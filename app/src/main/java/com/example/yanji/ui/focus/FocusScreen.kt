@@ -1,6 +1,8 @@
 package com.example.yanji.ui.focus
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -14,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -268,8 +271,14 @@ fun FocusScreen(
     }
 }
 
+enum class FocusSetupStep {
+    SELECT_CATEGORY,    // 子页 1：选择复习大科目
+    SELECT_SUBCATEGORY, // 子页 2：选择细分小类（有细分小类时）
+    SELECT_MODE         // 子页 3：计时模式选择与开始专注
+}
+
 /**
- * 专注入场页（基于 Stitch 设计重构）
+ * 专注入场页（分为 3 个紧凑子页，全屏无需上下滚动）
  */
 @Composable
 fun FocusSetupContent(
@@ -285,6 +294,11 @@ fun FocusSetupContent(
     onNavigateToDailyDetail: (String) -> Unit = {}
 ) {
     val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+
+    var currentStep by remember { mutableStateOf(FocusSetupStep.SELECT_CATEGORY) }
+    var selectedCategory by remember {
+        mutableStateOf(subjects.find { it.id == (selectedSubject.parentId ?: selectedSubject.id) })
+    }
 
     var isCountdownMode by remember(selectedMode) {
         mutableStateOf(selectedMode != FocusModes.COUNT_UP)
@@ -302,468 +316,377 @@ fun FocusSetupContent(
             it.parentId == null && it.enabled && it.id != "other" && it.name != "其他" && !it.name.contains("其他")
         }.sortedBy { it.sortOrder }
     }
-    val currentCategoryId = selectedSubject.parentId ?: selectedSubject.id
+
+    val currentCategoryId = selectedCategory?.id ?: (selectedSubject.parentId ?: selectedSubject.id)
     val subcategories = remember(subjects, currentCategoryId) {
         subjects.filter { it.parentId == currentCategoryId && it.enabled }.sortedBy { it.sortOrder }
     }
 
-    Column(
+    // 物理返回键按步退回
+    BackHandler(enabled = currentStep != FocusSetupStep.SELECT_CATEGORY) {
+        if (currentStep == FocusSetupStep.SELECT_MODE) {
+            if (subcategories.isNotEmpty()) {
+                currentStep = FocusSetupStep.SELECT_SUBCATEGORY
+            } else {
+                currentStep = FocusSetupStep.SELECT_CATEGORY
+            }
+        } else if (currentStep == FocusSetupStep.SELECT_SUBCATEGORY) {
+            currentStep = FocusSetupStep.SELECT_CATEGORY
+        }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(YanjiBackground)
             .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
-        // ---- 1. Subtle Ambient Header Section ----
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "专注准备",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 24.sp,
-                            letterSpacing = (-0.5).sp
-                        ),
-                        color = YanjiTextPrimary
+        AnimatedContent(
+            targetState = currentStep,
+            transitionSpec = {
+                if (targetState.ordinal > initialState.ordinal) {
+                    (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
+                        slideOutHorizontally { width -> -width } + fadeOut()
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(YanjiSuccess, CircleShape)
+                } else {
+                    (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
+                        slideOutHorizontally { width -> width } + fadeOut()
                     )
                 }
-
-                // Today's cumulative stat badge
-                Surface(
-                    shape = CircleShape,
-                    color = YanjiPrimarySoft,
-                    modifier = Modifier.clickable { onNavigateToDailyDetail(todayIso) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+            },
+            label = "FocusSetupStepTransition",
+            modifier = Modifier.fillMaxSize()
+        ) { step ->
+            when (step) {
+                FocusSetupStep.SELECT_CATEGORY -> {
+                    // ==========================================
+                    // 第一个子页：选择复习大科目
+                    // ==========================================
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = YanjiPrimary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = "今日累计 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp
-                            ),
-                            color = YanjiPrimary
-                        )
-                    }
-                }
-            }
-            Text(
-                text = "设定复习目标，保持心流节律",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = YanjiTextSecondary,
-                    fontSize = 14.sp
-                )
-            )
-        }
-
-        // ---- 2. Module 1: 复习科目选择 (2-Column Grid + Subcategories) ----
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "选择复习科目",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                ),
-                color = YanjiTextPrimary
-            )
-
-            // 2-Column Grid for Top-level Subject Cards
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                topCategories.chunked(2).forEach { rowSubjects ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        rowSubjects.forEach { category ->
-                            val isSelected = currentCategoryId == category.id
-                            Surface(
-                                shape = RoundedCornerShape(22.dp),
-                                color = if (isSelected) YanjiPrimarySoft else YanjiSurface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) YanjiPrimary.copy(alpha = 0.5f) else YanjiBorder
-                                ),
-                                shadowElevation = if (isSelected) 1.dp else 0.dp,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .clickable {
-                                        val children = subjects.filter { it.parentId == category.id && it.enabled }
-                                            .sortedBy { it.sortOrder }
-                                        onSelectSubject(children.firstOrNull() ?: category)
-                                    }
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Header
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = if (isSelected) YanjiSurface else YanjiSurfaceSoft,
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier.fillMaxSize()
-                                            ) {
-                                                Icon(
-                                                    imageVector = getSubjectIcon(category.id, category.name),
-                                                    contentDescription = null,
-                                                    tint = if (isSelected) YanjiPrimary else YanjiTextSecondary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            text = "专注准备",
+                                            style = MaterialTheme.typography.headlineMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 24.sp,
+                                                letterSpacing = (-0.5).sp
+                                            ),
+                                            color = YanjiTextPrimary
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .background(YanjiSuccess, CircleShape)
+                                        )
+                                    }
 
-                                        if (isSelected) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = YanjiPrimarySoft,
+                                        modifier = Modifier.clickable { onNavigateToDailyDetail(todayIso) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
                                             Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = "已选择",
+                                                imageVector = Icons.Default.Schedule,
+                                                contentDescription = null,
                                                 tint = YanjiPrimary,
-                                                modifier = Modifier.size(20.dp)
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Text(
+                                                text = "今日累计 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 12.sp
+                                                ),
+                                                color = YanjiPrimary
                                             )
                                         }
                                     }
-
-                                    Text(
-                                        text = category.name,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                            fontSize = 15.sp
-                                        ),
-                                        color = if (isSelected) YanjiPrimary else YanjiTextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
                                 }
-                            }
-                        }
-
-                        // If odd number in row, fill spacer
-                        if (rowSubjects.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-
-            // Sub-category Micro Chips
-            if (subcategories.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = YanjiSurface,
-                    border = BorderStroke(1.dp, YanjiBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Layers,
-                                    contentDescription = null,
-                                    tint = YanjiPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
                                 Text(
-                                    text = "细分小类",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
-                                    ),
-                                    color = YanjiTextSecondary
-                                )
-                            }
-                            Text(
-                                text = "单选细分方向",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    color = YanjiTextTertiary
-                                )
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            subcategories.forEach { child ->
-                                val isChildSelected = selectedSubject.id == child.id
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isChildSelected) YanjiPrimarySoft else YanjiSurfaceSoft,
-                                    modifier = Modifier.clickable { onSelectSubject(child) }
-                                ) {
-                                    Text(
-                                        text = child.name,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontSize = 12.sp,
-                                            fontWeight = if (isChildSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isChildSelected) YanjiPrimary else YanjiTextSecondary
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                    text = "第一步 · 选择复习科目",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = YanjiTextSecondary,
+                                        fontSize = 14.sp
                                     )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ---- 3. Module 2: 计时模式 (Segmented Capsule + Panels) ----
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "计时模式",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                ),
-                color = YanjiTextPrimary
-            )
-
-            // Segmented Control Capsule (正向计时 vs 倒计时模式)
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = YanjiSurfaceSoft,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Button 1: 正向计时
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (!isCountdownMode) YanjiSurface else Color.Transparent,
-                        shadowElevation = if (!isCountdownMode) 1.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable {
-                                isCountdownMode = false
-                                onSelectMode(FocusModes.COUNT_UP)
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AllInclusive,
-                                contentDescription = null,
-                                tint = if (!isCountdownMode) YanjiPrimary else YanjiTextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "正向计时",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontSize = 14.sp,
-                                    fontWeight = if (!isCountdownMode) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (!isCountdownMode) YanjiPrimary else YanjiTextSecondary
-                            )
-                        }
-                    }
-
-                    // Button 2: 倒计时模式
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isCountdownMode) YanjiSurface else Color.Transparent,
-                        shadowElevation = if (isCountdownMode) 1.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable {
-                                isCountdownMode = true
-                                val matched = QUICK_DURATIONS.find { it.minutes == selectedDurationMinutes }
-                                onSelectMode(matched?.mode ?: "${selectedDurationMinutes}分钟专注")
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.HourglassTop,
-                                contentDescription = null,
-                                tint = if (isCountdownMode) YanjiPrimary else YanjiTextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "倒计时模式",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isCountdownMode) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (isCountdownMode) YanjiPrimary else YanjiTextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Mode Details Panel
-            if (isCountdownMode) {
-                // Countdown Duration Picker Card
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = YanjiSurface,
-                    border = BorderStroke(1.dp, YanjiBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "快捷时长选项",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontSize = 13.sp,
-                                    color = YanjiTextSecondary,
-                                    fontWeight = FontWeight.Medium
                                 )
-                            )
-                            Text(
-                                text = "${selectedDurationMinutes} 分钟深度学习",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontSize = 13.sp,
-                                    color = YanjiPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
+                            }
 
-                        // 4-Column Quick Duration Chips
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            QUICK_DURATIONS.forEach { opt ->
-                                val isOptSelected = selectedDurationMinutes == opt.minutes
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isOptSelected) YanjiPrimarySoft else YanjiSurfaceSoft,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isOptSelected) YanjiPrimary.copy(alpha = 0.4f) else Color.Transparent
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            selectedDurationMinutes = opt.minutes
-                                            onSelectMode(opt.mode)
-                                        }
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
+                            // 2x2 Grid for Top-level Subject Cards
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                topCategories.chunked(2).forEach { rowSubjects ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Text(
-                                            text = opt.title,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 18.sp
-                                            ),
-                                            color = if (isOptSelected) YanjiPrimary else YanjiTextPrimary
-                                        )
-                                        Text(
-                                            text = opt.subtitle,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 11.sp,
-                                                fontWeight = if (isOptSelected) FontWeight.SemiBold else FontWeight.Normal
-                                            ),
-                                            color = if (isOptSelected) YanjiPrimary else YanjiTextSecondary
-                                        )
+                                        rowSubjects.forEach { category ->
+                                            val categoryChildren = subjects.filter { it.parentId == category.id && it.enabled }
+                                            val hasChildren = categoryChildren.isNotEmpty()
+
+                                            Surface(
+                                                shape = RoundedCornerShape(22.dp),
+                                                color = YanjiSurface,
+                                                border = BorderStroke(1.dp, YanjiBorder),
+                                                shadowElevation = 1.dp,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(120.dp)
+                                                    .clip(RoundedCornerShape(22.dp))
+                                                    .clickable {
+                                                        selectedCategory = category
+                                                        if (hasChildren) {
+                                                            currentStep = FocusSetupStep.SELECT_SUBCATEGORY
+                                                        } else {
+                                                            onSelectSubject(category)
+                                                            currentStep = FocusSetupStep.SELECT_MODE
+                                                        }
+                                                    }
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(14.dp),
+                                                    verticalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Surface(
+                                                            shape = CircleShape,
+                                                            color = YanjiSurfaceSoft,
+                                                            modifier = Modifier.size(40.dp)
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = getSubjectIcon(category.id, category.name),
+                                                                    contentDescription = null,
+                                                                    tint = YanjiPrimary,
+                                                                    modifier = Modifier.size(20.dp)
+                                                                )
+                                                            }
+                                                        }
+
+                                                        Icon(
+                                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                            contentDescription = null,
+                                                            tint = YanjiTextTertiary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+
+                                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                        Text(
+                                                            text = category.name,
+                                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 16.sp
+                                                            ),
+                                                            color = YanjiTextPrimary,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = if (hasChildren) "${categoryChildren.size} 个细分小类 →" else "直接进入计时 →",
+                                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                                fontSize = 11.sp,
+                                                                color = if (hasChildren) YanjiPrimary else YanjiTextTertiary
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if (rowSubjects.size == 1) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
                             }
                         }
 
+                        // Bottom Action Links
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = YanjiTextTertiary,
-                                    modifier = Modifier.size(15.dp)
-                                )
+                            TextButton(onClick = onNavigateToExam) {
                                 Text(
-                                    text = "达到设定时间后将温和柔声提醒",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 11.sp,
-                                        color = YanjiTextTertiary
-                                    )
-                                )
-                            }
-
-                            TextButton(
-                                onClick = { showCustomDurationDialog = true },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                            ) {
-                                Text(
-                                    text = "自定义时长",
+                                    text = "切换到模拟考试 →",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = YanjiPrimary,
                                         fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                FocusSetupStep.SELECT_SUBCATEGORY -> {
+                    // ==========================================
+                    // 第二个子页：选择细分小类
+                    // ==========================================
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Header with Back Button
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { currentStep = FocusSetupStep.SELECT_CATEGORY },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "返回上一步",
+                                        tint = YanjiTextPrimary
+                                    )
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "${selectedCategory?.name ?: "科目"} · 细分小类",
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp
+                                        ),
+                                        color = YanjiTextPrimary
+                                    )
+                                    Text(
+                                        text = "第二步 · 确定本次专注的具体知识板块",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = YanjiTextSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Subcategory Cards List
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                subcategories.forEach { child ->
+                                    Surface(
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = YanjiSurface,
+                                        border = BorderStroke(1.dp, YanjiBorder),
+                                        shadowElevation = 1.dp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(64.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .clickable {
+                                                onSelectSubject(child)
+                                                currentStep = FocusSetupStep.SELECT_MODE
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = YanjiPrimarySoft,
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Box(
+                                                        contentAlignment = Alignment.Center,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Layers,
+                                                            contentDescription = null,
+                                                            tint = YanjiPrimary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Text(
+                                                    text = child.name,
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 15.sp
+                                                    ),
+                                                    color = YanjiTextPrimary
+                                                )
+                                            }
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "进入模式",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 11.sp,
+                                                        color = YanjiTextTertiary
+                                                    )
+                                                )
+                                                Icon(
+                                                    imageVector = Icons.Default.ChevronRight,
+                                                    contentDescription = null,
+                                                    tint = YanjiPrimary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Footer hint
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { currentStep = FocusSetupStep.SELECT_CATEGORY }) {
+                                Text(
+                                    text = "← 返回重新选择大类",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = YanjiTextSecondary,
                                         fontSize = 12.sp
                                     )
                                 )
@@ -771,131 +694,424 @@ fun FocusSetupContent(
                         }
                     }
                 }
-            } else {
-                // Count-up Explainer Card
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = YanjiSurface,
-                    border = BorderStroke(1.dp, YanjiBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+
+                FocusSetupStep.SELECT_MODE -> {
+                    // ==========================================
+                    // 第三个子页：计时模式选择与开始专注
+                    // ==========================================
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = YanjiLavenderSoft,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize()
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // Header with Back Button
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.AllInclusive,
-                                    contentDescription = null,
-                                    tint = YanjiLavender,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                IconButton(
+                                    onClick = {
+                                        if (subcategories.isNotEmpty()) {
+                                            currentStep = FocusSetupStep.SELECT_SUBCATEGORY
+                                        } else {
+                                            currentStep = FocusSetupStep.SELECT_CATEGORY
+                                        }
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "返回上一步",
+                                        tint = YanjiTextPrimary
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "计时模式",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 20.sp
+                                            ),
+                                            color = YanjiTextPrimary
+                                        )
+                                        Text(
+                                            text = "设定复习节奏，进入专注心流",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = YanjiTextSecondary,
+                                                fontSize = 12.sp
+                                            )
+                                        )
+                                    }
+
+                                    // Selected Subject Badge
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = YanjiPrimarySoft,
+                                        modifier = Modifier.clickable {
+                                            if (subcategories.isNotEmpty()) {
+                                                currentStep = FocusSetupStep.SELECT_SUBCATEGORY
+                                            } else {
+                                                currentStep = FocusSetupStep.SELECT_CATEGORY
+                                            }
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = null,
+                                                tint = YanjiPrimary,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = selectedSubject.name,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp
+                                                ),
+                                                color = YanjiPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Segmented Capsule [正向计时] vs [倒计时模式]
+                            Surface(
+                                shape = RoundedCornerShape(22.dp),
+                                color = YanjiSurfaceSoft,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(3.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    // Button 1: 正向计时
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = if (!isCountdownMode) YanjiSurface else Color.Transparent,
+                                        shadowElevation = if (!isCountdownMode) 1.dp else 0.dp,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .clickable {
+                                                isCountdownMode = false
+                                                onSelectMode(FocusModes.COUNT_UP)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AllInclusive,
+                                                contentDescription = null,
+                                                tint = if (!isCountdownMode) YanjiPrimary else YanjiTextSecondary,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "正向计时",
+                                                style = MaterialTheme.typography.labelLarge.copy(
+                                                    fontSize = 13.sp,
+                                                    fontWeight = if (!isCountdownMode) FontWeight.Bold else FontWeight.Medium
+                                                ),
+                                                color = if (!isCountdownMode) YanjiPrimary else YanjiTextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    // Button 2: 倒计时模式
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = if (isCountdownMode) YanjiSurface else Color.Transparent,
+                                        shadowElevation = if (isCountdownMode) 1.dp else 0.dp,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .clickable {
+                                                isCountdownMode = true
+                                                val matched = QUICK_DURATIONS.find { it.minutes == selectedDurationMinutes }
+                                                onSelectMode(matched?.mode ?: "${selectedDurationMinutes}分钟专注")
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.HourglassTop,
+                                                contentDescription = null,
+                                                tint = if (isCountdownMode) YanjiPrimary else YanjiTextSecondary,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "倒计时模式",
+                                                style = MaterialTheme.typography.labelLarge.copy(
+                                                    fontSize = 13.sp,
+                                                    fontWeight = if (isCountdownMode) FontWeight.Bold else FontWeight.Medium
+                                                ),
+                                                color = if (isCountdownMode) YanjiPrimary else YanjiTextSecondary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Mode Details Card
+                            if (isCountdownMode) {
+                                Surface(
+                                    shape = RoundedCornerShape(22.dp),
+                                    color = YanjiSurface,
+                                    border = BorderStroke(1.dp, YanjiBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "快捷时长选项",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 13.sp
+                                                ),
+                                                color = YanjiTextSecondary
+                                            )
+
+                                            val currentMatched = QUICK_DURATIONS.find { it.minutes == selectedDurationMinutes }
+                                            Text(
+                                                text = currentMatched?.fullLabel ?: "${selectedDurationMinutes} 分钟自定义",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    color = YanjiPrimary
+                                                )
+                                            )
+                                        }
+
+                                        // 4 Quick Duration Chips
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            QUICK_DURATIONS.forEach { option ->
+                                                val isSelected = selectedDurationMinutes == option.minutes
+                                                Surface(
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    color = if (isSelected) YanjiPrimarySoft else YanjiSurfaceSoft,
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (isSelected) YanjiPrimary.copy(alpha = 0.6f) else Color.Transparent
+                                                    ),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(14.dp))
+                                                        .clickable {
+                                                            selectedDurationMinutes = option.minutes
+                                                            onSelectMode(option.mode)
+                                                        }
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier.padding(vertical = 10.dp),
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Text(
+                                                            text = option.title,
+                                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 18.sp
+                                                            ),
+                                                            color = if (isSelected) YanjiPrimary else YanjiTextPrimary
+                                                        )
+                                                        Text(
+                                                            text = option.subtitle,
+                                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                                fontSize = 11.sp
+                                                            ),
+                                                            color = if (isSelected) YanjiPrimary else YanjiTextSecondary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "达到设定时间后将温和柔声提醒",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 11.sp,
+                                                    color = YanjiTextTertiary
+                                                )
+                                            )
+
+                                            TextButton(
+                                                onClick = { showCustomDurationDialog = true },
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                            ) {
+                                                Text(
+                                                    text = "自定义时长",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 11.sp,
+                                                        color = YanjiPrimary,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(22.dp),
+                                    color = YanjiSurface,
+                                    border = BorderStroke(1.dp, YanjiBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = YanjiLavenderSoft,
+                                            modifier = Modifier.size(42.dp)
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AllInclusive,
+                                                    contentDescription = null,
+                                                    tint = YanjiLavender,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(
+                                                text = "无限制心流模式",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp
+                                                ),
+                                                color = YanjiTextPrimary
+                                            )
+                                            Text(
+                                                text = "不预设终止闹钟，适合难题探索与深度文献研读。",
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 12.sp,
+                                                    color = YanjiTextSecondary
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = "无限制心流模式",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
-                                ),
-                                color = YanjiTextPrimary
-                            )
-                            Text(
-                                text = "不预设终止闹钟，适合难题探索与深度文献研读。",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 12.sp,
-                                    color = YanjiTextSecondary
+                        // Bottom CTA & Footer
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Button(
+                                onClick = onStart,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(22.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "进入专注心流 · ${selectedSubject.name}",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    ),
+                                    color = Color.White
+                                )
+                            }
+
+                            Text(
+                                text = "准备好纸笔与书本，放空杂念，只对当下负责。",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    color = YanjiTextTertiary
+                                ),
+                                textAlign = TextAlign.Center
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = { showSaveQuickDialog = true }) {
+                                    Text(
+                                        text = "存为首页快捷 →",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = YanjiTextSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                }
+
+                                TextButton(onClick = onNavigateToExam) {
+                                    Text(
+                                        text = "切换到模拟考试 →",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = YanjiPrimary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-
-
-
-        // ---- 5. CTA Module (Start Button & Footer) ----
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
-        ) {
-            Button(
-                onClick = onStart,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "进入专注心流 · ${selectedSubject.name}",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    ),
-                    color = Color.White
-                )
-            }
-
-            Text(
-                text = "准备好纸笔与书本，放空杂念，只对当下负责。",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    color = YanjiTextTertiary
-                ),
-                textAlign = TextAlign.Center
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = { showSaveQuickDialog = true }) {
-                    Text(
-                        text = "存为首页快捷 →",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = YanjiTextSecondary,
-                            fontSize = 12.sp
-                        )
-                    )
-                }
-
-                TextButton(onClick = onNavigateToExam) {
-                    Text(
-                        text = "切换到模拟考试 →",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = YanjiPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
-                        )
-                    )
-                }
-            }
-        }
     }
-
-
 
     // 自定义时长 Dialog
     if (showCustomDurationDialog) {
