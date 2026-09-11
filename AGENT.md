@@ -7,6 +7,10 @@
 
 ## 一、项目运行环境与元信息
 
+* **代码仓库**：`github.com/xinye1017/yanji`（私密），分支 `main`，远端 `origin`。
+* **提交纪律**：`app/schemas/**` 必须随代码一起提交（迁移测试的校验依据）；**绝不提交**
+  `local.properties`、`*.db*`、`build/` 下的真机备份。
+
 * **操作系统**：Windows (PowerShell / pwsh)
 * **项目路径**：`D:\AI项目\yanji`
 * **应用包名**：`com.example.yanji`

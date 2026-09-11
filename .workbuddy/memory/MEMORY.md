@@ -2,6 +2,17 @@
 
 > 只记录跨会话仍然有效的事实与约定。日常改动写在 `YYYY-MM-DD.md`。
 
+## 仓库
+
+- GitHub：`xinye1017/yanji`（**私密**），分支 `main`，远端 `origin`。
+- `git config` 身份：Xinye / 1436143769@qq.com。
+- `app/schemas/**` 是迁移测试的校验依据，**必须随代码提交**；改 Entity 忘了 bump 版本号
+  会把同版本号的 schema JSON 覆盖掉，务必避免。
+- `scripts/adb-backup.sh`、`scripts/adb-push.sh` 是可复用的真机脚本；一次性运维脚本
+  （清库/恢复）在 `build/` 下，不入库。
+- 本地代理端口 7898（曾为 7897）；`gradle.properties` 的 `-Dfile.encoding=GBK`
+  是中文 Windows 路径 workaround，CI 里用 `sed` 换成 UTF-8，不要"顺手修正"。
+
 ## 项目定位
 
 - 单 Android App module：Kotlin + Jetpack Compose + Room，`minSdk 24 / target 36`，Java 17。
