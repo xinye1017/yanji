@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DailySessionItem
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.StudyStatisticsRepository
@@ -35,11 +36,15 @@ fun FocusSessionDetailScreen(
     sessionId: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: FocusSessionDetailViewModel = viewModel {
+        FocusSessionDetailViewModel(
+            YanjiRepository.getInstance(),
+            StudyStatisticsRepository.getInstance()
+        )
+    }
 ) {
     val context = LocalContext.current
-    val focusSessions by repo.focusSessions.collectAsStateWithLifecycle()
+    val focusSessions by viewModel.focusSessions.collectAsStateWithLifecycle()
     val session = focusSessions.find { it.id == sessionId }
 
     var isEditingNote by remember { mutableStateOf(false) }
@@ -253,7 +258,7 @@ fun FocusSessionDetailScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
                                 onClick = {
-                                    statsRepo.updateSessionNote(session.id, false, noteInput)
+                                    viewModel.updateSessionNote(session.id, noteInput)
                                     isEditingNote = false
                                     Toast.makeText(context, "备注已更新", Toast.LENGTH_SHORT).show()
                                 },
@@ -309,19 +314,7 @@ fun FocusSessionDetailScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        statsRepo.deleteSession(
-                            DailySessionItem(
-                                id = session.id,
-                                title = session.note,
-                                subjectId = session.subjectId,
-                                subjectName = session.subjectName,
-                                subjectColor = "#356AE6",
-                                startTime = session.startTime,
-                                endTime = session.endTime,
-                                durationSeconds = session.durationSeconds,
-                                isExam = false
-                            )
-                        )
+                        viewModel.deleteSession(session.id)
                         showDeleteConfirmDialog = false
                         Toast.makeText(context, "记录已删除", Toast.LENGTH_SHORT).show()
                         onBack()

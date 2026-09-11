@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.StudyStatisticsRepository
@@ -34,10 +35,12 @@ fun JournalScreen(
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToJournalEditor: (journalId: String?, date: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: JournalViewModel = viewModel {
+        JournalViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    }
 ) {
-    val journals by repo.journalEntries.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val journals = state.journals
 
     val todayStr = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -94,7 +97,7 @@ fun JournalScreen(
                     entry = entry,
                     onClick = { onNavigateToJournalEditor(entry.id, entry.date) },
                     onStudyDurationClick = { onNavigateToDailyDetail(entry.date) },
-                    statsRepo = statsRepo
+                    studyDurationSeconds = viewModel.dailySummaryFor(entry.date).totalDurationSeconds
                 )
             }
         }
@@ -106,12 +109,11 @@ fun JournalCard(
     entry: JournalEntry,
     onClick: () -> Unit,
     onStudyDurationClick: () -> Unit,
-    statsRepo: StudyStatisticsRepository
+    studyDurationSeconds: Long
 ) {
-    // 单一事实来源：该日期真实的学习时长聚合（FocusSession + ExamSession）。
-    // 不再回退到日记自身记录的时长副本。
-    val dailySummary = statsRepo.getDailyStudySummary(entry.date)
-    val durationSecs = dailySummary.totalDurationSeconds
+    // 单一事实来源：该日期真实的学习时长聚合（FocusSession + ExamSession），
+    // 由 ViewModel 计算后以纯值传入，本组件不再持有仓库依赖。
+    val durationSecs = studyDurationSeconds
 
     Card(
         modifier = Modifier

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
@@ -60,11 +61,17 @@ fun FocusScreen(
     quickStartPreset: QuickStartPreset? = null,
     onQuickStartConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: FocusViewModel = viewModel {
+        FocusViewModel(
+            YanjiRepository.getInstance(),
+            StudyStatisticsRepository.getInstance()
+        )
+    }
 ) {
     val context = LocalContext.current
-    val subjects by repo.subjects.collectAsStateWithLifecycle()
-    val activeSession by repo.activeFocus.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val subjects = state.subjects
+    val activeSession = state.activeSession
     val timerServiceState by FocusTimerService.timerState.collectAsStateWithLifecycle()
 
     var selectedSubject by remember {
@@ -82,7 +89,7 @@ fun FocusScreen(
     fun launchFocus(subject: Subject, mode: String, note: String) {
         // 先把会话登记到业务层，再把 sessionId 交给前台 Service：
         // 这样倒计时结束时的落库不再依赖本页面是否还在组合。
-        val session = repo.startFocus(
+        val session = viewModel.startFocus(
             subjectId = subject.id,
             subjectName = subject.name,
             note = note,
@@ -98,7 +105,7 @@ fun FocusScreen(
 
     fun dismissSummary() {
         showSummaryDialog = false
-        repo.acknowledgeCompletedFocus()
+        viewModel.acknowledgeCompletedFocus()
     }
 
     // 首页快捷操作：进页面即按预设组合开始计时，随后立刻清空 pending 值避免重复触发
@@ -127,7 +134,7 @@ fun FocusScreen(
 
     // 完成事件由业务层广播（前台 Service → ActiveSessionCoordinator → Repository）。
     // 页面只做展示：即便本页面当时没有组合，记录也已经写入数据库。
-    val completedFocus by repo.lastCompletedFocus.collectAsStateWithLifecycle()
+    val completedFocus = state.lastCompletedFocus
     LaunchedEffect(completedFocus) {
         if (completedFocus != null) {
             lastFinishedSession = completedFocus
@@ -142,18 +149,18 @@ fun FocusScreen(
             elapsedSeconds = currentElapsedSeconds,
             onPause = {
                 FocusTimerService.pauseTimer(context)
-                repo.pauseFocus(currentElapsedSeconds)
+                viewModel.pauseFocus(currentElapsedSeconds)
             },
             onResume = {
                 FocusTimerService.resumeTimer(context)
-                repo.resumeFocus()
+                viewModel.resumeFocus()
             },
             onFinish = {
                 // 正向计时时间小于1分钟默认不予保存
                 if (currentElapsedSeconds < 60L) {
                     Toast.makeText(context, "专注时间不足 1 分钟，本次记录不予保存", Toast.LENGTH_SHORT).show()
                     FocusTimerService.discardTimer(context)
-                    repo.cancelFocus()
+                    viewModel.cancelFocus()
                 } else {
                     // 结束语义：主动结束 → 按实际时长保存（由业务层执行）
                     FocusTimerService.completeTimer(context)
@@ -161,7 +168,7 @@ fun FocusScreen(
             },
             onCancel = {
                 FocusTimerService.discardTimer(context)
-                repo.cancelFocus()
+                viewModel.cancelFocus()
             }
         )
     } else {
@@ -174,10 +181,11 @@ fun FocusScreen(
             onSelectMode = { selectedMode = it },
             noteText = noteText,
             onNoteChange = { noteText = it },
-            todayFocusSeconds = repo.getTodayFocusDurationSeconds(),
+            todayFocusSeconds = state.todayFocusSeconds,
+            todayTotalSeconds = state.todayTotalSeconds,
             onStart = { launchFocus(selectedSubject, selectedMode, noteText) },
             onSaveAsQuickAction = { label ->
-                repo.addQuickStartPreset(
+                viewModel.saveQuickStartPreset(
                     QuickStartPreset(
                         label = label.ifBlank { "开始${selectedSubject.name}${selectedMode}" },
                         subjectId = selectedSubject.id,
@@ -196,7 +204,7 @@ fun FocusScreen(
 
     // Summary Dialog when session completes
     if (showSummaryDialog && lastFinishedSession != null) {
-        val totalSecs = repo.getTodayFocusDurationSeconds()
+        val totalSecs = state.todayFocusSeconds
         val totalH = totalSecs / 3600
         val totalM = (totalSecs % 3600) / 60
         val sessionH = lastFinishedSession!!.durationSeconds / 3600
@@ -261,6 +269,8 @@ fun FocusSetupContent(
     noteText: String,
     onNoteChange: (String) -> Unit,
     todayFocusSeconds: Long = 0L,
+    /** 今日总学时（专注+模考），由 FocusViewModel 计算后传入。 */
+    todayTotalSeconds: Long = 0L,
     onStart: () -> Unit,
     onSaveAsQuickAction: (String) -> Unit = {},
     onNavigateToExam: () -> Unit,
@@ -268,10 +278,6 @@ fun FocusSetupContent(
     onNavigateToFocusDetail: (String) -> Unit = {}
 ) {
     val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-    val statsRepo = remember { StudyStatisticsRepository.getInstance() }
-    val dailySummary by statsRepo.getDailyStudySummaryFlow(todayIso).collectAsStateWithLifecycle(
-        initialValue = statsRepo.getDailyStudySummary(todayIso)
-    )
 
     var showSaveQuickDialog by remember { mutableStateOf(false) }
 
@@ -307,7 +313,7 @@ fun FocusSetupContent(
                         color = YanjiTextPrimary
                     )
 
-                    if (dailySummary.totalDurationSeconds > 0L) {
+                    if (todayTotalSeconds > 0L) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -316,7 +322,7 @@ fun FocusSetupContent(
                                 .padding(horizontal = 9.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "今日已专注 ${DurationFormatter.formatHoursMinutes(dailySummary.totalDurationSeconds)}",
+                                text = "今日已专注 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = YanjiPrimary,
                                 fontWeight = FontWeight.SemiBold

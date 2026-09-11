@@ -30,7 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.*
+import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.AppContentInsets
@@ -46,32 +49,11 @@ fun StatsScreen(
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
     onNavigateToExamHistory: () -> Unit = {},
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: StatsViewModel = viewModel {
+        StatsViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    }
 ) {
-    var selectedTimeTab by remember { mutableIntStateOf(0) } // 0: 本周, 1: 本月, 2: 全部累计
-    var trendChartMode by remember { mutableStateOf(TrendMode.BAR) }
-    var subjectStatsLevel by remember { mutableStateOf(SubjectStatsLevel.SUBCATEGORY) }
-    val aiAnalyses by repo.aiAnalyses.collectAsStateWithLifecycle()
-    var latestReport by remember { mutableStateOf(aiAnalyses.firstOrNull()) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    // Single source of truth statistics
-    val weeklySummary by statsRepo.getWeeklyStudySummaryFlow().collectAsStateWithLifecycle(
-        initialValue = statsRepo.getWeeklyStudySummary()
-    )
-    val subjectTimeRange = when (selectedTimeTab) {
-        0 -> StudyTimeRange.WEEK
-        1 -> StudyTimeRange.MONTH
-        else -> StudyTimeRange.ALL
-    }
-    val subjectDistributionFlow = remember(subjectTimeRange, subjectStatsLevel) {
-        statsRepo.getSubjectDistributionFlow(subjectTimeRange, subjectStatsLevel)
-    }
-    val subjectDistribution by subjectDistributionFlow.collectAsStateWithLifecycle(
-        initialValue = statsRepo.getSubjectDistribution(subjectTimeRange, subjectStatsLevel)
-    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Bottom sheet state for clicked chart bar
     var selectedDayForSheet by remember { mutableStateOf<DayBarData?>(null) }
@@ -103,7 +85,7 @@ fun StatsScreen(
 
         // Time Range Filter
         PrimaryTabRow(
-            selectedTabIndex = selectedTimeTab,
+            selectedTabIndex = state.selectedTimeTab,
             containerColor = YanjiSurfaceSoft,
             contentColor = YanjiPrimary,
             modifier = Modifier
@@ -112,10 +94,10 @@ fun StatsScreen(
             indicator = {}
         ) {
             listOf("本周", "本月", "全部累计").forEachIndexed { index, title ->
-                val isSelected = selectedTimeTab == index
+                val isSelected = state.selectedTimeTab == index
                 Tab(
                     selected = isSelected,
-                    onClick = { selectedTimeTab = index },
+                    onClick = { viewModel.selectTimeTab(index) },
                     text = {
                         Text(
                             text = title,
@@ -135,11 +117,7 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // 15.1: Emphasize Primary Metric (e.g. 本周学习 48h 32m)
-        val periodDurationSecs = when (selectedTimeTab) {
-            0 -> weeklySummary.totalDurationSeconds
-            1 -> repo.getStudyDurationForPeriod(30)
-            else -> repo.getTotalStudyDurationSeconds()
-        }
+        val periodDurationSecs = state.periodDurationSeconds
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -149,7 +127,7 @@ fun StatsScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = when (selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
+                    text = when (state.selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = YanjiTextSecondary
@@ -164,7 +142,7 @@ fun StatsScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "有效学习 ${weeklySummary.activeDays} 天",
+                        text = "有效学习 ${state.weeklySummary.activeDays} 天",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = YanjiSuccess,
@@ -183,19 +161,19 @@ fun StatsScreen(
         ) {
             LightweightMetricCard(
                 title = "日均专注",
-                value = DurationFormatter.formatHoursMinutes(weeklySummary.dailyAverageSeconds),
+                value = DurationFormatter.formatHoursMinutes(state.weeklySummary.dailyAverageSeconds),
                 modifier = Modifier.weight(1f)
             )
 
             LightweightMetricCard(
                 title = "连续有效",
-                value = "${weeklySummary.streakDays} 天",
+                value = "${state.weeklySummary.streakDays} 天",
                 modifier = Modifier.weight(1f)
             )
 
             LightweightMetricCard(
                 title = "模拟考试",
-                value = "${weeklySummary.examCount} 次",
+                value = "${state.weeklySummary.examCount} 次",
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onNavigateToExamHistory() }
@@ -203,7 +181,7 @@ fun StatsScreen(
         }
 
         // 15.3: Longest Single Session (Clickable to FocusSessionDetail)
-        weeklySummary.longestSession?.let { longest ->
+        state.weeklySummary.longestSession?.let { longest ->
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
             Card(
                 modifier = Modifier
@@ -270,7 +248,7 @@ fun StatsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (selectedTimeTab == 0) "近 7 天学习时长趋势" else "每日学时分布",
+                        text = if (state.selectedTimeTab == 0) "近 7 天学习时长趋势" else "每日学时分布",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = YanjiTextPrimary
@@ -281,8 +259,8 @@ fun StatsScreen(
                         TrendMode.entries.forEach { mode ->
                             TrendModeChip(
                                 label = mode.label,
-                                selected = trendChartMode == mode,
-                                onClick = { trendChartMode = mode }
+                                selected = state.trendChartMode == mode,
+                                onClick = { viewModel.selectTrendMode(mode) }
                             )
                         }
                     }
@@ -291,9 +269,9 @@ fun StatsScreen(
                 Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
 
                 // Interactive Bar Chart
-                val maxBarDuration = maxOf(36000L, weeklySummary.days.maxOfOrNull { it.durationSeconds } ?: 36000L)
+                val maxBarDuration = maxOf(36000L, state.weeklySummary.days.maxOfOrNull { it.durationSeconds } ?: 36000L)
 
-                if (trendChartMode == TrendMode.BAR) {
+                if (state.trendChartMode == TrendMode.BAR) {
                     // Interactive Bar Chart
                     Row(
                         modifier = Modifier
@@ -302,7 +280,7 @@ fun StatsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        weeklySummary.days.forEach { day ->
+                        state.weeklySummary.days.forEach { day ->
                             val ratio = (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.06f, 1f)
                             val isToday = day.isToday
 
@@ -352,13 +330,13 @@ fun StatsScreen(
                             .height(140.dp)
                     ) {
                         Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
-                            val n = weeklySummary.days.size
+                            val n = state.weeklySummary.days.size
                             if (n > 0) {
                                 val topPad = 16.dp.toPx()
                                 val bottomPad = 30.dp.toPx() // 8dp 间隙 + 内嵌日期标签行
                                 val plotH = size.height - topPad - bottomPad
 
-                                val pts = weeklySummary.days.mapIndexed { index, day ->
+                                val pts = state.weeklySummary.days.mapIndexed { index, day ->
                                     val ratio = (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0f, 1f)
                                     Offset(
                                         x = (index + 0.5f) * size.width / n,
@@ -386,7 +364,7 @@ fun StatsScreen(
                                 )
 
                                 pts.forEachIndexed { index, pt ->
-                                    val isToday = weeklySummary.days[index].isToday
+                                    val isToday = state.weeklySummary.days[index].isToday
                                     if (isToday) {
                                         drawCircle(color = YanjiPrimarySoft, radius = 9.dp.toPx(), center = pt)
                                     }
@@ -403,7 +381,7 @@ fun StatsScreen(
                                 .fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            weeklySummary.days.forEach { day ->
+                            state.weeklySummary.days.forEach { day ->
                                 Text(
                                     text = day.dayLabel,
                                     style = MaterialTheme.typography.labelMedium,
@@ -418,7 +396,7 @@ fun StatsScreen(
 
                         // Transparent clickable columns aligned with the line points
                         Row(modifier = Modifier.fillMaxSize()) {
-                            weeklySummary.days.forEach { day ->
+                            state.weeklySummary.days.forEach { day ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -436,7 +414,7 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // Section 17: Subject Breakdown Cards (Dynamic & Clickable)
-        val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
+        val subjectDist = state.subjectDistribution.associate { it.subjectName to it.durationSeconds }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -460,14 +438,14 @@ fun StatsScreen(
                         SubjectStatsLevel.entries.forEach { level ->
                             TrendModeChip(
                                 label = level.title,
-                                selected = subjectStatsLevel == level,
-                                onClick = { subjectStatsLevel = level }
+                                selected = state.subjectStatsLevel == level,
+                                onClick = { viewModel.selectSubjectLevel(level) }
                             )
                         }
                     }
                 }
                 Text(
-                    text = if (subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY) {
+                    text = if (state.subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY) {
                         "按具体学科统计 · 点击查看明细"
                     } else {
                         "已汇总子类与大类直接记录 · 点击查看明细"
@@ -481,12 +459,12 @@ fun StatsScreen(
                 // 学科构成环形图
                 SubjectDonutChart(
                     subjectDist = subjectDist,
-                    totalLabel = subjectTimeRange.title
+                    totalLabel = state.timeRange.title
                 )
 
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
-                subjectDistribution.forEachIndexed { index, sub ->
+                state.subjectDistribution.forEachIndexed { index, sub ->
                     val color = remember(sub.subjectColor) {
                         try {
                             Color(android.graphics.Color.parseColor(sub.subjectColor))
@@ -513,7 +491,7 @@ fun StatsScreen(
                         )
                     }
 
-                    if (index < subjectDistribution.size - 1) {
+                    if (index < state.subjectDistribution.size - 1) {
                         Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
                     }
                 }
@@ -554,22 +532,13 @@ fun StatsScreen(
                     }
 
                     Button(
-                        onClick = {
-                            scope.launch {
-                                isAnalyzing = true
-                                try {
-                                    latestReport = repo.generateAiAnalysis(7)
-                                } finally {
-                                    isAnalyzing = false
-                                }
-                            }
-                        },
-                        enabled = !isAnalyzing,
+                        onClick = { viewModel.generateAnalysis() },
+                        enabled = !state.isAnalyzing,
                         colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        if (isAnalyzing) {
+                        if (state.isAnalyzing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(14.dp),
                                 color = YanjiOnPrimary,
@@ -583,9 +552,9 @@ fun StatsScreen(
                     }
                 }
 
-                if (latestReport != null) {
+                if (state.latestReport != null) {
                     Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
-                    val report = latestReport!!
+                    val report = state.latestReport!!
 
                     Box(
                         modifier = Modifier

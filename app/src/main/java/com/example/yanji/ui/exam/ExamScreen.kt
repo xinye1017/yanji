@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.SessionStatus
@@ -47,10 +48,11 @@ import java.util.*
 fun ExamScreen(
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: ExamViewModel = viewModel { ExamViewModel(YanjiRepository.getInstance()) }
 ) {
     val context = LocalContext.current
-    val examSessions by repo.examSessions.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val examSessions = state.examSessions
     val timerServiceState by FocusTimerService.timerState.collectAsStateWithLifecycle()
     var currentSubTab by remember { mutableStateOf(0) } // 0: 备考发起, 1: 走势与记录, 2: AI诊断
 
@@ -68,12 +70,11 @@ fun ExamScreen(
     val businessSession by ActiveSessionCoordinator.active.collectAsStateWithLifecycle()
 
     // 模考页的 AI 诊断：展示真实的 AiAnalysis，没有就显示空状态（不编造内容）
-    val aiAnalyses by repo.aiAnalyses.collectAsStateWithLifecycle()
-    var latestAiAnalysis by remember { mutableStateOf(aiAnalyses.firstOrNull()) }
+    var latestAiAnalysis by remember { mutableStateOf(state.aiAnalyses.firstOrNull()) }
     var isAnalyzingAi by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(aiAnalyses) {
-        if (latestAiAnalysis == null) latestAiAnalysis = aiAnalyses.firstOrNull()
+    LaunchedEffect(state.aiAnalyses) {
+        if (latestAiAnalysis == null) latestAiAnalysis = state.aiAnalyses.firstOrNull()
     }
     LaunchedEffect(businessSession) {
         val session = businessSession
@@ -101,7 +102,7 @@ fun ExamScreen(
 
     // 模考完成事件同样由业务层广播：记录在 Service 结束计时的瞬间就已落库，
     // 这里只负责弹出成绩录入对话框。
-    val completedExam by repo.lastCompletedExam.collectAsStateWithLifecycle()
+    val completedExam = state.lastCompletedExam
     LaunchedEffect(completedExam) {
         val finished = completedExam ?: return@LaunchedEffect
         isExamRunning = false
@@ -114,7 +115,7 @@ fun ExamScreen(
     fun dismissScoreDialog() {
         showScoreDialog = false
         pendingExamSession = null
-        repo.acknowledgeCompletedExam()
+        viewModel.acknowledgeCompletedExam()
     }
 
     if (isExamRunning && activeExamName != null) {
@@ -141,7 +142,7 @@ fun ExamScreen(
             onQuit = {
                 // 放弃本场模考：不产生记录
                 FocusTimerService.discardTimer(context)
-                repo.abandonExam()
+                viewModel.abandonExam()
                 isExamRunning = false
                 activeExamName = null
             }
@@ -235,7 +236,7 @@ fun ExamScreen(
                             isExamPaused = false
                             // 先登记业务会话，再启动前台计时：完成时的落库由业务层负责。
                             // 专注与模考互斥，已有计时在跑时拒绝启动并回滚本地 UI 状态。
-                            val session = repo.startExamSession(subjectId, name, durationSecs)
+                            val session = viewModel.startExamSession(subjectId, name, durationSecs)
                             if (session == null) {
                                 isExamRunning = false
                                 activeExamName = null
@@ -263,7 +264,7 @@ fun ExamScreen(
                             coroutineScope.launch {
                                 isAnalyzingAi = true
                                 try {
-                                    latestAiAnalysis = repo.generateAiAnalysis(7)
+                                    latestAiAnalysis = viewModel.generateAnalysis(7)
                                 } finally {
                                     isAnalyzingAi = false
                                 }
@@ -289,7 +290,7 @@ fun ExamScreen(
                     onClick = {
                         val scoreVal = scoreInput.toDoubleOrNull()
                         // 模考记录在计时结束的那一刻就已经落库，这里只是补写成绩与复盘。
-                        repo.addExamSession(pendingExamSession!!.copy(score = scoreVal, note = noteInput))
+                        viewModel.saveExamResult(pendingExamSession!!.copy(score = scoreVal, note = noteInput))
                         dismissScoreDialog()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),

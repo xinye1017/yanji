@@ -513,7 +513,8 @@ class StudyStatisticsRepository(
             activeDays = activeDays,
             longestSession = longest,
             examCount = recentExamCount,
-            streakDays = maxOf(1, streak),
+            // 如实呈现：0 天就是 0 天，不用 maxOf(1, ...) 伪造（消费者已按 0 分支处理文案）
+            streakDays = streak,
             days = days
         )
     }

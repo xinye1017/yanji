@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.StudyStatisticsRepository
@@ -36,11 +37,13 @@ fun JournalEditorScreen(
     onBack: () -> Unit,
     onSaveSuccess: () -> Unit,
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: JournalViewModel = viewModel {
+        JournalViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    }
 ) {
     val context = LocalContext.current
-    val journals by repo.journalEntries.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val journals = state.journals
     val existingEntry = remember(journalId, date, journals) {
         if (!journalId.isNullOrBlank()) {
             journals.find { it.id == journalId }
@@ -50,8 +53,7 @@ fun JournalEditorScreen(
     }
 
     // Single source of truth for daily study duration
-    val dailySummary = statsRepo.getDailyStudySummary(date)
-    val studyDuration = dailySummary.totalDurationSeconds
+    val studyDuration = viewModel.dailySummaryFor(date).totalDurationSeconds
 
     var title by remember(existingEntry) { mutableStateOf(existingEntry?.title ?: "") }
     var content by remember(existingEntry) { mutableStateOf(existingEntry?.content ?: "") }
@@ -116,7 +118,7 @@ fun JournalEditorScreen(
                         tomorrowPlan = tomorrowPlan.trim(),
                         tags = existingEntry?.tags ?: emptyList()
                     )
-                    repo.addOrUpdateJournal(finalEntry)
+                    viewModel.saveJournal(finalEntry)
                     Toast.makeText(context, "日记已保存", Toast.LENGTH_SHORT).show()
                     onSaveSuccess()
                 },

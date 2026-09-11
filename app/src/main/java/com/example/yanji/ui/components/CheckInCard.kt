@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.fill.Fire
@@ -33,14 +34,10 @@ import java.util.Locale
 @Composable
 fun CheckInCard(
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
+    viewModel: CheckInViewModel = viewModel { CheckInViewModel(YanjiRepository.getInstance()) },
     onCheckInSuccess: (CheckIn) -> Unit = {}
 ) {
-    val checkIns by repo.checkIns.collectAsStateWithLifecycle()
-    val isCheckedInToday = remember(checkIns) { repo.isCheckedInToday() }
-    val currentStreak = remember(checkIns) { repo.getCurrentStreak() }
-    val past7Days = remember(checkIns) { repo.getPast7DaysCheckInStatus() }
-    val todayCheckIn = remember(checkIns) { repo.getTodayCheckIn() }
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -79,7 +76,7 @@ fun CheckInCard(
                             color = YanjiTextPrimary
                         )
                         Text(
-                            text = if (currentStreak > 0) "已连续打卡 $currentStreak 天" else "开启坚持第一步",
+                            text = if (state.currentStreak > 0) "已连续打卡 $state.currentStreak 天" else "开启坚持第一步",
                             fontSize = 12.sp,
                             color = YanjiTextSecondary
                         )
@@ -89,13 +86,13 @@ fun CheckInCard(
                 // Status Tag
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isCheckedInToday) YanjiSuccess.copy(alpha = 0.12f) else YanjiPrimarySoft
+                    color = if (state.isCheckedInToday) YanjiSuccess.copy(alpha = 0.12f) else YanjiPrimarySoft
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isCheckedInToday) {
+                        if (state.isCheckedInToday) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
@@ -135,7 +132,7 @@ fun CheckInCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                past7Days.forEach { dayStatus ->
+                state.past7Days.forEach { dayStatus ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.weight(1f)
@@ -186,7 +183,9 @@ fun CheckInCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Action / State Area
-            if (isCheckedInToday && todayCheckIn != null) {
+            // 局部捕获：state 是委托属性，块内多次访问无法 smart cast
+            val todayCheckIn = state.todayCheckIn
+            if (state.isCheckedInToday && todayCheckIn != null) {
                 // Today Checked-In Info Bar
                 Box(
                     modifier = Modifier
@@ -227,7 +226,7 @@ fun CheckInCard(
                 // Check-in Action: Direct Button
                 Button(
                     onClick = {
-                        val checkIn = repo.checkInToday(
+                        val checkIn = viewModel.checkInToday(
                             note = "今日按计划踏实复习"
                         )
                         onCheckInSuccess(checkIn)

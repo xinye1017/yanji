@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.YanjiRepository
@@ -33,9 +34,10 @@ fun ExamHistoryScreen(
     onNavigateToExamDetail: (examId: String) -> Unit,
     onStartNewExam: () -> Unit,
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: ExamViewModel = viewModel { ExamViewModel(YanjiRepository.getInstance()) }
 ) {
-    val examSessions by repo.examSessions.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val examSessions = state.examSessions
 
     Column(
         modifier = modifier

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.security.CleartextPolicy
 import com.example.yanji.theme.*
@@ -46,9 +47,10 @@ private val AI_PRESETS = listOf(
 @Composable
 fun AiConfigDialog(
     onDismissRequest: () -> Unit,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: AiConfigViewModel = viewModel { AiConfigViewModel(YanjiRepository.getInstance()) }
 ) {
-    val settings by repo.settings.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val settings = state.settings
     var provider by remember(settings.aiProvider) { mutableStateOf(settings.aiProvider) }
     var baseUrl by remember(settings.aiBaseUrl) { mutableStateOf(settings.aiBaseUrl) }
     var apiKey by remember(settings.aiApiKey) { mutableStateOf(settings.aiApiKey) }
@@ -400,7 +402,7 @@ fun AiConfigDialog(
                         coroutineScope.launch {
                             isTestingConnection = true
                             connectionMessage = null
-                            val result = repo.fetchAvailableModels(baseUrl, apiKey)
+                            val result = viewModel.fetchAvailableModels(baseUrl, apiKey)
                             isTestingConnection = false
                             result.fold(
                                 onSuccess = { list ->
@@ -466,7 +468,7 @@ fun AiConfigDialog(
                     }
                     Button(
                         onClick = {
-                            repo.updateSettings(
+                            viewModel.updateSettings(
                                 settings.copy(
                                     aiProvider = provider.trim(),
                                     aiBaseUrl = baseUrl.trim(),

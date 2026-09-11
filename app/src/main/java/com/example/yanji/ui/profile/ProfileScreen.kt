@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.backup.BackupCodec
@@ -59,9 +60,10 @@ import java.util.TimeZone
 fun ProfileScreen(
     onNavigateToAchievements: () -> Unit = {},
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: ProfileViewModel = viewModel { ProfileViewModel(YanjiRepository.getInstance()) }
 ) {
-    val settings by repo.settings.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val settings = state.settings
 
     // Countdown days: compute from settings.targetExamDate (single source of truth, mirror HomeScreen)
     val daysRemaining = remember(settings.targetExamDate) {
@@ -94,7 +96,7 @@ fun ProfileScreen(
     // ---------- 备份导出 / 导入 ----------
     var isExporting by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
-    // 待确认的导入：先解析出摘要给用户看清楚"要覆盖什么"，再真正落库
+    // 待确认的导入：先解析出摘要给用户看清�?"要覆盖什�?"，再真正落库
     var pendingImport by remember { mutableStateOf<Pair<String, BackupDecodeResult.Success>?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
 
@@ -105,7 +107,7 @@ fun ProfileScreen(
         coroutineScope.launch {
             isExporting = true
             try {
-                val json = repo.exportBackupJson()
+                val json = viewModel.exportBackupJson()
                 val written = withContext(Dispatchers.IO) {
                     runCatching {
                         context.contentResolver.openOutputStream(uri)?.use { out ->
@@ -115,11 +117,11 @@ fun ProfileScreen(
                     }
                 }
                 if (written.isSuccess) {
-                    Toast.makeText(context, "已导出备份（不含 AI Key）", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "已导出备份（不含 AI Key�?", Toast.LENGTH_LONG).show()
                 } else {
                     Toast.makeText(
                         context,
-                        "导出失败：${written.exceptionOrNull()?.localizedMessage ?: "未知错误"}",
+                        "导出失败�?${written.exceptionOrNull()?.localizedMessage ?: "未知错误"}",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -138,7 +140,7 @@ fun ProfileScreen(
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         input.readBytes().toString(Charsets.UTF_8)
-                    } ?: error("无法读取所选文件")
+                    } ?: error("无法读取所选文�?")
                 }
             }
             text.onSuccess { raw ->
@@ -151,7 +153,7 @@ fun ProfileScreen(
                     }
                 }
             }.onFailure {
-                importError = "读取文件失败：${it.localizedMessage ?: "未知错误"}"
+                importError = "读取文件失败�?${it.localizedMessage ?: "未知错误"}"
             }
         }
     }
@@ -188,7 +190,7 @@ fun ProfileScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "2027 考研备战者",
+                            text = "2027 考研备战�?",
                             style = MaterialTheme.typography.headlineMedium,
                             color = YanjiTextPrimary
                         )
@@ -227,7 +229,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // Settings Groups
-        SettingsGroupTitle("考研与备考规划")
+        SettingsGroupTitle("考研与备考规�?")
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -238,9 +240,9 @@ fun ProfileScreen(
             Column {
                 SettingsItem(
                     icon = Icons.Outlined.Flag,
-                    title = "考研目标与初试日期",
+                    title = "考研目标与初试日�?",
                     subtitle = if (daysRemaining != null) {
-                        "${settings.targetExamDate} (倒计时 ${if (daysRemaining >= 0) daysRemaining else 0} 天)"
+                        "${settings.targetExamDate} (倒计�? ${if (daysRemaining >= 0) daysRemaining else 0} �?)"
                     } else {
                         settings.targetExamDate
                     },
@@ -250,7 +252,7 @@ fun ProfileScreen(
                 SettingsItem(
                     icon = Icons.Outlined.Timer,
                     title = "每日学习目标时长",
-                    subtitle = "${settings.dailyGoalHours.toInt()} 小时 / 天 (最低有效阈值 30 分钟)",
+                    subtitle = "${settings.dailyGoalHours.toInt()} 小时 / �? (最低有效阈�? 30 分钟)",
                     onClick = { showExamTargetDialog = true }
                 )
             }
@@ -258,7 +260,7 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        SettingsGroupTitle("AI 诊断与模型接口")
+        SettingsGroupTitle("AI 诊断与模型接�?")
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -278,7 +280,7 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        SettingsGroupTitle("数据存储与安全")
+        SettingsGroupTitle("数据存储与安�?")
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -291,9 +293,9 @@ fun ProfileScreen(
                     icon = Icons.Outlined.CloudDownload,
                     title = "导出本地数据备份 (JSON)",
                     subtitle = if (isExporting) {
-                        "正在导出…"
+                        "正在导出�?"
                     } else {
-                        "专注记录、模拟考试、日记、打卡与设置（不含 AI Key）"
+                        "专注记录、模拟考试、日记、打卡与设置（不�? AI Key�?"
                     },
                     onClick = { if (!isExporting) startExport() }
                 )
@@ -302,9 +304,9 @@ fun ProfileScreen(
                     icon = Icons.Outlined.CloudUpload,
                     title = "导入数据恢复",
                     subtitle = if (isImporting) {
-                        "正在导入…"
+                        "正在导入�?"
                     } else {
-                        "从 JSON 备份整表恢复（会先自动留一份本机快照）"
+                        "�? JSON 备份整表恢复（会先自动留一份本机快照）"
                     },
                     onClick = { if (!isImporting) importLauncher.launch(arrayOf("application/json")) }
                 )
@@ -324,8 +326,8 @@ fun ProfileScreen(
             Column {
                 SettingsItem(
                     icon = Icons.Outlined.Info,
-                    title = "关于研迹 (Yanji) 与卷卷",
-                    subtitle = "v1.0 · 安静、稳定、耐心的考研备考伴侣",
+                    title = "关于研迹 (Yanji) 与卷�?",
+                    subtitle = "v1.0 · 安静、稳定、耐心的考研备考伴�?",
                     onClick = { showAboutDialog = true }
                 )
             }
@@ -347,7 +349,7 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        repo.updateSettings(
+                        viewModel.updateSettings(
                             settings.copy(
                                 targetSchool = school,
                                 targetMajor = major,
@@ -422,7 +424,7 @@ fun ProfileScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("每日专注学习目标：${goalH.toInt()} 小时", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("每日专注学习目标�?${goalH.toInt()} 小时", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Slider(
                         value = goalH,
                         onValueChange = { goalH = it },
@@ -450,13 +452,12 @@ fun ProfileScreen(
     // AI Config Dialog
     if (showAiConfigDialog) {
         AiConfigDialog(
-            onDismissRequest = { showAiConfigDialog = false },
-            repo = repo
+            onDismissRequest = { showAiConfigDialog = false }
         )
     }
 
     // ---------- 导入确认 ----------
-    // 导入是「整表替换」，属于破坏性操作：必须先把要覆盖的内容讲清楚再执行。
+    // 导入是「整表替捀��，属于破坏性操作：必须先把要覆盖的内容讲清楚再执行�?
     pendingImport?.let { (rawJson, decoded) ->
         val backup = decoded.backup
         val warnings = decoded.warnings
@@ -469,7 +470,7 @@ fun ProfileScreen(
                         coroutineScope.launch {
                             isImporting = true
                             val result = try {
-                                repo.importBackupJson(rawJson)
+                                viewModel.importBackupJson(rawJson)
                             } catch (e: Exception) {
                                 com.example.yanji.data.backup.BackupImportResult.Failure(
                                     e.localizedMessage ?: "未知错误"
@@ -506,7 +507,7 @@ fun ProfileScreen(
             text = {
                 Column {
                     Text(
-                        "本机现有的专注、模考、日记、对话、打卡与成就将被**整体替换**为备份内容。",
+                        "本机现有的专注、模考、日记、对话、打卡与成就将被**整体替换**为备份内容�?",
                         fontSize = 13.sp,
                         color = YanjiTextSecondary,
                         lineHeight = 19.sp
@@ -520,7 +521,7 @@ fun ProfileScreen(
                             .padding(12.dp)
                     ) {
                         Text(
-                            "备份内容：${backup.countsSummary()}",
+                            "备份内容�?${backup.countsSummary()}",
                             fontSize = 12.sp,
                             color = YanjiTextPrimary,
                             lineHeight = 18.sp
@@ -534,7 +535,7 @@ fun ProfileScreen(
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        "导入前会自动在本机留一份快照，可随时找回。",
+                        "导入前会自动在本机留一份快照，可随时找回�?",
                         fontSize = 12.sp,
                         color = YanjiTextTertiary
                     )
@@ -555,10 +556,10 @@ fun ProfileScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("知道了", fontWeight = FontWeight.Bold)
+                    Text("知道�?", fontWeight = FontWeight.Bold)
                 }
             },
-            title = { Text("导入未执行", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text("导入未执�?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             text = { Text(message, fontSize = 13.sp, color = YanjiTextPrimary, lineHeight = 19.sp) },
             shape = RoundedCornerShape(20.dp),
             containerColor = YanjiSurface
@@ -588,7 +589,7 @@ fun ProfileScreen(
             text = {
                 Column {
                     Text(
-                        text = "研迹（Yanji）是一款仅供个人使用的 Android 考研日记与学习管理应用。\n\n核心价值：记录、专注、积累、复盘。\n\n设计原则：\n• Local First：数据全部存储在用户本地设备\n• 真实记录：专注计时基于真实时间戳\n• 低干扰：不做复杂社交、排行榜和过度鸡血\n• 卷卷陪伴：拟人化圆角笔记本伙伴，安静陪伴你的考研全程。",
+                        text = "研迹（Yanji）是一款仅供个人使用的 Android 考研日记与学习管理应用。\n\n核心价值：记录、专注、积累、复盘。\n\n设计原则：\n�? Local First：数据全部存储在用户本地设备\n�? 真实记录：专注计时基于真实时间戳\n�? 低干扰：不做复杂社交、排行榜和过度鸡血\n�? 卷卷陪伴：拟人化圆角笔记本伙伴，安静陪伴你的考研全程�?",
                         fontSize = 13.sp,
                         color = YanjiTextPrimary,
                         lineHeight = 20.sp
@@ -633,7 +634,7 @@ private fun YanjiExamDatePickerDialog(
         ((leadingEmptyCells + daysInMonth + 6) / 7).coerceIn(5, 6)
     }
     val todayMillis = remember { currentLocalDateAsUtcMillis() }
-    val weekdays = remember { listOf("一", "二", "三", "四", "五", "六", "日") }
+    val weekdays = remember { listOf("一", "�?", "�?", "�?", "�?", "�?", "�?") }
 
     fun moveMonth(delta: Int) {
         val target = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
@@ -679,7 +680,7 @@ private fun YanjiExamDatePickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${visibleYear} 年 ${visibleMonth + 1} 月",
+                        text = "${visibleYear} �? ${visibleMonth + 1} �?",
                         modifier = Modifier.weight(1f),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -694,7 +695,7 @@ private fun YanjiExamDatePickerDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronLeft,
-                            contentDescription = "上个月",
+                            contentDescription = "上个�?",
                             tint = YanjiTextSecondary
                         )
                     }
@@ -708,7 +709,7 @@ private fun YanjiExamDatePickerDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "下个月",
+                            contentDescription = "下个�?",
                             tint = YanjiTextSecondary
                         )
                     }
@@ -766,7 +767,7 @@ private fun YanjiExamDatePickerDialog(
                                                 }
                                             )
                                             .semantics {
-                                                contentDescription = "${visibleYear}年${visibleMonth + 1}月${day}日"
+                                                contentDescription = "${visibleYear}�?${visibleMonth + 1}�?${day}�?"
                                                 selected = isSelected
                                             }
                                             .clickable { selectedDateMillis = dayMillis },
@@ -835,7 +836,7 @@ private fun formatExamDateFromUtcMillis(value: Long): String =
     }.format(Date(value))
 
 private fun formatExamDateDisplayFromUtcMillis(value: Long): String =
-    SimpleDateFormat("yyyy年M月d日", Locale.CHINA).apply {
+    SimpleDateFormat("yyyy年M月d�?", Locale.CHINA).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }.format(Date(value))
 

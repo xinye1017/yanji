@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.StudyTimeRange
@@ -34,13 +35,18 @@ fun SubjectStudyDetailScreen(
     onNavigateToExamDetail: (examId: String) -> Unit,
     onNavigateToStartFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: SubjectStudyDetailViewModel = viewModel(
+        key = subjectId
+    ) { SubjectStudyDetailViewModel(StudyStatisticsRepository.getInstance(), subjectId) }
 ) {
     var selectedRange by remember { mutableStateOf(StudyTimeRange.TODAY) }
 
-    val summary by statsRepo.getSubjectStudySummaryFlow(subjectId, selectedRange).collectAsStateWithLifecycle(
-        initialValue = statsRepo.getSubjectStudySummary(subjectId, selectedRange)
-    )
+    val summary by viewModel.summary.collectAsStateWithLifecycle()
+
+    val selectRange: (StudyTimeRange) -> Unit = { range ->
+        selectedRange = range
+        viewModel.selectRange(range)
+    }
 
     val subjectColor = remember(summary.subjectColor) {
         try {
@@ -99,7 +105,7 @@ fun SubjectStudyDetailScreen(
                 val isSelected = selectedRange == range
                 Tab(
                     selected = isSelected,
-                    onClick = { selectedRange = range },
+                    onClick = { selectRange(range) },
                     text = {
                         Text(
                             text = range.title,

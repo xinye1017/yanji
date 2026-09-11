@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.ChatContextSource
 import com.example.yanji.data.ChatMessage
 import com.example.yanji.data.ChatSender
@@ -50,18 +51,17 @@ import java.util.*
 @Composable
 fun JuanjuanChatScreen(
     onNavigateBack: () -> Unit,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: ChatViewModel = viewModel { ChatViewModel(YanjiRepository.getInstance()) }
 ) {
     BackHandler(onBack = onNavigateBack)
     val context = LocalContext.current
-    val messages by repo.chatMessages.collectAsStateWithLifecycle()
-    val isAiReplying by repo.isAiReplying.collectAsStateWithLifecycle()
-    val settings by repo.settings.collectAsStateWithLifecycle()
-    val sessions by repo.chatSessions.collectAsStateWithLifecycle()
-    val currentSessionId by repo.currentSessionId.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val messages = state.messages
+    val isAiReplying = state.isAiReplying
+    val sessions = state.sessions
+    val currentSessionId = state.currentSessionId
 
-    val currentSession = sessions.find { it.id == currentSessionId }
-    val activeModel = currentSession?.model ?: settings.aiModel.ifBlank { "deepseek-chat" }
+    val activeModel = state.currentSession?.model ?: state.settings.aiModel.ifBlank { "deepseek-chat" }
     val isNewConversation = messages.isEmpty()
 
     var inputText by remember { mutableStateOf("") }
@@ -71,10 +71,8 @@ fun JuanjuanChatScreen(
     var showHistorySheet by remember { mutableStateOf(false) }
     var showAiSettings by remember { mutableStateOf(false) }
 
-    // Real context sources from repository
-    val contextSources = remember(messages.size, sessions.size, repo) {
-        repo.currentContextSources()
-    }
+    // Real context sources from repository（随消息/会话流在 ViewModel 内重算）
+    val contextSources = state.contextSources
 
     // Quick questions for empty state
     val quickQuestions = listOf(
@@ -99,7 +97,7 @@ fun JuanjuanChatScreen(
                 onBack = onNavigateBack,
                 onHistory = { showHistorySheet = true },
                 onNewChat = {
-                    repo.createNewChatSession(activeModel)
+                    viewModel.createNewChatSession(activeModel)
                     Toast.makeText(context, "已开启新对话", Toast.LENGTH_SHORT).show()
                 },
                 onAiSettings = { showAiSettings = true }
@@ -164,11 +162,11 @@ fun JuanjuanChatScreen(
                             message = msg,
                             learningRecordCount = contextSources.sumOf { it.count },
                             onActionClick = { action ->
-                                repo.executeAction(action, context)
+                                viewModel.executeAction(action, context)
                                 Toast.makeText(context, "已执行：${action.label}", Toast.LENGTH_SHORT).show()
                             },
                             onFollowupClick = { followup ->
-                                repo.sendChatMessage(followup, model = activeModel)
+                                viewModel.sendChatMessage(followup, model = activeModel)
                             },
                             onContextSourceClick = { source ->
                                 Toast.makeText(context, "查看 ${source.type.name.replace("_", " ")}", Toast.LENGTH_SHORT).show()
@@ -191,7 +189,7 @@ fun JuanjuanChatScreen(
                             questions = quickQuestions,
                             onQuestionClick = { question ->
                                 val cleanQuery = question.replace(Regex("^[^一-龥a-zA-Z0-9]+"), "").trim()
-                                repo.sendChatMessage(cleanQuery, model = activeModel)
+                                viewModel.sendChatMessage(cleanQuery, model = activeModel)
                             }
                         )
                     }
@@ -206,7 +204,7 @@ fun JuanjuanChatScreen(
                     if (inputText.isNotBlank()) {
                         val text = inputText
                         inputText = ""
-                        repo.sendChatMessage(text, model = activeModel)
+                        viewModel.sendChatMessage(text, model = activeModel)
                     }
                 }
             )
@@ -261,7 +259,7 @@ fun JuanjuanChatScreen(
 
                     Button(
                         onClick = {
-                            repo.createNewChatSession(activeModel)
+                            viewModel.createNewChatSession(activeModel)
                             showHistorySheet = false
                             Toast.makeText(context, "已开启新对话", Toast.LENGTH_SHORT).show()
                         },
@@ -306,7 +304,7 @@ fun JuanjuanChatScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        repo.switchChatSession(s.id)
+                                        viewModel.switchChatSession(s.id)
                                         showHistorySheet = false
                                     }
                             ) {
@@ -400,7 +398,7 @@ fun JuanjuanChatScreen(
                             confirmButton = {
                                 TextButton(
                                     onClick = {
-                                        repo.deleteChatSession(target.id)
+                                        viewModel.deleteChatSession(target.id)
                                         sessionToDelete = null
                                     }
                                 ) {
@@ -424,8 +422,7 @@ fun JuanjuanChatScreen(
     // AI Settings Dialog
     if (showAiSettings) {
         AiConfigDialog(
-            onDismissRequest = { showAiSettings = false },
-            repo = repo
+            onDismissRequest = { showAiSettings = false }
         )
     }
 }

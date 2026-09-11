@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.*
@@ -32,11 +33,11 @@ fun ExamDetailScreen(
     examId: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance()
+    viewModel: ExamViewModel = viewModel { ExamViewModel(YanjiRepository.getInstance()) }
 ) {
     val context = LocalContext.current
-    val examSessions by repo.examSessions.collectAsStateWithLifecycle()
-    val exam = examSessions.find { it.id == examId }
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val exam = state.examSessions.find { it.id == examId }
 
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
@@ -268,7 +269,7 @@ fun ExamDetailScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        repo.deleteExamSession(exam.id)
+                        viewModel.deleteExam(exam.id)
                         showDeleteConfirmDialog = false
                         Toast.makeText(context, "模考记录已删除", Toast.LENGTH_SHORT).show()
                         onBack()

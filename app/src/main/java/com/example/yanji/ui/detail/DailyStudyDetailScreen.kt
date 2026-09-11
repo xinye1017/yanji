@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.*
+import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.JuanjuanAvatar
 
@@ -34,11 +36,11 @@ fun DailyStudyDetailScreen(
     onNavigateToExamDetail: (examId: String) -> Unit,
     onNavigateToStartFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: DailyStudyDetailViewModel = viewModel(
+        key = date
+    ) { DailyStudyDetailViewModel(StudyStatisticsRepository.getInstance(), date) }
 ) {
-    val summary by statsRepo.getDailyStudySummaryFlow(date).collectAsStateWithLifecycle(
-        initialValue = statsRepo.getDailyStudySummary(date)
-    )
+    val summary by viewModel.summary.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier

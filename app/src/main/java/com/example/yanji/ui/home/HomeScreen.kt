@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -77,12 +78,14 @@ fun HomeScreen(
     onNavigateToAchievements: () -> Unit = {},
     onQuickStart: (preset: QuickStartPreset) -> Unit = {},
     modifier: Modifier = Modifier,
-    repo: YanjiRepository = YanjiRepository.getInstance(),
-    statsRepo: StudyStatisticsRepository = StudyStatisticsRepository.getInstance()
+    viewModel: HomeViewModel = viewModel {
+        HomeViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    }
 ) {
-    val settings by repo.settings.collectAsStateWithLifecycle()
-    val examSessions by repo.examSessions.collectAsStateWithLifecycle()
-    val quickPresets by repo.quickStartPresets.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val settings = state.settings
+    val examSessions = state.examSessions
+    val quickPresets = state.quickPresets
 
     var presetToDelete by remember { mutableStateOf<QuickStartPreset?>(null) }
 
@@ -97,43 +100,19 @@ fun HomeScreen(
 
     var celebratingCheckIn by remember { mutableStateOf<CheckIn?>(null) }
 
-    val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-    val dailySummary by statsRepo.getDailyStudySummaryFlow(todayIso).collectAsStateWithLifecycle(
-        initialValue = statsRepo.getDailyStudySummary(todayIso)
-    )
+    val todayIso = state.todayIso
 
-    val todaySecs = dailySummary.totalDurationSeconds
+    val todaySecs = state.todaySummary.totalDurationSeconds
     val todayHours = todaySecs / 3600
     val todayMins = (todaySecs % 3600) / 60
     val goalHours = settings.dailyGoalHours
     val goalSecs = (goalHours * 3600).toLong()
     val progress = (todaySecs.toFloat() / goalSecs.coerceAtLeast(1L)).coerceIn(0f, 1f)
 
-    // Countdown days calculation (单一数据源：settings.targetExamDate；解析失败回退显示原字符串)
-    val daysRemaining = remember(settings.targetExamDate) {
-        runCatching {
-            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            fmt.isLenient = false
-            val target = Calendar.getInstance()
-            target.time = fmt.parse(settings.targetExamDate)!!
-            target.set(Calendar.HOUR_OF_DAY, 0)
-            target.set(Calendar.MINUTE, 0)
-            target.set(Calendar.SECOND, 0)
-            target.set(Calendar.MILLISECOND, 0)
-            val today = Calendar.getInstance()
-            today.set(Calendar.HOUR_OF_DAY, 0)
-            today.set(Calendar.MINUTE, 0)
-            today.set(Calendar.SECOND, 0)
-            today.set(Calendar.MILLISECOND, 0)
-            ((target.timeInMillis - today.timeInMillis) / 86_400_000L).toInt()
-        }.getOrNull()
-    }
+    val daysRemaining = state.daysRemaining
 
-    // Exam statistics
-    val avgScore = if (examSessions.isNotEmpty()) {
-        val scored = examSessions.mapNotNull { it.score }
-        if (scored.isNotEmpty()) scored.average() else 0.0
-    } else 0.0
+    // Exam statistics（派生值由 HomeViewModel 随数据变化重算）
+    val avgScore = state.avgExamScore
 
     BoxWithConstraints(
         modifier = modifier
@@ -246,9 +225,8 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        // Check-In Card
+        // Check-In Card（打卡状态由 CheckInViewModel 自持，宿主不再传 repo）
         CheckInCard(
-            repo = repo,
             onCheckInSuccess = { checkIn ->
                 celebratingCheckIn = checkIn
             }
@@ -338,7 +316,7 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (dailySummary.subjectDistribution.isEmpty()) {
+                if (state.todaySummary.subjectDistribution.isEmpty()) {
                     Text(
                         text = "今日尚未记录学习时长，点击下方按钮开始专注",
                         fontSize = 12.sp,
@@ -350,7 +328,7 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        dailySummary.subjectDistribution.forEach { (subName, secs) ->
+                        state.todaySummary.subjectDistribution.forEach { (subName, secs) ->
                             val color = when {
                                 subName.contains("数学") || subName.contains("线性代数") || subName.contains("概率论") -> SubjectMath
                                 subName.contains("408") || subName.contains("专业课") ||
@@ -488,19 +466,19 @@ fun HomeScreen(
                                                 ?: return@detectDragGesturesAfterLongPress
                                             val oldTop = myTop
                                             val newTop = itemTopLefts[targetIndex] ?: oldTop
-                                            repo.moveQuickStartPreset(draggedId, targetIndex)
+                                            viewModel.moveQuickStartPreset(draggedId, targetIndex)
                                             // 补偿：交换后保持手指相对被拖块的抓取位置不变
                                             dragOffset += oldTop - newTop
                                             dragIndex = targetIndex
                                         }
                                     },
                                     onDragEnd = {
-                                        repo.commitQuickStartPresetOrder()
+                                        viewModel.commitQuickStartPresetOrder()
                                         dragIndex = -1
                                         dragOffset = Offset.Zero
                                     },
                                     onDragCancel = {
-                                        repo.commitQuickStartPresetOrder()
+                                        viewModel.commitQuickStartPresetOrder()
                                         dragIndex = -1
                                         dragOffset = Offset.Zero
                                     }
@@ -621,7 +599,7 @@ fun HomeScreen(
         // 6. Juanjuan Encouragement
         // 注意：这里不能对连续天数做 `maxOf(1, ...)` —— 没有任何连续学习记录时
         // 显示"已达成 1 天"属于伪造统计。真实的 0 天就如实呈现，只是换成引导文案。
-        val streakDays = statsRepo.getWeeklyStudySummary().streakDays
+        val streakDays = state.streakDays
         JuanjuanEncouragementBanner(
             message = if (todaySecs > 0) {
                 "今天已经积累 ${todayHours} 小时 ${todayMins} 分钟。专注的轨迹正在清晰留下，不急不躁，按部就班。"
@@ -676,7 +654,7 @@ fun HomeScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        repo.deleteQuickStartPreset(preset.id)
+                        viewModel.deleteQuickStartPreset(preset.id)
                         presetToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = YanjiDanger),
