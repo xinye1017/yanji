@@ -76,7 +76,7 @@ fun CheckInCard(
                             color = YanjiTextPrimary
                         )
                         Text(
-                            text = if (state.currentStreak > 0) "已连续打卡 $state.currentStreak 天" else "开启坚持第一步",
+                            text = if (state.currentStreak > 0) "已连续打卡 ${state.currentStreak} 天" else "开启坚持第一步",
                             fontSize = 12.sp,
                             color = YanjiTextSecondary
                         )

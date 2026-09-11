@@ -791,7 +791,7 @@ class YanjiRepository private constructor() {
             sources += ChatContextSource(
                 ContextSourceType.CURRENT_CONVERSATION,
                 recentChat.size,
-                "本次对话最近 $recentChat.size 条消息"
+                "本次对话最近 ${recentChat.size} 条消息"
             )
         }
 
