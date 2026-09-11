@@ -78,6 +78,13 @@ class YanjiRepository private constructor() {
     private val _subjects = MutableStateFlow(defaultSubjects)
     val subjects: StateFlow<List<Subject>> = _subjects.asStateFlow()
 
+    fun addCustomSubject(name: String, color: String = "#356AE6"): Subject {
+        val id = "custom_" + UUID.randomUUID().toString().take(8)
+        val newSub = Subject(id, name, color, sortOrder = _subjects.value.size + 1)
+        _subjects.value = _subjects.value + newSub
+        return newSub
+    }
+
     // ---- 领域 Store：状态与动作各自归属，Repository 只做同名委托（UI 层零改动）----
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
     private val journalStore = JournalStore(scope = repoScope, dbProvider = { database })

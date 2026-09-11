@@ -11,17 +11,27 @@ import java.util.UUID
  */
 object FocusModes {
     const val COUNT_UP = "正向计时"
-    const val POMODORO_45 = "45分钟番茄"
-    const val DEEP_60 = "60分钟深度"
-    const val BIG_90 = "90分钟大题"
+    const val POMODORO_25 = "25分钟番茄"
+    const val POMODORO_45 = "45分钟深度"
+    const val DEEP_60 = "60分钟小测"
+    const val BIG_90 = "90分钟专题"
 
-    val ALL: List<String> = listOf(COUNT_UP, POMODORO_45, DEEP_60, BIG_90)
+    val ALL: List<String> = listOf(COUNT_UP, POMODORO_25, POMODORO_45, DEEP_60, BIG_90)
 
-    /** 正向计时返回 0，表示不限时长。 */
-    fun targetSeconds(mode: String): Long = when (mode) {
-        POMODORO_45 -> 2700L
-        DEEP_60 -> 3600L
-        BIG_90 -> 5400L
+    /** 正向计时返回 0，表示不限时长；倒计时返回目标秒数。 */
+    fun targetSeconds(mode: String): Long = when {
+        mode.contains("25") -> 1500L
+        mode.contains("45") -> 2700L
+        mode.contains("60") -> 3600L
+        mode.contains("90") -> 5400L
+        mode.contains("分钟") -> {
+            val minutes = Regex("""(\d+)\s*分钟""").find(mode)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+            minutes * 60L
+        }
+        mode == "45分钟番茄" -> 2700L
+        mode == "60分钟深度" -> 3600L
+        mode == "90分钟大题" -> 5400L
+        mode == COUNT_UP -> 0L
         else -> 0L
     }
 }

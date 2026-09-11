@@ -87,4 +87,7 @@ class FocusViewModel(
 
     /** 把当前组合保存为首页快捷操作。 */
     fun saveQuickStartPreset(preset: QuickStartPreset): QuickStartPreset = repo.addQuickStartPreset(preset)
+
+    /** 新增自定义科目 */
+    fun addCustomSubject(name: String): Subject = repo.addCustomSubject(name)
 }
