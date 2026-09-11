@@ -8,6 +8,12 @@ import com.example.yanji.data.backup.BackupImportResult
 import com.example.yanji.data.ai.AiClient
 import com.example.yanji.data.backup.BackupTransfer
 import com.example.yanji.data.chat.ChatStore
+import com.example.yanji.data.checkin.CheckInStore
+import com.example.yanji.data.checkin.DayCheckInStatus
+import com.example.yanji.data.journal.JournalStore
+import com.example.yanji.data.preset.QuickStartPresetStore
+import com.example.yanji.data.study.StudyStats
+import com.example.yanji.data.timer.TimerStore
 import com.example.yanji.data.backup.UserSettingsBackup
 import com.example.yanji.data.backup.YanjiBackup
 import com.example.yanji.data.db.*
@@ -72,14 +78,16 @@ class YanjiRepository private constructor() {
     private val _subjects = MutableStateFlow(defaultSubjects)
     val subjects: StateFlow<List<Subject>> = _subjects.asStateFlow()
 
-    private val _focusSessions = MutableStateFlow<List<FocusSession>>(emptyList())
-    val focusSessions: StateFlow<List<FocusSession>> = _focusSessions.asStateFlow()
+    // ---- 领域 Store：状态与动作各自归属，Repository 只做同名委托（UI 层零改动）----
+    private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
+    private val journalStore = JournalStore(scope = repoScope, dbProvider = { database })
+    private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
+    private val presetStore = QuickStartPresetStore(scope = repoScope, dbProvider = { database })
 
-    private val _examSessions = MutableStateFlow<List<ExamSession>>(emptyList())
-    val examSessions: StateFlow<List<ExamSession>> = _examSessions.asStateFlow()
+    val focusSessions: StateFlow<List<FocusSession>> get() = timerStore.focusSessions
+    val examSessions: StateFlow<List<ExamSession>> get() = timerStore.examSessions
 
-    private val _journalEntries = MutableStateFlow<List<JournalEntry>>(emptyList())
-    val journalEntries: StateFlow<List<JournalEntry>> = _journalEntries.asStateFlow()
+    val journalEntries: StateFlow<List<JournalEntry>> get() = journalStore.journalEntries
 
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
@@ -102,27 +110,21 @@ class YanjiRepository private constructor() {
     val currentSessionId: StateFlow<String> get() = chatStore.currentSessionId
     val isAiReplying: StateFlow<Boolean> get() = chatStore.isAiReplying
 
-    private val _checkIns = MutableStateFlow<List<CheckIn>>(emptyList())
-    val checkIns: StateFlow<List<CheckIn>> = _checkIns.asStateFlow()
+    val checkIns: StateFlow<List<CheckIn>> get() = checkInStore.checkIns
 
     private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
     val unlockedAchievements: StateFlow<Map<String, Long>> = _unlockedAchievements.asStateFlow()
 
     // 首页自定义快捷操作（科目 + 计时模式 + 备注 组合）
-    private val _quickStartPresets = MutableStateFlow<List<QuickStartPreset>>(emptyList())
-    val quickStartPresets: StateFlow<List<QuickStartPreset>> = _quickStartPresets.asStateFlow()
+    val quickStartPresets: StateFlow<List<QuickStartPreset>> get() = presetStore.quickStartPresets
 
     // Current running active session if any
-    private val _activeFocus = MutableStateFlow<FocusSession?>(null)
-    val activeFocus: StateFlow<FocusSession?> = _activeFocus.asStateFlow()
+    val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
 
     // 由业务层（而不是 Compose 页面）宣告"刚刚完成了一次专注 / 一场模考"。
     // UI 只是这个事件的观察者：即使页面当时没有组合，记录也已经落库。
-    private val _lastCompletedFocus = MutableStateFlow<FocusSession?>(null)
-    val lastCompletedFocus: StateFlow<FocusSession?> = _lastCompletedFocus.asStateFlow()
-
-    private val _lastCompletedExam = MutableStateFlow<ExamSession?>(null)
-    val lastCompletedExam: StateFlow<ExamSession?> = _lastCompletedExam.asStateFlow()
+    val lastCompletedFocus: StateFlow<FocusSession?> get() = timerStore.lastCompletedFocus
+    val lastCompletedExam: StateFlow<ExamSession?> get() = timerStore.lastCompletedExam
 
     fun bindDatabase(db: YanjiDatabase) {
         if (database != null) return
@@ -134,18 +136,7 @@ class YanjiRepository private constructor() {
         cachedAiApiKey = secretStore?.readAiApiKey().orEmpty()
 
         // 把"计时结束如何落库"交给业务层：前台 Service 与任何页面都可以调用它。
-        ActiveSessionCoordinator.bind(object : TimerSessionPersistence {
-            override suspend fun completeFocus(
-                session: ActiveSession,
-                actualSeconds: Long,
-                pausedSeconds: Long,
-                pauseCount: Int,
-                endEpochMs: Long
-            ) = persistCompletedFocus(session, actualSeconds, pausedSeconds, pauseCount, endEpochMs)
-
-            override suspend fun completeExam(session: ActiveSession, actualSeconds: Long, endEpochMs: Long) =
-                persistCompletedExam(session, actualSeconds, endEpochMs)
-        })
+        ActiveSessionCoordinator.bind(timerStore.persistence)
         ActiveSessionCoordinator.restorePersisted()
 
         repoScope.launch {
@@ -161,21 +152,9 @@ class YanjiRepository private constructor() {
             // known tradeoff: simpler than a merge-by-id strategy, and matches the previous
             // behavior. The inconsistency window is sub-frame and only visible under
             // rapid parallel writes.
-            launch {
-                db.focusSessionDao().getAll().collect { entities ->
-                    _focusSessions.value = entities.map { it.toDomainModel() }
-                }
-            }
-            launch {
-                db.examSessionDao().getAll().collect { entities ->
-                    _examSessions.value = entities.map { it.toDomainModel() }
-                }
-            }
-            launch {
-                db.journalEntryDao().getAll().collect { entities ->
-                    _journalEntries.value = entities.map { it.toDomainModel() }
-                }
-            }
+            // 专注/模考、日记的 DB 订阅由各自的 Store 负责
+            timerStore.bind(db)
+            journalStore.bind(db)
             launch {
                 db.userSettingsDao().getSettings().collect { entity ->
                     if (entity != null) {
@@ -186,21 +165,13 @@ class YanjiRepository private constructor() {
             }
             // 聊天的 DB 订阅由 ChatStore 自己负责
             chatStore.bind(db)
-            launch {
-                db.checkInDao().getAllFlow().collect { entities ->
-                    _checkIns.value = entities.map { it.toDomainModel() }
-                }
-            }
+            checkInStore.bind(db)
             launch {
                 db.achievementDao().getAllFlow().collect { entities ->
                     _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
                 }
             }
-            launch {
-                db.quickStartPresetDao().getAllFlow().collect { entities ->
-                    _quickStartPresets.value = entities.map { it.toDomainModel() }
-                }
-            }
+            presetStore.bind(db)
         }
     }
 
@@ -246,11 +217,6 @@ class YanjiRepository private constructor() {
         }
     }
 
-    // Actions
-
-    /** 最短可记录时长：与 UI 的「不足 1 分钟不予保存」提示保持同一条业务规则。 */
-    private val minRecordedFocusSeconds = 60L
-
     /**
      * 开始一次专注。
      *
@@ -265,35 +231,7 @@ class YanjiRepository private constructor() {
         subjectName: String,
         note: String,
         mode: String = FocusModes.COUNT_UP
-    ): FocusSession? {
-        val now = System.currentTimeMillis()
-        val session = FocusSession(
-            id = UUID.randomUUID().toString(),
-            subjectId = subjectId,
-            subjectName = subjectName,
-            startTime = now,
-            endTime = now,
-            durationSeconds = 0,
-            note = note,
-            mode = mode,
-            status = SessionStatus.RUNNING
-        )
-        val accepted = ActiveSessionCoordinator.begin(
-            ActiveSession(
-                sessionId = session.id,
-                kind = ActiveSessionKind.FOCUS,
-                subjectId = subjectId,
-                subjectName = subjectName,
-                mode = mode,
-                note = note,
-                targetDurationSeconds = FocusModes.targetSeconds(mode),
-                startedAtEpochMs = now
-            )
-        )
-        if (!accepted) return null
-        _activeFocus.value = session
-        return session
-    }
+    ): FocusSession? = timerStore.startFocus(subjectId, subjectName, note, mode)
 
     /**
      * 登记一场模考到业务层，供前台 Service 完成时落库。
@@ -303,125 +241,37 @@ class YanjiRepository private constructor() {
         subjectId: String,
         subjectName: String,
         plannedDurationSeconds: Long
-    ): ExamSession? {
-        val now = System.currentTimeMillis()
-        val session = ExamSession(
-            id = UUID.randomUUID().toString(),
-            subjectId = subjectId,
-            subjectName = subjectName,
-            plannedDurationSeconds = plannedDurationSeconds,
-            actualDurationSeconds = 0,
-            startTime = now,
-            endTime = now,
-            status = SessionStatus.RUNNING
-        )
-        val accepted = ActiveSessionCoordinator.begin(
-            ActiveSession(
-                sessionId = session.id,
-                kind = ActiveSessionKind.EXAM,
-                subjectId = subjectId,
-                subjectName = subjectName,
-                targetDurationSeconds = plannedDurationSeconds,
-                plannedDurationSeconds = plannedDurationSeconds,
-                startedAtEpochMs = now
-            )
-        )
-        if (!accepted) return null
-        return session
-    }
+    ): ExamSession? = timerStore.startExamSession(subjectId, subjectName, plannedDurationSeconds)
 
     /** UI 侧的暂停镜像；真实计时事实由前台 Service 的 [com.example.yanji.data.timer.TimerMachine] 维护。 */
-    fun pauseFocus(elapsedSeconds: Long = 0L) {
-        val current = _activeFocus.value ?: return
-        if (current.status == SessionStatus.RUNNING) {
-            _activeFocus.value = current.copy(
-                status = SessionStatus.PAUSED,
-                durationSeconds = if (elapsedSeconds > 0) elapsedSeconds else current.durationSeconds
-            )
-        }
-    }
+    fun pauseFocus(elapsedSeconds: Long = 0L) = timerStore.pauseFocus(elapsedSeconds)
 
-    fun resumeFocus() {
-        val current = _activeFocus.value ?: return
-        if (current.status == SessionStatus.PAUSED) {
-            _activeFocus.value = current.copy(status = SessionStatus.RUNNING)
-        }
-    }
+    fun resumeFocus() = timerStore.resumeFocus()
 
-    fun updateFocusDuration(seconds: Long) {
-        val current = _activeFocus.value ?: return
-        _activeFocus.value = current.copy(durationSeconds = seconds)
-    }
+    fun updateFocusDuration(seconds: Long) = timerStore.updateFocusDuration(seconds)
 
     /**
      * 用户放弃本次计时：不产生任何记录。
      * 与 [ActiveSessionCoordinator.cancel] 成对使用。
      */
-    fun cancelFocus() {
-        _activeFocus.value = null
-        ActiveSessionCoordinator.cancel()
-    }
+    fun cancelFocus() = timerStore.cancelFocus()
 
     /** 用户放弃本场模考：不产生记录。 */
-    fun abandonExam() {
-        ActiveSessionCoordinator.cancel()
-    }
+    fun abandonExam() = timerStore.abandonExam()
 
-    fun acknowledgeCompletedFocus() {
-        _lastCompletedFocus.value = null
-    }
+    fun acknowledgeCompletedFocus() = timerStore.acknowledgeCompletedFocus()
 
-    fun acknowledgeCompletedExam() {
-        _lastCompletedExam.value = null
-    }
+    fun acknowledgeCompletedExam() = timerStore.acknowledgeCompletedExam()
 
     /**
      * 由 [ActiveSessionCoordinator] 调用的落库出口：专注完成。
      *
      * 数据只写 Room，内存列表交给 DAO 的 Flow 回灌，避免"内存一份缓存 + DB 一份"的双写不一致。
      */
-    private suspend fun persistCompletedFocus(
-        session: ActiveSession,
-        actualSeconds: Long,
-        pausedSeconds: Long,
-        pauseCount: Int,
-        endEpochMs: Long
-    ) {
-        _activeFocus.value = null
-        if (actualSeconds < minRecordedFocusSeconds) return
 
-        val recorded = FocusSession(
-            id = session.sessionId,
-            subjectId = session.subjectId,
-            subjectName = session.subjectName,
-            startTime = session.startedAtEpochMs,
-            endTime = endEpochMs,
-            durationSeconds = actualSeconds,
-            pausedDurationSeconds = pausedSeconds.coerceAtLeast(0L),
-            pauseCount = pauseCount,
-            mode = session.mode,
-            note = session.note,
-            status = SessionStatus.COMPLETED
-        )
-        database?.focusSessionDao()?.insert(FocusSessionEntity.fromDomainModel(recorded))
-        _lastCompletedFocus.value = recorded
-    }
 
     /** 由 [ActiveSessionCoordinator] 调用的落库出口：模考完成。 */
-    private suspend fun persistCompletedExam(session: ActiveSession, actualSeconds: Long, endEpochMs: Long) {
-        val recorded = ExamSession(
-            id = session.sessionId,
-            subjectId = session.subjectId,
-            subjectName = session.subjectName,
-            plannedDurationSeconds = session.plannedDurationSeconds,
-            actualDurationSeconds = actualSeconds.coerceAtLeast(0L),
-            startTime = session.startedAtEpochMs,
-            endTime = endEpochMs,
-            status = SessionStatus.COMPLETED
-        )
-        database?.examSessionDao()?.insert(ExamSessionEntity.fromDomainModel(recorded))
-        _lastCompletedExam.value = recorded
-    }
+
 
     /** 探测可用模型列表。协议与传输细节见 [com.example.yanji.data.ai.AiClient]。 */
     suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> =
@@ -429,43 +279,17 @@ class YanjiRepository private constructor() {
 
 
 
-    fun addExamSession(session: ExamSession) {
-        _examSessions.value = listOf(session) + _examSessions.value
-        repoScope.launch {
-            database?.examSessionDao()?.insert(ExamSessionEntity.fromDomainModel(session))
-        }
-    }
+    fun addExamSession(session: ExamSession) = timerStore.addExamSession(session)
 
-    fun deleteFocusSession(id: String) {
-        _focusSessions.value = _focusSessions.value.filter { it.id != id }
-        repoScope.launch {
-            database?.focusSessionDao()?.deleteById(id)
-        }
-    }
+    fun deleteFocusSession(id: String) = timerStore.deleteFocusSession(id)
 
-    fun updateFocusSessionNote(id: String, note: String) {
-        _focusSessions.value = _focusSessions.value.map {
-            if (it.id == id) it.copy(note = note) else it
-        }
-        repoScope.launch {
-            database?.focusSessionDao()?.updateNote(id, note)
-        }
-    }
+    fun updateFocusSessionNote(id: String, note: String) = timerStore.updateFocusSessionNote(id, note)
 
-    fun deleteExamSession(id: String) {
-        _examSessions.value = _examSessions.value.filter { it.id != id }
-        repoScope.launch {
-            database?.examSessionDao()?.deleteById(id)
-        }
-    }
+    fun deleteExamSession(id: String) = timerStore.deleteExamSession(id)
 
-    suspend fun getFocusSessionByIdFromDb(id: String): FocusSessionEntity? = withContext(Dispatchers.IO) {
-        database?.focusSessionDao()?.getById(id)
-    }
+    suspend fun getFocusSessionByIdFromDb(id: String): FocusSessionEntity? = timerStore.getFocusSessionByIdFromDb(id)
 
-    suspend fun getExamSessionByIdFromDb(id: String): ExamSessionEntity? = withContext(Dispatchers.IO) {
-        database?.examSessionDao()?.getById(id)
-    }
+    suspend fun getExamSessionByIdFromDb(id: String): ExamSessionEntity? = timerStore.getExamSessionByIdFromDb(id)
 
     /**
      * 保存日记。**以 Room 为唯一事实来源**，不再维护"内存一份 + DB 一份"的双缓存。
@@ -476,25 +300,13 @@ class YanjiRepository private constructor() {
      * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库；当传入的 entry 用了新 id
      *    但日期已存在时，会产生两条同日期日记。现在统一按日期归一化 id/createdAt。
      */
-    fun addOrUpdateJournal(entry: JournalEntry) {
-        repoScope.launch {
-            val dao = database?.journalEntryDao() ?: return@launch
-            val existing = dao.getByDate(entry.date)
-            val normalized = entry.copy(
-                id = existing?.id ?: entry.id,
-                createdAt = existing?.createdAt ?: entry.createdAt,
-                updatedAt = System.currentTimeMillis()
-            )
-            dao.insert(JournalEntryEntity.fromDomainModel(normalized))
-        }
-    }
+    /**
+     * 保存日记。**以 Room 为唯一事实来源**；按日期归一化 id/createdAt 的规则见
+     * [JournalStore.addOrUpdate]。
+     */
+    fun addOrUpdateJournal(entry: JournalEntry) = journalStore.addOrUpdate(entry)
 
-    fun deleteJournal(id: String) {
-        _journalEntries.value = _journalEntries.value.filter { it.id != id }
-        repoScope.launch {
-            database?.journalEntryDao()?.deleteById(id)
-        }
-    }
+    fun deleteJournal(id: String) = journalStore.delete(id)
 
     /**
      * 保存用户设置。
@@ -573,7 +385,7 @@ class YanjiRepository private constructor() {
 
         // 会话列表被整体替换后，"当前会话"指针必须重新校正到一个真实存在的会话上
         chatStore.onSessionsReplaced()
-        _activeFocus.value = null
+        timerStore.clearActiveFocus()
 
         BackupImportResult.Success(backup, snapshotPath, decoded.warnings)
     }
@@ -589,60 +401,26 @@ class YanjiRepository private constructor() {
 
     // === 首页自定义快捷操作 ===
     // 写入顺序：先更新内存 StateFlow（UI 立即响应），再落库；DB Flow 回灌时保持一致。
-    fun addQuickStartPreset(preset: QuickStartPreset): QuickStartPreset {
-        val nextOrder = (_quickStartPresets.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
-        val stored = preset.copy(sortOrder = nextOrder)
-        _quickStartPresets.value = _quickStartPresets.value + stored
-        repoScope.launch {
-            database?.quickStartPresetDao()?.insert(QuickStartPresetEntity.fromDomainModel(stored))
-        }
-        return stored
-    }
+    fun addQuickStartPreset(preset: QuickStartPreset): QuickStartPreset = presetStore.add(preset)
 
-    fun updateQuickStartPreset(preset: QuickStartPreset) {
-        _quickStartPresets.value = _quickStartPresets.value.map {
-            if (it.id == preset.id) preset else it
-        }
-        repoScope.launch {
-            database?.quickStartPresetDao()?.insert(QuickStartPresetEntity.fromDomainModel(preset))
-        }
-    }
+    fun updateQuickStartPreset(preset: QuickStartPreset) = presetStore.update(preset)
 
-    fun deleteQuickStartPreset(id: String) {
-        _quickStartPresets.value = _quickStartPresets.value.filter { it.id != id }
-        repoScope.launch {
-            database?.quickStartPresetDao()?.deleteById(id)
-        }
-    }
+    fun deleteQuickStartPreset(id: String) = presetStore.delete(id)
 
     /** 长按拖动排序：把 id 项移动到 toIndex 位置（内存即时生效，其余项顺移）。 */
-    fun moveQuickStartPreset(id: String, toIndex: Int) {
-        val list = _quickStartPresets.value.toMutableList()
-        val from = list.indexOfFirst { it.id == id }
-        if (from < 0 || toIndex !in list.indices || from == toIndex) return
-        val item = list.removeAt(from)
-        list.add(toIndex, item)
-        _quickStartPresets.value = list.mapIndexed { i, p -> p.copy(sortOrder = i) }
-    }
+    fun moveQuickStartPreset(id: String, toIndex: Int) = presetStore.move(id, toIndex)
 
     /** 拖动结束后把当前内存顺序持久化到 DB。 */
-    fun commitQuickStartPresetOrder() {
-        val ordered = _quickStartPresets.value
-        repoScope.launch {
-            ordered.forEachIndexed { i, p ->
-                database?.quickStartPresetDao()?.insert(QuickStartPresetEntity.fromDomainModel(p.copy(sortOrder = i)))
-            }
-        }
-    }
+    fun commitQuickStartPresetOrder() = presetStore.commitOrder()
 
     suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
         val settings = _settings.value
         val snapshot = StudyDiagnosticSnapshot.from(
             periodDays = periodDays,
             settings = settings,
-            focusSessions = _focusSessions.value,
-            examSessions = _examSessions.value,
-            journalEntries = _journalEntries.value
+            focusSessions = timerStore.focusSessions.value,
+            examSessions = timerStore.examSessions.value,
+            journalEntries = journalStore.journalEntries.value
         )
         val analysis = if (settings.aiApiKey.isNotBlank() && snapshot.sessionCount > 0) {
             runCatching { callAiDiagnosticApi(snapshot, settings) }
@@ -804,7 +582,7 @@ class YanjiRepository private constructor() {
      * 若无已记录模考，返回 null，调用方应改用「从你的描述来看…」。
      */
     private fun buildLocalExamStats(): String? {
-        val recent = _examSessions.value
+        val recent = timerStore.examSessions.value
             .filter { it.score != null && SubjectCatalog.categoryIdOf(it.subjectId) == "math" }
             .sortedByDescending { it.startTime }
             .take(8)
@@ -829,10 +607,10 @@ class YanjiRepository private constructor() {
             systemPrompt = JuanjuanPrompt.SYSTEM_PROMPT,
             runtimeContext = JuanjuanPrompt.buildRuntimeContext(
                 settings = settings,
-                focusSessions = _focusSessions.value,
-                examSessions = _examSessions.value,
-                journalEntries = _journalEntries.value,
-                activeFocus = _activeFocus.value
+                focusSessions = timerStore.focusSessions.value,
+                examSessions = timerStore.examSessions.value,
+                journalEntries = journalStore.journalEntries.value,
+                activeFocus = timerStore.activeFocus.value
             ),
             history = history,
             settings = settings,
@@ -923,169 +701,39 @@ class YanjiRepository private constructor() {
     }
 
     // Helper query computations (Unified Single Source of Truth)
-    fun getTodayFocusDurationSeconds(): Long {
-        val todayStr = dateFormat.format(Date())
-        val focusSecs = _focusSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && dateFormat.format(Date(it.startTime)) == todayStr }
-            .sumOf { it.durationSeconds }
-        val examSecs = _examSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && dateFormat.format(Date(it.startTime)) == todayStr }
-            .sumOf { it.actualDurationSeconds }
-        return focusSecs + examSecs
-    }
+    fun getTodayFocusDurationSeconds(): Long =
+        StudyStats.durationOnDay(timerStore.focusSessions.value, timerStore.examSessions.value, System.currentTimeMillis())
 
-    fun getStudyDurationForPeriod(days: Int): Long {
-        val cutoff = System.currentTimeMillis() - days * 86400000L
-        val focusSecs = _focusSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && it.startTime >= cutoff }
-            .sumOf { it.durationSeconds }
-        val examSecs = _examSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && it.startTime >= cutoff }
-            .sumOf { it.actualDurationSeconds }
-        return focusSecs + examSecs
-    }
-
-    fun getTotalStudyDurationSeconds(): Long {
-        val focusSecs = _focusSessions.value
-            .filter { it.status == SessionStatus.COMPLETED }
-            .sumOf { it.durationSeconds }
-        val examSecs = _examSessions.value
-            .filter { it.status == SessionStatus.COMPLETED }
-            .sumOf { it.actualDurationSeconds }
-        return focusSecs + examSecs
-    }
-
-    fun getTodaySubjectDistribution(): Map<String, Long> {
-        val todayStr = dateFormat.format(Date())
-        val map = mutableMapOf<String, Long>()
-        fun add(subjectId: String, subjectName: String, seconds: Long) {
-            val bucketId = SubjectCatalog.subcategoryBucketId(subjectId, subjectName)
-            val displayName = SubjectCatalog.displayName(bucketId) ?: subjectName
-            map[displayName] = (map[displayName] ?: 0L) + seconds
-        }
-        _focusSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && dateFormat.format(Date(it.startTime)) == todayStr }
-            .forEach { add(it.subjectId, it.subjectName, it.durationSeconds) }
-        _examSessions.value
-            .filter { it.status == SessionStatus.COMPLETED && dateFormat.format(Date(it.startTime)) == todayStr }
-            .forEach { add(it.subjectId, it.subjectName, it.actualDurationSeconds) }
-        return map
-    }
-
-    // CheckIn & Streak operations
-    fun isCheckedInToday(): Boolean {
-        val todayStr = dateFormat.format(Date())
-        return _checkIns.value.any { it.date == todayStr }
-    }
-
-    fun getTodayCheckIn(): CheckIn? {
-        val todayStr = dateFormat.format(Date())
-        return _checkIns.value.find { it.date == todayStr }
-    }
-
-    fun getCurrentStreak(): Int {
-        val dates = _checkIns.value.map { it.date }.toSet()
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val todayStr = sdf.format(Date())
-
-        var streak = 0
-        val targetCal = Calendar.getInstance()
-
-        if (dates.contains(todayStr)) {
-            // Count backwards from today
-            streak = 1
-            while (true) {
-                targetCal.add(Calendar.DAY_OF_YEAR, -1)
-                val prevDate = sdf.format(targetCal.time)
-                if (dates.contains(prevDate)) {
-                    streak++
-                } else {
-                    break
-                }
-            }
-        } else {
-            // Check if checked in yesterday
-            targetCal.add(Calendar.DAY_OF_YEAR, -1)
-            val yesterdayStr = sdf.format(targetCal.time)
-            if (dates.contains(yesterdayStr)) {
-                streak = 1
-                while (true) {
-                    targetCal.add(Calendar.DAY_OF_YEAR, -1)
-                    val prevDate = sdf.format(targetCal.time)
-                    if (dates.contains(prevDate)) {
-                        streak++
-                    } else {
-                        break
-                    }
-                }
-            }
-        }
-        return streak
-    }
-
-    fun checkInToday(note: String = "", mood: String = ""): CheckIn {
-        val todayStr = dateFormat.format(Date())
-        val existing = _checkIns.value.find { it.date == todayStr }
-        if (existing != null) {
-            return existing
-        }
-
-        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-        val yesterdayStr = dateFormat.format(cal.time)
-        val yesterdayCheckIn = _checkIns.value.find { it.date == yesterdayStr }
-        val newStreak = if (yesterdayCheckIn != null) {
-            yesterdayCheckIn.streak + 1
-        } else {
-            val currentStreakBeforeToday = getCurrentStreak()
-            if (currentStreakBeforeToday > 0) currentStreakBeforeToday + 1 else 1
-        }
-
-        val checkIn = CheckIn(
-            date = todayStr,
-            checkInTime = System.currentTimeMillis(),
-            streak = newStreak,
-            note = note.ifBlank { "今日打卡，稳扎稳打向前进！" },
-            mood = mood
+    fun getStudyDurationForPeriod(days: Int): Long =
+        StudyStats.durationSince(
+            timerStore.focusSessions.value,
+            timerStore.examSessions.value,
+            System.currentTimeMillis() - days * 86400000L
         )
 
-        _checkIns.value = listOf(checkIn) + _checkIns.value.filter { it.date != todayStr }
+    fun getTotalStudyDurationSeconds(): Long =
+        StudyStats.totalDuration(timerStore.focusSessions.value, timerStore.examSessions.value)
 
-        repoScope.launch {
-            database?.checkInDao()?.insert(CheckInEntity.fromDomainModel(checkIn))
-        }
+    fun getTodaySubjectDistribution(): Map<String, Long> =
+        StudyStats.subjectDistributionOnDay(
+            timerStore.focusSessions.value,
+            timerStore.examSessions.value,
+            System.currentTimeMillis()
+        )
 
-        return checkIn
-    }
+    // CheckIn & Streak operations
+    fun isCheckedInToday(): Boolean = checkInStore.isCheckedInToday()
 
-    data class DayCheckInStatus(
-        val date: String,
-        val dayLabel: String,
-        val isToday: Boolean,
-        val isCheckedIn: Boolean
-    )
+    fun getTodayCheckIn(): CheckIn? = checkInStore.getTodayCheckIn()
 
-    fun getPast7DaysCheckInStatus(): List<DayCheckInStatus> {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val dayNameSdf = SimpleDateFormat("E", Locale.CHINESE)
-        val checkInDates = _checkIns.value.map { it.date }.toSet()
+    fun getCurrentStreak(): Int = checkInStore.getCurrentStreak()
 
-        val result = mutableListOf<DayCheckInStatus>()
-        for (i in 6 downTo 0) {
-            val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -i) }
-            val dStr = sdf.format(cal.time)
-            val label = if (i == 0) "今天" else dayNameSdf.format(cal.time)
-            result.add(
-                DayCheckInStatus(
-                    date = dStr,
-                    dayLabel = label,
-                    isToday = (i == 0),
-                    isCheckedIn = checkInDates.contains(dStr)
-                )
-            )
-        }
-        return result
-    }
+    fun checkInToday(note: String = "", mood: String = ""): CheckIn =
+        checkInStore.checkInToday(note, mood)
 
+    fun getPast7DaysCheckInStatus(): List<DayCheckInStatus> = checkInStore.getPast7DaysCheckInStatus()
+
+    /** 解锁成就。幂等：已解锁的直接忽略。 */
     fun unlockAchievement(id: String) {
         val now = System.currentTimeMillis()
         if (_unlockedAchievements.value.containsKey(id)) return
@@ -1104,7 +752,7 @@ class YanjiRepository private constructor() {
         val sevenDaysAgo = System.currentTimeMillis() - 7 * 86400000L
 
         // 数学模考
-        val mathExams = _examSessions.value
+        val mathExams = timerStore.examSessions.value
             .filter { it.score != null && SubjectCatalog.categoryIdOf(it.subjectId) == "math" && it.startTime >= sevenDaysAgo }
         if (mathExams.isNotEmpty()) {
             sources += ChatContextSource(
@@ -1115,10 +763,10 @@ class YanjiRepository private constructor() {
         }
 
         // 错题/学习记录（近 7 天 focus + exam note 含「错」+ journal 含「错」）
-        val recentFocus = _focusSessions.value.filter { it.startTime >= sevenDaysAgo }
+        val recentFocus = timerStore.focusSessions.value.filter { it.startTime >= sevenDaysAgo }
         val wrongNotesCount = recentFocus.count { it.note.contains("错") }
-            + _examSessions.value.filter { it.startTime >= sevenDaysAgo }.count { it.note.contains("错") }
-            + _journalEntries.value.filter { it.updatedAt >= sevenDaysAgo }.count { it.content.contains("错") }
+            + timerStore.examSessions.value.filter { it.startTime >= sevenDaysAgo }.count { it.note.contains("错") }
+            + journalStore.journalEntries.value.filter { it.updatedAt >= sevenDaysAgo }.count { it.content.contains("错") }
         if (wrongNotesCount > 0) {
             sources += ChatContextSource(
                 ContextSourceType.WRONG_NOTES,
@@ -1204,7 +852,7 @@ class YanjiRepository private constructor() {
      */
     private fun saveTipToJournalInternal(context: Context, content: String) {
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val existing = _journalEntries.value.firstOrNull { it.date == todayStr }
+        val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
         val appendText = "\n\n### 卷卷说考研方法锦囊\n$content"
         if (existing != null) {
             addOrUpdateJournal(existing.copy(content = existing.content + appendText))
@@ -1227,7 +875,7 @@ class YanjiRepository private constructor() {
      */
     private fun addPlanToJournalInternal(context: Context, planText: String) {
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val existing = _journalEntries.value.firstOrNull { it.date == todayStr }
+        val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
         val cleanPlan = planText.replace("要将『", "").replace("』加为明早计划吗？", "").replace("？", "").trim()
         val planItem = "\n- [ ] 明早实践：$cleanPlan"
         if (existing != null) {
