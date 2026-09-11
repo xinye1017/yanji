@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置。
+
+  背景：此前 Manifest 使用 android:usesCleartextTraffic="true"，只为支持一个局域网
+  Ollama preset，却把整个 App 的明文网络访问面全部打开。
+
+  现在的策略：
+  - base-config 默认 **禁止** 明文流量，AI 请求必须走 HTTPS；
+  - 仅对本机回环地址开一个小口子，覆盖「Ollama 跑在同一台设备」以及
+    「adb reverse tcp:11434 tcp:11434 端口转发到本机」这两种本地开发场景。
+
+  如果需要访问局域网内另一台机器上的 HTTP 服务，正确做法是给它套一层 HTTPS 反向代理，
+  或在开发机上执行 `adb reverse`，而不是重新放开全局明文流量。
+-->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Android 模拟器访问宿主机的固定别名 -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
+</network-security-config>

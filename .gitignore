@@ -1,0 +1,28 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# --- 构建与工具链产物 ---
+.kotlin/
+build/
+
+# --- 本地工具状态 ---
+.claude/
+
+# --- 备份/快照类文件（含真机数据，绝不入库） ---
+*.db
+*.db-wal
+*.db-shm
+device-backup/

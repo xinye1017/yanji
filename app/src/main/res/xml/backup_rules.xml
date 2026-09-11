@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自动备份规则（Android 11 / API 30 及以下，由 Manifest 的 android:fullBackupContent 引用）。
+
+  与 data_extraction_rules.xml 保持同一策略：只备份 Room 学习数据库。
+  凭据位于 noBackupFilesDir 且经 Keystore 加密，天然不在备份范围内。
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+</full-backup-content>
