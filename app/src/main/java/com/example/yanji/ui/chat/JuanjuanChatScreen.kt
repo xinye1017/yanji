@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -89,9 +90,18 @@ fun JuanjuanChatScreen(
     var selectedModel by remember(activeModel) { mutableStateOf(activeModel) }
     var thinkingIntensity by remember { mutableStateOf(ThinkingIntensity.DEEP) }
 
-    // Auto-scroll when message changes
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val isKeyboardOpen = imeBottom > 0.dp
+
+    // Auto-scroll when message changes or keyboard opens
     LaunchedEffect(messages.size, isAiReplying) {
         if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+    LaunchedEffect(isKeyboardOpen) {
+        if (isKeyboardOpen && messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -109,8 +119,8 @@ fun JuanjuanChatScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 52.dp,
-                bottom = 125.dp
+                top = statusBarHeight + 52.dp,
+                bottom = if (isKeyboardOpen) imeBottom + 105.dp else 125.dp
             )
         ) {
             // Timestamp
@@ -191,7 +201,27 @@ fun JuanjuanChatScreen(
             }
         }
 
-        // Floating Top Bar: Completely transparent, ONLY 2 circular floating buttons
+        // Top Gradient Blur / Frosted Overlay (从上到下渐变透明，越往下越透明)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(statusBarHeight + 72.dp)
+                .align(Alignment.TopCenter)
+                .zIndex(5f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            YanjiBackground.copy(alpha = 0.96f),
+                            YanjiBackground.copy(alpha = 0.86f),
+                            YanjiBackground.copy(alpha = 0.55f),
+                            YanjiBackground.copy(alpha = 0.18f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
+        // Floating Top Bar: 左右两个悬浮圆形按钮，处于渐变层上方
         ChatTopBar(
             onBack = onNavigateBack,
             onHistory = { showHistorySheet = true },

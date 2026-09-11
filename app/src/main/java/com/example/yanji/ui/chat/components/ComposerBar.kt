@@ -92,14 +92,25 @@ fun ComposerBar(
 
     val displayModel = getModelDisplayName(activeModel)
 
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val isKeyboardOpen = imeBottom > 0.dp
+    // When keyboard is open, imeBottom covers from screen bottom to keyboard top.
+    // Use strictly imeBottom to avoid double-counting navigation bar height.
+    val insetsBottom = if (isKeyboardOpen) imeBottom else navBottom
+    val extraBottomPadding = if (isKeyboardOpen) 4.dp else 8.dp
+
     // Outer column with NO background (purely transparent over screen background)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 4.dp,
+                bottom = insetsBottom + extraBottomPadding
+            ),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Model Indicator & Thinking Status Row (No overall background)
         Row(
