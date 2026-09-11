@@ -75,4 +75,13 @@ class ChatViewModel(
     fun switchChatSession(sessionId: String) = repo.switchChatSession(sessionId)
 
     fun deleteChatSession(sessionId: String) = repo.deleteChatSession(sessionId)
+
+    fun updateModel(model: String) {
+        val currentSessionId = uiState.value.currentSessionId
+        if (currentSessionId.isNotBlank()) {
+            repo.updateSessionModel(currentSessionId, model)
+        }
+        val currentSettings = uiState.value.settings
+        repo.updateSettings(currentSettings.copy(aiModel = model))
+    }
 }

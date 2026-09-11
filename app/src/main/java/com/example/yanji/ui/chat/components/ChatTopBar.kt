@@ -9,7 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,16 +33,17 @@ fun ChatTopBar(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Return button: 36dp round surface with subtle shadow
+        // Floating Back Button (36dp circle, zero bar background)
         Surface(
             modifier = Modifier.size(36.dp),
             shape = CircleShape,
             color = YanjiSurface,
-            shadowElevation = 1.dp
+            shadowElevation = 1.dp,
+            border = BorderStroke(0.5.dp, YanjiBorder)
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -59,7 +60,7 @@ fun ChatTopBar(
             }
         }
 
-        // More actions button: 36dp round surface with subtle shadow & dropdown menu
+        // Floating More Actions Button (36dp circle, horizontal 3 dots, zero shadow dropdown)
         Box {
             var expanded by remember { mutableStateOf(false) }
 
@@ -67,7 +68,8 @@ fun ChatTopBar(
                 modifier = Modifier.size(36.dp),
                 shape = CircleShape,
                 color = YanjiSurface,
-                shadowElevation = 1.dp
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, YanjiBorder)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -76,7 +78,7 @@ fun ChatTopBar(
                         .clickable { expanded = !expanded }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
+                        imageVector = Icons.Default.MoreHoriz,
                         contentDescription = "更多操作",
                         tint = YanjiTextSecondary,
                         modifier = Modifier.size(20.dp)
@@ -91,7 +93,7 @@ fun ChatTopBar(
                 shape = RoundedCornerShape(16.dp),
                 containerColor = YanjiSurface,
                 tonalElevation = 0.dp,
-                shadowElevation = 8.dp,
+                shadowElevation = 0.dp, // 彻底去掉阴影，解决阴影与卡片加载割裂问题
                 border = BorderStroke(1.dp, YanjiBorder)
             ) {
                 DropdownMenuItem(

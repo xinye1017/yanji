@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -85,6 +86,9 @@ fun JuanjuanChatScreen(
         "政治大题背诵有什么技巧？"
     )
 
+    var selectedModel by remember(activeModel) { mutableStateOf(activeModel) }
+    var thinkingIntensity by remember { mutableStateOf(ThinkingIntensity.DEEP) }
+
     // Auto-scroll when message changes
     LaunchedEffect(messages.size, isAiReplying) {
         if (messages.isNotEmpty()) {
@@ -92,128 +96,142 @@ fun JuanjuanChatScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            ChatTopBar(
-                onBack = onNavigateBack,
-                onHistory = { showHistorySheet = true },
-                onNewChat = {
-                    viewModel.createNewChatSession(activeModel)
-                    Toast.makeText(context, "已开启新对话", Toast.LENGTH_SHORT).show()
-                },
-                onAiSettings = { showAiSettings = true }
-            )
-        },
-        containerColor = YanjiBackground
-    ) { paddingValues ->
-        Column(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(YanjiBackground)
+    ) {
+        // Chat Stream Body (Messages scroll freely behind the floating header and composer)
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 52.dp,
+                bottom = 125.dp
+            )
         ) {
-            // Chat Stream Body
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 20.dp)
-            ) {
-                // Timestamp
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center
+            // Timestamp
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = YanjiSurfaceSoft
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = YanjiSurfaceSoft
-                        ) {
-                            Text(
-                                text = SimpleDateFormat("今天 HH:mm", Locale.getDefault()).format(Date()),
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    color = YanjiTextTertiary,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp
-                                ),
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (isNewConversation) {
-                    item {
-                        ConversationWelcome(
-                            contextRecordCount = contextSources.sumOf { it.count }
-                        )
-                    }
-                }
-
-                // Messages list
-                items(messages, key = { it.id }) { msg ->
-                    if (msg.sender == ChatSender.USER) {
-                        UserMessageBubble(
-                            content = msg.content
-                        )
-                    } else {
-                        JuanjuanMessageBubble(
-                            message = msg,
-                            learningRecordCount = contextSources.sumOf { it.count },
-                            onActionClick = { action ->
-                                viewModel.executeAction(action, context)
-                                Toast.makeText(context, "已执行：${action.label}", Toast.LENGTH_SHORT).show()
-                            },
-                            onFollowupClick = { followup ->
-                                viewModel.sendChatMessage(followup, model = activeModel)
-                            },
-                            onContextSourceClick = { source ->
-                                Toast.makeText(context, "查看 ${source.type.name.replace("_", " ")}", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
-                }
-
-                // AI Thinking indicator
-                if (isAiReplying) {
-                    item {
-                        AiThinkingIndicator()
-                    }
-                }
-
-                // Suggestions are an on-ramp for a fresh conversation, not a repeated interruption.
-                if (isNewConversation) {
-                    item {
-                        QuickQuestionsRow(
-                            questions = quickQuestions,
-                            onQuestionClick = { question ->
-                                val cleanQuery = question.replace(Regex("^[^一-龥a-zA-Z0-9]+"), "").trim()
-                                viewModel.sendChatMessage(cleanQuery, model = activeModel)
-                            }
+                        Text(
+                            text = SimpleDateFormat("今天 HH:mm", Locale.getDefault()).format(Date()),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = YanjiTextTertiary,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                         )
                     }
                 }
             }
 
-            // Composer Bar (Stitch design with model switcher & thinking status)
-            ComposerBar(
-                inputText = inputText,
-                onTextChange = { inputText = it },
-                onSend = {
-                    if (inputText.isNotBlank()) {
-                        val text = inputText
-                        inputText = ""
-                        viewModel.sendChatMessage(text, model = activeModel)
-                    }
-                },
-                activeModel = activeModel,
-                onModelClick = { showAiSettings = true }
-            )
+            if (isNewConversation) {
+                item {
+                    ConversationWelcome(
+                        contextRecordCount = contextSources.sumOf { it.count }
+                    )
+                }
+            }
+
+            // Messages list
+            items(messages, key = { it.id }) { msg ->
+                if (msg.sender == ChatSender.USER) {
+                    UserMessageBubble(
+                        content = msg.content
+                    )
+                } else {
+                    JuanjuanMessageBubble(
+                        message = msg,
+                        learningRecordCount = contextSources.sumOf { it.count },
+                        onActionClick = { action ->
+                            viewModel.executeAction(action, context)
+                            Toast.makeText(context, "已执行：${action.label}", Toast.LENGTH_SHORT).show()
+                        },
+                        onFollowupClick = { followup ->
+                            viewModel.sendChatMessage(followup, model = selectedModel)
+                        },
+                        onContextSourceClick = { source ->
+                            Toast.makeText(context, "查看 ${source.type.name.replace("_", " ")}", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+
+            // AI Thinking indicator
+            if (isAiReplying) {
+                item {
+                    AiThinkingIndicator()
+                }
+            }
+
+            // Suggestions are an on-ramp for a fresh conversation, not a repeated interruption.
+            if (isNewConversation) {
+                item {
+                    QuickQuestionsRow(
+                        questions = quickQuestions,
+                        onQuestionClick = { question ->
+                            val cleanQuery = question.replace(Regex("^[^一-龥a-zA-Z0-9]+"), "").trim()
+                            viewModel.sendChatMessage(cleanQuery, model = selectedModel)
+                        }
+                    )
+                }
+            }
         }
+
+        // Floating Top Bar: Completely transparent, ONLY 2 circular floating buttons
+        ChatTopBar(
+            onBack = onNavigateBack,
+            onHistory = { showHistorySheet = true },
+            onNewChat = {
+                viewModel.createNewChatSession(selectedModel)
+                Toast.makeText(context, "已开启新对话", Toast.LENGTH_SHORT).show()
+            },
+            onAiSettings = { showAiSettings = true },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(10f)
+        )
+
+        // Floating Bottom Composer Bar: Model dropdown + Thinking intensity dropdown + Input pill
+        ComposerBar(
+            inputText = inputText,
+            onTextChange = { inputText = it },
+            onSend = {
+                if (inputText.isNotBlank()) {
+                    val text = inputText
+                    inputText = ""
+                    viewModel.sendChatMessage(text, model = selectedModel)
+                }
+            },
+            activeModel = selectedModel,
+            onModelSelect = { newModel ->
+                selectedModel = newModel
+                viewModel.updateModel(newModel)
+                Toast.makeText(context, "已切换模型：${getModelDisplayName(newModel)}", Toast.LENGTH_SHORT).show()
+            },
+            thinkingIntensity = thinkingIntensity,
+            onThinkingIntensityChange = { newIntensity ->
+                thinkingIntensity = newIntensity
+                Toast.makeText(context, "思考强度：${newIntensity.title}", Toast.LENGTH_SHORT).show()
+            },
+            onOpenAiSettings = { showAiSettings = true },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .zIndex(10f)
+        )
     }
 
     // History Bottom Sheet
