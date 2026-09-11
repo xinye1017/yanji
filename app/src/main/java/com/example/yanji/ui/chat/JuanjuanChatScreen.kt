@@ -117,9 +117,9 @@ fun JuanjuanChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(
-                top = statusBarHeight + 52.dp,
+                top = statusBarHeight + 10.dp,
                 bottom = if (isKeyboardOpen) imeBottom + 105.dp else 125.dp
             )
         ) {
@@ -128,7 +128,7 @@ fun JuanjuanChatScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
@@ -140,9 +140,9 @@ fun JuanjuanChatScreen(
                             style = MaterialTheme.typography.labelMedium.copy(
                                 color = YanjiTextTertiary,
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
+                                fontSize = 11.sp
                             ),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
                         )
                     }
                 }
@@ -205,16 +205,16 @@ fun JuanjuanChatScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(statusBarHeight + 72.dp)
+                .height(statusBarHeight + 56.dp)
                 .align(Alignment.TopCenter)
                 .zIndex(5f)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
                             YanjiBackground.copy(alpha = 0.96f),
-                            YanjiBackground.copy(alpha = 0.86f),
-                            YanjiBackground.copy(alpha = 0.55f),
-                            YanjiBackground.copy(alpha = 0.18f),
+                            YanjiBackground.copy(alpha = 0.85f),
+                            YanjiBackground.copy(alpha = 0.45f),
+                            YanjiBackground.copy(alpha = 0.12f),
                             Color.Transparent
                         )
                     )
