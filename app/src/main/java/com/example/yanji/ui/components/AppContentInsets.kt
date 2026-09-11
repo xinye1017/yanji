@@ -10,5 +10,5 @@ import androidx.compose.ui.unit.dp
  * 58dp dock height + 12dp float gap + 18dp breathing = 88dp.
  */
 object AppContentInsets {
-    val BottomBarPadding = 88.dp
+    val BottomBarPadding = 96.dp
 }
