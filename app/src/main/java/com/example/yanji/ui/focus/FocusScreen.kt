@@ -63,13 +63,6 @@ private val QUICK_DURATIONS = listOf(
     DurationOption(90, "90", "专题", "90 分钟真题整块", FocusModes.BIG_90)
 )
 
-private val QUICK_GOALS = listOf(
-    "攻克薄弱大题",
-    "真题错题重做",
-    "核心概念过关",
-    "背诵重点词汇",
-    "总结专题笔记"
-)
 
 private fun getSubjectIcon(subjectId: String, name: String): ImageVector {
     val lower = (subjectId + name).lowercase()
@@ -200,15 +193,8 @@ fun FocusScreen(
             onSelectSubject = { selectedSubject = it },
             selectedMode = selectedMode,
             onSelectMode = { selectedMode = it },
-            noteText = noteText,
-            onNoteChange = { noteText = it },
             todayTotalSeconds = state.todayTotalSeconds,
-            onStart = { launchFocus(selectedSubject, selectedMode, noteText) },
-            onAddCustomSubject = { name ->
-                val newSub = viewModel.addCustomSubject(name)
-                selectedSubject = newSub
-                Toast.makeText(context, "已添加自定义科目：$name", Toast.LENGTH_SHORT).show()
-            },
+            onStart = { launchFocus(selectedSubject, selectedMode, "") },
             onSaveAsQuickAction = { label ->
                 viewModel.saveQuickStartPreset(
                     QuickStartPreset(
@@ -216,7 +202,7 @@ fun FocusScreen(
                         subjectId = selectedSubject.id,
                         subjectName = selectedSubject.name,
                         mode = selectedMode,
-                        note = noteText
+                        note = ""
                     )
                 )
                 Toast.makeText(context, "已添加到首页快捷操作", Toast.LENGTH_SHORT).show()
@@ -292,11 +278,8 @@ fun FocusSetupContent(
     onSelectSubject: (Subject) -> Unit,
     selectedMode: String,
     onSelectMode: (String) -> Unit,
-    noteText: String,
-    onNoteChange: (String) -> Unit,
     todayTotalSeconds: Long = 0L,
     onStart: () -> Unit,
-    onAddCustomSubject: (String) -> Unit = {},
     onSaveAsQuickAction: (String) -> Unit = {},
     onNavigateToExam: () -> Unit,
     onNavigateToDailyDetail: (String) -> Unit = {}
@@ -311,12 +294,13 @@ fun FocusSetupContent(
         mutableStateOf(if (mins > 0) mins else 45)
     }
 
-    var showCustomSubjectDialog by remember { mutableStateOf(false) }
     var showCustomDurationDialog by remember { mutableStateOf(false) }
     var showSaveQuickDialog by remember { mutableStateOf(false) }
 
     val topCategories = remember(subjects) {
-        subjects.filter { it.parentId == null && it.enabled }.sortedBy { it.sortOrder }
+        subjects.filter {
+            it.parentId == null && it.enabled && it.id != "other" && it.name != "其他" && !it.name.contains("其他")
+        }.sortedBy { it.sortOrder }
     }
     val currentCategoryId = selectedSubject.parentId ?: selectedSubject.id
     val subcategories = remember(subjects, currentCategoryId) {
@@ -398,43 +382,14 @@ fun FocusSetupContent(
 
         // ---- 2. Module 1: 复习科目选择 (2-Column Grid + Subcategories) ----
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "选择复习科目",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    ),
-                    color = YanjiTextPrimary
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { showCustomSubjectDialog = true }
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "自定义科目",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = YanjiPrimary,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp
-                        )
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = YanjiPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
+            Text(
+                text = "选择复习科目",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                ),
+                color = YanjiTextPrimary
+            )
 
             // 2-Column Grid for Top-level Subject Cards
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -572,26 +527,6 @@ fun FocusSetupContent(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val isAllSelected = selectedSubject.id == currentCategoryId
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isAllSelected) YanjiPrimarySoft else YanjiSurfaceSoft,
-                                modifier = Modifier.clickable {
-                                    val parent = subjects.find { it.id == currentCategoryId }
-                                    if (parent != null) onSelectSubject(parent)
-                                }
-                            ) {
-                                Text(
-                                    text = "全部",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isAllSelected) YanjiPrimary else YanjiTextSecondary
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                                )
-                            }
-
                             subcategories.forEach { child ->
                                 val isChildSelected = selectedSubject.id == child.id
                                 Surface(
@@ -889,114 +824,7 @@ fun FocusSetupContent(
             }
         }
 
-        // ---- 4. Module 3: 当次目标与备注 (Focus Intention & Target Note) ----
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "当次目标与备注",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    ),
-                    color = YanjiTextPrimary
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = YanjiSurfaceSoft
-                ) {
-                    Text(
-                        text = "选填",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = YanjiTextTertiary
-                        ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
 
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = YanjiSurface,
-                border = BorderStroke(1.dp, YanjiBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Rounded text box
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = YanjiSurfaceSoft,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        BasicTextField(
-                            value = noteText,
-                            onValueChange = onNoteChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = YanjiTextPrimary,
-                                fontSize = 14.sp
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (noteText.isEmpty()) {
-                                    Text(
-                                        text = "写下一句微小具体的任务，例如：完成高数讲义例题 4-6...",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = YanjiTextTertiary,
-                                            fontSize = 13.sp
-                                        )
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
-                    }
-
-                    // Quick Goal Chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "快捷：",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = YanjiTextTertiary,
-                                fontSize = 11.sp
-                            )
-                        )
-                        QUICK_GOALS.forEach { goal ->
-                            Surface(
-                                shape = CircleShape,
-                                color = YanjiSurfaceSoft,
-                                modifier = Modifier.clickable {
-                                    onNoteChange(if (noteText.isBlank()) goal else "$noteText · $goal")
-                                }
-                            ) {
-                                Text(
-                                    text = goal,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 11.sp,
-                                        color = YanjiTextSecondary
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // ---- 5. CTA Module (Start Button & Footer) ----
         Column(
@@ -1067,46 +895,7 @@ fun FocusSetupContent(
         }
     }
 
-    // 自定义科目 Dialog
-    if (showCustomSubjectDialog) {
-        var newSubjectName by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showCustomSubjectDialog = false },
-            title = { Text("添加自定义复习科目", fontWeight = FontWeight.Bold) },
-            text = {
-                OutlinedTextField(
-                    value = newSubjectName,
-                    onValueChange = { newSubjectName = it },
-                    label = { Text("科目名称") },
-                    placeholder = { Text("例如：西方经济学、法硕刑法...") },
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (newSubjectName.isNotBlank()) {
-                            onAddCustomSubject(newSubjectName.trim())
-                            showCustomSubjectDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("添加", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCustomSubjectDialog = false }) {
-                    Text("取消")
-                }
-            },
-            containerColor = YanjiSurface,
-            shape = RoundedCornerShape(20.dp)
-        )
-    }
+
 
     // 自定义时长 Dialog
     if (showCustomDurationDialog) {
@@ -1221,7 +1010,6 @@ fun FocusSetupContent(
                         Column(modifier = Modifier.padding(12.dp)) {
                             PresetSummaryRow("科目", selectedSubject.name)
                             PresetSummaryRow("模式", selectedMode)
-                            PresetSummaryRow("备注", noteText.ifBlank { "（无）" })
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
