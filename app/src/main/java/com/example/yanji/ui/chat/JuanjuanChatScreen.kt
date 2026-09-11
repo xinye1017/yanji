@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -116,38 +117,40 @@ fun JuanjuanChatScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(top = 16.dp, bottom = 20.dp)
             ) {
+                // Timestamp
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = YanjiSurfaceSoft
+                        ) {
+                            Text(
+                                text = SimpleDateFormat("今天 HH:mm", Locale.getDefault()).format(Date()),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    color = YanjiTextTertiary,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 12.sp
+                                ),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
                 if (isNewConversation) {
                     item {
                         ConversationWelcome(
                             contextRecordCount = contextSources.sumOf { it.count }
                         )
-                    }
-                } else {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = YanjiSurfaceSoft
-                            ) {
-                                Text(
-                                    text = SimpleDateFormat("今天 HH:mm", Locale.getDefault()).format(Date()),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        color = YanjiTextTertiary,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -196,7 +199,7 @@ fun JuanjuanChatScreen(
                 }
             }
 
-            // Composer Bar
+            // Composer Bar (Stitch design with model switcher & thinking status)
             ComposerBar(
                 inputText = inputText,
                 onTextChange = { inputText = it },
@@ -206,7 +209,9 @@ fun JuanjuanChatScreen(
                         inputText = ""
                         viewModel.sendChatMessage(text, model = activeModel)
                     }
-                }
+                },
+                activeModel = activeModel,
+                onModelClick = { showAiSettings = true }
             )
         }
     }
@@ -429,85 +434,144 @@ fun JuanjuanChatScreen(
 
 @Composable
 private fun ConversationWelcome(contextRecordCount: Int) {
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.PageRadius),
-        color = YanjiSurfaceBlue,
-        border = androidx.compose.foundation.BorderStroke(1.dp, YanjiPrimary.copy(alpha = 0.10f)),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.Top
     ) {
+        // Juanjuan Avatar with sparkle badge (40dp)
+        Box(modifier = Modifier.size(40.dp)) {
+            JuanjuanAvatar(size = 40.dp)
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 2.dp, y = 2.dp)
+                    .clip(CircleShape)
+                    .background(YanjiPrimary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(10.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
         Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                JuanjuanAvatar(size = 46.dp)
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "嗨，我是卷卷",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color = YanjiTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
+            // Header: Name + Badge
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "卷卷",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = YanjiTextSecondary,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
                     )
+                )
+
+                Surface(
+                    shape = CircleShape,
+                    color = YanjiPrimarySoft
+                ) {
                     Text(
-                        text = "你的备考学伴",
-                        style = MaterialTheme.typography.labelMedium.copy(color = YanjiPrimary)
+                        text = "专属学伴",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = YanjiPrimaryStrong,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
-                }
-                Surface(shape = CircleShape, color = YanjiSuccessSoft) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .background(YanjiSuccess, CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = "在线",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = YanjiSuccess,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        )
-                    }
                 }
             }
 
-            Text(
-                text = "今天想先解决哪件事？学习方法、做题卡点和情绪波动，我都陪你一起理清。",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = YanjiTextSecondary,
-                    lineHeight = 22.sp
-                )
-            )
-
-            if (contextRecordCount > 0) {
-                Surface(
-                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-                    color = Color.White.copy(alpha = 0.72f)
+            // Welcome Bubble (white card matching Stitch design)
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 4.dp,
+                    topEnd = 16.dp,
+                    bottomStart = 16.dp,
+                    bottomEnd = 16.dp
+                ),
+                color = YanjiSurface,
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = "嗨，今天已经专注备考啦！🌱",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = YanjiTextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+
+                    Text(
+                        text = "我刚刚看了你的近期模考成绩与研迹日记：核心基础整体非常扎实，准备好迎接今天的突破了吗？",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = YanjiTextPrimary,
+                            lineHeight = 22.sp,
+                            fontSize = 14.sp
+                        )
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = YanjiSurfaceBlue,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = YanjiPrimary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(7.dp))
                         Text(
-                            text = "本次对话会参考 $contextRecordCount 项学习记录",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                color = YanjiPrimaryStrong,
-                                fontWeight = FontWeight.Medium
-                            )
+                            text = "今天想聊聊考场时间分配、草稿折痕法，还是单纯想吐吐槽放松一下？卷卷随时在听哦。",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = YanjiTextSecondary,
+                                lineHeight = 20.sp,
+                                fontSize = 13.sp
+                            ),
+                            modifier = Modifier.padding(12.dp)
                         )
+                    }
+
+                    if (contextRecordCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = null,
+                                tint = YanjiLavender,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "已关联近 $contextRecordCount 项学习记录深度思考",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = Color(0xFF5C4BC3),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -520,15 +584,20 @@ private fun QuickQuestionsRow(
     questions: List<String>,
     onQuestionClick: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         Text(
             text = "可以从这些开始",
-            style = MaterialTheme.typography.labelLarge.copy(
+            style = MaterialTheme.typography.labelMedium.copy(
                 color = YanjiTextSecondary,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp
             ),
-            modifier = Modifier.padding(start = 2.dp)
+            modifier = Modifier.padding(start = 2.dp, top = 4.dp)
         )
+
         androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -537,15 +606,16 @@ private fun QuickQuestionsRow(
         ) {
             questions.forEach { question ->
                 Surface(
-                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
+                    shape = RoundedCornerShape(12.dp),
                     color = YanjiSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, YanjiPrimary.copy(alpha = 0.14f)),
+                    border = BorderStroke(1.dp, YanjiBorder),
+                    shadowElevation = 0.5.dp,
                     modifier = Modifier
                         .clickable { onQuestionClick(question) }
                         .weight(1f, fill = false)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -554,16 +624,16 @@ private fun QuickQuestionsRow(
                             tint = YanjiPrimary,
                             modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(7.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = question,
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = YanjiPrimary,
-                                fontWeight = FontWeight.Medium
+                                color = YanjiTextPrimary,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 12.sp
                             ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

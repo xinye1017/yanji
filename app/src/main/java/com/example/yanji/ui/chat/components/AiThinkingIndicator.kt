@@ -6,8 +6,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,14 +17,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.yanji.theme.YanjiPrimary
-import com.example.yanji.theme.YanjiRadius
-import com.example.yanji.theme.YanjiSurface
-import com.example.yanji.theme.YanjiTextSecondary
+import com.example.yanji.theme.*
+import com.example.yanji.ui.components.JuanjuanAvatar
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -40,28 +39,24 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
         ),
         label = "thinking-progress"
     )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.Start
     ) {
-        // Mini Juanjuan avatar indicator
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(YanjiPrimary.copy(alpha = 0.15f))
-        ) {
-            // Sparkle indicator
+        // Juanjuan Avatar with sparkle badge
+        Box(modifier = Modifier.size(40.dp)) {
+            JuanjuanAvatar(size = 40.dp)
             Box(
                 modifier = Modifier
                     .size(16.dp)
                     .align(Alignment.BottomEnd)
                     .offset(x = 2.dp, y = 2.dp)
                     .clip(CircleShape)
-                    .background(YanjiPrimary),
+                    .background(YanjiLavender),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -73,45 +68,48 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(10.dp))
 
-        // Animated dots
+        // Animated dots bubble (white surface with subtle shadow)
         Surface(
-            shape = RoundedCornerShape(YanjiRadius.MessageRadius),
+            shape = RoundedCornerShape(
+                topStart = 4.dp,
+                topEnd = 16.dp,
+                bottomStart = 16.dp,
+                bottomEnd = 16.dp
+            ),
             color = YanjiSurface,
             shadowElevation = 1.dp,
-            modifier = Modifier
-                .padding(top = 4.dp, bottom = 4.dp)
-                .padding(horizontal = 14.dp)
+            border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f))
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 (0..2).forEach { i ->
                     val delay = i * 150f
                     val progress = (((animated - delay) % 1200f) + 1200f) % 1200f / 1200f
-                    val scale = 0.5f + 0.5f * sin(progress * 2 * PI).toFloat()
+                    val scale = 0.6f + 0.4f * sin(progress * 2 * PI).toFloat()
                     Box(
                         modifier = Modifier
                             .graphicsLayer { this.scaleX = scale; this.scaleY = scale }
-                            .size(6.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
-                            .background(YanjiPrimary.copy(alpha = 0.5f + 0.5f * scale))
+                            .background(YanjiLavender.copy(alpha = 0.5f + 0.5f * scale))
                     )
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = "卷卷正在深度思考…",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = YanjiTextSecondary,
+                        fontSize = 12.sp
+                    )
+                )
             }
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Text(
-            text = "思考中…",
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = YanjiTextSecondary,
-                fontSize = 11.sp
-            )
-        )
     }
 }

@@ -1,34 +1,25 @@
 package com.example.yanji.ui.chat.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clipScrollableContainer
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yanji.theme.YanjiPrimary
-import com.example.yanji.theme.YanjiPrimarySoft
-import com.example.yanji.theme.YanjiRadius
-import com.example.yanji.theme.YanjiSurface
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
+import androidx.compose.ui.unit.sp
+import com.example.yanji.theme.*
 
 @Composable
 fun ChatTopBar(
@@ -42,126 +33,159 @@ fun ChatTopBar(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderIconButton(
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "返回",
-            onClick = onBack
-        )
-        MoreMenu(
-            onHistory = onHistory,
-            onNewChat = onNewChat,
-            onAiSettings = onAiSettings
-        )
-    }
-}
-
-@Composable
-private fun HeaderIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = YanjiTextPrimary,
-            modifier = Modifier.size(23.dp)
-        )
-    }
-}
-
-@Composable
-private fun MoreMenu(
-    onHistory: () -> Unit,
-    onNewChat: () -> Unit,
-    onAiSettings: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        HeaderIconButton(
-            icon = Icons.Default.MoreHoriz,
-            contentDescription = "更多操作",
-            onClick = { expanded = !expanded }
-        )
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.width(208.dp),
-            shape = RoundedCornerShape(20.dp),
-            containerColor = YanjiSurface,
-            tonalElevation = 0.dp,
-            shadowElevation = 12.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, YanjiPrimary.copy(alpha = 0.12f))
+        // Return button: 36dp round surface with subtle shadow
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape,
+            color = YanjiSurface,
+            shadowElevation = 1.dp
         ) {
-            Text(
-                text = "对话操作",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    color = YanjiTextSecondary,
-                    fontWeight = FontWeight.SemiBold
-                ),
-                modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 8.dp)
-            )
-            MenuAction(
-                icon = Icons.Default.History,
-                label = "历史记录",
-                onClick = { onHistory(); expanded = false }
-            )
-            MenuAction(
-                icon = Icons.Default.Add,
-                label = "新建对话",
-                emphasized = true,
-                onClick = { onNewChat(); expanded = false }
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                color = YanjiPrimary.copy(alpha = 0.08f)
-            )
-            MenuAction(
-                icon = Icons.Default.Settings,
-                label = "AI 设置",
-                onClick = { onAiSettings(); expanded = false }
-            )
-            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = onBack)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = YanjiTextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // More actions button: 36dp round surface with subtle shadow & dropdown menu
+        Box {
+            var expanded by remember { mutableStateOf(false) }
+
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = CircleShape,
+                color = YanjiSurface,
+                shadowElevation = 1.dp
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { expanded = !expanded }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "更多操作",
+                        tint = YanjiTextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.width(180.dp),
+                shape = RoundedCornerShape(16.dp),
+                containerColor = YanjiSurface,
+                tonalElevation = 0.dp,
+                shadowElevation = 8.dp,
+                border = BorderStroke(1.dp, YanjiBorder)
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "新建对话",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp
+                            ),
+                            color = YanjiPrimary
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.AddComment,
+                            contentDescription = null,
+                            tint = YanjiPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onNewChat()
+                    },
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                )
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "查看对话历史",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 14.sp
+                            ),
+                            color = YanjiTextPrimary
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = YanjiTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onHistory()
+                    },
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = YanjiDivider
+                )
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "AI 设置",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 14.sp
+                            ),
+                            color = YanjiTextPrimary
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = YanjiTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onAiSettings()
+                    },
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
         }
     }
-}
-
-@Composable
-private fun MenuAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    emphasized: Boolean = false,
-    onClick: () -> Unit
-) {
-    val rowShape = RoundedCornerShape(YanjiRadius.ButtonRadius)
-    DropdownMenuItem(
-        text = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = if (emphasized) YanjiPrimary else YanjiTextPrimary
-            )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (emphasized) YanjiPrimary else YanjiTextSecondary,
-                modifier = Modifier.size(19.dp)
-            )
-        },
-        onClick = onClick,
-        modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 1.dp)
-            .clip(rowShape)
-            .background(if (emphasized) YanjiPrimarySoft else Color.Transparent),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-    )
 }

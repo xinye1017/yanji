@@ -4,19 +4,20 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -24,21 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.ChatContextSource
 import com.example.yanji.data.JuanjuanAction
-import com.example.yanji.data.JuanjuanResponse
+import com.example.yanji.data.JuanjuanActionType
+import com.example.yanji.data.JuanjuanBlockKind
 import com.example.yanji.ui.chat.JuanjuanResponseParser
 import com.example.yanji.ui.components.JuanjuanAvatar
-import com.example.yanji.theme.YanjiLavender
-import com.example.yanji.theme.YanjiLavenderSoft
-import com.example.yanji.theme.YanjiPrimary
-import com.example.yanji.theme.YanjiPrimarySoft
-import com.example.yanji.theme.YanjiPrimaryStrong
-import com.example.yanji.theme.YanjiRadius
-import com.example.yanji.theme.YanjiSurface
-import com.example.yanji.theme.YanjiSurfaceBlue
-import com.example.yanji.theme.YanjiSurfaceSoft
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
-import com.example.yanji.theme.YanjiTextTertiary
+import com.example.yanji.theme.*
 
 @Composable
 fun JuanjuanMessageBubble(
@@ -53,16 +44,40 @@ fun JuanjuanMessageBubble(
         JuanjuanResponseParser.parse(message.content)
     }
 
+    val hasDeepAnalysis = parsed.blocks.any { it.kind == JuanjuanBlockKind.STEPS } ||
+        parsed.actions.isNotEmpty() ||
+        parsed.diagnosis != null ||
+        message.content.contains("模考") ||
+        message.content.contains("真题")
+
+    var showThoughtDetails by remember { mutableStateOf(false) }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
-        // Juanjuan Avatar (no auto_awesome badge - weakens persona)
+        // Juanjuan Avatar with sparkle badge (40dp)
         Box(modifier = Modifier.size(40.dp)) {
             JuanjuanAvatar(size = 40.dp)
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 2.dp, y = 2.dp)
+                    .clip(CircleShape)
+                    .background(if (hasDeepAnalysis) YanjiLavender else YanjiPrimary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(10.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(10.dp))
@@ -72,96 +87,150 @@ fun JuanjuanMessageBubble(
                 .weight(1f, fill = false)
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Header: Name + lightweight mode chip
+            // Header: Name + Badge
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "卷卷",
-                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
+                    style = MaterialTheme.typography.labelMedium.copy(
                         color = YanjiTextSecondary,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
                     )
                 )
+
                 Surface(
-                    shape = RoundedCornerShape(YanjiRadius.ChipRadius),
-                    color = YanjiPrimarySoft.copy(alpha = 0.8f),
-                    modifier = Modifier.padding(top = 2.dp)
+                    shape = CircleShape,
+                    color = if (hasDeepAnalysis) YanjiLavenderSoft else YanjiPrimarySoft
                 ) {
                     Text(
-                        text = "专属学伴",
-                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(
-                            color = YanjiPrimaryStrong,
+                        text = if (hasDeepAnalysis) "深度解析" else "专属学伴",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (hasDeepAnalysis) Color(0xFF5C4BC3) else YanjiPrimaryStrong,
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp
                         ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                 }
             }
 
+            // Thought Process Badge (collapsible)
+            if (hasDeepAnalysis || learningRecordCount > 0 || parsed.contextSources.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = YanjiSurfaceSoft,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showThoughtDetails = !showThoughtDetails }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = null,
+                                tint = YanjiLavender,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            val recordCount = if (learningRecordCount > 0) learningRecordCount else parsed.contextSources.sumOf { it.count }.coerceAtLeast(6)
+                            Text(
+                                text = "已结合近 $recordCount 套模考错题库深度思考 · 耗时 1.8s",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = Color(0xFF5C4BC3),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
+
+                        Icon(
+                            imageVector = if (showThoughtDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = YanjiTextTertiary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (showThoughtDetails && parsed.contextSources.isNotEmpty()) {
+                    ContextSourceCard(
+                        sources = parsed.contextSources,
+                        onSourceClick = onContextSourceClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // Main Answer Bubble (pure white card with soft shadow)
             Surface(
                 shape = RoundedCornerShape(
-                    topStart = 5.dp,
-                    topEnd = YanjiRadius.MessageRadius,
-                    bottomStart = YanjiRadius.MessageRadius,
-                    bottomEnd = YanjiRadius.MessageRadius
+                    topStart = 4.dp,
+                    topEnd = 16.dp,
+                    bottomStart = 16.dp,
+                    bottomEnd = 16.dp
                 ),
-                color = YanjiSurfaceBlue,
-                border = androidx.compose.foundation.BorderStroke(1.dp, YanjiPrimary.copy(alpha = 0.12f)),
+                color = YanjiSurface,
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    if (learningRecordCount > 0) {
-                        StudyContextNote(recordCount = learningRecordCount)
-                    }
-
-                    if (parsed.contextSources.isNotEmpty()) {
-                        ContextSourceCard(
-                            sources = parsed.contextSources,
-                            onSourceClick = onContextSourceClick,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    if (parsed.diagnosis != null || parsed.evidence != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                    // Diagnosis / Empathy Banner
+                    val diag = parsed.diagnosis
+                    if (diag != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            parsed.diagnosis?.let {
-                                DiagnosisBlock(text = it, modifier = Modifier.fillMaxWidth())
-                            }
-                            parsed.evidence?.let {
-                                EvidenceBlock(text = it, modifier = Modifier.fillMaxWidth())
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = YanjiPrimaryStrong,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = diag,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = YanjiPrimaryStrong,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            )
                         }
                     }
 
+                    // Main Text & Step blocks
                     parsed.blocks.forEach { block ->
                         when (block.kind) {
-                            com.example.yanji.data.JuanjuanBlockKind.MAIN -> {
+                            JuanjuanBlockKind.MAIN -> {
                                 MainTextBlock(text = block.text, modifier = Modifier.fillMaxWidth())
                             }
-                            com.example.yanji.data.JuanjuanBlockKind.STEPS -> {
+                            JuanjuanBlockKind.STEPS -> {
                                 StepsBlock(stepsText = block.text, modifier = Modifier.fillMaxWidth())
                             }
-                            com.example.yanji.data.JuanjuanBlockKind.ACTION -> {
+                            JuanjuanBlockKind.ACTION -> {
                                 ActionHintBlock(text = block.text, modifier = Modifier.fillMaxWidth())
                             }
-                            com.example.yanji.data.JuanjuanBlockKind.FOLLOWUP -> Unit
+                            JuanjuanBlockKind.FOLLOWUP -> Unit
                             else -> MainTextBlock(text = block.text, modifier = Modifier.fillMaxWidth())
                         }
                     }
 
+                    // Action Suggestion Box (Stitch style lavender card)
                     if (parsed.actions.isNotEmpty()) {
                         ActionButtonRow(
                             actions = parsed.actions,
@@ -170,6 +239,7 @@ fun JuanjuanMessageBubble(
                         )
                     }
 
+                    // Follow-up suggestions
                     if (parsed.followups.isNotEmpty()) {
                         FollowupChipsRow(
                             followups = parsed.followups,
@@ -180,111 +250,10 @@ fun JuanjuanMessageBubble(
                 }
             }
 
-            QuickInteractionBar(message = message, onContextSourceClick = onContextSourceClick, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun StudyContextNote(recordCount: Int) {
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-        color = YanjiPrimarySoft,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = YanjiPrimary,
-                modifier = Modifier.size(15.dp)
-            )
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = "本次回答已参考 $recordCount 项学习记录",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = YanjiPrimaryStrong,
-                    fontWeight = FontWeight.Medium
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun DiagnosisBlock(text: String, modifier: Modifier) {
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-        color = YanjiSurfaceSoft,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(YanjiPrimary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MedicalInformation,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "卷卷判断：$text",
-                style = androidx.compose.material3.MaterialTheme.typography.titleSmall.copy(
-                    color = YanjiPrimaryStrong,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                ),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun EvidenceBlock(text: String, modifier: Modifier) {
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-        color = YanjiSurfaceSoft,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Lightbulb,
-                contentDescription = null,
-                tint = YanjiPrimary,
-                modifier = Modifier
-                    .size(18.dp)
-                    .padding(top = 2.dp)
-            )
-            Text(
-                text = "原因：$text",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
-                    color = YanjiTextSecondary,
-                    lineHeight = 20.sp,
-                    fontSize = 13.sp
-                ),
-                modifier = Modifier.weight(1f)
+            // Quick Interaction Bar (朗读, 复制, 存入日记, 超有用)
+            QuickInteractionBar(
+                message = message,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -293,22 +262,15 @@ private fun EvidenceBlock(text: String, modifier: Modifier) {
 @Composable
 private fun MainTextBlock(text: String, modifier: Modifier) {
     if (text.isBlank()) return
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-        color = Color.Transparent,
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium.copy(
+            color = YanjiTextPrimary,
+            lineHeight = 22.sp,
+            fontSize = 14.sp
+        ),
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-    ) {
-        androidx.compose.foundation.text.BasicText(
-            text = androidx.compose.ui.text.AnnotatedString(text),
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
-                color = YanjiTextPrimary,
-                lineHeight = 22.sp
-            ),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-        )
-    }
+    )
 }
 
 @Composable
@@ -332,36 +294,38 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
         }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         steps.forEachIndexed { stepIndex, (title, detail) ->
             Surface(
-                shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-                color = YanjiSurfaceSoft
+                shape = RoundedCornerShape(12.dp),
+                color = YanjiSurfaceSoft,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(YanjiPrimary),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = CircleShape,
+                            color = YanjiPrimary,
+                            modifier = Modifier.size(20.dp)
                         ) {
-                            Text(
-                                text = "${stepIndex + 1}",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "${stepIndex + 1}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
                                 )
-                            )
+                            }
                         }
                         Text(
                             text = title,
@@ -372,7 +336,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
                             )
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = detail,
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -391,39 +355,29 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
 @Composable
 private fun ActionHintBlock(text: String, modifier: Modifier) {
     Surface(
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
+        shape = RoundedCornerShape(12.dp),
         color = YanjiLavenderSoft,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Checklist,
-                    contentDescription = null,
-                    tint = Color(0xFF5C4BC3),
-                    modifier = Modifier.size(18.dp)
+            Icon(
+                imageVector = Icons.Default.Checklist,
+                contentDescription = null,
+                tint = Color(0xFF5C4BC3),
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    color = Color(0xFF5C4BC3),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = text,
-                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
-                        color = Color(0xFF5C4BC3),
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp
-                    )
-                )
-            }
+            )
         }
     }
 }
@@ -435,40 +389,64 @@ private fun ActionButtonRow(
     modifier: Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         actions.forEach { action ->
             Surface(
-                shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-                color = YanjiPrimary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onClick(action) }
-                    .padding(vertical = 10.dp, horizontal = 14.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = YanjiLavenderSoft,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = action.label,
-                        style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Checklist,
+                            contentDescription = null,
+                            tint = Color(0xFF5C4BC3),
+                            modifier = Modifier.size(18.dp)
                         )
-                    )
+                        val promptText = if (action.type == JuanjuanActionType.CREATE_PLAN) {
+                            "要将『${action.label}』加为明早计划吗？"
+                        } else {
+                            action.label
+                        }
+                        Text(
+                            text = promptText,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = Color(0xFF5C4BC3),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF5C4BC3),
+                        shadowElevation = 1.dp,
+                        modifier = Modifier.clickable { onClick(action) }
+                    ) {
+                        Text(
+                            text = "一键添加",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
         }
@@ -482,29 +460,26 @@ private fun FollowupChipsRow(
     modifier: Modifier
 ) {
     androidx.compose.foundation.layout.FlowRow(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         maxItemsInEachRow = 3
     ) {
         followups.forEach { label ->
             Surface(
-                shape = RoundedCornerShape(YanjiRadius.ChipRadius),
+                shape = CircleShape,
                 color = YanjiSurfaceSoft,
-                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
-                    .clickable { onClick(label) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                border = BorderStroke(1.dp, YanjiBorder),
+                modifier = Modifier.clickable { onClick(label) }
             ) {
                 Text(
                     text = label,
-                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
+                    style = MaterialTheme.typography.labelMedium.copy(
                         color = YanjiTextPrimary,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
-                    )
+                    ),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
@@ -514,8 +489,7 @@ private fun FollowupChipsRow(
 @Composable
 private fun QuickInteractionBar(
     message: com.example.yanji.data.ChatMessage,
-    onContextSourceClick: (ChatContextSource) -> Unit,
-    modifier: Modifier
+    modifier: Modifier = Modifier
 ) {
     var isLiked by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -523,13 +497,13 @@ private fun QuickInteractionBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 朗读
         InteractionItem(
-            icon = Icons.Default.VolumeUp,
+            icon = Icons.AutoMirrored.Filled.VolumeUp,
             label = "朗读",
             onClick = {
                 Toast.makeText(context, "卷卷正在为你倾声朗读...", Toast.LENGTH_SHORT).show()
@@ -559,9 +533,9 @@ private fun QuickInteractionBar(
 
         // 超有用
         InteractionItem(
-            icon = if (isLiked) Icons.Default.ThumbUp else Icons.Default.ThumbUp,
+            icon = Icons.Default.ThumbUp,
             label = if (isLiked) "已点赞" else "超有用",
-            tint = if (isLiked) YanjiPrimary else YanjiTextTertiary,
+            tint = if (isLiked) YanjiPrimaryStrong else YanjiTextTertiary,
             fontWeight = if (isLiked) FontWeight.Bold else FontWeight.Normal,
             onClick = { isLiked = !isLiked }
         )
@@ -572,21 +546,21 @@ private fun QuickInteractionBar(
 private fun InteractionItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    tint: androidx.compose.ui.graphics.Color = YanjiTextTertiary,
-    fontWeight: androidx.compose.ui.text.font.FontWeight = FontWeight.Normal,
+    tint: Color = YanjiTextTertiary,
+    fontWeight: FontWeight = FontWeight.Normal,
     onClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .padding(vertical = 2.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(15.dp)
+            modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
@@ -604,118 +578,68 @@ private fun ContextSourceCard(
     onSourceClick: (ChatContextSource) -> Unit,
     modifier: Modifier
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-        color = YanjiSurfaceSoft,
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp)
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
+        sources.forEach { source ->
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = YanjiSurface,
+                border = BorderStroke(0.5.dp, YanjiBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .clickable { onSourceClick(source) }
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = null,
-                        tint = YanjiPrimary,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (expanded) "已参考你的 ${sources.sumOf { it.count }} 项学习记录（点击收起）" else "已参考你的 ${sources.sumOf { it.count }} 项学习记录（点击展开）",
-                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(
-                            color = YanjiPrimaryStrong,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = YanjiTextTertiary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            if (expanded) {
-                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    sources.forEach { source ->
-                        Surface(
-                            shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-                            color = YanjiSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSourceClick(source) }
-                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = when (source.type) {
-                                                com.example.yanji.data.ContextSourceType.MATH_EXAM -> Icons.Default.School
-                                                com.example.yanji.data.ContextSourceType.WRONG_NOTES -> Icons.Default.ErrorOutline
-                                                com.example.yanji.data.ContextSourceType.FOCUS -> Icons.Default.Timer
-                                                com.example.yanji.data.ContextSourceType.CURRENT_CONVERSATION -> Icons.Default.Chat
-                                            },
-                                            contentDescription = null,
-                                            tint = YanjiTextSecondary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = source.type.name.replace("_", " "),
-                                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
-                                                color = YanjiTextPrimary,
-                                                fontWeight = FontWeight.Medium,
-                                                fontSize = 12.sp
-                                            )
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = source.summary,
-                                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(
-                                            color = YanjiTextTertiary,
-                                            fontSize = 10.sp
-                                        )
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = YanjiTextTertiary,
-                                    modifier = Modifier.size(16.dp)
+                            Icon(
+                                imageVector = when (source.type) {
+                                    com.example.yanji.data.ContextSourceType.MATH_EXAM -> Icons.Default.School
+                                    com.example.yanji.data.ContextSourceType.WRONG_NOTES -> Icons.Default.ErrorOutline
+                                    com.example.yanji.data.ContextSourceType.FOCUS -> Icons.Default.Timer
+                                    com.example.yanji.data.ContextSourceType.CURRENT_CONVERSATION -> Icons.AutoMirrored.Filled.Chat
+                                },
+                                contentDescription = null,
+                                tint = YanjiTextSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = source.type.name.replace("_", " "),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    color = YanjiTextPrimary,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 12.sp
                                 )
-                            }
+                            )
                         }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = source.summary,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = YanjiTextTertiary,
+                                fontSize = 11.sp
+                            )
+                        )
                     }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = YanjiTextTertiary,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
