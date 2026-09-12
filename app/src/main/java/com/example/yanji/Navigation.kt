@@ -152,7 +152,10 @@ fun MainNavigation() {
                             journalId = screen.journalId,
                             date = screen.date,
                             onBack = { screenStack.removeLastOrNull() },
-                            onSaveSuccess = { screenStack.removeLastOrNull() }
+                            onSaveSuccess = { screenStack.removeLastOrNull() },
+                            onNavigateToDailyDetail = { d ->
+                                screenStack.add(YanjiSubScreen.DailyStudyDetail(d))
+                            }
                         )
                     }
                     is YanjiSubScreen.ExamMode -> {

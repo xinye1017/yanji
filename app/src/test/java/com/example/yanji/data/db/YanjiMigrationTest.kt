@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 9
+    private val CURRENT_VERSION = 10
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -177,7 +177,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_5_6,
         YanjiDatabase.MIGRATION_6_7,
         YanjiDatabase.migration7to8(legacyKeySink),
-        YanjiDatabase.MIGRATION_8_9
+        YanjiDatabase.MIGRATION_8_9,
+        YanjiDatabase.MIGRATION_9_10
     )
 
     /** 用驱动直接把手工 DDL + 种子数据写进目标文件，并把 user_version 设成 [version]。 */
@@ -242,6 +243,10 @@ class YanjiMigrationTest {
             "chat_messages.sessionId 索引缺失",
             "index_chat_messages_sessionId" in db.indexNames("chat_messages")
         )
+
+        // 5.5) v10 的 blockers 列存在且旧行回填空串
+        assertTrue("journal_entries blockers 列缺失", "blockers" in db.columnNames("journal_entries"))
+        assertEquals("", db.textValue("SELECT blockers FROM journal_entries WHERE id='j1'"))
 
         // 6) 其余设置字段未被迁移破坏
         assertEquals("浙大", db.textValue("SELECT targetSchool FROM user_settings WHERE id=1"))
@@ -308,7 +313,11 @@ class YanjiMigrationTest {
         val legacyKeys = mutableListOf<String>()
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.migration7to8 { legacyKeys += it }, YanjiDatabase.MIGRATION_8_9)
+            listOf(
+                YanjiDatabase.migration7to8 { legacyKeys += it },
+                YanjiDatabase.MIGRATION_8_9,
+                YanjiDatabase.MIGRATION_9_10
+            )
         )
 
         // 凭据被读出，用于上层写入 Keystore；列本身必须消失
@@ -336,10 +345,71 @@ class YanjiMigrationTest {
         val legacyKeys = mutableListOf<String>()
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.migration7to8 { legacyKeys += it }, YanjiDatabase.MIGRATION_8_9)
+            listOf(
+                YanjiDatabase.migration7to8 { legacyKeys += it },
+                YanjiDatabase.MIGRATION_8_9,
+                YanjiDatabase.MIGRATION_9_10
+            )
         )
 
         assertTrue("空凭据不应触发落盘", legacyKeys.isEmpty())
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 9 → 10 单跳
+
+    /**
+     * v9 起点结构：v7 的表结构经 MIGRATION_7_8 重建后的两张表
+     * （journal_entries 移除 studyDurationSeconds、user_settings 移除 aiApiKey）
+     * + MIGRATION_8_9 建立的全部索引。
+     * 终点 10.json 会校验索引，因此 seed 必须把它们建齐。
+     */
+    private val v9Ddl: List<String> = v7Ddl.map { ddl ->
+        when {
+            ddl.startsWith("CREATE TABLE IF NOT EXISTS `journal_entries`") ->
+                "CREATE TABLE IF NOT EXISTS `journal_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `moodScore` INTEGER NOT NULL, `energyScore` INTEGER NOT NULL, `studySatisfaction` INTEGER NOT NULL, `tomorrowPlan` TEXT NOT NULL, `tags` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+            ddl.startsWith("CREATE TABLE IF NOT EXISTS `user_settings`") ->
+                "CREATE TABLE IF NOT EXISTS `user_settings` (`id` INTEGER NOT NULL, `targetExamDate` TEXT NOT NULL, `targetSchool` TEXT NOT NULL, `targetMajor` TEXT NOT NULL, `dailyGoalHours` REAL NOT NULL, `validStudyThresholdMinutes` INTEGER NOT NULL, `defaultSubjectId` TEXT NOT NULL, `soundEnabled` INTEGER NOT NULL, `vibrationEnabled` INTEGER NOT NULL, `aiProvider` TEXT NOT NULL, `aiBaseUrl` TEXT NOT NULL, `aiModel` TEXT NOT NULL, PRIMARY KEY(`id`))"
+            else -> ddl
+        }
+    }
+
+    private val v9IndexDdl: List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_focus_sessions_startTime` ON `focus_sessions` (`startTime`)",
+        "CREATE INDEX IF NOT EXISTS `index_exam_sessions_startTime` ON `exam_sessions` (`startTime`)",
+        "CREATE INDEX IF NOT EXISTS `index_journal_entries_date` ON `journal_entries` (`date`)",
+        "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId` ON `chat_messages` (`sessionId`)",
+        "CREATE INDEX IF NOT EXISTS `index_chat_messages_timestamp` ON `chat_messages` (`timestamp`)",
+        "CREATE INDEX IF NOT EXISTS `index_quick_start_presets_sortOrder` ON `quick_start_presets` (`sortOrder`)"
+    )
+
+    @Test
+    fun migrate9To10_addsBlockersColumnWithBackfilledEmptyString() {
+        seedRawDatabase(
+            version = 9,
+            ddl = v9Ddl + v9IndexDdl,
+            statements = listOf(
+                "INSERT INTO journal_entries VALUES ('j1','2026-09-05','标题','正文',5,4,5,'计划','标签',1,2)"
+            )
+        )
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_9_10))
+
+        assertTrue("blockers 列应已存在", "blockers" in db.columnNames("journal_entries"))
+        // 旧行回填空串，其余字段原样保留
+        assertEquals("", db.textValue("SELECT blockers FROM journal_entries WHERE id='j1'"))
+        assertEquals("正文", db.textValue("SELECT content FROM journal_entries WHERE id='j1'"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        db.close()
+    }
+
+    @Test
+    fun migrate9To10_emptyJournalTableStaysEmpty() {
+        seedRawDatabase(version = 9, ddl = v9Ddl + v9IndexDdl)
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_9_10))
+
+        assertEquals("迁移不应向 journal_entries 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         db.close()
     }
 

@@ -43,7 +43,12 @@
 - 改任何 Entity 字段时**必须同步 bump `@Database(version)`**，否则 KSP 会用新 schema
   覆盖掉同版本号的 `app/schemas/<v>.json`，毁掉历史 schema。
 - `app/schemas/**` 是迁移测试的真实校验依据，**要当源码提交，不要删**。
-  当前只有 `7.json` 与 `8.json`（1~6 的历史 JSON 从未被提交过）。
+  当前有 `7.json` ~ `10.json`（1~6 的历史 JSON 从未被提交过）。当前 version 10。
+- **Room 的 TableInfo 校验允许「entity 侧无 DEFAULT、DB 侧有 DEFAULT」**（2026-09-12 实测）：
+  `ALTER TABLE ... ADD COLUMN x T NOT NULL DEFAULT ''` 后不需要给 Entity 加 @ColumnInfo(defaultValue)。
+- YanjiMigrationTest 的「起点 DDL」必须用与该版本真实结构一致的 DDL：
+  v7 之后的起点不能用 v7Ddl 直接充当（v8 重建移除了 journal.studyDurationSeconds 与
+  user_settings.aiApiKey），需用测试里的 `v9Ddl`（v7Ddl + 表替换）。
 
 ## 凭据与隐私
 

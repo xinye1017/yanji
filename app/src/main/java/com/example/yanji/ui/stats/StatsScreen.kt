@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,8 @@ import com.example.yanji.theme.*
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.JuanjuanAvatar
 import kotlinx.coroutines.launch
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +57,8 @@ fun StatsScreen(
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // 用户设置：周/月目标进度 = 每日目标 × 天数（与设置页同源）
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     // Bottom sheet state for clicked chart bar
     var selectedDayForSheet by remember { mutableStateOf<DayBarData?>(null) }
@@ -83,70 +88,33 @@ fun StatsScreen(
 
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
-        // Time Range Filter
-        PrimaryTabRow(
-            selectedTabIndex = state.selectedTimeTab,
-            containerColor = YanjiSurfaceSoft,
-            contentColor = YanjiPrimary,
+        // Time Range Filter（设计稿式：浅灰胶囊容器 + 白色选中胶囊，整体全圆角）
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
-            indicator = {}
+                .clip(RoundedCornerShape(50))
+                .background(YanjiSurfaceSoft)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             listOf("本周", "本月", "全部累计").forEachIndexed { index, title ->
                 val isSelected = state.selectedTimeTab == index
-                Tab(
-                    selected = isSelected,
-                    onClick = { viewModel.selectTimeTab(index) },
-                    text = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) YanjiPrimary else YanjiTextSecondary
-                        )
-                    },
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) YanjiSurface else Color.Transparent)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
-        // 15.1: Emphasize Primary Metric (e.g. 本周学习 48h 32m)
-        val periodDurationSecs = state.periodDurationSeconds
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = when (state.selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = YanjiTextSecondary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    color = if (isSelected) YanjiSurface else Color.Transparent,
+                    shadowElevation = if (isSelected) 2.dp else 0.dp,
+                    onClick = { viewModel.selectTimeTab(index) }
+                ) {
                     Text(
-                        text = DurationFormatter.formatHoursMinutes(periodDurationSecs),
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = YanjiPrimary
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "有效学习 ${state.weeklySummary.activeDays} 天",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = YanjiSuccess,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        text = title,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) YanjiPrimary else YanjiTextSecondary
                     )
                 }
             }
@@ -154,78 +122,191 @@ fun StatsScreen(
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        // 15.2: Supporting Metrics (Row of 3 lightweight metric cards)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            LightweightMetricCard(
-                title = "日均专注",
-                value = DurationFormatter.formatHoursMinutes(state.weeklySummary.dailyAverageSeconds),
-                modifier = Modifier.weight(1f)
-            )
+        // 15.1: Hero Period Card（设计稿式：放大主数字 + 较上周对比 + 日均投入 + 目标进度）
+        val periodDurationSecs = state.periodDurationSeconds
 
-            LightweightMetricCard(
-                title = "连续有效",
-                value = "${state.weeklySummary.streakDays} 天",
-                modifier = Modifier.weight(1f)
-            )
-
-            LightweightMetricCard(
-                title = "模拟考试",
-                value = "${state.weeklySummary.examCount} 次",
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onNavigateToExamHistory() }
-            )
+        // 目标进度：本周 = 日目标 × 7；本月 = 日目标 × 30；全部累计无目标语义
+        val goalSeconds = when (state.selectedTimeTab) {
+            0 -> (settings.dailyGoalHours * 7 * 3600f).toLong()
+            1 -> (settings.dailyGoalHours * 30 * 3600f).toLong()
+            else -> 0L
         }
+        val goalLabel = if (state.selectedTimeTab == 1) "月目标进度" else "周目标进度"
 
-        // 15.3: Longest Single Session (Clickable to FocusSessionDetail)
-        state.weeklySummary.longestSession?.let { longest ->
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .clickable { onNavigateToFocusDetail(longest.id) },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                // 行 1：标签 + 有效天数 + 较上周对比
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(YanjiPrimary, CircleShape)
+                        )
                         Text(
-                            text = "本周单次最长专注",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = when (state.selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
                             color = YanjiTextSecondary
+                        )
+                        Text(
+                            text = "有效学习 ${state.weeklySummary.activeDays} 天",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = YanjiSuccess
+                        )
+                    }
+
+                    // 「较上周」仅在周视角显示（与近 7 天口径对齐）
+                    if (state.selectedTimeTab == 0) {
+                        val prev = state.previousWeekSeconds
+                        val cur = state.weeklySummary.totalDurationSeconds
+                        if (prev > 0L || cur > 0L) {
+                            val delta = cur - prev
+                            val isUp = delta > 0
+                            val isFlat = delta == 0L
+                            val pillBg = when {
+                                isFlat -> YanjiSurfaceSoft
+                                isUp -> YanjiSuccessSoft
+                                else -> YanjiWarningSoft
+                            }
+                            val pillFg = when {
+                                isFlat -> YanjiTextSecondary
+                                isUp -> YanjiSuccess
+                                else -> YanjiWarning
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(pillBg)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TrendingUp,
+                                    contentDescription = null,
+                                    tint = pillFg,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = if (isFlat) "较上周 持平" else "较上周 ${if (isUp) "+" else "-"}${formatDeltaCompact(abs(delta))}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = pillFg
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 行 2：放大主数字（h / m 单位分离）+ 右侧日均投入
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    val hoursValue = periodDurationSecs / 3600
+                    val minutesValue = (periodDurationSecs % 3600) / 60
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = "$hoursValue",
+                            fontSize = 46.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YanjiTextPrimary,
+                            letterSpacing = (-1).sp
+                        )
+                        Text(
+                            text = "h",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = YanjiTextSecondary,
+                            modifier = Modifier.padding(start = 2.dp, bottom = 5.dp)
+                        )
+                        if (minutesValue > 0) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "$minutesValue",
+                                fontSize = 46.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YanjiTextPrimary,
+                                letterSpacing = (-1).sp
+                            )
+                            Text(
+                                text = "m",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = YanjiTextSecondary,
+                                modifier = Modifier.padding(start = 2.dp, bottom = 5.dp)
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "日均投入",
+                            fontSize = 11.sp,
+                            color = YanjiTextTertiary
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = longest.title,
-                            style = MaterialTheme.typography.labelLarge,
+                            text = DurationFormatter.formatHoursMinutes(state.weeklySummary.dailyAverageSeconds),
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = YanjiTextPrimary
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                }
+
+                // 行 3：目标进度（设计稿：进度条 + 百分比）
+                if (goalSeconds > 0L) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    val goalProgress = (periodDurationSecs.toFloat() / goalSeconds).coerceIn(0f, 1f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = DurationFormatter.formatHoursMinutes(longest.durationSeconds),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = YanjiPrimary
+                            text = "$goalLabel (${formatGoalHours(periodDurationSecs)} / ${formatGoalHours(goalSeconds)})",
+                            fontSize = 12.sp,
+                            color = YanjiTextSecondary
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = YanjiTextTertiary,
-                            modifier = Modifier.size(16.dp)
+                        Text(
+                            text = "${(goalProgress * 100).toInt()}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = YanjiPrimaryStrong
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(YanjiSurfaceSoft)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(goalProgress.coerceAtLeast(0.002f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(50))
+                                .background(YanjiPrimary)
                         )
                     }
                 }
@@ -237,7 +318,7 @@ fun StatsScreen(
         // Section 16: Interactive 7-Day Bar Chart
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -414,11 +495,20 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // Section 17: Subject Breakdown Cards (Dynamic & Clickable)
+        // subjectDistribution 已在 ViewModel 过滤为「仅含真实计时科目」；
+        // 这里只渲染有效科目，0 时长的空科目不会出现在比例条与列表里。
         val subjectDist = state.subjectDistribution.associate { it.subjectName to it.durationSeconds }
+
+        // 科目展示色：优先使用科目自带色值，非法/缺失时按名称推断
+        fun displayColor(sub: SubjectDistributionItem): Color = try {
+            Color(android.graphics.Color.parseColor(sub.subjectColor))
+        } catch (_: Exception) {
+            subjectChartColor(sub.subjectName)
+        }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -434,15 +524,10 @@ fun StatsScreen(
                         fontWeight = FontWeight.Bold,
                         color = YanjiTextPrimary
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SubjectStatsLevel.entries.forEach { level ->
-                            TrendModeChip(
-                                label = level.title,
-                                selected = state.subjectStatsLevel == level,
-                                onClick = { viewModel.selectSubjectLevel(level) }
-                            )
-                        }
-                    }
+                    SubjectLevelSegmented(
+                        selected = state.subjectStatsLevel,
+                        onSelect = { viewModel.selectSubjectLevel(it) }
+                    )
                 }
                 Text(
                     text = if (state.subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY) {
@@ -462,40 +547,96 @@ fun StatsScreen(
                     totalLabel = state.timeRange.title
                 )
 
-                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                if (state.subjectDistribution.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
-                state.subjectDistribution.forEachIndexed { index, sub ->
-                    val color = remember(sub.subjectColor) {
-                        try {
-                            Color(android.graphics.Color.parseColor(sub.subjectColor))
-                        } catch (_: Exception) {
-                            subjectChartColor(sub.subjectName)
+                    // 分段比例条：一眼看清各科占比结构（参考设计稿的 Segmented Proportional Bar）
+                    SubjectDistributionBar(
+                        segments = state.subjectDistribution.map { sub ->
+                            displayColor(sub) to sub.durationSeconds.toFloat()
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+
+                    state.subjectDistribution.forEachIndexed { index, sub ->
+                        val color = displayColor(sub)
+                        val subSecs = sub.durationSeconds
+                        val totalSecs = maxOf(1L, subjectDist.values.sum())
+                        val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onNavigateToSubjectDetail(sub.subjectId) }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            SubjectProgressBar(
+                                name = sub.subjectName,
+                                time = DurationFormatter.formatHoursMinutes(subSecs),
+                                percent = percent,
+                                color = color
+                            )
+                        }
+
+                        if (index < state.subjectDistribution.size - 1) {
+                            Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
                         }
                     }
-                    val subSecs = sub.durationSeconds
-                    val totalSecs = maxOf(1L, subjectDist.values.sum())
-                    val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
-
-                    Column(
+                } else {
+                    Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                    Text(
+                        text = "本周期暂无科目学时记录，完成一次专注后自动生成",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = YanjiTextTertiary,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onNavigateToSubjectDetail(sub.subjectId) }
-                            .padding(vertical = 4.dp)
-                    ) {
-                        SubjectProgressBar(
-                            name = sub.subjectName,
-                            time = DurationFormatter.formatHoursMinutes(subSecs),
-                            percent = percent,
-                            color = color
-                        )
-                    }
-
-                    if (index < state.subjectDistribution.size - 1) {
-                        Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
-                    }
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    )
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+
+        // 关键指标（设计稿三小卡：连续研读 / 单次最长 / 全真模拟）
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            MetricMiniCard(
+                icon = Icons.Default.LocalFireDepartment,
+                iconTint = YanjiWarning,
+                iconBg = YanjiWarningSoft,
+                title = "连续研读",
+                value = "${state.weeklySummary.streakDays}",
+                unit = "天",
+                modifier = Modifier.weight(1f)
+            )
+
+            val longest = state.weeklySummary.longestSession
+            MetricMiniCard(
+                icon = Icons.Default.Timelapse,
+                iconTint = YanjiPrimary,
+                iconBg = YanjiPrimarySoft,
+                title = "单次最长",
+                value = DurationFormatter.formatHoursMinutes(longest?.durationSeconds ?: 0L),
+                modifier = Modifier.weight(1f),
+                onClick = longest?.let { l -> { onNavigateToFocusDetail(l.id) } }
+            )
+
+            MetricMiniCard(
+                icon = Icons.Default.Quiz,
+                iconTint = YanjiLavender,
+                iconBg = YanjiLavenderSoft,
+                title = "全真模拟",
+                value = "${state.weeklySummary.examCount}",
+                unit = "场",
+                modifier = Modifier.weight(1f),
+                onClick = { onNavigateToExamHistory() }
+            )
         }
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
@@ -503,7 +644,7 @@ fun StatsScreen(
         // AI Diagnosis Trigger & Report Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -731,27 +872,64 @@ fun StatsScreen(
     }
 }
 
+/**
+ * 关键指标小卡（设计稿三卡样式）：圆形上色图标 + 标签 + 加粗数值（含单位小字）。
+ * 可点击时用于跳转对应明细页。
+ */
 @Composable
-private fun LightweightMetricCard(
+private fun MetricMiniCard(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBg: Color,
     title: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    unit: String? = null,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (onClick != null) Modifier.clickable { onClick() } else Modifier
+        ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(text = title, fontSize = 12.sp, color = YanjiTextSecondary)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
-            )
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(iconBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(text = title, fontSize = 12.sp, color = YanjiTextTertiary)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = value,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = YanjiTextPrimary,
+                    maxLines = 1
+                )
+                if (unit != null) {
+                    Text(
+                        text = unit,
+                        fontSize = 12.sp,
+                        color = YanjiTextSecondary,
+                        modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -810,6 +988,83 @@ private fun TrendModeChip(
         )
     }
 }
+
+/**
+ * 科目维度切换（大类 / 子类）· 对应设计稿的分段控件：
+ * 浅灰底容器 + 白色选中胶囊。
+ */
+@Composable
+private fun SubjectLevelSegmented(
+    selected: SubjectStatsLevel,
+    onSelect: (SubjectStatsLevel) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(YanjiSurfaceSoft)
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 展示顺序与设计稿一致：大类在前、子类在后（默认选中态不受影响）
+        listOf(SubjectStatsLevel.CATEGORY, SubjectStatsLevel.SUBCATEGORY).forEach { level ->
+            val isSelected = level == selected
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isSelected) YanjiSurface else Color.Transparent)
+                    .clickable { onSelect(level) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = level.title,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) YanjiPrimaryStrong else YanjiTextSecondary
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 分段比例条（对应设计稿的 Segmented Proportional Bar）：
+ * 按各科目时长占比横向排布，段间留细缝，整条两端为胶囊圆角。
+ * 仅在存在有效科目时渲染；单段时整条同色。
+ */
+@Composable
+private fun SubjectDistributionBar(segments: List<Pair<Color, Float>>) {
+    val total = segments.sumOf { it.second.toDouble() }.toFloat()
+    if (segments.isEmpty() || total <= 0f) return
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(RoundedCornerShape(50)),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        segments.forEach { (color, value) ->
+            val fraction = (value / total).coerceAtLeast(0.001f)
+            Box(
+                modifier = Modifier
+                    .weight(fraction)
+                    .fillMaxHeight()
+                    .background(color)
+            )
+        }
+    }
+}
+
+/** 「较上周」对比的紧凑时长："4.5h" / "45m"。 */
+private fun formatDeltaCompact(seconds: Long): String {
+    if (seconds < 3600L) return "${seconds / 60}m"
+    return String.format(Locale.US, "%.1fh", seconds / 3600f)
+}
+
+/** 目标进度里的时长："48.5h"。 */
+private fun formatGoalHours(seconds: Long): String =
+    String.format(Locale.US, "%.1fh", seconds / 3600f)
 
 private fun subjectChartColor(name: String): Color = when {
     name.contains("数学") || name.contains("线性代数") || name.contains("概率论") -> SubjectMath

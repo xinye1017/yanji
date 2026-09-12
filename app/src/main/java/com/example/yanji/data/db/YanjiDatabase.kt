@@ -21,7 +21,7 @@ import java.io.File
         UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -317,6 +317,21 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v10：日记新增「遇到的困难 / 卡点」列。
+         *
+         * 对应日记编辑页重构（Stitch 设计稿）中的独立卡点输入区。
+         * 纯 `ADD COLUMN ... NOT NULL DEFAULT ''`：SQLite 全版本可用，
+         * 旧行自动回填空串，不需要重建表。
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "ALTER TABLE journal_entries ADD COLUMN blockers TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -331,7 +346,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             migration7to8 { value -> persistLegacyApiKey(context, value) },
-            MIGRATION_8_9
+            MIGRATION_8_9,
+            MIGRATION_9_10
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

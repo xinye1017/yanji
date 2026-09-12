@@ -219,6 +219,7 @@ data class JournalEntry(
     val energyScore: Int = 4,
     val studySatisfaction: Int = 5,
     val tomorrowPlan: String = "",
+    val blockers: String = "", // 遇到的困难 / 卡点（v10 新增，按行书写）
     val tags: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

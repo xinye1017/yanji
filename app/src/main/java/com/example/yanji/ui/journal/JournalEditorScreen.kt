@@ -2,22 +2,32 @@ package com.example.yanji.ui.journal
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,12 +40,24 @@ import com.example.yanji.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * 记日记页（Stitch 设计稿「研迹 - 记录今日日记」重构版）。
+ *
+ * 布局约定：
+ *  - 顶部导航沿用计时器页（FocusScreen）的样式：大标题 + 右侧「今日累计」胶囊徽章 + 副标题，
+ *    编辑场景额外保留返回按钮；本页为全屏子页，不显示底部导航栏。
+ *  - 心境五档（需调整/微浮躁/平稳前行/专注充实/深度心流）映射既有字段 moodScore 1..5，
+ *    不改变数据库语义；energyScore / studySatisfaction 编辑时继承原值。
+ *  - 「遇到的困难 / 卡点」对应 v10 新增的 blockers 列。
+ *  - 「明日规划」以多行任务呈现，仍存储在 tomorrowPlan（按换行分隔）。
+ */
 @Composable
 fun JournalEditorScreen(
     journalId: String?,
     date: String,
     onBack: () -> Unit,
     onSaveSuccess: () -> Unit,
+    onNavigateToDailyDetail: (date: String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: JournalViewModel = viewModel {
         JournalViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
@@ -44,6 +66,8 @@ fun JournalEditorScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val journals = state.journals
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+
     val existingEntry = remember(journalId, date, journals) {
         if (!journalId.isNullOrBlank()) {
             journals.find { it.id == journalId }
@@ -52,17 +76,30 @@ fun JournalEditorScreen(
         }
     }
 
-    // Single source of truth for daily study duration
-    val studyDuration = viewModel.dailySummaryFor(date).totalDurationSeconds
+    // 单一事实来源：该日期真实的学习时长聚合（FocusSession + ExamSession）
+    val dailySummary = viewModel.dailySummaryFor(date)
+    val studyDuration = dailySummary.totalDurationSeconds
 
-    var title by remember(existingEntry) { mutableStateOf(existingEntry?.title ?: "") }
-    var content by remember(existingEntry) { mutableStateOf(existingEntry?.content ?: "") }
     var moodScore by remember(existingEntry) { mutableIntStateOf(existingEntry?.moodScore ?: 5) }
-    var energyScore by remember(existingEntry) { mutableIntStateOf(existingEntry?.energyScore ?: 4) }
-    var satisfactionScore by remember(existingEntry) { mutableIntStateOf(existingEntry?.studySatisfaction ?: 5) }
-    var tomorrowPlan by remember(existingEntry) { mutableStateOf(existingEntry?.tomorrowPlan ?: "") }
+    var content by remember(existingEntry) { mutableStateOf(existingEntry?.content ?: "") }
+    var blockers by remember(existingEntry) { mutableStateOf(existingEntry?.blockers ?: "") }
+    var planTasks by remember(existingEntry) {
+        mutableStateOf(
+            existingEntry?.tomorrowPlan
+                ?.split('\n')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty()
+        )
+    }
+    var planInput by remember { mutableStateOf("") }
 
-    val formattedHeaderDate = remember(date) {
+    val todayStr = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+    val isToday = date == todayStr
+
+    val formattedDate = remember(date) {
         try {
             val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val d = parser.parse(date) ?: Date()
@@ -72,251 +109,582 @@ fun JournalEditorScreen(
         }
     }
 
+    // 初试倒计时（单一事实来源：user_settings.targetExamDate，与 ProfileScreen 同口径）
+    val countdownDays = remember(settings.targetExamDate) {
+        try {
+            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val target = fmt.parse(settings.targetExamDate) ?: return@remember null
+            val today = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val targetDay = Calendar.getInstance().apply {
+                time = target
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val diff = ((targetDay.timeInMillis - today.timeInMillis) / 86_400_000L).toInt()
+            if (diff >= 0) diff else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveJournal() {
+        if (content.isBlank() && blockers.isBlank()) {
+            Toast.makeText(context, "请写点今日内容吧", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val finalEntry = JournalEntry(
+            id = existingEntry?.id ?: UUID.randomUUID().toString(),
+            date = date,
+            title = existingEntry?.title ?: "",
+            content = content.trim(),
+            moodScore = moodScore,
+            energyScore = existingEntry?.energyScore ?: 4,
+            studySatisfaction = existingEntry?.studySatisfaction ?: 5,
+            tomorrowPlan = planTasks.joinToString("\n"),
+            blockers = blockers.trim(),
+            tags = existingEntry?.tags ?: emptyList(),
+            // 编辑时保留原始创建时间，避免既有行为把 createdAt 刷新成当前时刻
+            createdAt = existingEntry?.createdAt ?: System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+        viewModel.saveJournal(finalEntry)
+        Toast.makeText(context, "日记已保存", Toast.LENGTH_SHORT).show()
+        onSaveSuccess()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(YanjiBackground)
     ) {
-        // Top Bar
-        Row(
+        // ---- 顶部导航（保持计时器页样式：大标题 + 今日累计徽章 + 副标题）----
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = YanjiTextPrimary
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = YanjiTextPrimary
+                        )
+                    }
+                    Text(
+                        text = if (isToday) "今日日记" else "当日日记",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            letterSpacing = (-0.5).sp
+                        ),
+                        color = YanjiTextPrimary
                     )
                 }
-                Text(
-                    text = "${formattedHeaderDate}日记",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary
-                )
-            }
 
-            Button(
-                onClick = {
-                    if (content.isBlank() && title.isBlank()) {
-                        Toast.makeText(context, "请写点今日内容吧", Toast.LENGTH_SHORT).show()
-                        return@Button
+                // 今日累计徽章（点击进入当日学习明细）
+                Surface(
+                    shape = CircleShape,
+                    color = YanjiPrimarySoft,
+                    modifier = Modifier.clickable { onNavigateToDailyDetail(date) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = YanjiPrimary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "今日累计 ${DurationFormatter.formatHoursMinutes(studyDuration)}",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            ),
+                            color = YanjiPrimary
+                        )
                     }
-                    val finalEntry = JournalEntry(
-                        id = existingEntry?.id ?: UUID.randomUUID().toString(),
-                        date = date,
-                        title = title.trim(),
-                        content = content.trim(),
-                        moodScore = moodScore,
-                        energyScore = energyScore,
-                        studySatisfaction = satisfactionScore,
-                        tomorrowPlan = tomorrowPlan.trim(),
-                        tags = existingEntry?.tags ?: emptyList()
-                    )
-                    viewModel.saveJournal(finalEntry)
-                    Toast.makeText(context, "日记已保存", Toast.LENGTH_SHORT).show()
-                    onSaveSuccess()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
-            ) {
-                Text("保存", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
             }
+            Text(
+                text = buildString {
+                    append(formattedDate)
+                    if (countdownDays != null) append(" · 初试倒计时 $countdownDays 天")
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = YanjiTextSecondary,
+                    fontSize = 14.sp
+                )
+            )
         }
 
+        // ---- 滚动内容区 ----
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(YanjiSpacing.CardGap)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Study Duration Banner (Read-only single source of truth)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+            // ---- 卡片 1：今日专注摘要 ----
+            JournalEditorCard {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "今日累计有效学习",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = YanjiTextSecondary,
-                        fontWeight = FontWeight.Medium
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(YanjiPrimarySoft, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = YanjiPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "今日累计专注",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = YanjiTextPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = DurationFormatter.formatHoursMinutes(studyDuration),
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YanjiPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = formatSubjectDistribution(dailySummary.subjectDistribution),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = YanjiTextTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // ---- 区块 2：今日专注心境 ----
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(
+                    title = "今日专注心境",
+                    hint = "快速标记",
+                    icon = Icons.Default.Star,
+                    iconTint = YanjiPrimary
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MOOD_OPTIONS.forEach { option ->
+                        val selected = moodScore == option.score
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (selected) YanjiPrimarySoft else YanjiSurface,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (selected) {
+                                        YanjiPrimary.copy(alpha = 0.4f)
+                                    } else {
+                                        YanjiBorder
+                                    },
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable { moodScore = option.score }
+                                .padding(vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = option.icon,
+                                contentDescription = option.label,
+                                tint = if (selected) YanjiPrimary else YanjiTextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = option.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) YanjiPrimary else YanjiTextSecondary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ---- 区块 3：今日复盘与收获 ----
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(
+                    title = "今日复盘与收获",
+                    hint = "2~3句话归纳突破",
+                    icon = Icons.Default.EditNote,
+                    iconTint = YanjiPrimary
+                )
+                PlainInputCard(
+                    value = content,
+                    onValueChange = { content = it },
+                    placeholder = "记录今天各科目的复习感受、突破与思路变化…",
+                    minLines = 4
+                )
+            }
+
+            // ---- 区块 4：遇到的困难 / 卡点 ----
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(
+                    title = "遇到的困难 / 卡点",
+                    hint = "快速诊断",
+                    icon = Icons.Default.HelpOutline,
+                    iconTint = YanjiWarning
+                )
+                PlainInputCard(
+                    value = blockers,
+                    onValueChange = { blockers = it },
+                    placeholder = "写下今天卡住你的知识点，便于后续针对性回炉…",
+                    minLines = 3
+                )
+            }
+
+            // ---- 区块 5：明日规划（动态任务列表）----
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(
+                    title = "明日规划",
+                    hint = if (planTasks.isEmpty()) "为明天列 1~3 项核心任务" else "已列 ${planTasks.size} 项",
+                    icon = Icons.Default.Flag,
+                    iconTint = YanjiSuccess
+                )
+                JournalEditorCard {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        planTasks.forEachIndexed { index, task ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(YanjiBackground, RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PlanIndexBadge(
+                                    index = index + 1,
+                                    container = YanjiPrimarySoft,
+                                    textColor = YanjiPrimary
+                                )
+                                Text(
+                                    text = task,
+                                    fontSize = 13.sp,
+                                    color = YanjiTextPrimary,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .clickable { planTasks = planTasks.filterIndexed { i, _ -> i != index } },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "删除任务",
+                                        tint = YanjiTextTertiary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = YanjiDivider)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PlanIndexBadge(
+                                index = planTasks.size + 1,
+                                container = YanjiSurfaceSoft,
+                                textColor = YanjiTextTertiary
+                            )
+                            BasicTextField(
+                                value = planInput,
+                                onValueChange = { planInput = it },
+                                modifier = Modifier.weight(1f),
+                                textStyle = TextStyle(
+                                    fontSize = 13.sp,
+                                    color = YanjiTextPrimary
+                                ),
+                                cursorBrush = SolidColor(YanjiPrimary),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = {
+                                    val value = planInput.trim()
+                                    if (value.isNotEmpty()) {
+                                        planTasks = planTasks + value
+                                        planInput = ""
+                                    }
+                                }),
+                                decorationBox = { inner ->
+                                    Box {
+                                        if (planInput.isEmpty()) {
+                                            Text(
+                                                text = "输入明日核心任务，回车或点击添加",
+                                                fontSize = 13.sp,
+                                                color = YanjiTextTertiary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        inner()
+                                    }
+                                }
+                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = YanjiPrimary,
+                                modifier = Modifier.clickable {
+                                    val value = planInput.trim()
+                                    if (value.isNotEmpty()) {
+                                        planTasks = planTasks + value
+                                        planInput = ""
+                                    }
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = YanjiOnPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "添加",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = YanjiOnPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- 区块 6：保存 ----
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = { saveJournal() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = DurationFormatter.formatHoursMinutes(studyDuration),
+                        text = "保存今日足迹",
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = YanjiPrimary
+                        fontWeight = FontWeight.Bold
                     )
                 }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "日记将自动关联今日学习数据，可在日记时间轴中回顾",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = YanjiTextTertiary
+                )
             }
 
-            // Status Ratings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "今日状态打分",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = YanjiTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
-
-                    RatingBarRow(
-                        label = "整体心态",
-                        score = moodScore,
-                        onScoreChanged = { moodScore = it }
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    RatingBarRow(
-                        label = "精力充沛度",
-                        score = energyScore,
-                        onScoreChanged = { energyScore = it }
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    RatingBarRow(
-                        label = "复习满意度",
-                        score = satisfactionScore,
-                        onScoreChanged = { satisfactionScore = it }
-                    )
-                }
-            }
-
-            // Title Input Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "今日标题",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = YanjiTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        placeholder = { Text("例如：渐入佳境：攻克多元微分与树算法", style = MaterialTheme.typography.bodyMedium) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
-                }
-            }
-
-            // Content Input Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "今日状态与复盘总结",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = YanjiTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
-                    OutlinedTextField(
-                        value = content,
-                        onValueChange = { content = it },
-                        placeholder = {
-                            Text(
-                                "记录今天各科目的复习感受、卡点攻克过程、心态变化...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                lineHeight = 19.sp
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        minLines = 6
-                    )
-                }
-            }
-
-            // Tomorrow Plan Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "明日核心目标 (可选)",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = YanjiTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
-                    OutlinedTextField(
-                        value = tomorrowPlan,
-                        onValueChange = { tomorrowPlan = it },
-                        placeholder = {
-                            Text(
-                                "1. 上午完成线性代数二次型标准形复习\n2. 下午攻克408图的最短路径算法",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        minLines = 3
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
+// ---------------------------------------------------------------- 局部组件
+
+/** 设计稿五档心境 → moodScore 1..5 的映射。 */
+private data class MoodOption(val score: Int, val label: String, val icon: ImageVector)
+
+private val MOOD_OPTIONS = listOf(
+    MoodOption(1, "需调整", Icons.Default.BatteryAlert),
+    MoodOption(2, "微浮躁", Icons.Default.Waves),
+    MoodOption(3, "平稳前行", Icons.Default.Contrast),
+    MoodOption(4, "专注充实", Icons.Default.CheckCircle),
+    MoodOption(5, "深度心流", Icons.Default.Bolt)
+)
+
+/** 设计稿统一卡片：白底 + 细边框 + 24dp 圆角。 */
 @Composable
-private fun RatingBarRow(
-    label: String,
-    score: Int,
-    onScoreChanged: (Int) -> Unit
-) {
+private fun JournalEditorCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, YanjiBorder.copy(alpha = 0.8f), RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(content = content)
+    }
+}
+
+/** 区块标题行：左侧 icon + 标题，右侧弱化提示。 */
+@Composable
+private fun SectionHeader(title: String, hint: String, icon: ImageVector, iconTint: Color) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 13.sp, color = YanjiTextSecondary)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (i in 1..5) {
-                Icon(
-                    imageVector = if (i <= score) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                    contentDescription = "$i 星",
-                    tint = if (i <= score) YanjiWarning else YanjiTextTertiary,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clickable { onScoreChanged(i) }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = YanjiTextPrimary
+            )
+        }
+        Text(text = hint, fontSize = 12.sp, color = YanjiTextTertiary)
+    }
+}
+
+/** 无边框输入卡：透明 BasicTextField 直接嵌在白卡内（对应设计稿 focus-within 输入区）。 */
+@Composable
+private fun PlainInputCard(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    minLines: Int
+) {
+    JournalEditorCard {
+        Box(modifier = Modifier.padding(16.dp)) {
+            if (value.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    color = YanjiTextTertiary,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = TextStyle(
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    color = YanjiTextPrimary
+                ),
+                cursorBrush = SolidColor(YanjiPrimary),
+                minLines = minLines,
+                maxLines = 12
+            )
         }
     }
+}
+
+/** 明日规划条目的序号圆标。 */
+@Composable
+private fun PlanIndexBadge(index: Int, container: Color, textColor: Color) {
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .background(container, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = index.toString(),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
+    }
+}
+
+/** 科目分布摘要行："数 3.7h · 408 2.5h · 英 1.3h"，空数据时给出占位说明。 */
+private fun formatSubjectDistribution(distribution: Map<String, Long>): String {
+    if (distribution.isEmpty()) return "今日暂无专注记录"
+    return distribution.entries
+        .sortedByDescending { it.value }
+        .joinToString(" · ") { "${subjectShortName(it.key)} ${formatCompactHours(it.value)}" }
+}
+
+/** 科目名缩写（设计稿口径：数 / 408 / 英 / 政）。 */
+private fun subjectShortName(name: String): String = when {
+    name.contains("数") -> "数"
+    name.contains("408") || name.contains("专业") || name.contains("计") || name.contains("代码") -> "408"
+    name.contains("英") -> "英"
+    name.contains("政") || name.contains("思") -> "政"
+    else -> name.take(2)
+}
+
+/** 紧凑时长："3.7h" / "45m"。 */
+private fun formatCompactHours(seconds: Long): String {
+    if (seconds <= 0) return "0h"
+    val hours = seconds / 3600.0
+    return if (hours >= 1) String.format(Locale.US, "%.1fh", hours) else "${seconds / 60}m"
 }

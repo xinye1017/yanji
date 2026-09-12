@@ -128,6 +128,7 @@ data class JournalEntryEntity(
     val energyScore: Int,
     val studySatisfaction: Int,
     val tomorrowPlan: String,
+    val blockers: String, // 遇到的困难 / 卡点（v10 新增）
     val tags: String, // Comma separated
     val createdAt: Long,
     val updatedAt: Long
@@ -142,6 +143,7 @@ data class JournalEntryEntity(
             energyScore = energyScore,
             studySatisfaction = studySatisfaction,
             tomorrowPlan = tomorrowPlan,
+            blockers = blockers,
             tags = if (tags.isBlank()) emptyList() else tags.split(",").map { it.trim() },
             createdAt = createdAt,
             updatedAt = updatedAt
@@ -159,6 +161,7 @@ data class JournalEntryEntity(
                 energyScore = model.energyScore,
                 studySatisfaction = model.studySatisfaction,
                 tomorrowPlan = model.tomorrowPlan,
+                blockers = model.blockers,
                 tags = model.tags.joinToString(","),
                 createdAt = model.createdAt,
                 updatedAt = model.updatedAt

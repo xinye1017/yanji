@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.DailyStudySummary
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.StudyStatisticsRepository
+import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +35,9 @@ class JournalViewModel(
         )
 
     fun saveJournal(entry: JournalEntry) = repo.addOrUpdateJournal(entry)
+
+    /** 用户设置（同步读缓存），编辑页用于计算初试倒计时。 */
+    val settings: StateFlow<UserSettings> get() = repo.settings
 
     /** 该日期真实学习时长（单一事实来源：FocusSession + ExamSession 聚合）。 */
     fun dailySummaryFor(date: String): DailyStudySummary = statsRepo.getDailyStudySummary(date)

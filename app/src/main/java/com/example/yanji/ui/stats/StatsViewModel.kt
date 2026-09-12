@@ -7,6 +7,7 @@ import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.StudyTimeRange
 import com.example.yanji.data.SubjectDistributionItem
 import com.example.yanji.data.SubjectStatsLevel
+import com.example.yanji.data.UserSettings
 import com.example.yanji.data.WeeklyStudySummary
 import com.example.yanji.data.YanjiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,6 +33,8 @@ data class StatsUiState(
     val subjectDistribution: List<SubjectDistributionItem>,
     /** 主指标卡的大数字：本周=周汇总；本月=近 30 天；全部=累计总学时。 */
     val periodDurationSeconds: Long,
+    /** 上一个 7 天窗口（第 8~14 天前）的有效时长，用于「较上周」对比。 */
+    val previousWeekSeconds: Long,
     val latestReport: AiAnalysis?,
     val isAnalyzing: Boolean
 )
@@ -58,6 +62,9 @@ class StatsViewModel(
 
     private val subjectDistributionFlow = chartSelection.flatMapLatest { (tab, level) ->
         statsRepo.getSubjectDistributionFlow(tab.toTimeRange(), level)
+            // 分布数据源会返回全量科目目录（含 0 时长的空科目）；
+            // 展示口径：只有真实产生过计时的科目才进入 UiState。
+            .map { list -> list.filter { it.durationSeconds > 0L } }
     }
 
     private val reportState = combine(latestReport, isAnalyzing, repo.aiAnalyses) { report, analyzing, all ->
@@ -72,8 +79,9 @@ class StatsViewModel(
         weeklySummary = statsRepo.getWeeklyStudySummary(),
         subjectDistribution = statsRepo.getSubjectDistribution(
             StudyTimeRange.WEEK, SubjectStatsLevel.SUBCATEGORY
-        ),
+        ).filter { it.durationSeconds > 0L },
         periodDurationSeconds = statsRepo.getWeeklyStudySummary().totalDurationSeconds,
+        previousWeekSeconds = repo.getStudyDurationForPeriod(14) - repo.getStudyDurationForPeriod(7),
         latestReport = repo.aiAnalyses.value.firstOrNull(),
         isAnalyzing = false
     )
@@ -99,6 +107,8 @@ class StatsViewModel(
                 1 -> repo.getStudyDurationForPeriod(30)
                 else -> repo.getTotalStudyDurationSeconds()
             },
+            // 上周窗口 = 近 14 天 − 近 7 天（与「本周=近 7 天」口径对齐）
+            previousWeekSeconds = repo.getStudyDurationForPeriod(14) - repo.getStudyDurationForPeriod(7),
             latestReport = report ?: allAnalyses.firstOrNull(),
             isAnalyzing = analyzing
         )
@@ -113,6 +123,9 @@ class StatsViewModel(
     fun selectTimeTab(tab: Int) {
         selectedTimeTab.value = tab
     }
+
+    /** 用户设置（同步读缓存）：统计页用于计算周目标进度。 */
+    val settings: StateFlow<UserSettings> get() = repo.settings
 
     fun selectSubjectLevel(level: SubjectStatsLevel) {
         subjectStatsLevel.value = level
