@@ -71,21 +71,43 @@ class CheckInLogicTest {
     }
 
     @Test
-    fun `past7Days returns seven entries with today last`() {
-        val result = CheckInLogic.past7Days(emptySet(), todayMs())
-        assertEquals(7, result.size)
-        assertEquals(true, result.last().isToday)
-        assertEquals("今天", result.last().dayLabel)
-        assertEquals(false, result.first().isToday)
+    fun `past7Days returns Monday to Sunday with today at correct weekday position`() {
+        // 2026-09-14 is Monday
+        val mondayMs = java.time.LocalDate.of(2026, 9, 14).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val mondayResult = CheckInLogic.past7Days(emptySet(), mondayMs)
+        assertEquals(7, mondayResult.size)
+        assertEquals(true, mondayResult[0].isToday)
+        assertEquals("今天", mondayResult[0].dayLabel)
+        assertEquals("周二", mondayResult[1].dayLabel)
+        assertEquals("周日", mondayResult[6].dayLabel)
+
+        // 2026-09-16 is Wednesday
+        val wednesdayMs = java.time.LocalDate.of(2026, 9, 16).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val wednesdayResult = CheckInLogic.past7Days(emptySet(), wednesdayMs)
+        assertEquals(7, wednesdayResult.size)
+        assertEquals("周一", wednesdayResult[0].dayLabel)
+        assertEquals(false, wednesdayResult[0].isToday)
+        assertEquals(true, wednesdayResult[2].isToday)
+        assertEquals("今天", wednesdayResult[2].dayLabel)
+        assertEquals("周日", wednesdayResult[6].dayLabel)
+
+        // 2026-09-20 is Sunday
+        val sundayMs = java.time.LocalDate.of(2026, 9, 20).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val sundayResult = CheckInLogic.past7Days(emptySet(), sundayMs)
+        assertEquals(7, sundayResult.size)
+        assertEquals("周一", sundayResult[0].dayLabel)
+        assertEquals(true, sundayResult[6].isToday)
+        assertEquals("今天", sundayResult[6].dayLabel)
     }
 
     @Test
-    fun `past7Days marks checked in dates`() {
-        val today = daysAgoStr(0)
-        val twoDaysAgo = daysAgoStr(2)
-        val result = CheckInLogic.past7Days(setOf(today, twoDaysAgo), todayMs())
-        assertEquals(true, result.last().isCheckedIn)
-        assertEquals(true, result[4].isCheckedIn)
-        assertEquals(false, result[5].isCheckedIn)
+    fun `past7Days marks checked in dates correctly in current week`() {
+        val mondayMs = java.time.LocalDate.of(2026, 9, 14).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val checkedDates = setOf("2026-09-14", "2026-09-16")
+        val result = CheckInLogic.past7Days(checkedDates, mondayMs)
+        assertEquals(true, result[0].isCheckedIn)
+        assertEquals(false, result[1].isCheckedIn)
+        assertEquals(true, result[2].isCheckedIn)
+        assertEquals(false, result[3].isCheckedIn)
     }
 }

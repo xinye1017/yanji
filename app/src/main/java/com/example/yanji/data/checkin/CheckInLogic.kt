@@ -56,19 +56,22 @@ internal object CheckInLogic {
         return 1
     }
 
-    /** 近 7 天（含今天）的打卡状态，用于首页打卡条。 */
+    /** 本周（周一至周日）的打卡状态，用于首页打卡条。按周一到周日顺序排列。 */
     fun past7Days(checkInDates: Set<String>, now: Long): List<DayCheckInStatus> {
         val weekdayFormatter = DateTimeFormatter.ofPattern("E", Locale.CHINESE)
         val result = mutableListOf<DayCheckInStatus>()
         val today = YanjiTime.localDate(now)
-        for (i in 6 downTo 0) {
-            val day = today.minusDays(i.toLong())
+        // 找到当周周一：DayOfWeek.MONDAY.value == 1, SUNDAY.value == 7
+        val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        for (i in 0..6) {
+            val day = monday.plusDays(i.toLong())
             val dStr = day.format(YanjiTime.isoDateFormatter)
+            val isToday = day == today
             result.add(
                 DayCheckInStatus(
                     date = dStr,
-                    dayLabel = if (i == 0) "今天" else day.format(weekdayFormatter),
-                    isToday = i == 0,
+                    dayLabel = if (isToday) "今天" else day.format(weekdayFormatter),
+                    isToday = isToday,
                     isCheckedIn = dStr in checkInDates
                 )
             )
