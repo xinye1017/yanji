@@ -12,16 +12,20 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import android.widget.Toast
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +88,10 @@ fun AchievementsScreen(
     val unlockedCount by achievementRepo.unlockedCount.collectAsStateWithLifecycle()
     val totalCount = achievementRepo.totalCount
 
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
+
     var selectedCategory by remember { mutableStateOf<AchievementCategory?>(null) }
     var viewingAchievement by remember { mutableStateOf<Achievement?>(null) }
 
@@ -137,7 +145,7 @@ fun AchievementsScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "考研成就殿堂",
                             style = MaterialTheme.typography.titleLarge,
@@ -147,6 +155,21 @@ fun AchievementsScreen(
                             text = "记录考研路上的每一个高光时刻",
                             style = MaterialTheme.typography.labelMedium,
                             color = YanjiTextSecondary
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(YanjiSurface)
+                            .clickable { showResetConfirmDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "初始化成就系统",
+                            tint = YanjiTextSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -290,6 +313,49 @@ fun AchievementsScreen(
             AchievementDetailDialog(
                 achievement = item,
                 onDismiss = { viewingAchievement = null }
+            )
+        }
+
+        // 6. Reset Confirmation Dialog
+        if (showResetConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetConfirmDialog = false },
+                title = {
+                    Text(
+                        text = "初始化成就与备考数据",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = YanjiTextPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = "是否确认将成就系统与历史测试数据完全归零？\n\n• 成就全量重置为 0/15 初始锁定状态\n• 测试专注记录与打卡记录将被清空\n• 目标院校（浙大）、专业与 AI 配置完整保留\n\n从此刻开始，开启全新踏实的考研陪伴之旅！",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = YanjiTextSecondary,
+                        lineHeight = 22.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                achievementRepo.resetAllAchievements()
+                                Toast.makeText(context, "成就与记录已初始化，祝考研一战成硕！", Toast.LENGTH_SHORT).show()
+                                showResetConfirmDialog = false
+                            }
+                        }
+                    ) {
+                        Text("确认归零初始化", color = YanjiPrimary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetConfirmDialog = false }) {
+                        Text("取消", color = YanjiTextTertiary)
+                    }
+                },
+                containerColor = YanjiSurface,
+                shape = RoundedCornerShape(20.dp)
             )
         }
     }

@@ -809,6 +809,24 @@ class YanjiRepository private constructor() {
     }
 
     /**
+     * 初始化成就系统与学习记录（用于用户开启全新备考旅程）。
+     * 清空测试生成的专注、模考、打卡、日记、对话与成就解锁记录；
+     * 严格保留目标院校、专业、倒计时与 AI Key 等基础设置。
+     */
+    suspend fun resetAchievementsAndStudyRecords() = withContext(Dispatchers.IO) {
+        val db = database ?: return@withContext
+        ActiveSessionCoordinator.cancel()
+        db.achievementDao().deleteAll()
+        _unlockedAchievements.value = emptyMap()
+        db.focusSessionDao().deleteAll()
+        db.examSessionDao().deleteAll()
+        db.journalEntryDao().deleteAll()
+        db.checkInDao().deleteAll()
+        db.chatMessageDao().clearAll()
+        db.chatSessionDao().clearAll()
+    }
+
+    /**
      * 返回本次对话已关联的真实研迹学习数据来源。
      * 每一项都基于真实本地数据；无数据时返回空列表（UI 展示为「暂无关联记录」）。
      */

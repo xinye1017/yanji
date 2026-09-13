@@ -307,4 +307,11 @@ class AchievementRepository private constructor(
     }.stateIn(scope, SharingStarted.Eagerly, 0)
 
     val totalCount: Int = definitions.size
+
+    /**
+     * 重置成就系统与学习测试记录，回归 0/15 初始锁定状态。
+     */
+    suspend fun resetAllAchievements() {
+        repo.resetAchievementsAndStudyRecords()
+    }
 }
