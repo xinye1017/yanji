@@ -379,12 +379,28 @@ data class JuanjuanResponse(
     val contextSources: List<ChatContextSource> = emptyList()
 )
 
+enum class AchievementRarity(
+    val title: String,
+    val englishName: String,
+    val order: Int
+) {
+    COMMON("普通", "Common", 1),
+    UNCOMMON("优秀", "Uncommon", 2),
+    RARE("稀有", "Rare", 3),
+    EPIC("史诗", "Epic", 4),
+    LEGENDARY("传说", "Legendary", 5),
+    MYTHIC("神话", "Mythic", 6)
+}
+
 enum class AchievementCategory(val title: String) {
     ALL("全部"),
-    FOCUS("专注习惯"),
-    EXAM("全真模考"),
-    JOURNAL("考研日记"),
-    STREAK("坚持打卡")
+    JOURNEY("研途启程"),
+    FOCUS("专注修炼"),
+    STREAK("坚持之路"),
+    EXAM("模考试炼"),
+    MATH("数学征途"),
+    REVIEW("复盘沉淀"),
+    HIDDEN("隐藏成就")
 }
 
 @Serializable
@@ -393,11 +409,16 @@ data class Achievement(
     val title: String,
     val description: String,
     val category: AchievementCategory,
+    val rarity: AchievementRarity = AchievementRarity.COMMON,
     val iconKey: String,
     val currentProgress: Long,
     val targetProgress: Long,
     val unit: String = "",
     val isUnlocked: Boolean = false,
     val unlockedAt: Long? = null,
-    val rewardQuote: String = ""
+    val rewardQuote: String = "",
+    val isHidden: Boolean = false,
+    val seriesId: String? = null,
+    val seriesOrder: Int = 0
 )
+
