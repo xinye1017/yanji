@@ -57,12 +57,23 @@ jobs:
       - name: Assemble release (R8 minify + resource shrink)
         run: ./gradlew :app:assembleRelease --stacktrace
 
+      - name: Android Lint
+        run: ./gradlew :app:lintDebug --stacktrace
+
       - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-report
           path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
       - name: Upload debug APK

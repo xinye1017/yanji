@@ -1,9 +1,8 @@
 package com.example.yanji.data.checkin
 
 import com.example.yanji.data.CheckIn
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import com.example.yanji.data.YanjiTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** 打卡条目在某一天的展示状态。 */
@@ -22,9 +21,8 @@ data class DayCheckInStatus(
  */
 internal object CheckInLogic {
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
-    fun dateStr(epochMs: Long): String = dateFormat.format(Date(epochMs))
+    fun dateStr(epochMs: Long): String =
+        YanjiTime.localDate(epochMs).format(YanjiTime.isoDateFormatter)
 
     /**
      * 连续打卡天数。
@@ -33,18 +31,18 @@ internal object CheckInLogic {
      */
     fun currentStreak(dates: Set<String>, now: Long): Int {
         if (dates.isEmpty()) return 0
-        val cal = Calendar.getInstance().apply { timeInMillis = now }
+        var day = YanjiTime.localDate(now)
         var streak = 0
         if (dates.contains(dateStr(now))) {
             streak = 1
         } else {
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            if (!dates.contains(dateStr(cal.timeInMillis))) return 0
+            day = day.minusDays(1)
+            if (!dates.contains(day.format(YanjiTime.isoDateFormatter))) return 0
             streak = 1
         }
         while (true) {
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            if (dates.contains(dateStr(cal.timeInMillis))) streak++ else break
+            day = day.minusDays(1)
+            if (dates.contains(day.format(YanjiTime.isoDateFormatter))) streak++ else break
         }
         return streak
     }
@@ -53,22 +51,23 @@ internal object CheckInLogic {
     fun nextStreakValue(existing: List<CheckIn>, now: Long): Int {
         val todayStr = dateStr(now)
         existing.find { it.date == todayStr }?.let { return it.streak }
-        val cal = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, -1) }
-        existing.find { it.date == dateStr(cal.timeInMillis) }?.let { return it.streak + 1 }
+        val yesterday = YanjiTime.localDate(now).minusDays(1).format(YanjiTime.isoDateFormatter)
+        existing.find { it.date == yesterday }?.let { return it.streak + 1 }
         return 1
     }
 
     /** 近 7 天（含今天）的打卡状态，用于首页打卡条。 */
     fun past7Days(checkInDates: Set<String>, now: Long): List<DayCheckInStatus> {
-        val dayNameSdf = SimpleDateFormat("E", Locale.CHINESE)
+        val weekdayFormatter = DateTimeFormatter.ofPattern("E", Locale.CHINESE)
         val result = mutableListOf<DayCheckInStatus>()
+        val today = YanjiTime.localDate(now)
         for (i in 6 downTo 0) {
-            val cal = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.DAY_OF_YEAR, -i) }
-            val dStr = dateStr(cal.timeInMillis)
+            val day = today.minusDays(i.toLong())
+            val dStr = day.format(YanjiTime.isoDateFormatter)
             result.add(
                 DayCheckInStatus(
                     date = dStr,
-                    dayLabel = if (i == 0) "今天" else dayNameSdf.format(cal.time),
+                    dayLabel = if (i == 0) "今天" else day.format(weekdayFormatter),
                     isToday = i == 0,
                     isCheckedIn = dStr in checkInDates
                 )

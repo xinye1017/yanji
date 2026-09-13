@@ -7,13 +7,11 @@ import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.Subject
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** 专注页不可变 UiState：科目目录、活跃会话、完成事件与今日累计。 */
 data class FocusUiState(
@@ -38,8 +36,7 @@ class FocusViewModel(
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
 
-    private val todayIso: String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    private val todayIso: String = YanjiTime.todayIso()
 
     val uiState: StateFlow<FocusUiState> = combine(
         repo.subjects,
@@ -69,7 +66,7 @@ class FocusViewModel(
     // ---- 动作 ----
 
     /** 登记专注会话到业务层；返回 null 表示已有计时在跑，调用方负责提示。 */
-    fun startFocus(
+    suspend fun startFocus(
         subjectId: String,
         subjectName: String,
         note: String,

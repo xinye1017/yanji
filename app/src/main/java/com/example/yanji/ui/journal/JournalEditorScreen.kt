@@ -36,9 +36,12 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+import java.util.UUID
 
 /**
  * 记日记页（Stitch 设计稿「研迹 - 记录今日日记」重构版）。
@@ -59,8 +62,8 @@ fun JournalEditorScreen(
     onSaveSuccess: () -> Unit,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: JournalViewModel = viewModel {
-        JournalViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    viewModel: JournalViewModel = com.example.yanji.di.yanjiViewModel { container ->
+        JournalViewModel(container.repository, container.statisticsRepository)
     }
 ) {
     val context = LocalContext.current
@@ -95,39 +98,21 @@ fun JournalEditorScreen(
     var planInput by remember { mutableStateOf("") }
 
     val todayStr = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        YanjiTime.todayIso()
     }
     val isToday = date == todayStr
 
     val formattedDate = remember(date) {
-        try {
-            val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val d = parser.parse(date) ?: Date()
-            SimpleDateFormat("M 月 d 日", Locale.CHINESE).format(d)
-        } catch (e: Exception) {
-            date
-        }
+        YanjiTime.parseIsoDate(date)?.format(
+            DateTimeFormatter.ofPattern("M 月 d 日", Locale.CHINESE)
+        ) ?: date
     }
 
     // 初试倒计时（单一事实来源：user_settings.targetExamDate，与 ProfileScreen 同口径）
     val countdownDays = remember(settings.targetExamDate) {
-        try {
-            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val target = fmt.parse(settings.targetExamDate) ?: return@remember null
-            val today = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }
-            val targetDay = Calendar.getInstance().apply {
-                time = target
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }
-            val diff = ((targetDay.timeInMillis - today.timeInMillis) / 86_400_000L).toInt()
-            if (diff >= 0) diff else null
-        } catch (e: Exception) {
-            null
-        }
+        val target = YanjiTime.parseIsoDate(settings.targetExamDate)
+        target?.let { ChronoUnit.DAYS.between(YanjiTime.today(), it).toInt() }
+            ?.takeIf { it >= 0 }
     }
 
     fun saveJournal() {

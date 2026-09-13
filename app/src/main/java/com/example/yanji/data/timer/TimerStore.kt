@@ -27,8 +27,13 @@ import java.util.UUID
  */
 internal class TimerStore(
     private val scope: CoroutineScope,
-    private val dbProvider: () -> YanjiDatabase?
+    private val dbProvider: () -> YanjiDatabase?,
+    private var diskPersistence: TimerSessionPersistence? = null
 ) {
+
+    fun setDiskPersistence(persistence: TimerSessionPersistence) {
+        this.diskPersistence = persistence
+    }
 
     companion object {
         /** 最短可记录时长：与 UI 的「不足 1 分钟不予保存」提示保持同一条业务规则。 */
@@ -61,6 +66,29 @@ internal class TimerStore(
                 _examSessions.value = entities.map { it.toDomainModel() }
             }
         }
+        scope.launch {
+            ActiveSessionCoordinator.active.collect { session ->
+                if (session == null) {
+                    _activeFocus.value = null
+                } else if (session.kind == ActiveSessionKind.FOCUS) {
+                    _activeFocus.value = FocusSession(
+                        id = session.sessionId,
+                        subjectId = session.subjectId,
+                        subjectName = session.subjectName,
+                        startTime = session.startedAtEpochMs,
+                        endTime = session.startedAtEpochMs,
+                        durationSeconds = session.accumulatedActiveMs / 1000L,
+                        pausedDurationSeconds = 0L,
+                        pauseCount = session.pauseCount,
+                        mode = session.mode,
+                        note = session.note,
+                        status = if (session.paused) SessionStatus.PAUSED else SessionStatus.RUNNING
+                    )
+                } else {
+                    _activeFocus.value = null
+                }
+            }
+        }
     }
 
     val persistence: TimerSessionPersistence = object : TimerSessionPersistence {
@@ -74,7 +102,30 @@ internal class TimerStore(
 
         override suspend fun completeExam(session: ActiveSession, actualSeconds: Long, endEpochMs: Long) =
             persistCompletedExam(session, actualSeconds, endEpochMs)
+
+        override suspend fun saveActiveSession(record: ActiveSessionRecord) {
+            requireDiskPersistence().saveActiveSession(record)
+        }
+
+        override suspend fun saveActiveSession(session: ActiveSession) {
+            requireDiskPersistence().saveActiveSession(session)
+        }
+
+        override suspend fun clearActiveSession() {
+            requireDiskPersistence().clearActiveSession()
+        }
+
+        override suspend fun loadActiveSession(): ActiveSession? {
+            return requireDiskPersistence().loadActiveSession()
+        }
+
+        override suspend fun loadActiveSessionRecord(): ActiveSessionRecord? {
+            return requireDiskPersistence().loadActiveSessionRecord()
+        }
     }
+
+    private fun requireDiskPersistence(): TimerSessionPersistence =
+        checkNotNull(diskPersistence) { "Timer disk persistence is not bound" }
 
     // ------------------------------------------------------------ 会话生命周期
 
@@ -82,7 +133,7 @@ internal class TimerStore(
      * 开始一次专注。
      * @return 新建的会话（调用方把 id 交给前台 Service）；已有计时在跑时返回 null。
      */
-    fun startFocus(
+    suspend fun startFocus(
         subjectId: String,
         subjectName: String,
         note: String,
@@ -118,7 +169,7 @@ internal class TimerStore(
     }
 
     /** 登记一场模考。@return null 表示已有计时在跑（专注与模考互斥）。 */
-    fun startExamSession(
+    suspend fun startExamSession(
         subjectId: String,
         subjectName: String,
         plannedDurationSeconds: Long
@@ -153,10 +204,18 @@ internal class TimerStore(
     fun pauseFocus(elapsedSeconds: Long = 0L) {
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.RUNNING) {
+            val newDuration = if (elapsedSeconds > 0) elapsedSeconds else current.durationSeconds
             _activeFocus.value = current.copy(
                 status = SessionStatus.PAUSED,
-                durationSeconds = if (elapsedSeconds > 0) elapsedSeconds else current.durationSeconds
+                durationSeconds = newDuration
             )
+            ActiveSessionCoordinator.update {
+                it.copy(
+                    paused = true,
+                    accumulatedActiveMs = newDuration * 1000L,
+                    pauseCount = it.pauseCount + 1
+                )
+            }
         }
     }
 
@@ -164,6 +223,7 @@ internal class TimerStore(
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.PAUSED) {
             _activeFocus.value = current.copy(status = SessionStatus.RUNNING)
+            ActiveSessionCoordinator.update { it.copy(paused = false) }
         }
     }
 
@@ -206,8 +266,10 @@ internal class TimerStore(
         pauseCount: Int,
         endEpochMs: Long
     ) {
-        _activeFocus.value = null
-        if (actualSeconds < MIN_RECORDED_FOCUS_SECONDS) return
+        if (actualSeconds < MIN_RECORDED_FOCUS_SECONDS) {
+            _activeFocus.value = null
+            return
+        }
 
         val recorded = FocusSession(
             id = session.sessionId,
@@ -222,7 +284,9 @@ internal class TimerStore(
             note = session.note,
             status = SessionStatus.COMPLETED
         )
-        dbProvider()?.focusSessionDao()?.insert(FocusSessionEntity.fromDomainModel(recorded))
+        val db = dbProvider() ?: throw IllegalStateException("Database not available")
+        db.focusSessionDao().insert(FocusSessionEntity.fromDomainModel(recorded))
+        _activeFocus.value = null
         _lastCompletedFocus.value = recorded
     }
 
@@ -236,9 +300,13 @@ internal class TimerStore(
             actualDurationSeconds = actualSeconds.coerceAtLeast(0L),
             startTime = session.startedAtEpochMs,
             endTime = endEpochMs,
+            score = null,
+            maxScore = 150.0,
+            note = session.note,
             status = SessionStatus.COMPLETED
         )
-        dbProvider()?.examSessionDao()?.insert(ExamSessionEntity.fromDomainModel(recorded))
+        val db = dbProvider() ?: throw IllegalStateException("Database not available")
+        db.examSessionDao().insert(ExamSessionEntity.fromDomainModel(recorded))
         _lastCompletedExam.value = recorded
     }
 

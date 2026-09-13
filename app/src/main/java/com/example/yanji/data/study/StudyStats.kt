@@ -4,9 +4,7 @@ import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.SubjectCatalog
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.example.yanji.data.YanjiTime
 
 /**
  * 学习时长的纯计算。
@@ -17,10 +15,8 @@ import java.util.Locale
  */
 internal object StudyStats {
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
     private fun isCompletedToday(startTime: Long, dayEpochMs: Long): Boolean =
-        dateFormat.format(Date(startTime)) == dateFormat.format(Date(dayEpochMs))
+        YanjiTime.localDate(startTime) == YanjiTime.localDate(dayEpochMs)
 
     /** 指定当天的有效学习秒数（专注 + 模考，仅 COMPLETED）。 */
     fun durationOnDay(

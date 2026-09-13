@@ -7,14 +7,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.fill.*
 import com.adamglin.phosphoricons.regular.*
+import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.YanjiBackground
 import com.example.yanji.ui.achievement.AchievementsScreen
 import com.example.yanji.ui.chat.JuanjuanChatScreen
@@ -32,8 +37,10 @@ import com.example.yanji.ui.navigation.GlassBottomBar
 import com.example.yanji.ui.profile.ProfileScreen
 import com.example.yanji.ui.stats.StatsScreen
 import com.example.yanji.data.QuickStartPreset
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.YanjiTime
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 enum class YanjiTab(
     val title: String,
@@ -47,28 +54,62 @@ enum class YanjiTab(
     PROFILE("我的", PhosphorIcons.Fill.UserCircle, PhosphorIcons.Regular.UserCircle)
 }
 
+@Serializable
 sealed interface YanjiSubScreen {
+    @Serializable
     data class DailyStudyDetail(val date: String) : YanjiSubScreen
+    @Serializable
     data class SubjectStudyDetail(val subjectId: String) : YanjiSubScreen
+    @Serializable
     data class FocusSessionDetail(val sessionId: String) : YanjiSubScreen
+    @Serializable
     data object ExamHistory : YanjiSubScreen
+    @Serializable
     data class ExamDetail(val examId: String) : YanjiSubScreen
+    @Serializable
     data class JournalEditor(val journalId: String? = null, val date: String) : YanjiSubScreen
+    @Serializable
     data object ExamMode : YanjiSubScreen
+    @Serializable
     data object JuanjuanChat : YanjiSubScreen
+    @Serializable
     data object Achievements : YanjiSubScreen
 }
 
+val YanjiSubScreenStackSaver: Saver<SnapshotStateList<YanjiSubScreen>, ArrayList<String>> = Saver(
+    save = { list -> ArrayList(list.map { Json.encodeToString(YanjiSubScreen.serializer(), it) }) },
+    restore = { savedList ->
+        mutableStateListOf<YanjiSubScreen>().apply {
+            savedList.forEach { json ->
+                runCatching { Json.decodeFromString(YanjiSubScreen.serializer(), json) }.getOrNull()?.let { add(it) }
+            }
+        }
+    }
+)
+
 @Composable
 fun MainNavigation() {
-    var currentTab by remember { mutableStateOf(YanjiTab.HOME) }
-    val screenStack = remember { mutableStateListOf<YanjiSubScreen>() }
+    val repository = LocalAppContainer.current.repository
+    val activeFocus by repository.activeFocus.collectAsStateWithLifecycle()
+    var currentTab by rememberSaveable {
+        mutableStateOf(if (activeFocus != null) YanjiTab.FOCUS else YanjiTab.HOME)
+    }
+    val screenStack = rememberSaveable(saver = YanjiSubScreenStackSaver) {
+        mutableStateListOf<YanjiSubScreen>()
+    }
+
+    // 运行和暂停都属于专注环境；会话结束后仍回到专注页。
+    // 直接派生显示页，确保 Activity 重建时不会先闪现其他主 Tab。
+    val visibleTab = if (activeFocus != null) YanjiTab.FOCUS else currentTab
+    LaunchedEffect(activeFocus?.id) {
+        if (activeFocus != null) currentTab = YanjiTab.FOCUS
+    }
 
     // 首页快捷操作 → 专注页自动开始的 pending 传递
     var pendingQuickStart by remember { mutableStateOf<QuickStartPreset?>(null) }
 
     val todayStr = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        YanjiTime.todayIso()
     }
 
     // System back button handling for full screen sub-pages
@@ -177,7 +218,7 @@ fun MainNavigation() {
                 }
             } else {
                 // Primary Tabs
-                when (currentTab) {
+                when (visibleTab) {
                     YanjiTab.HOME -> {
                         HomeScreen(
                             onNavigateToFocus = { currentTab = YanjiTab.FOCUS },
@@ -229,8 +270,8 @@ fun MainNavigation() {
             }
         }
 
-        // Floating Glass Bottom Bar overlays at bottom center only when no sub-screen is shown
-        if (screenStack.isEmpty()) {
+        // 暂停也隐藏底栏；结束或放弃时由业务会话清空自动恢复。
+        if (screenStack.isEmpty() && activeFocus == null) {
             GlassBottomBar(
                 currentTab = currentTab,
                 onTabSelected = { currentTab = it },

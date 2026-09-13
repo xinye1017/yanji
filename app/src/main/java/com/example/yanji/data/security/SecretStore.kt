@@ -6,167 +6,262 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** Result of a credential write. A failure always means no plaintext was written. */
+sealed interface SecretWriteResult {
+    data object Saved : SecretWriteResult
+    data object Cleared : SecretWriteResult
+    data class Failure(val cause: Throwable) : SecretWriteResult
+}
+
+sealed interface LegacySecretMigrationResult {
+    data object NothingToMigrate : LegacySecretMigrationResult
+    data object Migrated : LegacySecretMigrationResult
+    data class Failure(val cause: Throwable) : LegacySecretMigrationResult
+}
+
 /**
- * AI 凭据（API Key）的秘密存储。
- *
- * 设计约束：
- * 1. **绝不进入 Room**。凭据与普通学习数据共享数据库文件，会一起进入 Android Auto Backup；
- *    用户的学习记录可以云备份，凭据不行。
- * 2. **绝不进入 SharedPreferences**。SharedPreferences 同样默认属于 Auto Backup 范围。
- * 3. 因此凭据落在 [Context.getNoBackupFilesDir]（系统保证永不参与备份/迁移），
- *    并用 Android Keystore 中的 AES-GCM 密钥加密后落盘。
- *
- * 实现不使用任何新增三方依赖：Keystore（API 23+）与框架 `Base64` 均可用，
- * 满足本项目 `minSdk 24` 的要求。
+ * AI credentials never enter Room, SharedPreferences, Auto Backup, or a reversible fallback.
+ * Implementations must fail closed when encryption or durable file replacement is unavailable.
  */
 interface SecretStore {
-
-    /** 保存 API Key。传入空白字符串等价于清空。 */
-    fun saveAiApiKey(value: String)
-
-    /** 读取 API Key；不存在时返回空字符串。 */
+    fun saveAiApiKey(value: String): SecretWriteResult
     fun readAiApiKey(): String
-
-    fun clearAiApiKey()
-
-    /**
-     * 处理数据库迁移阶段临时落盘的遗留明文 Key：加密后写入正式位置并删除明文文件。
-     * @return 是否真的迁移了一份遗留凭据（用于日志/诊断）。
-     */
-    fun migrateLegacyApiKeyIfPresent(): Boolean
+    fun clearAiApiKey(): SecretWriteResult
+    fun migrateLegacyApiKeyIfPresent(): LegacySecretMigrationResult
 
     companion object {
-        /** 迁移期间明文 Key 的临时落点（仍在 no-backup 目录内，不会被云备份）。 */
+        /** Temporary v7 -> v8 hand-off. Deleted only after an encrypted write succeeds. */
         const val LEGACY_FILE_NAME = "yanji_legacy_ai_api_key"
     }
 }
 
+/** Small seam that keeps file/migration behaviour testable without an Android Keystore. */
+internal interface SecretPayloadCrypto {
+    fun encrypt(plain: String): String
+    fun decrypt(stored: String): String
+    fun decodeLegacyPlain(stored: String): String
+    fun clearKey()
+}
+
 /**
- * 基于 Android Keystore + AES-GCM 的 [SecretStore] 实现。
+ * Android Keystore + AES-GCM credential storage.
  *
- * 存储格式：`v1:<base64(iv||ciphertext)>`。
- * 若设备 Keystore 不可用（极少数定制 ROM），降级为 `plain:<base64(utf8)>` 明文存储——
- * 依然位于 no-backup 目录，不会进入云备份；只在日志中留一条 WARN。
+ * Current format is `v1:<base64(iv||ciphertext)>`. Historical `plain:<base64>` payloads are
+ * accepted only by the migration path in [readAiApiKey]: they are immediately replaced by an
+ * encrypted payload before the value is exposed. If that replacement fails, the read returns an
+ * empty value and keeps the historical file for a later retry.
  */
-class KeystoreSecretStore(context: Context) : SecretStore {
+class KeystoreSecretStore private constructor(
+    private val credentialFile: File,
+    private val legacyFile: File,
+    private val crypto: SecretPayloadCrypto
+) : SecretStore {
 
-    private val appContext = context.applicationContext
-    private val credentialFile = File(appContext.noBackupFilesDir, CREDENTIAL_FILE_NAME)
-    private val legacyFile = File(appContext.noBackupFilesDir, SecretStore.LEGACY_FILE_NAME)
+    constructor(context: Context) : this(
+        credentialFile = File(context.applicationContext.noBackupFilesDir, CREDENTIAL_FILE_NAME),
+        legacyFile = File(context.applicationContext.noBackupFilesDir, SecretStore.LEGACY_FILE_NAME),
+        crypto = AndroidKeystorePayloadCrypto()
+    )
 
-    override fun saveAiApiKey(value: String) {
+    internal constructor(directory: File, crypto: SecretPayloadCrypto) : this(
+        credentialFile = File(directory, CREDENTIAL_FILE_NAME),
+        legacyFile = File(directory, SecretStore.LEGACY_FILE_NAME),
+        crypto = crypto
+    )
+
+    override fun saveAiApiKey(value: String): SecretWriteResult {
         val trimmed = value.trim()
-        if (trimmed.isEmpty()) {
-            clearAiApiKey()
-            return
+        if (trimmed.isEmpty()) return clearAiApiKey()
+
+        return runCatching {
+            val encrypted = crypto.encrypt(trimmed)
+            require(encrypted.startsWith(VERSION_PREFIX)) { "加密器返回了不受支持的凭据格式" }
+            replaceAtomically(credentialFile, encrypted)
+            SecretWriteResult.Saved
+        }.getOrElse { error ->
+            Log.e(TAG, "Keystore 加密或凭据落盘失败；拒绝保存未加密内容", error)
+            SecretWriteResult.Failure(error)
         }
-        val payload = runCatching { encrypt(trimmed) }.getOrElse { error ->
-            Log.w(TAG, "Keystore 加密不可用，降级为 no-backup 明文存储：${error.message}")
-            PLAIN_PREFIX + Base64.encodeToString(trimmed.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        }
-        writeAtomically(credentialFile, payload)
     }
 
     override fun readAiApiKey(): String {
         if (!credentialFile.exists()) return ""
-        val raw = runCatching { credentialFile.readText() }.getOrElse { return "" }
-        if (raw.isBlank()) return ""
-        return runCatching { decrypt(raw) }.getOrElse { error ->
-            // 典型场景：用户在系统设置里清除过应用数据后 Keystore 密钥被重置。
-            // 此时密文已无法还原，直接清掉，避免每次启动都抛异常。
-            Log.w(TAG, "凭据解密失败，已清除本地副本：${error.message}")
-            runCatching { credentialFile.delete() }
+        val stored = runCatching { credentialFile.readText(Charsets.UTF_8) }.getOrElse {
+            Log.e(TAG, "读取凭据文件失败", it)
+            return ""
+        }
+        if (stored.isBlank()) return ""
+
+        if (stored.startsWith(PLAIN_PREFIX)) {
+            val legacyValue = runCatching { crypto.decodeLegacyPlain(stored) }.getOrElse {
+                quarantineUnreadableCredential(it)
+                return ""
+            }.trim()
+            if (legacyValue.isEmpty()) {
+                runCatching { credentialFile.delete() }
+                return ""
+            }
+            return when (saveAiApiKey(legacyValue)) {
+                SecretWriteResult.Saved -> {
+                    Log.i(TAG, "已将历史 plain 凭据一次性迁移至 Keystore")
+                    legacyValue
+                }
+                else -> ""
+            }
+        }
+
+        return runCatching { crypto.decrypt(stored) }.getOrElse { error ->
+            quarantineUnreadableCredential(error)
             ""
         }
     }
 
-    override fun clearAiApiKey() {
-        runCatching { credentialFile.delete() }
-        runCatching { legacyFile.delete() }
-        runCatching {
-            val ks = keyStore()
-            if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
+    override fun clearAiApiKey(): SecretWriteResult = runCatching {
+        deleteIfPresent(credentialFile)
+        deleteIfPresent(legacyFile)
+        crypto.clearKey()
+        SecretWriteResult.Cleared
+    }.getOrElse { error ->
+        Log.e(TAG, "清除凭据失败", error)
+        SecretWriteResult.Failure(error)
+    }
+
+    override fun migrateLegacyApiKeyIfPresent(): LegacySecretMigrationResult {
+        if (!legacyFile.exists()) return LegacySecretMigrationResult.NothingToMigrate
+        val legacyValue = runCatching { legacyFile.readText(Charsets.UTF_8).trim() }.getOrElse {
+            return LegacySecretMigrationResult.Failure(it)
+        }
+        if (legacyValue.isEmpty()) {
+            return runCatching {
+                deleteIfPresent(legacyFile)
+                LegacySecretMigrationResult.NothingToMigrate
+            }.getOrElse { LegacySecretMigrationResult.Failure(it) }
+        }
+
+        return when (val write = saveAiApiKey(legacyValue)) {
+            SecretWriteResult.Saved -> runCatching {
+                deleteIfPresent(legacyFile)
+                Log.i(TAG, "已将数据库遗留 API Key 迁移至 Keystore")
+                LegacySecretMigrationResult.Migrated
+            }.getOrElse { LegacySecretMigrationResult.Failure(it) }
+            is SecretWriteResult.Failure -> LegacySecretMigrationResult.Failure(write.cause)
+            SecretWriteResult.Cleared -> LegacySecretMigrationResult.NothingToMigrate
         }
     }
 
-    override fun migrateLegacyApiKeyIfPresent(): Boolean {
-        if (!legacyFile.exists()) return false
-        val legacyValue = runCatching { legacyFile.readText().trim() }.getOrDefault("")
-        legacyFile.delete()
-        if (legacyValue.isEmpty()) return false
-        saveAiApiKey(legacyValue)
-        Log.i(TAG, "已将遗留明文 API Key 迁移至 Keystore 加密存储")
-        return true
+    private fun quarantineUnreadableCredential(error: Throwable) {
+        Log.w(TAG, "凭据无法解密，已隔离本地副本", error)
+        val unreadable = File(credentialFile.parentFile, "${credentialFile.name}.unreadable")
+        runCatching {
+            if (unreadable.exists()) unreadable.delete()
+            if (!credentialFile.renameTo(unreadable)) credentialFile.delete()
+        }
     }
 
-    // ---------- internals ----------
+    private fun replaceAtomically(target: File, content: String) {
+        target.parentFile?.mkdirs()
+        val temporary = File(target.parentFile, "${target.name}.tmp")
+        val backup = File(target.parentFile, "${target.name}.bak")
+        FileOutputStream(temporary).use { output ->
+            output.write(content.toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
+        }
 
-    private fun encrypt(plain: String): String {
+        if (backup.exists() && !backup.delete()) {
+            temporary.delete()
+            error("无法清理旧凭据备份")
+        }
+        if (target.exists() && !target.renameTo(backup)) {
+            temporary.delete()
+            error("无法暂存旧凭据")
+        }
+        if (!temporary.renameTo(target)) {
+            if (backup.exists()) backup.renameTo(target)
+            temporary.delete()
+            error("无法原子替换凭据文件")
+        }
+        if (backup.exists() && !backup.delete()) {
+            Log.w(TAG, "凭据已更新，但旧的加密备份未能删除")
+        }
+    }
+
+    private fun deleteIfPresent(file: File) {
+        if (file.exists() && !file.delete()) error("无法删除 ${file.name}")
+    }
+
+    private companion object {
+        const val TAG = "YanjiSecret"
+        const val VERSION_PREFIX = "v1:"
+        const val PLAIN_PREFIX = "plain:"
+        const val CREDENTIAL_FILE_NAME = "yanji_ai_credential"
+    }
+}
+
+private class AndroidKeystorePayloadCrypto : SecretPayloadCrypto {
+    override fun encrypt(plain: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-        val iv = cipher.iv
         val cipherText = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
-        val packed = ByteArray(iv.size + cipherText.size)
-        System.arraycopy(iv, 0, packed, 0, iv.size)
-        System.arraycopy(cipherText, 0, packed, iv.size, cipherText.size)
-        return VERSION_PREFIX + Base64.encodeToString(packed, Base64.NO_WRAP)
+        return VERSION_PREFIX + Base64.encodeToString(cipher.iv + cipherText, Base64.NO_WRAP)
     }
 
-    private fun decrypt(stored: String): String {
-        if (stored.startsWith(PLAIN_PREFIX)) {
-            val body = stored.substring(PLAIN_PREFIX.length)
-            return String(Base64.decode(body, Base64.NO_WRAP), Charsets.UTF_8)
-        }
+    override fun decrypt(stored: String): String {
         require(stored.startsWith(VERSION_PREFIX)) { "未知的凭据存储格式" }
         val packed = Base64.decode(stored.substring(VERSION_PREFIX.length), Base64.NO_WRAP)
         require(packed.size > IV_LENGTH) { "凭据内容损坏" }
-        val iv = packed.copyOfRange(0, IV_LENGTH)
-        val cipherText = packed.copyOfRange(IV_LENGTH, packed.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-        return String(cipher.doFinal(cipherText), Charsets.UTF_8)
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            secretKey(),
+            GCMParameterSpec(GCM_TAG_BITS, packed.copyOfRange(0, IV_LENGTH))
+        )
+        return String(cipher.doFinal(packed.copyOfRange(IV_LENGTH, packed.size)), Charsets.UTF_8)
+    }
+
+    override fun decodeLegacyPlain(stored: String): String {
+        require(stored.startsWith(PLAIN_PREFIX)) { "不是历史 plain 凭据" }
+        return String(
+            Base64.decode(stored.substring(PLAIN_PREFIX.length), Base64.NO_WRAP),
+            Charsets.UTF_8
+        )
+    }
+
+    override fun clearKey() {
+        val store = keyStore()
+        if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
     }
 
     private fun secretKey(): SecretKey {
-        val ks = keyStore()
-        (ks.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
-
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        val store = keyStore()
+        (store.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE).run {
+            init(
+                KeyGenParameterSpec.Builder(
+                    KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(KEY_SIZE_BITS)
+                    .setUserAuthenticationRequired(false)
+                    .build()
             )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(KEY_SIZE_BITS)
-                .setUserAuthenticationRequired(false)
-                .build()
-        )
-        return generator.generateKey()
+            generateKey()
+        }
     }
 
     private fun keyStore(): KeyStore =
         KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
 
-    private fun writeAtomically(target: File, content: String) {
-        val tmp = File(target.parentFile, "${target.name}.tmp")
-        tmp.writeText(content)
-        if (!tmp.renameTo(target)) {
-            target.writeText(content)
-            tmp.delete()
-        }
-        // noBackupFilesDir 本身即位于 data/data/<pkg>/no_backup，不需要额外权限设置。
-    }
-
     private companion object {
-        const val TAG = "YanjiSecret"
         const val ANDROID_KEY_STORE = "AndroidKeyStore"
         const val KEY_ALIAS = "yanji_ai_credential_key_v1"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -175,6 +270,5 @@ class KeystoreSecretStore(context: Context) : SecretStore {
         const val IV_LENGTH = 12
         const val VERSION_PREFIX = "v1:"
         const val PLAIN_PREFIX = "plain:"
-        const val CREDENTIAL_FILE_NAME = "yanji_ai_credential"
     }
 }

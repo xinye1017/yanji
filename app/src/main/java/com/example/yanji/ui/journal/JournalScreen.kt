@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
@@ -27,8 +26,8 @@ import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.ui.components.AppContentInsets
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.yanji.ui.components.YanjiPageHeader
+import com.example.yanji.data.YanjiTime
 
 @Composable
 fun JournalScreen(
@@ -43,7 +42,7 @@ fun JournalScreen(
     val journals = state.journals
 
     val todayStr = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        YanjiTime.todayIso()
     }
 
     Box(
@@ -59,37 +58,22 @@ fun JournalScreen(
             verticalArrangement = Arrangement.spacedBy(YanjiSpacing.CardGap)
         ) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "考研日记",
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "记录真实思考与状态 · 自动关联每日学时",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = YanjiTextSecondary
-                        )
+                YanjiPageHeader(
+                    title = "考研日记",
+                    subtitle = "记录真实思考与状态 · 自动关联每日学时",
+                    trailing = {
+                        Button(
+                            onClick = { onNavigateToJournalEditor(null, todayStr) },
+                            colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("记今天", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
                     }
-
-                    Button(
-                        onClick = { onNavigateToJournalEditor(null, todayStr) },
-                        colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("记今天", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    }
-                }
+                )
             }
 
             items(journals) { entry ->
@@ -133,7 +117,7 @@ fun JournalCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = entry.date,
-                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = YanjiPrimary
                     )
@@ -148,7 +132,7 @@ fun JournalCard(
                     ) {
                         Text(
                             text = DurationFormatter.formatHoursMinutes(durationSecs),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = YanjiPrimaryStrong
                         )
@@ -173,7 +157,7 @@ fun JournalCard(
             // Title
             Text(
                 text = entry.title.ifEmpty { "学习随记与复盘" },
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = YanjiTextPrimary
             )
@@ -183,10 +167,9 @@ fun JournalCard(
             // Content snippet
             Text(
                 text = entry.content,
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodyMedium,
                 color = YanjiTextSecondary,
-                maxLines = 3,
-                lineHeight = 20.sp
+                maxLines = 3
             )
 
             if (entry.tomorrowPlan.isNotBlank()) {
@@ -201,16 +184,15 @@ fun JournalCard(
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             text = "明日计划: ",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = YanjiLavender
                         )
                         Text(
                             text = entry.tomorrowPlan,
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             color = YanjiTextPrimary,
-                            maxLines = 2,
-                            lineHeight = 18.sp
+                            maxLines = 2
                         )
                     }
                 }

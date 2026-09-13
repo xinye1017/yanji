@@ -71,17 +71,28 @@ class StatsViewModel(
         Triple(report, analyzing, all)
     }
 
+    private val periodDurationFlow = selectedTimeTab.flatMapLatest { tab ->
+        statsRepo.getStudyDurationFlow(tab.toTimeRange())
+    }
+
+    private val selectionMetrics = combine(
+        chartSelection,
+        trendChartMode,
+        periodDurationFlow,
+        statsRepo.getPreviousCalendarWeekDurationFlow()
+    ) { selection, chartMode, periodSeconds, previousWeekSeconds ->
+        SelectionMetrics(selection.first, selection.second, chartMode, periodSeconds, previousWeekSeconds)
+    }
+
     private val initial = StatsUiState(
         selectedTimeTab = 0,
         subjectStatsLevel = SubjectStatsLevel.SUBCATEGORY,
         trendChartMode = TrendMode.BAR,
         timeRange = StudyTimeRange.WEEK,
-        weeklySummary = statsRepo.getWeeklyStudySummary(),
-        subjectDistribution = statsRepo.getSubjectDistribution(
-            StudyTimeRange.WEEK, SubjectStatsLevel.SUBCATEGORY
-        ).filter { it.durationSeconds > 0L },
-        periodDurationSeconds = statsRepo.getWeeklyStudySummary().totalDurationSeconds,
-        previousWeekSeconds = repo.getStudyDurationForPeriod(14) - repo.getStudyDurationForPeriod(7),
+        weeklySummary = WeeklyStudySummary(0L, 0L, 0, null, 0, 0, emptyList()),
+        subjectDistribution = emptyList(),
+        periodDurationSeconds = 0L,
+        previousWeekSeconds = 0L,
         latestReport = repo.aiAnalyses.value.firstOrNull(),
         isAnalyzing = false
     )
@@ -89,26 +100,22 @@ class StatsViewModel(
     val uiState: StateFlow<StatsUiState> = combine(
         statsRepo.getWeeklyStudySummaryFlow(),
         subjectDistributionFlow,
-        chartSelection,
-        trendChartMode,
+        selectionMetrics,
         reportState
-    ) { weekly, distribution, selection, chartMode, reportTriple ->
-        val (tab, level) = selection
+    ) { weekly, distribution, metrics, reportTriple ->
+        val tab = metrics.tab
+        val level = metrics.level
         val (report, analyzing, allAnalyses) = reportTriple
         StatsUiState(
             selectedTimeTab = tab,
             subjectStatsLevel = level,
-            trendChartMode = chartMode,
+            trendChartMode = metrics.chartMode,
             timeRange = tab.toTimeRange(),
             weeklySummary = weekly,
             subjectDistribution = distribution,
-            periodDurationSeconds = when (tab) {
-                0 -> weekly.totalDurationSeconds
-                1 -> repo.getStudyDurationForPeriod(30)
-                else -> repo.getTotalStudyDurationSeconds()
-            },
-            // 上周窗口 = 近 14 天 − 近 7 天（与「本周=近 7 天」口径对齐）
-            previousWeekSeconds = repo.getStudyDurationForPeriod(14) - repo.getStudyDurationForPeriod(7),
+            periodDurationSeconds = metrics.periodSeconds,
+            // Previous calendar week: Monday 00:00 through this Monday 00:00.
+            previousWeekSeconds = metrics.previousWeekSeconds,
             latestReport = report ?: allAnalyses.firstOrNull(),
             isAnalyzing = analyzing
         )
@@ -153,4 +160,12 @@ class StatsViewModel(
         1 -> StudyTimeRange.MONTH
         else -> StudyTimeRange.ALL
     }
+
+    private data class SelectionMetrics(
+        val tab: Int,
+        val level: SubjectStatsLevel,
+        val chartMode: TrendMode,
+        val periodSeconds: Long,
+        val previousWeekSeconds: Long
+    )
 }

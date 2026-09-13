@@ -1,8 +1,7 @@
 package com.example.yanji.data
 
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+
 
 data class SubjectStudyStat(
     val name: String,
@@ -73,16 +72,18 @@ data class StudyDiagnosticSnapshot(
             now: Long = System.currentTimeMillis()
         ): StudyDiagnosticSnapshot {
             val safePeriodDays = periodDays.coerceIn(1, 90)
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val start = now - (safePeriodDays - 1) * DAY_MILLIS
-            val startDate = dateFormat.format(Date(start))
-            val endDate = dateFormat.format(Date(now))
+            val endDay = YanjiTime.localDate(now)
+            val startDay = endDay.minusDays((safePeriodDays - 1).toLong())
+            val start = YanjiTime.dayRange(startDay).startInclusive
+            val endExclusive = YanjiTime.dayRange(endDay).endExclusive
+            val startDate = startDay.format(YanjiTime.isoDateFormatter)
+            val endDate = endDay.format(YanjiTime.isoDateFormatter)
             val sessions = focusSessions.filter {
-                it.status == SessionStatus.COMPLETED && it.startTime in start..now
+                it.status == SessionStatus.COMPLETED && it.startTime in start until endExclusive
             }
             val dailySeconds = (0 until safePeriodDays).map { dayOffset ->
-                val day = dateFormat.format(Date(start + dayOffset * DAY_MILLIS))
-                sessions.filter { dateFormat.format(Date(it.startTime)) == day }.sumOf { it.durationSeconds }
+                val day = startDay.plusDays(dayOffset.toLong())
+                sessions.filter { YanjiTime.localDate(it.startTime) == day }.sumOf { it.durationSeconds }
             }
             val totalSeconds = dailySeconds.sum()
             val subjectStats = sessions.groupBy {
@@ -96,7 +97,9 @@ data class StudyDiagnosticSnapshot(
                 }
                 .sortedByDescending { it.seconds }
             val journals = journalEntries.filter { it.date in startDate..endDate }
-            val exams = examSessions.filter { it.startTime in start..now && it.status == SessionStatus.COMPLETED }
+            val exams = examSessions.filter {
+                it.startTime in start until endExclusive && it.status == SessionStatus.COMPLETED
+            }
                 .sortedByDescending { it.startTime }
                 .take(5)
             return StudyDiagnosticSnapshot(
@@ -121,7 +124,6 @@ data class StudyDiagnosticSnapshot(
             )
         }
 
-        private const val DAY_MILLIS = 86_400_000L
     }
 }
 

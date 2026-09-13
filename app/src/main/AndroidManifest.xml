@@ -4,11 +4,19 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      Android 16 QPR1 起提供的实时活动（Live Update / promoted ongoing）权限。
+      该常量不存在于 API 36 的 android.jar（实测），因此只能以字面量声明；
+      声明它在低版本系统上是无害的 no-op。是否真正可用由
+      NotificationManagerCompat.canPostPromotedNotifications() 在运行时判定。
+    -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
+        android:name=".YanjiApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

@@ -36,13 +36,18 @@ class MainActivity : ComponentActivity() {
     }
 
     enableEdgeToEdge()
+    val container = (application as YanjiApplication).container
     setContent {
-      YanjiTheme {
-        Surface(
-          modifier = Modifier.fillMaxSize(),
-          color = MaterialTheme.colorScheme.background
-        ) {
-          MainNavigation()
+      androidx.compose.runtime.CompositionLocalProvider(
+        com.example.yanji.di.LocalAppContainer provides container
+      ) {
+        YanjiTheme {
+          Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+          ) {
+            MainNavigation()
+          }
         }
       }
     }

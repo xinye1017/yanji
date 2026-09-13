@@ -2,6 +2,8 @@ package com.example.yanji.data.timer
 
 import android.os.SystemClock
 
+import java.io.File
+
 /**
  * 单调时钟抽象。
  *
@@ -15,8 +17,18 @@ import android.os.SystemClock
  */
 interface MonotonicClock {
     fun nowMs(): Long
+    fun currentBootId(): String = "boot_default"
 }
 
 object SystemMonotonicClock : MonotonicClock {
     override fun nowMs(): Long = SystemClock.elapsedRealtime()
+
+    private val cachedBootId: String by lazy {
+        runCatching {
+            File("/proc/sys/kernel/random/boot_id").readText().trim()
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: "boot_${System.currentTimeMillis() - SystemClock.elapsedRealtime()}"
+    }
+
+    override fun currentBootId(): String = cachedBootId
 }

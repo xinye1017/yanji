@@ -18,6 +18,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildTypes {
         release {
             // 开启代码压缩与资源压缩：缩包、去掉无用代码与调试符号。
@@ -28,6 +32,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -36,6 +41,13 @@ android {
       aidl = false
       buildConfig = false
       shaders = false
+    }
+
+    lint {
+        abortOnError = false
+        checkDependencies = true
+        textReport = true
+        htmlReport = true
     }
 
     packaging {
@@ -74,6 +86,7 @@ configurations.configureEach {
 }
 
 dependencies {
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)

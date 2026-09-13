@@ -3,9 +3,6 @@ package com.example.yanji.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class StudyDiagnosticsTest {
     @Test
@@ -21,7 +18,7 @@ class StudyDiagnosticsTest {
             ),
             examSessions = listOf(ExamSession("exam", "math", "数学", score = 120.0, maxScore = 150.0)),
             journalEntries = listOf(
-                JournalEntry("journal", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(now)), content = "复盘积分计算")
+                JournalEntry("journal", YanjiTime.localDate(now).toString(), content = "复盘积分计算")
             ),
             now = now
         )

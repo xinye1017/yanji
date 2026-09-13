@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 10
+    private val CURRENT_VERSION = 11
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -178,7 +178,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_6_7,
         YanjiDatabase.migration7to8(legacyKeySink),
         YanjiDatabase.MIGRATION_8_9,
-        YanjiDatabase.MIGRATION_9_10
+        YanjiDatabase.MIGRATION_9_10,
+        YanjiDatabase.MIGRATION_10_11
     )
 
     /** 用驱动直接把手工 DDL + 种子数据写进目标文件，并把 user_version 设成 [version]。 */
@@ -316,7 +317,8 @@ class YanjiMigrationTest {
             listOf(
                 YanjiDatabase.migration7to8 { legacyKeys += it },
                 YanjiDatabase.MIGRATION_8_9,
-                YanjiDatabase.MIGRATION_9_10
+                YanjiDatabase.MIGRATION_9_10,
+                YanjiDatabase.MIGRATION_10_11
             )
         )
 
@@ -348,7 +350,8 @@ class YanjiMigrationTest {
             listOf(
                 YanjiDatabase.migration7to8 { legacyKeys += it },
                 YanjiDatabase.MIGRATION_8_9,
-                YanjiDatabase.MIGRATION_9_10
+                YanjiDatabase.MIGRATION_9_10,
+                YanjiDatabase.MIGRATION_10_11
             )
         )
 
@@ -393,7 +396,10 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_9_10))
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11)
+        )
 
         assertTrue("blockers 列应已存在", "blockers" in db.columnNames("journal_entries"))
         // 旧行回填空串，其余字段原样保留
@@ -407,7 +413,10 @@ class YanjiMigrationTest {
     fun migrate9To10_emptyJournalTableStaysEmpty() {
         seedRawDatabase(version = 9, ddl = v9Ddl + v9IndexDdl)
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_9_10))
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11)
+        )
 
         assertEquals("迁移不应向 journal_entries 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         db.close()
@@ -429,6 +438,59 @@ class YanjiMigrationTest {
         ).forEach { table ->
             assertEquals("迁移不应向 $table 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM $table"))
         }
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 10 -> 11 duplicate cleanup
+
+    private val v10Ddl: List<String> = v9Ddl.map { ddl ->
+        if (ddl.startsWith("CREATE TABLE IF NOT EXISTS `journal_entries`")) {
+            "CREATE TABLE IF NOT EXISTS `journal_entries` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `moodScore` INTEGER NOT NULL, `energyScore` INTEGER NOT NULL, `studySatisfaction` INTEGER NOT NULL, `tomorrowPlan` TEXT NOT NULL, `blockers` TEXT NOT NULL, `tags` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        } else {
+            ddl
+        }
+    }
+
+    @Test
+    fun migrate10To11_deduplicatesByUpdatedCreatedAndIdThenEnforcesUniqueDate() {
+        seedRawDatabase(
+            version = 10,
+            ddl = v10Ddl + v9IndexDdl,
+            statements = listOf(
+                // updatedAt wins first.
+                "INSERT INTO journal_entries VALUES ('old','2026-09-01','old','','3','3','3','','','','10','100')",
+                "INSERT INTO journal_entries VALUES ('updated','2026-09-01','updated','','3','3','3','','','','1','101')",
+                // createdAt breaks an updatedAt tie.
+                "INSERT INTO journal_entries VALUES ('created-old','2026-09-02','created-old','','3','3','3','','','','10','200')",
+                "INSERT INTO journal_entries VALUES ('created-new','2026-09-02','created-new','','3','3','3','','','','11','200')",
+                // id DESC breaks the final tie.
+                "INSERT INTO journal_entries VALUES ('a','2026-09-03','a','','3','3','3','','','','20','300')",
+                "INSERT INTO journal_entries VALUES ('z','2026-09-03','z','','3','3','3','','','','20','300')",
+                "INSERT INTO journal_entries VALUES ('single','2026-09-04','single','','3','3','3','','','','30','400')"
+            )
+        )
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11))
+
+        assertEquals(4, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals("updated", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-01'"))
+        assertEquals("created-new", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-02'"))
+        assertEquals("z", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-03'"))
+        assertEquals("single", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-04'"))
+        assertEquals(
+            1,
+            db.intValue(
+                "SELECT `unique` FROM pragma_index_list('journal_entries') " +
+                    "WHERE name='index_journal_entries_date'"
+            )
+        )
+
+        val duplicateInsert = runCatching {
+            db.prepare(
+                "INSERT INTO journal_entries VALUES ('duplicate','2026-09-04','','','3','3','3','','','','31','401')"
+            ).use { it.step() }
+        }
+        assertTrue("database must reject a second journal for the same date", duplicateInsert.isFailure)
         db.close()
     }
 

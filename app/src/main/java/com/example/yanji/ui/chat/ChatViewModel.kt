@@ -8,6 +8,7 @@ import com.example.yanji.data.ChatSession
 import com.example.yanji.data.JuanjuanAction
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.ai.ChatReplyState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -16,12 +17,15 @@ import kotlinx.coroutines.flow.stateIn
 /** 伴学对话不可变 UiState：消息流、会话目录、回复状态与上下文来源统计。 */
 data class ChatUiState(
     val messages: List<ChatMessage>,
-    val isAiReplying: Boolean,
+    val replyState: ChatReplyState,
+    val hasMoreMessages: Boolean,
     val settings: UserSettings,
     val sessions: List<ChatSession>,
     val currentSessionId: String,
     val contextSources: List<ChatContextSource>
 ) {
+    val isAiReplying: Boolean get() = replyState.isReplying
+
     val currentSession: ChatSession?
         get() = sessions.find { it.id == currentSessionId }
 }
@@ -34,19 +38,27 @@ class ChatViewModel(
     private val repo: YanjiRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<ChatUiState> = combine(
+    private val conversationState = combine(
         repo.chatMessages,
-        repo.isAiReplying,
+        repo.currentSessionId,
+        repo.chatReplyStates,
+        repo.hasMoreChatMessages
+    ) { messages, sessionId, replyStates, hasMore ->
+        ConversationState(messages, sessionId, replyStates[sessionId] ?: ChatReplyState(), hasMore)
+    }
+
+    val uiState: StateFlow<ChatUiState> = combine(
+        conversationState,
         repo.settings,
-        repo.chatSessions,
-        repo.currentSessionId
-    ) { messages, replying, settings, sessions, sessionId ->
+        repo.chatSessions
+    ) { conversation, settings, sessions ->
         ChatUiState(
-            messages = messages,
-            isAiReplying = replying,
+            messages = conversation.messages,
+            replyState = conversation.replyState,
+            hasMoreMessages = conversation.hasMoreMessages,
             settings = settings,
             sessions = sessions,
-            currentSessionId = sessionId,
+            currentSessionId = conversation.sessionId,
             contextSources = repo.currentContextSources()
         )
     }.stateIn(
@@ -54,7 +66,8 @@ class ChatViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ChatUiState(
             messages = repo.chatMessages.value,
-            isAiReplying = repo.isAiReplying.value,
+            replyState = repo.chatReplyStates.value[repo.currentSessionId.value] ?: ChatReplyState(),
+            hasMoreMessages = repo.hasMoreChatMessages.value,
             settings = repo.settings.value,
             sessions = repo.chatSessions.value,
             currentSessionId = repo.currentSessionId.value,
@@ -68,6 +81,13 @@ class ChatViewModel(
         repo.createNewChatSession(initialModel)
 
     fun sendChatMessage(text: String, model: String? = null) = repo.sendChatMessage(text, model)
+
+    fun retryFailedReply() {
+        val sessionId = uiState.value.currentSessionId
+        if (sessionId.isNotBlank()) repo.retryChatReply(sessionId)
+    }
+
+    fun loadMoreMessages() = repo.loadMoreChatMessages()
 
     fun executeAction(action: JuanjuanAction, context: android.content.Context): Boolean =
         repo.executeAction(action, context)
@@ -84,4 +104,11 @@ class ChatViewModel(
         val currentSettings = uiState.value.settings
         repo.updateSettings(currentSettings.copy(aiModel = model))
     }
+
+    private data class ConversationState(
+        val messages: List<ChatMessage>,
+        val sessionId: String,
+        val replyState: ChatReplyState,
+        val hasMoreMessages: Boolean
+    )
 }

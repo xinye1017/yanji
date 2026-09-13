@@ -117,7 +117,7 @@ data class ExamSessionEntity(
 
 @Entity(
     tableName = "journal_entries",
-    indices = [Index("date")]
+    indices = [Index(value = ["date"], unique = true)]
 )
 data class JournalEntryEntity(
     @PrimaryKey val id: String,
@@ -229,7 +229,7 @@ data class UserSettingsEntity(
 
 @Entity(
     tableName = "chat_messages",
-    indices = [Index("sessionId"), Index("timestamp")]
+    indices = [Index("sessionId"), Index("timestamp"), Index(value = ["sessionId", "timestamp"])]
 )
 data class ChatMessageEntity(
     @PrimaryKey val id: String,
@@ -377,4 +377,3 @@ data class QuickStartPresetEntity(
         }
     }
 }
-

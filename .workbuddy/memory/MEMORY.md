@@ -28,6 +28,38 @@
   `技术栈.md` 里写的 Gradle 8.x 是旧信息。
 - 本机可直接验证：`./gradlew.bat :app:testDebugUnitTest` 与 `:app:assembleDebug` 都能离线跑通
   （SDK 在 `C:\Users\dex\Android\Sdk`）。
+- **本机必须用 `./gradlew.bat`，不要用 `./gradlew`**：Git Bash 下后者报
+  `ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain`。
+- **Gradle 输出含 NUL 字节**，管道给 `grep` 会报 `Binary file (standard input) matches`
+  → 先 `tr -d '\000'`。
+- **Kotlin daemon 偶发崩溃**（`e: Daemon compilation failed` + `IncrementalCachesManager.close` 文件锁），
+  Gradle 会自动 `Using fallback strategy: Compile without Kotlin daemon` 并 BUILD SUCCESSFUL。
+  看到 `e:` 先确认末尾有没有 `BUILD SUCCESSFUL` 再判定为编译失败。
+  多任务并发跑 Gradle 会加剧，必要时 `./gradlew.bat --stop` 后串行重跑。
+
+## UI Design Token
+
+- 配色/圆角/间距的**唯一来源**是 `app/src/main/java/com/example/yanji/theme/`
+  （`Color.kt` / `Radius.kt` / `Spacing.kt` / `Type.kt` / `Theme.kt`），
+  **不是** `ui/theme/`（该目录不存在，容易找错）。
+- **`ui/` 下不允许出现 `Color(0x...)` 字面量**，静态检查：
+  `grep -R "Color(0x" app/src/main/java/com/example/yanji/ui` 必须 0 命中。
+  新增颜色先加进 `theme/Color.kt` 并起语义名。
+- `#5C4BC3` 是 `YanjiLavenderDeep`（Chat 深度解析前景专用），不要与 `YanjiLavender` 混用：
+  后者铺在 `YanjiLavenderSoft` 上对比度不足。
+- 标准卡片圆角固定 `YanjiRadius.StandardCardRadius = 24.dp`（DESIGN.md standard card），
+  `YanjiCard` 默认 shape 不再走 `CardDefaults.shape`（M3 = Shapes.medium = 16dp）。
+- 页面主标题统一用 `YanjiPageHeader(title, subtitle?, trailing?)`；
+  品牌化 TopBar（`ChatTopBar`）不复用。
+- raw `fontSize` 只在**计时器 / 图表主数字**上保留，普通正文与 Label 一律走
+  `MaterialTheme.typography`。
+
+## 判定「测试失败是否自己引入」
+
+用 `git worktree add <tmp> HEAD` 拉一份干净基线，在**独立目录**跑 `./gradlew.bat :app:testDebugUnitTest`，
+比对测试总数与通过情况（工作副本的 `app/build/test-results/**/*.xml` 与基线互不覆盖）。
+2026-09-13 实测：HEAD 74 测试全绿，工作副本 102 测试其中 `ActiveSessionPersistenceTest` 8 个失败
+—— 失败源自未提交的计时重构，与当轮 UI 改动无关。**先做这个对照，再决定是否要修。**
 
 ## 数据层约定（重要）
 
@@ -65,6 +97,42 @@
   **不允许**再出现「由 Compose 页面决定这次学习算不算数」的写法。
 - 语义：倒计时归零 / 主动「结束」→ COMPLETED 落库；「放弃」→ CANCELLED 不落库；
   专注不足 60 秒不记录。
+
+## 专注展示层（FocusLiveState / liveactivity）
+
+- **统一状态源是 `data/timer/FocusLiveState.kt`**（sealed + `focusLiveStateOf()` 纯函数）。
+  App UI、系统通知、Android Live Update、ColorOS 流体云都消费它，不要再各自推文案。
+- `FocusTimerService` 暴露两条流，同源于 TimerMachine，**不是两套计时器**：
+  - `liveState`：语义状态，只在 START / PAUSE / RESUME / FINISH / DISCARD 发射 → 通知层消费；
+  - `elapsedSecondsForUi`：每秒展示镜像 → **只给 Compose**，通知层不准消费。
+  运行中的 `44:59→44:58` 交给系统 Chronometer，**禁止每秒 `notify()`**。
+- 通知 Action 字符串唯一定义在 `liveactivity/FocusTimerActions.kt`，Service 的 `ACTION_*` 引用它。
+- 通知文案/动作的「该显示什么」在 `FocusNotificationSpec(s)`（纯 Kotlin，JVM 可测），
+  「怎么 setXxx」在 `StandardNotificationController`。「暂停必须关掉 Chronometer」有单测守门。
+- 新增 `res/drawable/ic_stat_focus.xml` 作 small icon，不用 Launcher 图标、不加 LargeIcon。
+- Compose 侧：`ActiveFocusContent(elapsedSeconds: State<Long>)`，**函数体内不读取**，
+  只在 `CountdownFocusBody` / `FlowFocusBody` 读 `.value`，避免外层手工 Layout 每秒重测。
+- `TimerState`/`timerState` 是遗留镜像，只剩 `ExamScreen` 在用，新代码不要往里加字段。
+- **Service 里不能用字段初始化取 `applicationContext`**（组件先构造后 attachBaseContext，会 NPE），
+  一律 `lateinit` + `onCreate` 赋值。
+
+## Android 16 Live Update / ColorOS 流体云（已实测）
+
+- 真机 OPPO PKB110 / ColorOS **V16.1.0** / Android 16 / `ro.build.version.sdk_full=36.0`：
+  **`canPostPromotedNotifications() == false`**，但 `POST_PROMOTED_NOTIFICATIONS: granted=true`
+  → 标准 Live Update 不可用，实际走「普通常驻通知 + Chronometer」。**换 ROM/开系统开关后需重测。**
+- `dumpsys notification` 里 AppSettings 的 `promoted=true` **不等于** `canPostPromotedNotifications()`，
+  不能当能力判据；只信运行时 API。
+- `POST_PROMOTED_NOTIFICATIONS` / `Settings.ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS`
+  在 **API 36 的 android.jar 里不存在**（已全量 class 搜索）。权限只能用字面量声明，
+  设置页常量**不可引用**；权限弹窗改走 `ACTION_APP_NOTIFICATION_SETTINGS`。
+- ColorOS 流体云是它自己的 livealert/pantanal 框架 + 按包名 denylist
+  （`livealert_disable_seedling`、`fluid_cloud_not_support`、
+  **`oplus_no_fluid_capsule_animation`** 管小胶囊动画）。**不要**用 Hidden API / Reflection 去碰。
+- OPPO **原生**流体云（SeedlingSupportSDK / IntelligentIntent）需**企业认证 + 联系 OPPO +
+  serviceId 分配 + UPK**，属商务接入；`ColorOsFluidCloudController` 只做探测与降级，不做私有调用。
+- 真机诊断可复现：`LiveActivityCapabilityInstrumentedTest`
+  （报告落盘 `externalCacheDir/live-activity-capability.txt`）。
 
 ## 设备运维（adb）
 

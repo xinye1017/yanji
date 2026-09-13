@@ -1,8 +1,7 @@
 package com.example.yanji.data
 
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+
 
 /**
  * The stable persona and the per-request study snapshot sent to OpenAI-compatible
@@ -68,11 +67,12 @@ object JuanjuanPrompt {
         activeFocus: FocusSession?,
         now: Long = System.currentTimeMillis()
     ): String {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val today = dateFormat.format(Date(now))
-        val sevenDaysAgo = now - 7 * DAY_MILLIS
-        val recentFocus = focusSessions.filter { it.startTime >= sevenDaysAgo }
-        val todayFocus = focusSessions.filter { dateFormat.format(Date(it.startTime)) == today }
+        val today = YanjiTime.localDate(now)
+        val recentRange = YanjiTime.lastDaysRange(7)
+        val recentFocus = focusSessions.filter {
+            it.startTime in recentRange.startInclusive until recentRange.endExclusive
+        }
+        val todayFocus = focusSessions.filter { YanjiTime.localDate(it.startTime) == today }
         val todaySeconds = todayFocus.sumOf { it.durationSeconds }
         val subjectSummary = todayFocus
             .groupBy { it.subjectName }
@@ -82,7 +82,7 @@ object JuanjuanPrompt {
             .joinToString("、") { "${it.key}${formatDuration(it.value)}" }
             .ifBlank { "暂无记录" }
         val recentExams = examSessions
-            .filter { it.startTime >= sevenDaysAgo }
+            .filter { it.startTime in recentRange.startInclusive until recentRange.endExclusive }
             .sortedByDescending { it.startTime }
             .take(3)
             .joinToString("；") { exam ->
@@ -118,5 +118,4 @@ object JuanjuanPrompt {
     private fun clip(value: String, maxLength: Int): String =
         value.replace(Regex("[\\r\\n\\t]+"), " ").trim().take(maxLength)
 
-    private const val DAY_MILLIS = 86_400_000L
 }

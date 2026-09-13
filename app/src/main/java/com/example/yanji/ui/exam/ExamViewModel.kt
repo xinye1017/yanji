@@ -44,7 +44,7 @@ class ExamViewModel(
     // ---- 动作 ----
 
     /** 登记一场模考；返回 null 表示已有计时在跑（专注与模考互斥），调用方负责提示。 */
-    fun startExamSession(
+    suspend fun startExamSession(
         subjectId: String,
         subjectName: String,
         plannedDurationSeconds: Long

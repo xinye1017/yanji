@@ -8,14 +8,12 @@ import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.time.temporal.ChronoUnit
 
 /**
  * 首页不可变 UiState：一张卡所需的所有展示数据都在这里，页面只渲染不计算。
@@ -47,8 +45,7 @@ class HomeViewModel(
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
 
-    private val todayIso: String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    private val todayIso: String = YanjiTime.todayIso()
 
     private val todaySummaryFlow = statsRepo.getDailyStudySummaryFlow(todayIso)
     private val weeklySummaryFlow = statsRepo.getWeeklyStudySummaryFlow()
@@ -105,20 +102,8 @@ class HomeViewModel(
     }
 
     /** 单一数据源：settings.targetExamDate；解析失败返回 null（页面回退显示原字符串）。 */
-    private fun daysRemainingFor(targetExamDate: String): Int? = runCatching {
-        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        fmt.isLenient = false
-        val target = Calendar.getInstance()
-        target.time = fmt.parse(targetExamDate)!!
-        target.set(Calendar.HOUR_OF_DAY, 0)
-        target.set(Calendar.MINUTE, 0)
-        target.set(Calendar.SECOND, 0)
-        target.set(Calendar.MILLISECOND, 0)
-        val today = Calendar.getInstance()
-        today.set(Calendar.HOUR_OF_DAY, 0)
-        today.set(Calendar.MINUTE, 0)
-        today.set(Calendar.SECOND, 0)
-        today.set(Calendar.MILLISECOND, 0)
-        ((target.timeInMillis - today.timeInMillis) / 86_400_000L).toInt()
-    }.getOrNull()
+    private fun daysRemainingFor(targetExamDate: String): Int? {
+        val target = YanjiTime.parseIsoDate(targetExamDate) ?: return null
+        return ChronoUnit.DAYS.between(YanjiTime.today(), target).toInt()
+    }
 }

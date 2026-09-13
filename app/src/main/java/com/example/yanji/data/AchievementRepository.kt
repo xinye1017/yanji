@@ -5,7 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneId
 
 class AchievementRepository private constructor(
     private val repo: YanjiRepository = YanjiRepository.getInstance()
@@ -124,10 +126,8 @@ class AchievementRepository private constructor(
             rewardQuote = "清晨的微光与翻书声，是世界上最美妙的交响乐。",
             calculateProgress = { focus, exam, _, _ ->
                 fun isMorning(time: Long): Boolean {
-                    val cal = Calendar.getInstance().apply { timeInMillis = time }
-                    val hour = cal.get(Calendar.HOUR_OF_DAY)
-                    val minute = cal.get(Calendar.MINUTE)
-                    return hour < 7 || (hour == 7 && minute <= 30)
+                    val localTime = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).toLocalTime()
+                    return !localTime.isAfter(LocalTime.of(7, 30))
                 }
                 val hasMorning = focus.any { isMorning(it.startTime) } || exam.any { isMorning(it.startTime) }
                 if (hasMorning) 1L else 0L
@@ -144,10 +144,8 @@ class AchievementRepository private constructor(
             rewardQuote = "夜深人静时，你的每一盏台灯都在照亮未来的录取通知书。",
             calculateProgress = { focus, exam, _, _ ->
                 fun isNight(time: Long): Boolean {
-                    val cal = Calendar.getInstance().apply { timeInMillis = time }
-                    val hour = cal.get(Calendar.HOUR_OF_DAY)
-                    val minute = cal.get(Calendar.MINUTE)
-                    return hour >= 23 || (hour == 22 && minute >= 30) || (hour in 0..3)
+                    val localTime = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).toLocalTime()
+                    return !localTime.isBefore(LocalTime.of(22, 30)) || localTime.isBefore(LocalTime.of(4, 0))
                 }
                 val hasNight = focus.any { isNight(it.endTime) } || exam.any { isNight(it.endTime) }
                 if (hasNight) 1L else 0L

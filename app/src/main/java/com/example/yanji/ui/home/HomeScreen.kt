@@ -60,7 +60,6 @@ import com.example.yanji.ui.components.CheckInCard
 import com.example.yanji.ui.components.CheckInCelebrationDialog
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.JuanjuanEncouragementBanner
-import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable

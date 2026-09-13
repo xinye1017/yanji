@@ -35,27 +35,38 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
+import com.example.yanji.theme.YanjiBorder
 import com.example.yanji.theme.YanjiPrimary
 import com.example.yanji.theme.YanjiPrimarySoft
+import com.example.yanji.theme.YanjiTextPrimary
 import com.example.yanji.theme.YanjiTextSecondary
 import kotlin.math.abs
 
 private val DockPanelColor = Color.White
-private val DockPanelBorder = Color(0xFFE4EAF2)
 private val DockPillColor = YanjiPrimarySoft
-private val DockWidth = 280.dp
-private val DockHeight = 58.dp
-private val DockIndicatorSize = 48.dp
-private val DockIndicatorMaxStretch = 8.dp
 
 /**
- * Compact floating bottom navigation dock.
- *
- * - Text labels are removed for a clean, modern dock aesthetic.
- * - Icon size is increased to 26dp.
- * - Width is reduced to a compact 280dp capsule.
- * - Solid white panel with a quiet soft shadow (DESIGN.md: no glassmorphism,
- *   no translucent panels).
+ * Dock 胶囊的选中态描边 —— DESIGN.md「Borders」规定分隔/描边一律走 `#E4EAF2`（[YanjiBorder]），
+ * 让白色 dock 停靠在近白页面背景上时仍有一道克制的分界。
+ */
+private val DockBorderColor = YanjiBorder
+private val DockBorderWidth = 1.dp
+
+/**
+ * Dock 投影色 —— 由 text-primary `#172033` 推导的极低透明度投影，
+ * 与底部文字同源，避免投影发灰发脏。
+ */
+private val DockShadowColor = YanjiTextPrimary.copy(alpha = 0.05f)
+private val DockShadowColorStrong = YanjiTextPrimary.copy(alpha = 0.07f)
+
+private val DockWidth = 272.dp
+private val DockHeight = 52.dp
+private val DockIndicatorSize = 40.dp
+private val DockIndicatorMaxStretch = 4.dp
+
+/**
+ * Low-emphasis floating navigation dock. The 40dp selected surface is intentionally
+ * lighter than page CTAs, while the full 52dp slot remains tappable.
  */
 @Composable
 fun GlassBottomBar(
@@ -88,16 +99,16 @@ fun GlassBottomBar(
     Box(
         modifier = modifier
             .navigationBarsPadding()
-            .padding(bottom = 12.dp)
+            .padding(bottom = 8.dp)
             .shadow(
-                elevation = 10.dp,
+                elevation = 4.dp,
                 shape = CircleShape,
-                ambientColor = Color(0x18000000),
-                spotColor = Color(0x1F000000)
+                ambientColor = DockShadowColor,
+                spotColor = DockShadowColorStrong
             )
             .clip(CircleShape)
             .background(DockPanelColor)
-            .border(1.dp, DockPanelBorder, CircleShape)
+            .border(DockBorderWidth, DockBorderColor, CircleShape)
             .width(DockWidth)
             .height(DockHeight)
     ) {
@@ -144,7 +155,7 @@ private fun DockBarItem(
 
     val tint = lerp(YanjiTextSecondary, YanjiPrimary, selectionProgress)
     val iconSize by animateDpAsState(
-        targetValue = if (isPressed) 23.dp else (25f + selectionProgress).dp,
+        targetValue = if (isPressed) 21.dp else (22f + selectionProgress).dp,
         animationSpec = spring(dampingRatio = 0.66f, stiffness = 650f),
         label = "dockBarItemIconSize"
     )

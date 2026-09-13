@@ -110,7 +110,7 @@ fun JuanjuanMessageBubble(
                     Text(
                         text = if (hasDeepAnalysis) "深度解析" else "专属学伴",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = if (hasDeepAnalysis) Color(0xFF5C4BC3) else YanjiPrimaryStrong,
+                            color = if (hasDeepAnalysis) YanjiLavenderDeep else YanjiPrimaryStrong,
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp
                         ),
@@ -147,7 +147,7 @@ fun JuanjuanMessageBubble(
                             Text(
                                 text = "已结合近 $recordCount 套模考错题库深度思考 · 耗时 1.8s",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color(0xFF5C4BC3),
+                                    color = YanjiLavenderDeep,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -367,13 +367,13 @@ private fun ActionHintBlock(text: String, modifier: Modifier) {
             Icon(
                 imageVector = Icons.Default.Checklist,
                 contentDescription = null,
-                tint = Color(0xFF5C4BC3),
+                tint = YanjiLavenderDeep,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    color = Color(0xFF5C4BC3),
+                    color = YanjiLavenderDeep,
                     fontWeight = FontWeight.Medium,
                     fontSize = 12.sp
                 )
@@ -413,7 +413,7 @@ private fun ActionButtonRow(
                         Icon(
                             imageVector = Icons.Default.Checklist,
                             contentDescription = null,
-                            tint = Color(0xFF5C4BC3),
+                            tint = YanjiLavenderDeep,
                             modifier = Modifier.size(18.dp)
                         )
                         val promptText = if (action.type == JuanjuanActionType.CREATE_PLAN) {
@@ -424,7 +424,7 @@ private fun ActionButtonRow(
                         Text(
                             text = promptText,
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = Color(0xFF5C4BC3),
+                                color = YanjiLavenderDeep,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 12.sp
                             )
@@ -433,7 +433,7 @@ private fun ActionButtonRow(
 
                     Surface(
                         shape = CircleShape,
-                        color = Color(0xFF5C4BC3),
+                        color = YanjiLavenderDeep,
                         shadowElevation = 1.dp,
                         modifier = Modifier.clickable { onClick(action) }
                     ) {

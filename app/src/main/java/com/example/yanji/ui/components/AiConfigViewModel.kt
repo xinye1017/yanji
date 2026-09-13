@@ -4,14 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.SettingsUpdateResult
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /** AI 配置对话框不可变 UiState。 */
 data class AiConfigUiState(
-    val settings: UserSettings
+    val settings: UserSettings,
+    val securityError: String? = null
 )
 
 /**
@@ -24,8 +27,11 @@ class AiConfigViewModel(
     private val repo: YanjiRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<AiConfigUiState> = repo.settings
-        .map { AiConfigUiState(it) }
+    private val securityError = MutableStateFlow<String?>(null)
+
+    val uiState: StateFlow<AiConfigUiState> = combine(repo.settings, securityError) { settings, error ->
+        AiConfigUiState(settings, error)
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -35,5 +41,24 @@ class AiConfigViewModel(
     suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> =
         repo.fetchAvailableModels(baseUrl, apiKey)
 
-    fun updateSettings(newSettings: UserSettings) = repo.updateSettings(newSettings)
+    /** Returns false when Android Keystore could not durably save the key. */
+    fun updateSettings(newSettings: UserSettings): Boolean =
+        when (repo.updateSettings(newSettings)) {
+            SettingsUpdateResult.Saved -> {
+                securityError.value = null
+                true
+            }
+            SettingsUpdateResult.SecretUnavailable -> {
+                securityError.value = SECURITY_STORAGE_MESSAGE
+                false
+            }
+        }
+
+    fun clearSecurityError() {
+        securityError.value = null
+    }
+
+    companion object {
+        const val SECURITY_STORAGE_MESSAGE = "安全存储不可用，Key 未保存"
+    }
 }

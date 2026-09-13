@@ -6,6 +6,7 @@ import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.backup.BackupImportResult
 import com.example.yanji.data.ai.AiClient
+import com.example.yanji.data.ai.ChatReplyState
 import com.example.yanji.data.backup.BackupTransfer
 import com.example.yanji.data.chat.ChatStore
 import com.example.yanji.data.checkin.CheckInStore
@@ -19,17 +20,21 @@ import com.example.yanji.data.backup.YanjiBackup
 import com.example.yanji.data.db.*
 import com.example.yanji.data.security.KeystoreSecretStore
 import com.example.yanji.data.security.SecretStore
+import com.example.yanji.data.security.SecretWriteResult
 import com.example.yanji.data.timer.ActiveSession
 import com.example.yanji.data.timer.ActiveSessionCoordinator
 import com.example.yanji.data.timer.ActiveSessionKind
+import com.example.yanji.data.timer.FileTimerSessionPersistence
+import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerSessionPersistence
+import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.util.UUID
 
 class YanjiRepository private constructor() {
 
@@ -70,8 +75,6 @@ class YanjiRepository private constructor() {
     /** 凭据在内存中的只读镜像，避免每次设置 Flow 发射都做一次 Keystore 解密。 */
     @Volatile
     private var cachedAiApiKey: String = ""
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
     val defaultSubjects = SubjectCatalog.all
 
@@ -115,7 +118,8 @@ class YanjiRepository private constructor() {
     val chatSessions: StateFlow<List<ChatSession>> get() = chatStore.chatSessions
     val chatMessages: StateFlow<List<ChatMessage>> get() = chatStore.chatMessages
     val currentSessionId: StateFlow<String> get() = chatStore.currentSessionId
-    val isAiReplying: StateFlow<Boolean> get() = chatStore.isAiReplying
+    val chatReplyStates: StateFlow<Map<String, ChatReplyState>> get() = chatStore.replyStates
+    val hasMoreChatMessages: StateFlow<Boolean> get() = chatStore.hasMoreMessages
 
     val checkIns: StateFlow<List<CheckIn>> get() = checkInStore.checkIns
 
@@ -142,9 +146,17 @@ class YanjiRepository private constructor() {
         secretStore?.migrateLegacyApiKeyIfPresent()
         cachedAiApiKey = secretStore?.readAiApiKey().orEmpty()
 
+        // 活动会话持久化：使用 context.noBackupFilesDir，不进入云备份
+        val ctx = appContext
+        if (ctx != null) {
+            timerStore.setDiskPersistence(FileTimerSessionPersistence(ctx, SystemMonotonicClock))
+        }
+
         // 把"计时结束如何落库"交给业务层：前台 Service 与任何页面都可以调用它。
         ActiveSessionCoordinator.bind(timerStore.persistence)
-        ActiveSessionCoordinator.restorePersisted()
+        ActiveSessionCoordinator.restorePersisted { restored ->
+            if (restored != null && ctx != null) FocusTimerService.restoreActive(ctx)
+        }
 
         repoScope.launch {
             // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
@@ -233,7 +245,7 @@ class YanjiRepository private constructor() {
      * @return 新建的会话，调用方需要把 [FocusSession.id] 传给前台 Service；
      *         若已有正在进行的专注或模考（两者互斥），返回 null 且不改变任何状态。
      */
-    fun startFocus(
+    suspend fun startFocus(
         subjectId: String,
         subjectName: String,
         note: String,
@@ -244,7 +256,7 @@ class YanjiRepository private constructor() {
      * 登记一场模考到业务层，供前台 Service 完成时落库。
      * @return null 表示已有计时在跑（专注与模考互斥），本次启动被拒绝。
      */
-    fun startExamSession(
+    suspend fun startExamSession(
         subjectId: String,
         subjectName: String,
         plannedDurationSeconds: Long
@@ -298,6 +310,45 @@ class YanjiRepository private constructor() {
 
     suspend fun getExamSessionByIdFromDb(id: String): ExamSessionEntity? = timerStore.getExamSessionByIdFromDb(id)
 
+    /** Range-bounded statistics sources. These queries use the startTime indexes and never
+     * materialize the full Focus/Exam history for week, month, or day views. */
+    internal fun observeFocusSessionsInRange(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<FocusSession>> = requireDatabase().focusSessionDao()
+        .observeCompletedInRange(startInclusive, endExclusive)
+        .map { rows -> rows.map(FocusSessionEntity::toDomainModel) }
+
+    internal fun observeExamSessionsInRange(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<ExamSession>> = requireDatabase().examSessionDao()
+        .observeCompletedInRange(startInclusive, endExclusive)
+        .map { rows -> rows.map(ExamSessionEntity::toDomainModel) }
+
+    internal fun observeFocusSubjectTotals(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<StudySubjectAggregateRow>> = requireDatabase().focusSessionDao()
+        .observeSubjectTotals(startInclusive, endExclusive)
+
+    internal fun observeExamSubjectTotals(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<StudySubjectAggregateRow>> = requireDatabase().examSessionDao()
+        .observeSubjectTotals(startInclusive, endExclusive)
+
+    internal fun observeStudyDuration(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<Long> = combine(
+        requireDatabase().focusSessionDao().observeTotalSeconds(startInclusive, endExclusive),
+        requireDatabase().examSessionDao().observeTotalSeconds(startInclusive, endExclusive)
+    ) { focusSeconds, examSeconds -> focusSeconds + examSeconds }
+
+    private fun requireDatabase(): YanjiDatabase =
+        checkNotNull(database) { "YanjiRepository.init(context) must run before database queries" }
+
     /**
      * 保存日记。**以 Room 为唯一事实来源**，不再维护"内存一份 + DB 一份"的双缓存。
      *
@@ -321,17 +372,23 @@ class YanjiRepository private constructor() {
      * AI API Key 与其余字段**分离持久化**：Key 走 [SecretStore]（Keystore 加密 + no-backup 目录），
      * 其余字段走 Room。凭据因此不会随可云备份的学习数据库一起离开设备。
      */
-    fun updateSettings(newSettings: UserSettings) {
+    fun updateSettings(newSettings: UserSettings): SettingsUpdateResult {
         val apiKey = newSettings.aiApiKey.trim()
         if (apiKey != cachedAiApiKey) {
             // 先同步落盘凭据，再广播新状态，避免出现"UI 显示已保存、读回却为空"的中间态。
-            secretStore?.saveAiApiKey(apiKey)
-            cachedAiApiKey = apiKey
+            val store = secretStore
+                ?: return SettingsUpdateResult.SecretUnavailable
+            when (store.saveAiApiKey(apiKey)) {
+                SecretWriteResult.Saved,
+                SecretWriteResult.Cleared -> cachedAiApiKey = apiKey
+                is SecretWriteResult.Failure -> return SettingsUpdateResult.SecretUnavailable
+            }
         }
         _settings.value = newSettings.copy(aiApiKey = apiKey)
         repoScope.launch {
             database?.userSettingsDao()?.saveSettings(UserSettingsEntity.fromDomainModel(newSettings))
         }
+        return SettingsUpdateResult.Saved
     }
 
     // ==================================================================
@@ -400,7 +457,7 @@ class YanjiRepository private constructor() {
     private suspend fun writePreImportSnapshot(): String? {
         val ctx = appContext ?: return null
         val dir = File(ctx.filesDir, "pre_import_snapshots").apply { mkdirs() }
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val stamp = YanjiTime.backupStamp(Instant.now())
         val file = File(dir, "yanji-pre-import-$stamp.json")
         file.writeText(BackupCodec.encode(buildBackupPayload()))
         return file.absolutePath
@@ -454,6 +511,11 @@ class YanjiRepository private constructor() {
     fun sendChatMessage(text: String, model: String? = null, onFinished: () -> Unit = {}) =
         chatStore.sendChatMessage(text, model, onFinished)
 
+    fun retryChatReply(sessionId: String, onFinished: () -> Unit = {}) =
+        chatStore.retryFailedReply(sessionId, onFinished)
+
+    fun loadMoreChatMessages() = chatStore.loadMoreMessages()
+
     fun clearChatMessages() = chatStore.clearChatMessages()
 
         private suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String = "deepseek-chat"): String {
@@ -463,14 +525,10 @@ class YanjiRepository private constructor() {
         val hasCustomUrl = currentSettings.aiBaseUrl.isNotBlank() && !currentSettings.aiBaseUrl.contains("api.deepseek.com")
 
         if (hasKey || hasCustomUrl) {
-            try {
-                Log.i("YanjiAI", "Requesting real AI backend: ${currentSettings.aiBaseUrl}, model: $model")
-                return callAiApi(userMessage, currentSettings, model)
-            } catch (e: Exception) {
-                Log.e("YanjiAI", "Real AI backend call failed", e)
-                val errorMsg = e.localizedMessage ?: e.message ?: "未知网络错误"
-                return "【卷卷提醒 · AI 连接异常】\n\n未能从 AI 后端获取回复：$errorMsg\n\n📌 检查建议：\n1. 点击右上角「设置」图标（⚙️）核对 API Key 与 Base URL；\n2. 确保手机当前已连接可用 Wi-Fi 或移动数据；\n3. 确认大模型服务商账户额度是否充足。\n\n---\n以下是本地考研知识库建议：\n\n" + generateLocalFallbackReply(query)
-            }
+            Log.i("YanjiAI", "Requesting real AI backend: ${currentSettings.aiBaseUrl}, model: $model")
+            // Do not turn a transport failure into a successful assistant message. ChatStore maps
+            // the exception to typed AiFailure and keeps the original user message retryable.
+            return callAiApi(userMessage, currentSettings, model)
         }
 
         // When user has not configured API Key or custom backend
@@ -829,7 +887,7 @@ class YanjiRepository private constructor() {
                 val note = parts.getOrNull(2) ?: ""
                 val subject = SubjectCatalog.find(subjectId)
                 if (subject != null) {
-                    startFocus(subjectId, subject.name, note, mode)
+                    repoScope.launch { startFocus(subjectId, subject.name, note, mode) }
                     true
                 } else {
                     false
@@ -858,7 +916,7 @@ class YanjiRepository private constructor() {
      * Internal: save to journal (extracted from old saveTipToJournal).
      */
     private fun saveTipToJournalInternal(context: Context, content: String) {
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayStr = YanjiTime.todayIso()
         val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
         val appendText = "\n\n### 卷卷说考研方法锦囊\n$content"
         if (existing != null) {
@@ -881,7 +939,7 @@ class YanjiRepository private constructor() {
      * Internal: add plan to journal (extracted from old addPlanToJournal).
      */
     private fun addPlanToJournalInternal(context: Context, planText: String) {
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayStr = YanjiTime.todayIso()
         val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
         val cleanPlan = planText.replace("要将『", "").replace("』加为明早计划吗？", "").replace("？", "").trim()
         val planItem = "\n- [ ] 明早实践：$cleanPlan"

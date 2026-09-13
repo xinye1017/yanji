@@ -242,6 +242,7 @@ fun AiConfigDialog(
                     value = apiKey,
                     onValueChange = {
                         apiKey = it
+                        viewModel.clearSecurityError()
                         connectionMessage = null
                         connectionSucceeded = null
                     },
@@ -258,7 +259,18 @@ fun AiConfigDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+                    singleLine = true,
+                    isError = state.securityError != null,
+                    supportingText = state.securityError?.let { message ->
+                        {
+                            Text(
+                                text = message,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                color = YanjiDanger
+                            )
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -378,6 +390,34 @@ fun AiConfigDialog(
                         }
                     }
                 }
+
+                state.securityError?.let { message ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = YanjiError.copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, YanjiError.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = YanjiError,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = YanjiError
+                            )
+                        }
+                    }
+                }
             }
         },
         // 3. 将“测试连接”放到最下面，和“确认保存”放在同一栏
@@ -468,7 +508,7 @@ fun AiConfigDialog(
                     }
                     Button(
                         onClick = {
-                            viewModel.updateSettings(
+                            val saved = viewModel.updateSettings(
                                 settings.copy(
                                     aiProvider = provider.trim(),
                                     aiBaseUrl = baseUrl.trim(),
@@ -476,7 +516,7 @@ fun AiConfigDialog(
                                     aiModel = model.trim()
                                 )
                             )
-                            onDismissRequest()
+                            if (saved) onDismissRequest()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
                         shape = RoundedCornerShape(10.dp),

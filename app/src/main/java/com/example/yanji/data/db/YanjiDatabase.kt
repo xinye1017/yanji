@@ -21,7 +21,7 @@ import java.io.File
         UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -332,6 +332,46 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v11: enforce the domain invariant "one journal per calendar date" in SQLite.
+         *
+         * Older builds only normalized this in repository code, so concurrent writes/imports
+         * could leave duplicate dates. Before replacing the old non-unique index, keep exactly
+         * one deterministic winner per date: updatedAt DESC, createdAt DESC, id DESC.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    """
+                    DELETE FROM journal_entries
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM journal_entries AS newer
+                        WHERE newer.date = journal_entries.date
+                          AND (
+                              newer.updatedAt > journal_entries.updatedAt
+                              OR (newer.updatedAt = journal_entries.updatedAt AND newer.createdAt > journal_entries.createdAt)
+                              OR (
+                                  newer.updatedAt = journal_entries.updatedAt
+                                  AND newer.createdAt = journal_entries.createdAt
+                                  AND newer.id > journal_entries.id
+                              )
+                          )
+                    )
+                    """.trimIndent()
+                )
+                connection.exec("DROP INDEX IF EXISTS `index_journal_entries_date`")
+                connection.exec(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_journal_entries_date` " +
+                        "ON `journal_entries` (`date`)"
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId_timestamp` " +
+                        "ON `chat_messages` (`sessionId`, `timestamp`)"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -347,7 +387,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_6_7,
             migration7to8 { value -> persistLegacyApiKey(context, value) },
             MIGRATION_8_9,
-            MIGRATION_9_10
+            MIGRATION_9_10,
+            MIGRATION_10_11
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

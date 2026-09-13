@@ -28,8 +28,6 @@ import com.adamglin.phosphoricons.regular.Sparkle
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.*
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Composable
 fun CheckInCard(

@@ -1,6 +1,9 @@
 package com.example.yanji.data.timer
 
+import kotlinx.serialization.Serializable
+
 /** 计时会话的生命周期状态。 */
+@Serializable
 enum class TimerPhase {
     IDLE,
     RUNNING,
@@ -17,6 +20,7 @@ enum class TimerPhase {
  * @param accumulatedActiveMs 已完成区间的有效计时总长（不含当前正在跑的这一段）
  * @param resumedAtMonotonicMs 当前 running 段的单调时钟起点；暂停 / 终止时为 null
  */
+@Serializable
 data class TimerSnapshot(
     val phase: TimerPhase = TimerPhase.IDLE,
     val startedAtEpochMs: Long = 0L,
@@ -87,6 +91,21 @@ class TimerMachine(private val clock: MonotonicClock) {
         val current = snapshot
         if (current.phase != TimerPhase.PAUSED) return current
         snapshot = current.copy(phase = TimerPhase.RUNNING, resumedAtMonotonicMs = clock.nowMs())
+        return snapshot
+    }
+
+    /**
+     * Freeze elapsed time while a completion transaction is committing.
+     * This is not a user pause, so it deliberately does not increment [TimerSnapshot.pauseCount].
+     */
+    fun freezeForCommit(): TimerSnapshot {
+        val current = snapshot
+        if (current.phase != TimerPhase.RUNNING) return current
+        snapshot = current.copy(
+            phase = TimerPhase.PAUSED,
+            accumulatedActiveMs = elapsedMs(),
+            resumedAtMonotonicMs = null
+        )
         return snapshot
     }
 

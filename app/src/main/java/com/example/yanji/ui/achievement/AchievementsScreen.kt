@@ -48,8 +48,10 @@ import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.JuanjuanAvatar
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 fun getAchievementIcon(iconKey: String, isUnlocked: Boolean): ImageVector {
     return when (iconKey) {
@@ -339,7 +341,7 @@ fun AchievementGridCard(
                     .background(
                         if (isUnlocked) {
                             Brush.radialGradient(
-                                colors = listOf(YanjiPrimarySoft, Color(0xFFE8EEFF))
+                                colors = listOf(YanjiPrimarySoft, YanjiPrimaryGradientSoft)
                             )
                         } else {
                             Brush.radialGradient(
@@ -463,7 +465,8 @@ fun AchievementDetailDialog(
     val icon = getAchievementIcon(achievement.iconKey, isUnlocked)
     val unlockDateStr = remember(achievement.unlockedAt) {
         achievement.unlockedAt?.let {
-            SimpleDateFormat("yyyy年M月d日 HH:mm", Locale.CHINESE).format(Date(it))
+            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm", Locale.CHINESE))
         }
     }
 
@@ -491,7 +494,7 @@ fun AchievementDetailDialog(
                         .background(
                             if (isUnlocked) {
                                 Brush.radialGradient(
-                                    colors = listOf(YanjiPrimarySoft, Color(0xFFE5EDFF))
+                                    colors = listOf(YanjiPrimarySoft, YanjiPrimaryGradientSoft)
                                 )
                             } else {
                                 Brush.radialGradient(

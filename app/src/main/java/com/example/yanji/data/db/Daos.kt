@@ -3,6 +3,15 @@ package com.example.yanji.data.db
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+/** Room projection used by statistics screens; aggregation stays in SQLite. */
+data class StudySubjectAggregateRow(
+    val subjectId: String,
+    val subjectName: String,
+    val durationSeconds: Long,
+    val sessionCount: Int,
+    val longestSessionSeconds: Long
+)
+
 @Dao
 interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
@@ -13,6 +22,39 @@ interface FocusSessionDao {
 
     @Query("SELECT * FROM focus_sessions WHERE id = :id LIMIT 1")
     fun getByIdFlow(id: String): Flow<FocusSessionEntity?>
+
+    @Query(
+        "SELECT * FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<FocusSessionEntity>>
+
+    @Query(
+        "SELECT * FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
+
+    @Query(
+        "SELECT subjectId, subjectName, " +
+            "COALESCE(SUM(durationSeconds), 0) AS durationSeconds, " +
+            "COUNT(*) AS sessionCount, COALESCE(MAX(durationSeconds), 0) AS longestSessionSeconds " +
+            "FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "GROUP BY subjectId, subjectName"
+    )
+    fun observeSubjectTotals(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<StudySubjectAggregateRow>>
+
+    @Query(
+        "SELECT COALESCE(SUM(durationSeconds), 0) FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive"
+    )
+    fun observeTotalSeconds(startInclusive: Long, endExclusive: Long): Flow<Long>
 
     @Query("SELECT COUNT(*) FROM focus_sessions")
     suspend fun count(): Int
@@ -44,6 +86,39 @@ interface ExamSessionDao {
 
     @Query("SELECT * FROM exam_sessions WHERE id = :id LIMIT 1")
     fun getByIdFlow(id: String): Flow<ExamSessionEntity?>
+
+    @Query(
+        "SELECT * FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<ExamSessionEntity>>
+
+    @Query(
+        "SELECT * FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<ExamSessionEntity>
+
+    @Query(
+        "SELECT subjectId, subjectName, " +
+            "COALESCE(SUM(actualDurationSeconds), 0) AS durationSeconds, " +
+            "COUNT(*) AS sessionCount, COALESCE(MAX(actualDurationSeconds), 0) AS longestSessionSeconds " +
+            "FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "GROUP BY subjectId, subjectName"
+    )
+    fun observeSubjectTotals(
+        startInclusive: Long,
+        endExclusive: Long
+    ): Flow<List<StudySubjectAggregateRow>>
+
+    @Query(
+        "SELECT COALESCE(SUM(actualDurationSeconds), 0) FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive"
+    )
+    fun observeTotalSeconds(startInclusive: Long, endExclusive: Long): Flow<Long>
 
     @Query("SELECT COUNT(*) FROM exam_sessions")
     suspend fun count(): Int
@@ -115,6 +190,19 @@ interface ChatMessageDao {
 
     @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun getBySessionId(sessionId: String): Flow<List<ChatMessageEntity>>
+
+    /** First screen and load-more query. DESC lets SQLite stop at LIMIT using the composite index. */
+    @Query(
+        "SELECT * FROM chat_messages WHERE sessionId = :sessionId " +
+            "ORDER BY timestamp DESC, id DESC LIMIT :limit"
+    )
+    fun observeRecentBySessionId(sessionId: String, limit: Int): Flow<List<ChatMessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE sessionId = :sessionId")
+    fun observeCountBySessionId(sessionId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE sessionId = :sessionId AND sender = 'USER'")
+    suspend fun countUserMessages(sessionId: String): Int
 
     @Query("SELECT COUNT(*) FROM chat_messages")
     suspend fun count(): Int
@@ -224,4 +312,3 @@ interface QuickStartPresetDao {
     @Query("DELETE FROM quick_start_presets")
     suspend fun deleteAll()
 }
-

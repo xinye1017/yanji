@@ -21,6 +21,7 @@ room = "2.8.4"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
 phosphor = "1.0.0"
+desugarJdkLibs = "2.1.5"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -54,6 +55,7 @@ androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref =
 androidx-room-testing-jvm = { module = "androidx.room:room-testing-jvm", version.ref = "room" }
 androidx-sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version = "2.6.2" }
 phosphor-icon = { module = "com.adamglin:phosphor-icon", version.ref = "phosphor" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
