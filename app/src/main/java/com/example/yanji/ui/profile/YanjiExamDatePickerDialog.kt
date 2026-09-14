@@ -233,7 +233,7 @@ fun YanjiExamDatePickerDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { onDateSelected(selectedDateMillis) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                         colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
                     ) {
                         Text("确定", fontWeight = FontWeight.SemiBold)

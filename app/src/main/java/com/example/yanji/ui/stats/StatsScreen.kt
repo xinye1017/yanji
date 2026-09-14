@@ -28,11 +28,11 @@ import com.example.yanji.ui.components.YanjiPageHeader
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
+    modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToSubjectDetail: (subjectId: String) -> Unit = {},
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
     onNavigateToExamHistory: () -> Unit = {},
-    modifier: Modifier = Modifier,
     viewModel: StatsViewModel = yanjiViewModel { container ->
         StatsViewModel(container.repository, container.statisticsRepository)
     }

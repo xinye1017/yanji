@@ -25,7 +25,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
         // Trend Summary Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -55,7 +55,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiSurfaceSoft)
                             .padding(vertical = 28.dp),
                         contentAlignment = Alignment.Center
@@ -183,7 +183,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(YanjiRadius.Small))
                                 .background(YanjiSurfaceSoft)
                                 .padding(10.dp)
                         ) {

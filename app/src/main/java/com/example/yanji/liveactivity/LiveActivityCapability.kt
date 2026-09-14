@@ -1,6 +1,7 @@
 package com.example.yanji.liveactivity
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -111,7 +112,13 @@ object LiveActivityCapabilityDetector {
     /** 单一事实来源：通知渠道重要性达不到 IMPORTANCE_LOW 时 promoted 必然失败。 */
     fun isChannelPromotable(importance: Int): Boolean = importance > NotificationManager.IMPORTANCE_MIN
 
-    /** 供 UI 提示使用：是否需要引导用户去系统里打开通知。 */
+    /**
+     * 供 UI 提示使用：是否需要引导用户去系统里打开通知。
+     *
+     * `POST_NOTIFICATIONS` 是编译期内联的 String 常量（API 33），在 minSdk 24 上引用不会崩，
+     * 故按需抑制 `InlinedApi`。
+     */
+    @SuppressLint("InlinedApi")
     fun notificationPermissionState(context: Context): Boolean = runCatching {
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }.getOrDefault(true)

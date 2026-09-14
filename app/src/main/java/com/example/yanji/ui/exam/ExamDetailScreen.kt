@@ -113,7 +113,7 @@ fun ExamDetailScreen(
 
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(YanjiRadius.Small))
                                 .background(MaterialTheme.colorScheme.tertiaryContainer)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {

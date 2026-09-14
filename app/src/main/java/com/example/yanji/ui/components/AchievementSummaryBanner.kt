@@ -56,7 +56,7 @@ fun AchievementSummaryBanner(
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(YanjiRadius.Small))
                     .background(YanjiPrimarySoft),
                 contentAlignment = Alignment.Center
             ) {

@@ -32,8 +32,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun ExamScreen(
-    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
     viewModel: ExamViewModel = yanjiViewModel { container ->
         ExamViewModel(container.repository)
     }
@@ -138,7 +138,7 @@ fun ExamScreen(
                 contentColor = YanjiPrimary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(RoundedCornerShape(YanjiRadius.Small)),
                 indicator = {}
             ) {
                 listOf("发起模考", "成绩走势", "AI深度诊断").forEachIndexed { index, title ->
@@ -156,7 +156,7 @@ fun ExamScreen(
                         },
                         modifier = Modifier
                             .padding(4.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(if (isSelected) YanjiSurface else Color.Transparent)
                     )
                 }

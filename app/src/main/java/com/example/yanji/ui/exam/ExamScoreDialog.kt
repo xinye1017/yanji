@@ -30,7 +30,7 @@ fun ExamScoreDialog(
                     onConfirm(scoreVal, noteInput)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("保存成绩与复盘", fontWeight = FontWeight.Bold)
             }
@@ -64,7 +64,7 @@ fun ExamScoreDialog(
                     label = { Text("卷面得分 (满分 150/100)") },
                     placeholder = { Text("例如 128") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = true
                 )
 
@@ -76,7 +76,7 @@ fun ExamScoreDialog(
                     label = { Text("答题复盘与失分点") },
                     placeholder = { Text("例如：选择题全对，证明题构造辅助函数耗时过长...") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     maxLines = 3
                 )
             }

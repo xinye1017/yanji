@@ -29,7 +29,7 @@ fun ImportConfirmDialog(
             Button(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiDanger),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("确认覆盖本机数据", fontWeight = FontWeight.Bold)
             }
@@ -91,7 +91,7 @@ fun ImportErrorDialog(
             Button(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("知道了", fontWeight = FontWeight.Bold)
             }
@@ -113,7 +113,7 @@ fun AboutYanjiDialog(
             Button(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("了解", fontWeight = FontWeight.Bold)
             }

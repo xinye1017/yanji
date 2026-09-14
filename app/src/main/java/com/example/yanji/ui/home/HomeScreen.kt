@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -71,6 +72,7 @@ fun HomeScreen(
     onNavigateToJournal: () -> Unit,
     onNavigateToStats: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    modifier: Modifier = Modifier,
     onNavigateToJuanjuanChat: () -> Unit = {},
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToSubjectDetail: (subjectId: String) -> Unit = {},
@@ -78,7 +80,6 @@ fun HomeScreen(
     onNavigateToJournalEditor: (date: String) -> Unit = {},
     onNavigateToAchievements: () -> Unit = {},
     onQuickStart: (preset: QuickStartPreset) -> Unit = {},
-    modifier: Modifier = Modifier,
     viewModel: HomeViewModel = yanjiViewModel { container ->
         HomeViewModel(container.repository, container.statisticsRepository)
     }
@@ -426,7 +427,7 @@ fun HomeScreen(
                             if (avgScore > 0) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "均分 ${String.format("%.1f", avgScore)}",
+                                    text = "均分 ${String.format(Locale.US, "%.1f", avgScore)}",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = YanjiSuccess

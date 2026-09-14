@@ -1,6 +1,7 @@
 package com.example.yanji.ui.focus
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
@@ -9,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,14 +30,23 @@ import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.ui.components.YanjiPrimaryButton
 import kotlinx.coroutines.launch
 
+/**
+ * `Manifest.permission.POST_NOTIFICATIONS` 是**编译期内联**的 String 常量：在 minSdk 24 上
+ * 引用它不会触发任何运行时 API 调用，只有 API 33+ 才会真正弹出系统权限框。
+ * Lint 的 `InlinedApi` 只针对"常量所需的 API 高于 minSdk"这一点，故在此按需抑制；
+ * 收敛成私有常量而不是在 Composable 上做函数级抑制，是为了把抑制范围限制到这一处引用。
+ */
+@SuppressLint("InlinedApi")
+private const val POST_NOTIFICATIONS_PERMISSION = Manifest.permission.POST_NOTIFICATIONS
+
 @Composable
 fun FocusScreen(
     onNavigateToExam: () -> Unit,
+    modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
     quickStartPreset: QuickStartPreset? = null,
     onQuickStartConsumed: () -> Unit = {},
-    modifier: Modifier = Modifier,
     viewModel: FocusViewModel = yanjiViewModel { container ->
         FocusViewModel(container.repository, container.statisticsRepository)
     }
@@ -47,7 +58,7 @@ fun FocusScreen(
     val liveState by FocusTimerService.liveState.collectAsStateWithLifecycle()
     val tickingElapsed = FocusTimerService.elapsedSecondsForUi.collectAsStateWithLifecycle()
     val restoredElapsed = remember(activeSession?.id, activeSession?.durationSeconds) {
-        mutableStateOf(activeSession?.durationSeconds ?: 0L)
+        mutableLongStateOf(activeSession?.durationSeconds ?: 0L)
     }
     val elapsedSeconds: State<Long> =
         if (liveState is ActiveFocusState) tickingElapsed else restoredElapsed
@@ -240,7 +251,7 @@ fun FocusScreen(
                     text = stringResource(R.string.notification_permission_grant),
                     onClick = {
                         showNotificationRationale = false
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        notificationPermissionLauncher.launch(POST_NOTIFICATIONS_PERMISSION)
                     }
                 )
             },

@@ -23,8 +23,8 @@ import com.example.yanji.theme.*
 
 @Composable
 fun JuanjuanAvatar(
-    size: Dp = 44.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp
 ) {
     Box(
         modifier = modifier
@@ -45,8 +45,8 @@ fun JuanjuanAvatar(
 @Composable
 fun JuanjuanEncouragementBanner(
     message: String,
-    subMessage: String? = null,
     modifier: Modifier = Modifier,
+    subMessage: String? = null,
     onClick: (() -> Unit)? = null
 ) {
     val clickableModifier = if (onClick != null) {

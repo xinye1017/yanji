@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.StudyTimeRange
@@ -53,7 +54,7 @@ fun SubjectStudyDetailScreen(
 
     val subjectColor = remember(summary.subjectColor) {
         try {
-            Color(android.graphics.Color.parseColor(summary.subjectColor))
+            Color(summary.subjectColor.toColorInt())
         } catch (e: Exception) {
             YanjiPrimary
         }
@@ -86,7 +87,7 @@ fun SubjectStudyDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(YanjiRadius.Small)),
             indicator = {}
         ) {
             StudyTimeRange.entries.forEach { range ->
@@ -104,7 +105,7 @@ fun SubjectStudyDetailScreen(
                     },
                     modifier = Modifier
                         .padding(4.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
                         .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
                 )
             }

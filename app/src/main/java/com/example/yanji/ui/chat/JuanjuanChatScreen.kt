@@ -191,7 +191,7 @@ fun JuanjuanChatScreen(
                 item(key = "reply-error-$currentSessionId") {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
                         color = YanjiDangerSoft,
                         border = BorderStroke(1.dp, YanjiDanger.copy(alpha = 0.22f))
                     ) {

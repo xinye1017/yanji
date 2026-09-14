@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.*
 import com.example.yanji.di.yanjiViewModel
@@ -115,7 +116,7 @@ fun DailyStudyDetailScreen(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(RoundedCornerShape(YanjiRadius.Small))
                                             .background(chipColor.copy(alpha = 0.08f))
                                             .clickable { onNavigateToSubjectDetail(subName) }
                                             .padding(horizontal = 8.dp, vertical = 5.dp)
@@ -210,7 +211,7 @@ fun DailySessionRowCard(
 ) {
     val tagColor = remember(item.subjectColor) {
         try {
-            Color(android.graphics.Color.parseColor(item.subjectColor))
+            Color(item.subjectColor.toColorInt())
         } catch (e: Exception) {
             YanjiPrimary
         }
@@ -249,7 +250,7 @@ fun DailySessionRowCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(tagColor.copy(alpha = 0.12f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {

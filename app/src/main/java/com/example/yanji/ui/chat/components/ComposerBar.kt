@@ -56,12 +56,12 @@ fun ComposerBar(
     onSend: () -> Unit,
     isAiConfigured: Boolean,
     activeModel: String,
+    modifier: Modifier = Modifier,
     availableModels: List<String> = emptyList(),
     onModelSelect: (String) -> Unit = {},
     thinkingIntensity: ThinkingIntensity = ThinkingIntensity.DEEP,
     onThinkingIntensityChange: (ThinkingIntensity) -> Unit = {},
-    onOpenAiSettings: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onOpenAiSettings: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     var modelMenuExpanded by remember { mutableStateOf(false) }

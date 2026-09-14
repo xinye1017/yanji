@@ -1,5 +1,6 @@
 package com.example.yanji.service
 
+import android.annotation.SuppressLint
 import android.app.*
 import android.content.Context
 import android.content.Intent
@@ -475,6 +476,11 @@ class FocusTimerService : Service() {
         }
     }
 
+    /**
+     * `FOREGROUND_SERVICE_TYPE_SPECIAL_USE` 是编译期内联常量（API 34），
+     * 调用点已有 `Build.VERSION.SDK_INT >= Q` 守卫，故按需抑制 `InlinedApi`。
+     */
+    @SuppressLint("InlinedApi")
     private fun promoteToForeground() {
         val notification = liveActivity.buildOngoing(_liveState.value, kind) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

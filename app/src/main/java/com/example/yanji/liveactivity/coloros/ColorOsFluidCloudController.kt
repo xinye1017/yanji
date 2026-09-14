@@ -1,5 +1,6 @@
 package com.example.yanji.liveactivity.coloros
 
+import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -78,6 +79,7 @@ class ColorOsFluidCloudController(private val context: Context) {
      * 不使用 `ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS`：该常量**不存在于 API 36 的
      * android.jar**（实测全量 class 中搜不到），引用它会直接编译失败。
      */
+    @SuppressLint("InlinedApi")
     fun notificationSettingsIntent(): Intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

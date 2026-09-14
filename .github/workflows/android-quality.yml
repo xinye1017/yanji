@@ -39,6 +39,12 @@ jobs:
           sed -i 's/-Dfile.encoding=GBK/-Dfile.encoding=UTF-8/' gradle.properties
           rm -f local.properties
 
+      # 极低成本的 Design Token 防回归门禁（grep + awk，无自定义 lint 插件）：
+      # 1) ui/ 层禁止 Color(0x...) 颜色字面量；
+      # 2) ui/ 层裸 RoundedCornerShape(<N>.dp) 数量不得超过棘轮上限。
+      - name: Design token guard
+        run: ./scripts/check-design-tokens.sh
+
       - name: Unit tests (including migrations and deterministic reliability tests)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 

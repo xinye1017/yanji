@@ -91,7 +91,7 @@ fun StatsAiReportCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -123,7 +123,7 @@ fun StatsAiReportCard(
                     onClick = onGenerate,
                     enabled = !isAnalyzing,
                     colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     if (isAnalyzing) {
@@ -147,7 +147,7 @@ fun StatsAiReportCard(
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     color = YanjiWarningSoft,
                     border = BorderStroke(1.dp, YanjiWarning.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
@@ -176,7 +176,7 @@ fun StatsAiReportCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
                         .background(YanjiSurfaceSoft)
                         .padding(vertical = 20.dp, horizontal = 16.dp),
                     contentAlignment = Alignment.Center
@@ -197,7 +197,7 @@ fun StatsAiReportCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
                         .background(YanjiSurfaceSoft)
                         .padding(16.dp)
                 ) {

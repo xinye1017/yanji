@@ -77,8 +77,8 @@ fun JournalEditorScreen(
     date: String,
     onBack: () -> Unit,
     onSaveSuccess: () -> Unit,
-    onNavigateToDailyDetail: (date: String) -> Unit = {},
     modifier: Modifier = Modifier,
+    onNavigateToDailyDetail: (date: String) -> Unit = {},
     viewModel: JournalViewModel = com.example.yanji.di.yanjiViewModel { container ->
         JournalViewModel(container.repository, container.statisticsRepository)
     }
@@ -330,7 +330,7 @@ fun JournalEditorScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(JournalEditorTags.moodOption(option.score))
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(YanjiRadius.ContentBlockRadius))
                                 .background(
                                     if (selected) YanjiPrimarySoft else YanjiSurface,
                                     RoundedCornerShape(16.dp)
@@ -424,7 +424,7 @@ fun JournalEditorScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(YanjiBackground, RoundedCornerShape(16.dp))
+                                    .background(YanjiBackground, RoundedCornerShape(YanjiRadius.ContentBlockRadius))
                                     .padding(horizontal = 10.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -605,7 +605,7 @@ private fun JournalEditorCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, YanjiBorder.copy(alpha = 0.8f), RoundedCornerShape(24.dp)),
+            .border(1.dp, YanjiBorder.copy(alpha = 0.8f), RoundedCornerShape(YanjiRadius.StandardCardRadius)),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

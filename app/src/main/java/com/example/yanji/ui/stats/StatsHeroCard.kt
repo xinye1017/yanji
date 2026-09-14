@@ -40,7 +40,7 @@ fun StatsHeroCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {

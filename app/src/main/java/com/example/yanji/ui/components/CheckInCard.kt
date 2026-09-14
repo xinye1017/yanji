@@ -38,7 +38,7 @@ fun CheckInCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -82,7 +82,7 @@ fun CheckInCard(
 
                 // Status Tag
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     color = if (state.isCheckedInToday) YanjiSuccess.copy(alpha = 0.12f) else YanjiPrimarySoft
                 ) {
                     Row(

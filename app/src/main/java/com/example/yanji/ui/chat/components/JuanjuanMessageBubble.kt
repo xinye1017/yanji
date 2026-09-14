@@ -127,7 +127,7 @@ fun JuanjuanMessageBubble(
             // Thought Process Badge (collapsible)
             if (hasDeepAnalysis || learningRecordCount > 0 || parsed.contextSources.isNotEmpty()) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     color = YanjiSurfaceSoft,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,7 +304,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
     ) {
         steps.forEachIndexed { stepIndex, (title, detail) ->
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(YanjiRadius.Small),
                 color = YanjiSurfaceSoft,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -360,7 +360,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
 @Composable
 private fun ActionHintBlock(text: String, modifier: Modifier) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(YanjiRadius.Small),
         color = YanjiLavenderSoft,
         modifier = modifier.fillMaxWidth()
     ) {
@@ -399,7 +399,7 @@ private fun ActionButtonRow(
     ) {
         actions.forEach { action ->
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(YanjiRadius.Small),
                 color = YanjiLavenderSoft,
                 modifier = Modifier.fillMaxWidth()
             ) {

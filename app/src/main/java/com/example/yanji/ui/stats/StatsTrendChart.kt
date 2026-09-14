@@ -38,7 +38,7 @@ fun StatsTrendChart(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -87,7 +87,7 @@ fun StatsTrendChart(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(YanjiRadius.Small))
                                 .clickable { onSelectDay(day) }
                                 .padding(horizontal = 4.dp)
                         ) {
@@ -194,7 +194,7 @@ fun StatsTrendChart(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(YanjiRadius.Small))
                                     .clickable { onSelectDay(day) }
                             )
                         }

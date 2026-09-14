@@ -41,7 +41,10 @@ object YanjiRadius {
     val ContentBlockRadius = 16.dp
 
     /**
-     * 小圆角 / 标签圆角 — 12dp。
+     * 小尺度容器的统一圆角（12dp）：标签、徽章、图标底、行内高亮块、小分段控件等。
+     *
+     * 这些元素**语义各异但视觉角色一致**——都是附属于主体的紧凑块，因此共用同一档，
+     * 不为每个语义单独造一个同值的 token：那只是把 magic number 换个名字。
      */
     val Small = 12.dp
 

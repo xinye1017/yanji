@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.SubjectDistributionItem
 import com.example.yanji.data.SubjectStatsLevel
@@ -38,14 +39,14 @@ fun SubjectDistributionCard(
     val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
 
     fun displayColor(sub: SubjectDistributionItem): Color = try {
-        Color(android.graphics.Color.parseColor(sub.subjectColor))
+        Color(sub.subjectColor.toColorInt())
     } catch (_: Exception) {
         subjectChartColor(sub.subjectName)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -104,7 +105,7 @@ fun SubjectDistributionCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .clickable { onNavigateToSubjectDetail(sub.subjectId) }
                             .padding(vertical = 4.dp)
                     ) {
@@ -157,7 +158,7 @@ fun SubjectProgressBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(12.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
             color = color,
             trackColor = YanjiSurfaceSoft
         )
@@ -233,8 +234,8 @@ fun subjectChartColor(name: String): Color = when {
 @Composable
 private fun SubjectDonutChart(
     subjectDist: Map<String, Long>,
-    totalLabel: String = "今日",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    totalLabel: String = "今日"
 ) {
     val total = subjectDist.values.sum()
     val reveal by animateFloatAsState(

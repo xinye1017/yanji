@@ -2,6 +2,7 @@ package com.example.yanji.data
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.backup.BackupImportResult
@@ -28,6 +29,7 @@ import com.example.yanji.data.timer.FileTimerSessionPersistence
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerSessionPersistence
 import com.example.yanji.service.FocusTimerService
+import java.util.Locale
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
@@ -111,7 +113,7 @@ class YanjiRepository private constructor() {
         val prefs = ctx.getSharedPreferences("yanji_ai_models", Context.MODE_PRIVATE)
         val jsonArray = JSONArray()
         models.forEach { jsonArray.put(it) }
-        prefs.edit().putString("cached_models", jsonArray.toString()).apply()
+        prefs.edit { putString("cached_models", jsonArray.toString()) }
     }
 
     private val _settings = MutableStateFlow(UserSettings())
@@ -677,7 +679,8 @@ class YanjiRepository private constructor() {
 
         // 专注记录
         if (recentFocus.isNotEmpty()) {
-            val hours = (recentFocus.sumOf { it.durationSeconds } / 3600.0).let { String.format("%.1f", it) }
+            val hours = (recentFocus.sumOf { it.durationSeconds } / 3600.0)
+                .let { String.format(Locale.US, "%.1f", it) }
             sources += ChatContextSource(
                 ContextSourceType.FOCUS,
                 recentFocus.size,

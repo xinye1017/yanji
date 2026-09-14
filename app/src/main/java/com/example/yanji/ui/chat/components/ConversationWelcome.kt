@@ -139,7 +139,7 @@ fun ConversationWelcome(
                     )
 
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(YanjiRadius.Small),
                         color = if (!isAiConfigured) YanjiWarningSoft else YanjiSurfaceBlue,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -214,7 +214,7 @@ fun QuickQuestionsRow(
         ) {
             questions.forEach { question ->
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     color = YanjiSurface,
                     border = BorderStroke(1.dp, YanjiBorder),
                     shadowElevation = 0.5.dp,

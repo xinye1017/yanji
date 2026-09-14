@@ -32,7 +32,7 @@ fun FocusSummaryDialog(
             Button(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("太棒了，收下轨迹", fontWeight = FontWeight.Bold)
             }

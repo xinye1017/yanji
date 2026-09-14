@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.YanjiCard as Card
+import java.util.Locale
 
 @Composable
 fun ImmersiveExamTimer(
@@ -34,7 +35,7 @@ fun ImmersiveExamTimer(
     val hours = remainingSeconds / 3600
     val mins = (remainingSeconds % 3600) / 60
     val secs = remainingSeconds % 60
-    val timeFormatted = String.format("%02d:%02d:%02d", hours, mins, secs)
+    val timeFormatted = String.format(Locale.US, "%02d:%02d:%02d", hours, mins, secs)
 
     val startStr = remember(startTime) { YanjiTime.formatTime(startTime) }
     val endStr = remember(startTime, totalSeconds) {
@@ -96,7 +97,7 @@ fun ImmersiveExamTimer(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -125,7 +126,7 @@ fun ImmersiveExamTimer(
                     Spacer(modifier = Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiWarningSoft)
                             .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
@@ -144,7 +145,7 @@ fun ImmersiveExamTimer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .clip(RoundedCornerShape(12.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
                     color = YanjiPrimary,
                     trackColor = YanjiPrimarySoft
                 )

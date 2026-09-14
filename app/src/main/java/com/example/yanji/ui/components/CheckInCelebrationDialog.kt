@@ -133,7 +133,7 @@ fun CheckInCelebrationDialog(
 
                 // Streak pill
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
                     color = YanjiPrimarySoft,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
@@ -163,7 +163,7 @@ fun CheckInCelebrationDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(YanjiRadius.ContentBlockRadius))
                         .background(YanjiBackground)
                         .padding(16.dp)
                 ) {

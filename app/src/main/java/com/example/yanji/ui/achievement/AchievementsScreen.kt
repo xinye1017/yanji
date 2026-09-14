@@ -276,7 +276,7 @@ fun AchievementsScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp)),
+                                        .clip(RoundedCornerShape(4.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
                                     color = YanjiPrimary,
                                     trackColor = YanjiBackground,
                                 )
@@ -328,7 +328,7 @@ fun AchievementsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(YanjiRadius.Small))
                                 .background(YanjiBackground)
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
@@ -412,7 +412,7 @@ fun AchievementsScreen(
                     categories.forEach { (cat, title) ->
                         val isSelected = selectedCategory == cat
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(YanjiRadius.Small),
                             color = if (isSelected) YanjiPrimary else YanjiSurface,
                             modifier = Modifier.clickable { selectedCategory = cat }
                         ) {
@@ -532,7 +532,7 @@ fun UpcomingAchievementCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
+                    .clip(RoundedCornerShape(2.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
                 color = YanjiPrimary,
                 trackColor = YanjiBackground
             )
@@ -720,7 +720,7 @@ fun AchievementGridCard(
                             modifier = Modifier
                                 .fillMaxWidth(0.85f)
                                 .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
+                                .clip(RoundedCornerShape(3.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
                             color = YanjiPrimary.copy(alpha = 0.6f),
                             trackColor = YanjiBackground
                         )
@@ -907,7 +907,7 @@ fun AchievementDetailDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiBackground)
                             .padding(10.dp)
                     ) {
@@ -1020,7 +1020,7 @@ fun AchievementDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(42.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = YanjiPrimary,
                         contentColor = YanjiOnPrimary

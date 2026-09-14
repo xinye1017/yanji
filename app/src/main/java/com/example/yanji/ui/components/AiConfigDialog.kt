@@ -123,7 +123,7 @@ fun AiConfigDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(YanjiRadius.Small),
                         singleLine = true
                     )
 
@@ -219,7 +219,7 @@ fun AiConfigDialog(
                     label = { Text("Base URL (API 地址)") },
                     placeholder = { Text("https://api.deepseek.com/v1") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = false,
                     isError = cleartextWarning != null,
                     supportingText = cleartextWarning?.let { message ->
@@ -257,7 +257,7 @@ fun AiConfigDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = true,
                     isError = state.securityError != null,
                     supportingText = state.securityError?.let { message ->
@@ -301,7 +301,7 @@ fun AiConfigDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(YanjiRadius.Small),
                         singleLine = true
                     )
 

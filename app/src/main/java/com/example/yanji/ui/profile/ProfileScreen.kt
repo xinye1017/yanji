@@ -34,8 +34,8 @@ import java.util.Locale
 
 @Composable
 fun ProfileScreen(
-    onNavigateToAchievements: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onNavigateToAchievements: () -> Unit = {},
     viewModel: ProfileViewModel = yanjiViewModel { container ->
         ProfileViewModel(container.repository)
     }

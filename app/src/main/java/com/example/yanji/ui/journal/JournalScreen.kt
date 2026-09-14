@@ -29,9 +29,9 @@ import com.example.yanji.data.YanjiTime
 
 @Composable
 fun JournalScreen(
+    modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToJournalEditor: (journalId: String?, date: String) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier,
     viewModel: JournalViewModel = yanjiViewModel { container ->
         JournalViewModel(container.repository, container.statisticsRepository)
     }
@@ -101,7 +101,7 @@ fun JournalCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = YanjiSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -123,7 +123,7 @@ fun JournalCard(
                     // Clickable study duration chip linking to DailyStudyDetail
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiPrimarySoft)
                             .clickable { onStudyDurationClick() }
                             .padding(horizontal = 8.dp, vertical = 2.dp)
@@ -175,7 +175,7 @@ fun JournalCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
                         .background(YanjiSurfaceSoft)
                         .padding(10.dp)
                 ) {

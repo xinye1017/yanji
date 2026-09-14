@@ -31,7 +31,7 @@ fun ExamAiDiagnosisSection(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
             colors = CardDefaults.cardColors(containerColor = YanjiSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -60,7 +60,7 @@ fun ExamAiDiagnosisSection(
                         onClick = onGenerate,
                         enabled = !isAnalyzing,
                         colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         if (isAnalyzing) {
@@ -87,7 +87,7 @@ fun ExamAiDiagnosisSection(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiSurfaceSoft)
                             .padding(vertical = 24.dp, horizontal = 16.dp),
                         contentAlignment = Alignment.Center
@@ -110,7 +110,7 @@ fun ExamAiDiagnosisSection(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
                             .background(YanjiSurfaceBlue)
                             .padding(14.dp)
                     ) {
@@ -197,7 +197,7 @@ fun DiagnosisItem(
     ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(YanjiRadius.Small))
                 .background(color.copy(alpha = 0.12f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
         ) {

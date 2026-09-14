@@ -41,7 +41,7 @@ fun ExamTargetDialog(
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("保存设置", fontWeight = FontWeight.Bold)
             }
@@ -59,7 +59,7 @@ fun ExamTargetDialog(
                     onValueChange = { school = it },
                     label = { Text("目标院校") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = true
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -68,14 +68,14 @@ fun ExamTargetDialog(
                     onValueChange = { major = it },
                     label = { Text("目标专业") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = true
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedCard(
                     onClick = { showExamDatePicker = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(YanjiRadius.Small),
                     colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
                 ) {
                     Row(

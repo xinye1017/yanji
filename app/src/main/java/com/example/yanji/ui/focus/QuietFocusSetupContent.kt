@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -83,6 +84,7 @@ import com.example.yanji.theme.YanjiBackground
 import com.example.yanji.theme.YanjiBorder
 import com.example.yanji.theme.YanjiPrimary
 import com.example.yanji.theme.YanjiPrimarySoft
+import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSurface
 import com.example.yanji.theme.YanjiSurfaceSoft
 import com.example.yanji.theme.YanjiTextPrimary
@@ -148,7 +150,7 @@ fun QuietFocusSetupContent(
     }
     var selectedDurationMinutes by rememberSaveable(selectedMode) {
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
-        mutableStateOf(if (minutes > 0) minutes else 45)
+        mutableIntStateOf(if (minutes > 0) minutes else 45)
     }
     var showCustomDurationDialog by rememberSaveable { mutableStateOf(false) }
     var showSaveQuickDialog by rememberSaveable { mutableStateOf(false) }
@@ -466,7 +468,7 @@ private fun QuietCategoryStep(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(YanjiRadius.Small))
                                         .background(if (selected) YanjiSurface else iconBackground),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -869,7 +871,7 @@ private fun QuietCustomDurationDialog(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("分钟") },
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(YanjiRadius.Small)
                 )
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -901,7 +903,7 @@ private fun QuietCustomDurationDialog(
                     onConfirm(minutes)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("确定")
             }
@@ -945,7 +947,7 @@ private fun QuietSaveQuickDialog(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("快捷名称") },
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(YanjiRadius.Small)
                 )
             }
         },
@@ -953,7 +955,7 @@ private fun QuietSaveQuickDialog(
             Button(
                 onClick = { onConfirm(label.trim()) },
                 colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("添加到首页")
             }
