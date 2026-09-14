@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.DailyStudySummary
 import com.example.yanji.data.ExamSession
-import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
@@ -25,7 +24,6 @@ data class HomeUiState(
     val todayIso: String,
     val settings: UserSettings,
     val examSessions: List<ExamSession>,
-    val quickPresets: List<QuickStartPreset>,
     val todaySummary: DailyStudySummary,
     val streakDays: Int,
     /** 目标日期解析失败时为 null（页面回退显示原始日期字符串）。 */
@@ -38,7 +36,7 @@ data class HomeUiState(
  * 首页 Feature ViewModel。
  *
  * 依赖通过构造函数注入（无默认单例取值），宿主用 `viewModel { HomeViewModel(...) }` 创建；
- * Store 层（Timer/Chat/Journal/CheckIn/Preset）仍是进程级单例，这里只是状态编排层。
+ * Store 层（Timer/Chat/Journal/CheckIn）仍是进程级单例，这里只是状态编排层。
  */
 class HomeViewModel(
     private val repo: YanjiRepository,
@@ -55,7 +53,6 @@ class HomeViewModel(
         todayIso = todayIso,
         settings = repo.settings.value,
         examSessions = repo.examSessions.value,
-        quickPresets = repo.quickStartPresets.value,
         todaySummary = statsRepo.getDailyStudySummary(todayIso),
         streakDays = statsRepo.getWeeklyStudySummary().streakDays,
         daysRemaining = daysRemainingFor(repo.settings.value.targetExamDate),
@@ -65,15 +62,13 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(
         repo.settings,
         repo.examSessions,
-        repo.quickStartPresets,
         todaySummaryFlow,
         weeklySummaryFlow
-    ) { settings, exams, presets, todaySummary, weekly ->
+    ) { settings, exams, todaySummary, weekly ->
         HomeUiState(
             todayIso = todayIso,
             settings = settings,
             examSessions = exams,
-            quickPresets = presets,
             todaySummary = todaySummary,
             streakDays = weekly.streakDays,
             daysRemaining = daysRemainingFor(settings.targetExamDate),
@@ -84,14 +79,6 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = initial
     )
-
-    // ---- 动作：快捷操作排序 / 删除（转发给 PresetStore） ----
-
-    fun moveQuickStartPreset(id: String, toIndex: Int) = repo.moveQuickStartPreset(id, toIndex)
-
-    fun commitQuickStartPresetOrder() = repo.commitQuickStartPresetOrder()
-
-    fun deleteQuickStartPreset(id: String) = repo.deleteQuickStartPreset(id)
 
     // ---- 派生计算 ----
 

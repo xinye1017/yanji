@@ -134,7 +134,6 @@ fun QuietFocusSetupContent(
     onSelectMode: (String) -> Unit,
     todayTotalSeconds: Long = 0L,
     onStart: () -> Unit,
-    onSaveAsQuickAction: (String) -> Unit = {},
     onNavigateToExam: () -> Unit,
     onNavigateToDailyDetail: (String) -> Unit = {}
 ) {
@@ -153,7 +152,6 @@ fun QuietFocusSetupContent(
         mutableIntStateOf(if (minutes > 0) minutes else 45)
     }
     var showCustomDurationDialog by rememberSaveable { mutableStateOf(false) }
-    var showSaveQuickDialog by rememberSaveable { mutableStateOf(false) }
 
     val topCategories = remember(subjects) {
         subjects.filter {
@@ -280,7 +278,6 @@ fun QuietFocusSetupContent(
                         },
                         onCustomDuration = { showCustomDurationDialog = true },
                         onStart = onStart,
-                        onSaveQuick = { showSaveQuickDialog = true },
                         onNavigateToExam = onNavigateToExam
                     )
                 }
@@ -296,18 +293,6 @@ fun QuietFocusSetupContent(
                 selectedDurationMinutes = minutes
                 onSelectMode("${minutes}分钟专注")
                 showCustomDurationDialog = false
-            }
-        )
-    }
-
-    if (showSaveQuickDialog) {
-        QuietSaveQuickDialog(
-            subjectName = selectedSubject.name,
-            mode = selectedMode,
-            onDismiss = { showSaveQuickDialog = false },
-            onConfirm = { label ->
-                onSaveAsQuickAction(label)
-                showSaveQuickDialog = false
             }
         )
     }
@@ -596,7 +581,6 @@ private fun QuietRhythmStep(
     onDurationSelected: (QuietDurationOption) -> Unit,
     onCustomDuration: () -> Unit,
     onStart: () -> Unit,
-    onSaveQuick: () -> Unit,
     onNavigateToExam: () -> Unit
 ) {
     Column(
@@ -744,15 +728,8 @@ private fun QuietRhythmStep(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onSaveQuick) {
-                    Text(
-                        text = "保存为首页快捷",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextSecondary
-                    )
-                }
                 TextButton(onClick = onNavigateToExam) {
                     Text(
                         text = "模拟考试",
@@ -906,58 +883,6 @@ private fun QuietCustomDurationDialog(
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = YanjiTextSecondary) }
-        },
-        shape = RoundedCornerShape(20.dp),
-        containerColor = YanjiSurface
-    )
-}
-
-@Composable
-private fun QuietSaveQuickDialog(
-    subjectName: String,
-    mode: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var label by rememberSaveable(subjectName, mode) { mutableStateOf("开始$subjectName$mode") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "保存为首页快捷",
-                style = MaterialTheme.typography.headlineMedium,
-                color = YanjiTextPrimary
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "$subjectName · $mode",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary
-                )
-                OutlinedTextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("快捷名称") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(YanjiRadius.Small)
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(label.trim()) },
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
-            ) {
-                Text("添加到首页")
             }
         },
         dismissButton = {

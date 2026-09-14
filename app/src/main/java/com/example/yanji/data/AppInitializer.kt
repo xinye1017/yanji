@@ -13,9 +13,7 @@ import com.example.yanji.data.db.UserSettingsEntity
  *
  * 现在的约定：
  *  - 「表为空」是**合法业务状态**，不是「需要初始化」；
- *  - 只有系统配置默认值（[UserSettingsEntity]）允许在缺失时补齐；
- *  - 首页快捷操作的默认三项由 `YanjiRepository.seedDefaultQuickActionsIfNeeded`
- *    负责，且用 SharedPreferences 标记保证只 seed 一次、删掉后不复活。
+ *  - 只有系统配置默认值（[UserSettingsEntity]）允许在缺失时补齐。
  *
  * 抽成独立的类是为了让「不写业务数据」这条不变量可以被插桩测试直接验证
  * （对着一次性数据库跑，而不是对着用户的真实库）。

@@ -13,7 +13,6 @@ import com.example.yanji.data.chat.ChatStore
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
 import com.example.yanji.data.journal.JournalStore
-import com.example.yanji.data.preset.QuickStartPresetStore
 import com.example.yanji.data.study.StudyStats
 import com.example.yanji.data.timer.TimerStore
 import com.example.yanji.data.backup.UserSettingsBackup
@@ -58,7 +57,6 @@ class YanjiRepository private constructor() {
             repo.secretStore = KeystoreSecretStore(appContext)
             val db = YanjiDatabase.getDatabase(appContext)
             repo.bindDatabase(db)
-            repo.seedDefaultQuickActionsIfNeeded()
         }
     }
 
@@ -94,7 +92,6 @@ class YanjiRepository private constructor() {
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
     private val journalStore = JournalStore(scope = repoScope, dbProvider = { database })
     private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
-    private val presetStore = QuickStartPresetStore(scope = repoScope, dbProvider = { database })
 
     val focusSessions: StateFlow<List<FocusSession>> get() = timerStore.focusSessions
     val examSessions: StateFlow<List<ExamSession>> get() = timerStore.examSessions
@@ -139,9 +136,6 @@ class YanjiRepository private constructor() {
 
     private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
     val unlockedAchievements: StateFlow<Map<String, Long>> = _unlockedAchievements.asStateFlow()
-
-    // 首页自定义快捷操作（科目 + 计时模式 + 备注 组合）
-    val quickStartPresets: StateFlow<List<QuickStartPreset>> get() = presetStore.quickStartPresets
 
     // Current running active session if any
     val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
@@ -204,17 +198,7 @@ class YanjiRepository private constructor() {
                     _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
                 }
             }
-            presetStore.bind(db)
         }
-    }
-
-    /**
-     * 首次启动时把默认三个快捷操作（开始专注 / 模拟考试 / 写今日日记）写入 quick_start_presets，
-     * 使它们与自定义组合走同一份存储，统一支持长按删除。
-     * SharedPreferences 标志保证只 seed 一次：用户删掉默认项后不会被重新插入。
-     */
-    private fun seedDefaultQuickActionsIfNeeded() {
-        // 快捷操作已按用户要求从首页移除，不再写入默认预设数据
     }
 
     /**
@@ -443,20 +427,6 @@ class YanjiRepository private constructor() {
         file.writeText(BackupCodec.encode(buildBackupPayload()))
         return file.absolutePath
     }
-
-    // === 首页自定义快捷操作 ===
-    // 写入顺序：先更新内存 StateFlow（UI 立即响应），再落库；DB Flow 回灌时保持一致。
-    fun addQuickStartPreset(preset: QuickStartPreset): QuickStartPreset = presetStore.add(preset)
-
-    fun updateQuickStartPreset(preset: QuickStartPreset) = presetStore.update(preset)
-
-    fun deleteQuickStartPreset(id: String) = presetStore.delete(id)
-
-    /** 长按拖动排序：把 id 项移动到 toIndex 位置（内存即时生效，其余项顺移）。 */
-    fun moveQuickStartPreset(id: String, toIndex: Int) = presetStore.move(id, toIndex)
-
-    /** 拖动结束后把当前内存顺序持久化到 DB。 */
-    fun commitQuickStartPresetOrder() = presetStore.commitOrder()
 
     suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
         val settings = _settings.value

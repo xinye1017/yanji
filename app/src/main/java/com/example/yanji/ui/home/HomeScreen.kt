@@ -24,7 +24,6 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.CaretRight
 import com.adamglin.phosphoricons.regular.ChartLineUp
-import com.adamglin.phosphoricons.regular.Play
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.*
@@ -54,7 +53,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.DurationFormatter
-import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
@@ -79,7 +77,6 @@ fun HomeScreen(
     onNavigateToExamHistory: () -> Unit = {},
     onNavigateToJournalEditor: (date: String) -> Unit = {},
     onNavigateToAchievements: () -> Unit = {},
-    onQuickStart: (preset: QuickStartPreset) -> Unit = {},
     viewModel: HomeViewModel = yanjiViewModel { container ->
         HomeViewModel(container.repository, container.statisticsRepository)
     }
@@ -338,51 +335,6 @@ fun HomeScreen(
                 }
             }
 
-            // Quick Start Presets (Responsive FlowRow)
-            if (state.quickPresets.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
-                YanjiCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("home_quick_presets_card"),
-                    variant = YanjiCardVariant.Compact
-                ) {
-                    Column(modifier = Modifier.padding(YanjiSpacing.CardPaddingCompact)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "快捷专注",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "一键开启",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            state.quickPresets.forEach { preset ->
-                                QuickPresetChip(
-                                    preset = preset,
-                                    onClick = { onQuickStart(preset) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
             // 5. Exam Panorama & Linked Card (Clickable to ExamHistory)
@@ -538,54 +490,6 @@ fun SubjectTimeChip(
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
-    }
-}
-
-@Composable
-fun QuickPresetChip(
-    preset: QuickStartPreset,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = modifier.defaultMinSize(minHeight = 44.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Play,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = preset.label.ifBlank { preset.subjectName },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${preset.subjectName} · ${preset.mode}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 

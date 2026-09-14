@@ -102,13 +102,35 @@
 - 本机验证走 API 35 模拟器；CI 走 API 34（`android-ci.yml` 的 instrumented job）。
 - 目标架构（进行中）：Compose UI → Feature ViewModel → Repository → Room/Service。
 
+## 暗色模式 / 主题（进行中，2026-09-14）
+
+- 设计规范：仓库根 `design_dark.md`（Midnight Blue）。**亮色规范是 `DESIGN.md`。**
+- **`ui/` 下禁止静态亮色 token**（`YanjiPrimary`/`YanjiTextPrimary`/`YanjiSurface`… 共 21 个）。
+  它们是顶层 `val` 编译期常量，暗色下永远返回亮色值。一律改用
+  `MaterialTheme.colorScheme.*`（M3 有槽位的）或 `YanjiColors.*`（M3 没有的 5 个角色）。
+- **`ui/` 层禁止 `Color(0x...)` 字面量**；颜色唯一事实源 `theme/Color.kt`。
+  裸 dp 只允许出现在 `theme/Theme.kt` 的 `YanjiShapes`。
+- 学科色的**唯一事实来源在数据层**（`SubjectCatalog.colorHex` 字符串，落库/进备份）。
+  让它感知主题是错的；在**渲染层**用 `yanjiSeriesColor(hex, fallback)` 翻译成当前主题色。
+- `YanjiThemeMode`（SYSTEM/LIGHT/DARK）持久化在 `user_settings.themeMode`（存 name 字符串，
+  `fromStorage` 宽松解析、未知值回落 SYSTEM）。`YanjiTheme(darkTheme=…)` 仍收 Boolean，
+  由 `mode.resolveDarkTheme()` 解析，这样既有的 `YanjiTheme(darkTheme=true)` 测试不受影响。
+- 计划书与一键重做脚本：`build/dark-mode-work/`（`DARK_MODE_PLAN.md` + `reapply.py`）。
+- **等设计稿要求的色值**：底 `#0D111A` / 卡 `#151B28` / 控件 `#1D2536` / 浮层 `#222C40`；
+  主蓝升调 `#4F7DF3`、强调 `#7197F7`；文字 `#F0F4FC`/`#94A3B8`/`#64748B`；
+  容器用半透明 ARGB（`0x294F7DF3` = 16%）。**禁止纯黑 `#000000`。**
+
 ## 并发改造风险（2026-09-14 实测踩中）
 
 - 曾在**同一仓库上同时跑两个改造任务**，另一个进程（成就系统 V2 重构）每 7~15 秒改写一个文件，
   导致工作区反复不可编译（`MainActivity.kt` 的 `onCreate` 被删成语法错误；
   `AchievementsScreen.kt` / `HomeScreen.kt` 删了 `androidx.compose.material.icons.*` 导入但用法还在）。
-- **教训**：验证必须在 `git worktree add` 的隔离副本里做，不要在活动工作区反复构建；
+- **教训 1**：验证必须在 `git worktree add` 的隔离副本里做，不要在活动工作区反复构建；
   见到「刚还能编译、一分钟后语法错误」先怀疑并发写入，而不是自己改坏了。
+- **教训 2（更严重）**：该进程会**重置工作树**（不只改写文件）。2026-09-14 一次跨 42 文件、
+  700 处的主题化 sweep 在 15 分钟后被整体回滚（`HEAD` 未动，但 `git status` 里的改动全没了）。
+  ⇒ **跨几十个文件的大批量改动前，必须先确认工作区归自己独占**（问用户 / 或直接开 worktree）；
+  否则一次 `reset --hard` 就全部蒸发。**改动一旦成形就尽早 commit 固化。**
 
 ## adb 运维
 

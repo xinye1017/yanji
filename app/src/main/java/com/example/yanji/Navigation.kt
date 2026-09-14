@@ -36,7 +36,6 @@ import com.example.yanji.ui.journal.JournalScreen
 import com.example.yanji.ui.navigation.GlassBottomBar
 import com.example.yanji.ui.profile.ProfileScreen
 import com.example.yanji.ui.stats.StatsScreen
-import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
 import kotlinx.serialization.Serializable
@@ -104,9 +103,6 @@ fun MainNavigation() {
     LaunchedEffect(activeFocus?.id) {
         if (activeFocus != null) currentTab = YanjiTab.FOCUS
     }
-
-    // 首页快捷操作 → 专注页自动开始的 pending 传递
-    var pendingQuickStart by remember { mutableStateOf<QuickStartPreset?>(null) }
 
     val todayStr = remember {
         YanjiTime.todayIso()
@@ -231,20 +227,14 @@ fun MainNavigation() {
                             onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
                             onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) },
                             onNavigateToJournalEditor = { d -> screenStack.add(YanjiSubScreen.JournalEditor(date = d)) },
-                            onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) },
-                            onQuickStart = { preset ->
-                                pendingQuickStart = preset
-                                currentTab = YanjiTab.FOCUS
-                            }
+                            onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
                         )
                     }
                     YanjiTab.FOCUS -> {
                         FocusScreen(
                             onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
                             onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                            onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) },
-                            quickStartPreset = pendingQuickStart,
-                            onQuickStartConsumed = { pendingQuickStart = null }
+                            onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) }
                         )
                     }
                     YanjiTab.JOURNAL -> {

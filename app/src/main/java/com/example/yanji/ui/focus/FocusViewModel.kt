@@ -3,7 +3,6 @@ package com.example.yanji.ui.focus
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.Subject
 import com.example.yanji.data.YanjiRepository
@@ -81,9 +80,6 @@ class FocusViewModel(
     fun cancelFocus() = repo.cancelFocus()
 
     fun acknowledgeCompletedFocus() = repo.acknowledgeCompletedFocus()
-
-    /** 把当前组合保存为首页快捷操作。 */
-    fun saveQuickStartPreset(preset: QuickStartPreset): QuickStartPreset = repo.addQuickStartPreset(preset)
 
     /** 新增自定义科目 */
     fun addCustomSubject(name: String): Subject = repo.addCustomSubject(name)

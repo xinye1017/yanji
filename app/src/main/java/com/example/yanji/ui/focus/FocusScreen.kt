@@ -21,7 +21,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.R
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.Subject
 import com.example.yanji.data.timer.ActiveFocusState
 import com.example.yanji.di.yanjiViewModel
@@ -45,8 +44,6 @@ fun FocusScreen(
     modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
-    quickStartPreset: QuickStartPreset? = null,
-    onQuickStartConsumed: () -> Unit = {},
     viewModel: FocusViewModel = yanjiViewModel { container ->
         FocusViewModel(container.repository, container.statisticsRepository)
     }
@@ -148,21 +145,6 @@ fun FocusScreen(
         viewModel.acknowledgeCompletedFocus()
     }
 
-    LaunchedEffect(quickStartPreset) {
-        val preset = quickStartPreset ?: return@LaunchedEffect
-        onQuickStartConsumed()
-        if (activeSession != null) {
-            Toast.makeText(context, "已有专注在进行中，请先结束本次计时", Toast.LENGTH_SHORT).show()
-            return@LaunchedEffect
-        }
-        val subject = subjects.find { it.id == preset.subjectId }
-            ?: Subject(preset.subjectId, preset.subjectName, "#356AE6")
-        selectedSubjectId = subject.id
-        selectedMode = preset.mode
-        noteText = preset.note
-        launchFocus(subject, preset.mode, preset.note)
-    }
-
     val completedFocus = state.lastCompletedFocus
     LaunchedEffect(completedFocus) {
         if (completedFocus != null) {
@@ -206,18 +188,6 @@ fun FocusScreen(
             onSelectMode = { selectedMode = it },
             todayTotalSeconds = state.todayTotalSeconds,
             onStart = { launchFocus(selectedSubject, selectedMode, "") },
-            onSaveAsQuickAction = { label ->
-                viewModel.saveQuickStartPreset(
-                    QuickStartPreset(
-                        label = label.ifBlank { "开始${selectedSubject.name}${selectedMode}" },
-                        subjectId = selectedSubject.id,
-                        subjectName = selectedSubject.name,
-                        mode = selectedMode,
-                        note = ""
-                    )
-                )
-                Toast.makeText(context, "已添加到首页快捷操作", Toast.LENGTH_SHORT).show()
-            },
             onNavigateToExam = onNavigateToExam,
             onNavigateToDailyDetail = onNavigateToDailyDetail
         )
