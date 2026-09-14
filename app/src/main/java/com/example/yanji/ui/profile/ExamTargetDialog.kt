@@ -23,7 +23,7 @@ fun ExamTargetDialog(
     var school by remember { mutableStateOf(settings.targetSchool) }
     var major by remember { mutableStateOf(settings.targetMajor) }
     var date by remember { mutableStateOf(settings.targetExamDate) }
-    var goalH by remember { mutableFloatStateOf(settings.dailyGoalHours) }
+    var goalH by remember { mutableFloatStateOf(if (settings.dailyGoalHours in 0f..16f) settings.dailyGoalHours else 0f) }
     var showExamDatePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -92,9 +92,9 @@ fun ExamTargetDialog(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = date,
+                                text = date.ifBlank { "点击选择初试日期" },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = YanjiTextPrimary
+                                color = if (date.isBlank()) YanjiTextTertiary else YanjiTextPrimary
                             )
                         }
                         Icon(
@@ -105,12 +105,13 @@ fun ExamTargetDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("每日专注学习目标：${goalH.toInt()} 小时", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                val goalText = if (goalH <= 0f) "未设置（滑动选择）" else "${goalH.toInt()} 小时"
+                Text("每日专注学习目标：$goalText", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 Slider(
                     value = goalH,
                     onValueChange = { goalH = it },
-                    valueRange = 4f..16f,
-                    steps = 11
+                    valueRange = 0f..16f,
+                    steps = 15
                 )
             }
         },

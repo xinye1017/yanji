@@ -1,17 +1,14 @@
 package com.example.yanji.ui.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,12 +17,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
-import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.StudyTimeRange
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiDetailTopBar
+import com.example.yanji.ui.components.YanjiPrimaryButton
 
 @Composable
 fun SubjectStudyDetailScreen(
@@ -35,17 +35,20 @@ fun SubjectStudyDetailScreen(
     onNavigateToExamDetail: (examId: String) -> Unit,
     onNavigateToStartFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SubjectStudyDetailViewModel = viewModel(
+    viewModel: SubjectStudyDetailViewModel = yanjiViewModel(
         key = subjectId
-    ) { SubjectStudyDetailViewModel(StudyStatisticsRepository.getInstance(), subjectId) }
+    ) { container -> SubjectStudyDetailViewModel(container.statisticsRepository, subjectId) }
 ) {
-    var selectedRange by remember { mutableStateOf(StudyTimeRange.TODAY) }
+    var selectedRange by rememberSaveable(subjectId) { mutableStateOf(StudyTimeRange.TODAY) }
 
     val summary by viewModel.summary.collectAsStateWithLifecycle()
 
     val selectRange: (StudyTimeRange) -> Unit = { range ->
         selectedRange = range
-        viewModel.selectRange(range)
+    }
+
+    LaunchedEffect(selectedRange) {
+        viewModel.selectRange(selectedRange)
     }
 
     val subjectColor = remember(summary.subjectColor) {
@@ -59,45 +62,30 @@ fun SubjectStudyDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
-                    tint = YanjiTextPrimary
+        // Unified Detail TopBar with Subject Color Dot
+        YanjiDetailTopBar(
+            title = summary.subjectName,
+            onBack = onBack,
+            titleLeading = {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(subjectColor)
                 )
             }
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(subjectColor)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = summary.subjectName,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
-            )
-        }
+        )
 
         // Time Range Filter Tabs
         PrimaryTabRow(
             selectedTabIndex = selectedRange.ordinal,
-            containerColor = YanjiSurfaceSoft,
-            contentColor = YanjiPrimary,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
                 .clip(RoundedCornerShape(12.dp)),
             indicator = {}
         ) {
@@ -109,56 +97,54 @@ fun SubjectStudyDetailScreen(
                     text = {
                         Text(
                             text = range.title,
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) YanjiPrimary else YanjiTextSecondary
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     },
                     modifier = Modifier
                         .padding(4.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) YanjiSurface else Color.Transparent)
+                        .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
             contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(YanjiSpacing.CardGap)
         ) {
             // Summary Card
             item {
-                Card(
+                YanjiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    variant = YanjiCardVariant.Standard
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                         Text(
                             text = "${selectedRange.title}专注投入",
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
                                 text = DurationFormatter.formatHoursMinutes(summary.totalDurationSeconds),
-                                fontSize = 34.sp,
+                                style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "共 ${summary.sessionCount} 次",
-                                fontSize = 13.sp,
-                                color = YanjiTextSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 6.dp)
                             )
                         }
@@ -168,14 +154,14 @@ fun SubjectStudyDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "单次最长：",
-                                    fontSize = 12.sp,
-                                    color = YanjiTextSecondary
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = DurationFormatter.formatHoursMinutes(summary.longestSessionSeconds),
-                                    fontSize = 12.sp,
+                                    style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = YanjiPrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -187,19 +173,17 @@ fun SubjectStudyDetailScreen(
             item {
                 Text(
                     text = "专注明细记录",
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             if (summary.sessions.isEmpty()) {
                 item {
-                    Card(
+                    YanjiCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        variant = YanjiCardVariant.Standard
                     ) {
                         Column(
                             modifier = Modifier
@@ -211,17 +195,14 @@ fun SubjectStudyDetailScreen(
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = "这个科目在${selectedRange.title}还没有专注记录。",
-                                fontSize = 14.sp,
-                                color = YanjiTextSecondary
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-        Spacer(modifier = Modifier.height(32.dp))
-                            Button(
-                                onClick = onNavigateToStartFocus,
-                                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("开始专注", fontWeight = FontWeight.Bold)
-                            }
+                            Spacer(modifier = Modifier.height(24.dp))
+                            YanjiPrimaryButton(
+                                text = "开始专注",
+                                onClick = onNavigateToStartFocus
+                            )
                         }
                     }
                 }

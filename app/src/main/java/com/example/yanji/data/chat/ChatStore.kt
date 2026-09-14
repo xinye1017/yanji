@@ -11,6 +11,8 @@ import com.example.yanji.data.db.ChatMessageEntity
 import com.example.yanji.data.db.ChatSessionEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +57,7 @@ internal class ChatStore(
 
     private val messageLimit = MutableStateFlow(DEFAULT_PAGE_SIZE)
     private val pendingRetries = mutableMapOf<String, PendingReply>()
+    private val replyJobs = mutableMapOf<String, Job>()
     private var sessionJob: Job? = null
     private var bindingJob: Job? = null
 
@@ -90,6 +93,10 @@ internal class ChatStore(
     }
 
     fun close() {
+        synchronized(replyJobs) {
+            replyJobs.values.forEach { it.cancel() }
+            replyJobs.clear()
+        }
         sessionJob?.cancel()
         sessionJob = null
         bindingJob?.cancel()
@@ -130,6 +137,10 @@ internal class ChatStore(
 
     fun switchChatSession(sessionId: String) {
         if (_chatSessions.value.none { it.id == sessionId }) return
+        val previousSessionId = _currentSessionId.value
+        if (previousSessionId.isNotBlank() && previousSessionId != sessionId) {
+            cancelReply(previousSessionId)
+        }
         messageLimit.value = DEFAULT_PAGE_SIZE
         _currentSessionId.value = sessionId
     }
@@ -139,6 +150,7 @@ internal class ChatStore(
     }
 
     fun deleteChatSession(sessionId: String) {
+        cancelReply(sessionId)
         val remaining = _chatSessions.value.filter { it.id != sessionId }
         _chatSessions.value = remaining
         synchronized(pendingRetries) { pendingRetries.remove(sessionId) }
@@ -192,6 +204,14 @@ internal class ChatStore(
         requestReply(pending.userMessage, pending.model, insertUserMessage = false, onFinished)
     }
 
+    /** Cancels the socket-owning coroutine without turning cancellation into a network error. */
+    fun cancelReply(sessionId: String = _currentSessionId.value) {
+        if (sessionId.isBlank()) return
+        val job = synchronized(replyJobs) { replyJobs.remove(sessionId) } ?: return
+        job.cancel()
+        setReplyState(sessionId, ChatReplyState(failure = AiFailure.Cancelled))
+    }
+
     private fun requestReply(
         userMessage: ChatMessage,
         model: String,
@@ -202,7 +222,7 @@ internal class ChatStore(
         synchronized(pendingRetries) { pendingRetries[sessionId] = PendingReply(userMessage, model) }
         setReplyState(sessionId, ChatReplyState(isReplying = true))
 
-        scope.launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 val db = dbProvider() ?: error("Database not available")
                 if (insertUserMessage) db.chatMessageDao().insert(ChatMessageEntity.fromDomainModel(userMessage))
@@ -234,13 +254,24 @@ internal class ChatStore(
 
                 synchronized(pendingRetries) { pendingRetries.remove(sessionId) }
                 setReplyState(sessionId, ChatReplyState())
+            } catch (cancelled: CancellationException) {
+                setReplyState(sessionId, ChatReplyState(failure = AiFailure.Cancelled))
+                throw cancelled
             } catch (error: Throwable) {
                 runCatching { android.util.Log.e("YanjiAI", "AI reply failed (${error::class.java.simpleName})") }
                 setReplyState(sessionId, ChatReplyState(failure = AiFailure.from(error)))
             } finally {
+                synchronized(replyJobs) {
+                    if (replyJobs[sessionId] === coroutineContext[Job]) replyJobs.remove(sessionId)
+                }
                 onFinished()
             }
         }
+        synchronized(replyJobs) {
+            replyJobs.remove(sessionId)?.cancel()
+            replyJobs[sessionId] = job
+        }
+        job.start()
     }
 
     private fun setReplyState(sessionId: String, state: ChatReplyState) {
@@ -270,7 +301,13 @@ internal class ChatStore(
     ) {
         val settings = settingsProvider()
         val generated = if (settings.aiApiKey.isNotBlank()) {
-            runCatching { aiClient.generateTitle(userQuery, assistantReply, settings, model) }.getOrDefault("")
+            try {
+                aiClient.generateTitle(userQuery, assistantReply, settings, model)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ""
+            }
         } else ""
 
         val cleanTitle = (generated.ifBlank { localTitle(userQuery) })

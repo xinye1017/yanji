@@ -54,14 +54,14 @@ fun ProfileIdentityCard(settings: UserSettings) {
                     color = YanjiTextPrimary
                 )
                 Text(
-                    text = settings.targetSchool,
+                    text = settings.targetSchool.ifBlank { "点击设置目标院校" },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary,
+                    color = if (settings.targetSchool.isBlank()) YanjiTextTertiary else YanjiTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = settings.targetMajor,
+                    text = settings.targetMajor.ifBlank { "未设置专业" },
                     style = MaterialTheme.typography.labelMedium,
                     color = YanjiTextTertiary,
                     maxLines = 1,
@@ -79,8 +79,8 @@ fun PreparationOverviewCard(
     todayStudySeconds: Long
 ) {
     val safeDays = daysRemaining?.coerceAtLeast(0)
-    val goalSeconds = (settings.dailyGoalHours * 3_600f).coerceAtLeast(1f)
-    val progress = (todayStudySeconds / goalSeconds).coerceIn(0f, 1f)
+    val goalSeconds = settings.dailyGoalHours * 3_600f
+    val progress = if (goalSeconds > 0f) (todayStudySeconds / goalSeconds).coerceIn(0f, 1f) else 0f
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -230,7 +230,7 @@ fun LocalDataStatus() {
             modifier = Modifier.size(14.dp)
         )
         Text(
-            text = "数据仅存本地",
+            text = "本地优先 · 可随系统迁移",
             style = MaterialTheme.typography.labelMedium,
             color = YanjiTextTertiary
         )
@@ -303,7 +303,9 @@ fun formatStudyDuration(seconds: Long): String {
 }
 
 fun formatGoalHours(hours: Float): String =
-    if (hours % 1f == 0f) "${hours.toInt()}h" else "${"%.1f".format(Locale.US, hours)}h"
+    if (hours <= 0f) "未设置"
+    else if (hours % 1f == 0f) "${hours.toInt()}h" else "${"%.1f".format(Locale.US, hours)}h"
 
 fun formatExamDateCompact(value: String): String =
-    if (Regex("""\d{4}-\d{2}-\d{2}""").matches(value)) value.replace("-", ".") else value
+    if (value.isBlank()) "未设置"
+    else if (Regex("""\d{4}-\d{2}-\d{2}""").matches(value)) value.replace("-", ".") else value

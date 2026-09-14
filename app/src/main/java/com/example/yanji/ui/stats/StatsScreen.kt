@@ -172,6 +172,7 @@ fun StatsScreen(
         StatsAiReportCard(
             report = state.latestReport,
             isAnalyzing = state.isAnalyzing,
+            errorMessage = state.analysisError,
             onGenerate = { viewModel.generateAnalysis() }
         )
 

@@ -108,7 +108,11 @@ data class StudyDiagnosticSnapshot(
                 periodEnd = endDate,
                 totalSeconds = totalSeconds,
                 activeDays = dailySeconds.count { it >= settings.validStudyThresholdMinutes * 60L },
-                goalDays = dailySeconds.count { it >= (settings.dailyGoalHours * 3600).toLong() },
+                goalDays = if (settings.dailyGoalHours > 0f) {
+                    dailySeconds.count { it >= (settings.dailyGoalHours * 3600).toLong() }
+                } else {
+                    0
+                },
                 dailyGoalHours = settings.dailyGoalHours,
                 dailyHours = dailySeconds.map { it / 3600.0 },
                 subjectStats = subjectStats,

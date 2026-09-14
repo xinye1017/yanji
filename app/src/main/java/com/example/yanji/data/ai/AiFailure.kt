@@ -27,8 +27,16 @@ sealed interface AiFailure {
         override val userMessage: String = "无法连接 AI 服务，请检查网络后重试。"
     }
 
+    data object Cancelled : AiFailure {
+        override val userMessage: String = "AI 请求已取消，可以重新发送。"
+    }
+
     data object InvalidResponse : AiFailure {
         override val userMessage: String = "AI 返回了无法识别的内容，请重试。"
+    }
+
+    data object ClientRequest : AiFailure {
+        override val userMessage: String = "AI 服务拒绝了请求，请检查模型与接口设置。"
     }
 
     data object Service : AiFailure {
@@ -37,6 +45,7 @@ sealed interface AiFailure {
 
     companion object {
         fun from(throwable: Throwable): AiFailure {
+            if (throwable is AiException && throwable.failure != null) return throwable.failure
             if (throwable is SocketTimeoutException) return Timeout
             if (throwable is IOException) return Network
             val message = throwable.message.orEmpty().lowercase()
@@ -48,6 +57,14 @@ sealed interface AiFailure {
                 "返回内容为空" in message || "invalid" in message || "parse" in message -> InvalidResponse
                 else -> Service
             }
+        }
+
+        fun fromHttpStatus(code: Int): AiFailure = when (code) {
+            401, 403 -> Authentication
+            404 -> Endpoint
+            429 -> Quota
+            in 400..499 -> ClientRequest
+            else -> Service
         }
     }
 }

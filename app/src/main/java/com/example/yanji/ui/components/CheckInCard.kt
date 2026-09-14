@@ -20,19 +20,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.fill.Fire
 import com.adamglin.phosphoricons.regular.Sparkle
 import com.example.yanji.data.CheckIn
-import com.example.yanji.data.YanjiRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 
 @Composable
 fun CheckInCard(
     modifier: Modifier = Modifier,
-    viewModel: CheckInViewModel = viewModel { CheckInViewModel(YanjiRepository.getInstance()) },
+    viewModel: CheckInViewModel = yanjiViewModel { container -> CheckInViewModel(container.repository) },
     onCheckInSuccess: (CheckIn) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

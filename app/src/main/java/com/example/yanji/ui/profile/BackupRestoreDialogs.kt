@@ -128,7 +128,7 @@ fun AboutYanjiDialog(
         text = {
             Column {
                 Text(
-                    text = "研迹（Yanji）是一款仅供个人使用的 Android 考研日记与学习管理应用。\n\n核心价值：记录、专注、积累、复盘。\n\n设计原则：\n• Local First：数据全部存储在用户本地设备\n• 真实记录：专注计时基于真实时间戳\n• 低干扰：不做复杂社交、排行榜和过度鸡血\n• 卷卷陪伴：拟人化圆角笔记本伙伴，安静陪伴你的考研全程。",
+                    text = "研迹（Yanji）是一款仅供个人使用的 Android 考研日记与学习管理应用。\n\n核心价值：记录、专注、积累、复盘。\n\n设计原则：\n• Local First：研迹不提供自建云同步；学习数据库可按 Android 系统设置参与云备份或设备迁移，AI Key 与活动计时快照不参与备份\n• 真实记录：专注计时基于真实时间戳\n• 低干扰：不做复杂社交、排行榜和过度鸡血\n• 卷卷陪伴：拟人化圆角笔记本伙伴，安静陪伴你的考研全程。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = YanjiTextPrimary
                 )

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +31,9 @@ import com.example.yanji.data.JuanjuanBlockKind
 import com.example.yanji.ui.chat.JuanjuanResponseParser
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.theme.*
+
+/** UI 测试定位锚点：与 androidTest 共享，避免断言依赖中文文案。 */
+const val JuanjuanMessageBubbleTestTag = "juanjuan_message_bubble"
 
 @Composable
 fun JuanjuanMessageBubble(
@@ -55,7 +59,8 @@ fun JuanjuanMessageBubble(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            .testTag(JuanjuanMessageBubbleTestTag),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {

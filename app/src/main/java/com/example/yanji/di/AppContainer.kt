@@ -36,18 +36,13 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         StudyStatisticsRepository(repository)
     }
     override val achievementRepository: AchievementRepository by lazy {
-        AchievementRepository.getInstance()
+        AchievementRepository(repository)
     }
     override val activeSessionCoordinator: ActiveSessionCoordinator get() = ActiveSessionCoordinator
 }
 
 val LocalAppContainer = staticCompositionLocalOf<AppContainer> {
-    object : AppContainer {
-        override val repository: YanjiRepository get() = YanjiRepository.getInstance()
-        override val statisticsRepository: StudyStatisticsRepository get() = StudyStatisticsRepository.getInstance()
-        override val achievementRepository: AchievementRepository get() = AchievementRepository.getInstance()
-        override val activeSessionCoordinator: ActiveSessionCoordinator get() = ActiveSessionCoordinator
-    }
+    error("AppContainer was not provided. Wrap app and tests in LocalAppContainer.")
 }
 
 /**

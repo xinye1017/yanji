@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,8 +18,8 @@ fun ExamScoreDialog(
     onDismiss: () -> Unit,
     onConfirm: (score: Double?, note: String) -> Unit
 ) {
-    var scoreInput by remember { mutableStateOf("") }
-    var noteInput by remember { mutableStateOf("") }
+    var scoreInput by rememberSaveable(session.id) { mutableStateOf("") }
+    var noteInput by rememberSaveable(session.id) { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,

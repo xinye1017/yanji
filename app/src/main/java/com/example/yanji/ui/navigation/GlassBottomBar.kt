@@ -9,9 +9,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -20,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,43 +34,28 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
-import com.example.yanji.theme.YanjiBorder
-import com.example.yanji.theme.YanjiPrimary
-import com.example.yanji.theme.YanjiPrimarySoft
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
 import kotlin.math.abs
 
-private val DockPanelColor = Color.White
-private val DockPillColor = YanjiPrimarySoft
-
-/**
- * Dock 胶囊的选中态描边 —— DESIGN.md「Borders」规定分隔/描边一律走 `#E4EAF2`（[YanjiBorder]），
- * 让白色 dock 停靠在近白页面背景上时仍有一道克制的分界。
- */
-private val DockBorderColor = YanjiBorder
-private val DockBorderWidth = 1.dp
-
-/**
- * Dock 投影色 —— 由 text-primary `#172033` 推导的极低透明度投影，
- * 与底部文字同源，避免投影发灰发脏。
- */
-private val DockShadowColor = YanjiTextPrimary.copy(alpha = 0.05f)
-private val DockShadowColorStrong = YanjiTextPrimary.copy(alpha = 0.07f)
-
-private val DockWidth = 272.dp
 private val DockHeight = 52.dp
 private val DockIndicatorSize = 40.dp
 private val DockIndicatorMaxStretch = 4.dp
+private val MinDockWidth = 260.dp
+private val MaxDockWidth = 360.dp
+private val HorizontalMargin = 24.dp
 
 /**
- * Low-emphasis floating navigation dock. The 40dp selected surface is intentionally
- * lighter than page CTAs, while the full 52dp slot remains tappable.
+ * 响应式浮动导航栏（GlassBottomBar）：
+ * 1. 宽度自适应：在可用宽度（maxWidth - 左右安全边距）与 [MinDockWidth]..[MaxDockWidth] 之间弹性调整，
+ *    在 compact phone、主屏、折叠屏、平板和横屏下均有良好表现；
+ * 2. 主题适配：背景和描边基于 [MaterialTheme.colorScheme]，无缝适配深色/浅色模式；
+ * 3. 无障碍增强：提供标准的 Tab 角色、选中状态指示与完整的 contentDescription，交互区域达到无障碍标准。
  */
 @Composable
 fun GlassBottomBar(
@@ -91,52 +80,66 @@ fun GlassBottomBar(
         )
     }
 
-    val slotWidth = DockWidth / tabs.size.toFloat()
-    val remainingDistance = abs(selectedIndex - indicatorPosition.value).coerceIn(0f, 1f)
-    val indicatorWidth = DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
-    val indicatorCenter = slotWidth * (indicatorPosition.value + 0.5f)
-
-    Box(
+    BoxWithConstraints(
         modifier = modifier
+            .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 8.dp)
-            .shadow(
-                elevation = 4.dp,
-                shape = CircleShape,
-                ambientColor = DockShadowColor,
-                spotColor = DockShadowColorStrong
-            )
-            .clip(CircleShape)
-            .background(DockPanelColor)
-            .border(DockBorderWidth, DockBorderColor, CircleShape)
-            .width(DockWidth)
-            .height(DockHeight)
+            .padding(bottom = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
+        val availableWidth = maxWidth - HorizontalMargin * 2
+        val dockWidth = availableWidth.coerceIn(MinDockWidth, MaxDockWidth)
+        val slotWidth = dockWidth / tabs.size.toFloat()
+        val remainingDistance = abs(selectedIndex - indicatorPosition.value).coerceIn(0f, 1f)
+        val indicatorWidth = DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
+        val indicatorCenter = slotWidth * (indicatorPosition.value + 0.5f)
+
+        val dockPanelColor = MaterialTheme.colorScheme.surface
+        val dockPillColor = MaterialTheme.colorScheme.primaryContainer
+        val dockBorderColor = MaterialTheme.colorScheme.outlineVariant
+        val dockShadowColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+        val dockShadowColorStrong = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)
+
         Box(
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = indicatorCenter - indicatorWidth / 2f)
-                .width(indicatorWidth)
-                .height(DockIndicatorSize)
-                .clip(CircleShape)
-                .background(DockPillColor)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            tabs.forEachIndexed { index, tab ->
-                val selectionProgress =
-                    (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f)
-
-                DockBarItem(
-                    tab = tab,
-                    isSelected = tab == currentTab,
-                    selectionProgress = selectionProgress,
-                    onTabSelected = onTabSelected,
-                    modifier = Modifier.weight(1f)
+                .shadow(
+                    elevation = 4.dp,
+                    shape = CircleShape,
+                    ambientColor = dockShadowColor,
+                    spotColor = dockShadowColorStrong
                 )
+                .clip(CircleShape)
+                .background(dockPanelColor)
+                .border(1.dp, dockBorderColor, CircleShape)
+                .width(dockWidth)
+                .height(DockHeight)
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = indicatorCenter - indicatorWidth / 2f)
+                    .width(indicatorWidth)
+                    .height(DockIndicatorSize)
+                    .clip(CircleShape)
+                    .background(dockPillColor)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                tabs.forEachIndexed { index, tab ->
+                    val selectionProgress =
+                        (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f)
+
+                    DockBarItem(
+                        tab = tab,
+                        isSelected = tab == currentTab,
+                        selectionProgress = selectionProgress,
+                        onTabSelected = onTabSelected,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -153,7 +156,10 @@ private fun DockBarItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val tint = lerp(YanjiTextSecondary, YanjiPrimary, selectionProgress)
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val tint = lerp(unselectedColor, selectedColor, selectionProgress)
+
     val iconSize by animateDpAsState(
         targetValue = if (isPressed) 21.dp else (22f + selectionProgress).dp,
         animationSpec = spring(dampingRatio = 0.66f, stiffness = 650f),
@@ -168,7 +174,11 @@ private fun DockBarItem(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .semantics { selected = isSelected }
+            .minimumInteractiveComponentSize()
+            .testTag("nav_tab_${tab.name.lowercase()}")
+            .semantics {
+                this.selected = isSelected
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -176,7 +186,7 @@ private fun DockBarItem(
                 onClick = {
                     if (!isSelected) onTabSelected(tab)
                 }
-        ),
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -185,7 +195,7 @@ private fun DockBarItem(
                 contentDescription = if (isSelected) "${tab.title}，已选中" else tab.title,
                 tint = tint.copy(alpha = 1f - selectionProgress),
                 modifier = Modifier
-                    .offset(y = iconOffset)
+                    .offset { IntOffset(0, iconOffset.roundToPx()) }
                     .size(iconSize)
             )
             Icon(
@@ -193,7 +203,7 @@ private fun DockBarItem(
                 contentDescription = null,
                 tint = tint.copy(alpha = selectionProgress),
                 modifier = Modifier
-                    .offset(y = iconOffset)
+                    .offset { IntOffset(0, iconOffset.roundToPx()) }
                     .size(iconSize)
             )
         }

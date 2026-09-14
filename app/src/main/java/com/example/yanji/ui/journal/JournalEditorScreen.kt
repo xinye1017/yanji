@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -16,7 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.adamglin.PhosphorIcons
+import com.adamglin.phosphoricons.Regular
+import com.adamglin.phosphoricons.regular.ArrowLeft
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -31,7 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.StudyStatisticsRepository
@@ -42,6 +49,16 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import java.util.UUID
+
+/** UI 测试定位锚点：与 JournalEditorScreenInstrumentedTest 共享，避免断言依赖中文文案。 */
+object JournalEditorTags {
+    const val ContentInput = "journal_content_input"
+    const val BlockersInput = "journal_blockers_input"
+    const val SaveButton = "journal_save_button"
+    const val PlanInput = "journal_plan_input"
+    const val PlanAddButton = "journal_plan_add_button"
+    fun moodOption(score: Int) = "journal_mood_$score"
+}
 
 /**
  * 记日记页（Stitch 设计稿「研迹 - 记录今日日记」重构版）。
@@ -83,19 +100,33 @@ fun JournalEditorScreen(
     val dailySummary = viewModel.dailySummaryFor(date)
     val studyDuration = dailySummary.totalDurationSeconds
 
-    var moodScore by remember(existingEntry) { mutableIntStateOf(existingEntry?.moodScore ?: 5) }
-    var content by remember(existingEntry) { mutableStateOf(existingEntry?.content ?: "") }
-    var blockers by remember(existingEntry) { mutableStateOf(existingEntry?.blockers ?: "") }
-    var planTasks by remember(existingEntry) {
-        mutableStateOf(
-            existingEntry?.tomorrowPlan
-                ?.split('\n')
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                .orEmpty()
-        )
+    // Draft fields survive Activity recreation and ordinary process death through saved state.
+    // The keys are navigation identity only: a delayed Room emission must not overwrite a restored
+    // draft after the user has already typed into it.
+    var draftInitialized by rememberSaveable(journalId, date) { mutableStateOf(false) }
+    var moodScore by rememberSaveable(journalId, date) { mutableIntStateOf(5) }
+    var content by rememberSaveable(journalId, date) { mutableStateOf("") }
+    var blockers by rememberSaveable(journalId, date) { mutableStateOf("") }
+    var planTasks by rememberSaveable(
+        journalId,
+        date,
+        stateSaver = listSaver(save = { it }, restore = { it })
+    ) { mutableStateOf(emptyList<String>()) }
+    var planInput by rememberSaveable(journalId, date) { mutableStateOf("") }
+
+    LaunchedEffect(existingEntry?.id) {
+        val entry = existingEntry ?: return@LaunchedEffect
+        if (!draftInitialized) {
+            moodScore = entry.moodScore
+            content = entry.content
+            blockers = entry.blockers
+            planTasks = entry.tomorrowPlan
+                .split('\n')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            draftInitialized = true
+        }
     }
-    var planInput by remember { mutableStateOf("") }
 
     val todayStr = remember {
         YanjiTime.todayIso()
@@ -161,11 +192,17 @@ fun JournalEditorScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(48.dp)
+                            .testTag("detail_top_bar_back")
+                    ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = PhosphorIcons.Regular.ArrowLeft,
                             contentDescription = "返回",
-                            tint = YanjiTextPrimary
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
@@ -292,6 +329,7 @@ fun JournalEditorScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
+                                .testTag(JournalEditorTags.moodOption(option.score))
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(
                                     if (selected) YanjiPrimarySoft else YanjiSurface,
@@ -306,7 +344,11 @@ fun JournalEditorScreen(
                                     },
                                     shape = RoundedCornerShape(16.dp)
                                 )
-                                .clickable { moodScore = option.score }
+                                .selectable(
+                                    selected = selected,
+                                    role = Role.RadioButton,
+                                    onClick = { moodScore = option.score }
+                                )
                                 .padding(vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
@@ -341,7 +383,8 @@ fun JournalEditorScreen(
                     value = content,
                     onValueChange = { content = it },
                     placeholder = "记录今天各科目的复习感受、突破与思路变化…",
-                    minLines = 4
+                    minLines = 4,
+                    testTag = JournalEditorTags.ContentInput
                 )
             }
 
@@ -357,7 +400,8 @@ fun JournalEditorScreen(
                     value = blockers,
                     onValueChange = { blockers = it },
                     placeholder = "写下今天卡住你的知识点，便于后续针对性回炉…",
-                    minLines = 3
+                    minLines = 3,
+                    testTag = JournalEditorTags.BlockersInput
                 )
             }
 
@@ -430,7 +474,9 @@ fun JournalEditorScreen(
                             BasicTextField(
                                 value = planInput,
                                 onValueChange = { planInput = it },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag(JournalEditorTags.PlanInput),
                                 textStyle = TextStyle(
                                     fontSize = 13.sp,
                                     color = YanjiTextPrimary
@@ -463,13 +509,15 @@ fun JournalEditorScreen(
                             Surface(
                                 shape = CircleShape,
                                 color = YanjiPrimary,
-                                modifier = Modifier.clickable {
-                                    val value = planInput.trim()
-                                    if (value.isNotEmpty()) {
-                                        planTasks = planTasks + value
-                                        planInput = ""
+                                modifier = Modifier
+                                    .testTag(JournalEditorTags.PlanAddButton)
+                                    .clickable {
+                                        val value = planInput.trim()
+                                        if (value.isNotEmpty()) {
+                                            planTasks = planTasks + value
+                                            planInput = ""
+                                        }
                                     }
-                                }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -506,7 +554,8 @@ fun JournalEditorScreen(
                     onClick = { saveJournal() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
+                        .height(54.dp)
+                        .testTag(JournalEditorTags.SaveButton),
                     shape = RoundedCornerShape(24.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
@@ -602,7 +651,8 @@ private fun PlainInputCard(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    minLines: Int
+    minLines: Int,
+    testTag: String
 ) {
     JournalEditorCard {
         Box(modifier = Modifier.padding(16.dp)) {
@@ -618,7 +668,9 @@ private fun PlainInputCard(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(testTag),
                 textStyle = TextStyle(
                     fontSize = 14.sp,
                     lineHeight = 22.sp,

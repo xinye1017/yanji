@@ -15,6 +15,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.text.style.TextAlign
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.JuanjuanAvatar
@@ -82,6 +86,7 @@ fun MetricMiniCard(
 fun StatsAiReportCard(
     report: AiAnalysis?,
     isAnalyzing: Boolean,
+    errorMessage: String? = null,
     onGenerate: () -> Unit
 ) {
     Card(
@@ -130,8 +135,59 @@ fun StatsAiReportCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("分析中...", style = MaterialTheme.typography.labelMedium)
                     } else {
-                        Text("生成诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (report == null) "生成诊断" else "重新生成",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
+                }
+            }
+
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = YanjiWarningSoft,
+                    border = BorderStroke(1.dp, YanjiWarning.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = YanjiWarning,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = YanjiTextPrimary,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            } else if (report == null) {
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(YanjiSurfaceSoft)
+                        .padding(vertical = 20.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "尚未生成学情诊断。\n配置 AI 并在本周期产生专注记录后，点击右上角「生成诊断」，卷卷将只依据你的真实记录进行深度分析，绝不伪造虚假数据。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = YanjiTextSecondary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
                 }
             }
 

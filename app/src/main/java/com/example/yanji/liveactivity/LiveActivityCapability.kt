@@ -33,7 +33,9 @@ data class LiveActivityCapability(
         get() = manufacturer.equals("OPPO", ignoreCase = true) ||
             manufacturer.equals("OnePlus", ignoreCase = true) ||
             manufacturer.equals("realme", ignoreCase = true) ||
-            brand.equals("OPPO", ignoreCase = true)
+            brand.equals("OPPO", ignoreCase = true) ||
+            brand.equals("OnePlus", ignoreCase = true) ||
+            brand.equals("realme", ignoreCase = true)
 
     /**
      * 最终生效的展示层级。三级降级，越靠前越优先（规范 §34）。

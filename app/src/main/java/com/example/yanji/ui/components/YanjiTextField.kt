@@ -2,17 +2,17 @@ package com.example.yanji.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiRadius
 
 /**
  * 研迹标准文本输入框。
- * 浅灰底、轻边框、圆角 16dp，聚焦时转主色。
+ * 容器底、轻边框、圆角 16dp (YanjiRadius.InputRadius)，聚焦时转主色。
  */
 @Composable
 fun YanjiTextField(
@@ -37,20 +37,20 @@ fun YanjiTextField(
         singleLine = singleLine,
         maxLines = maxLines,
         label = label?.let { { Text(it) } },
-        placeholder = placeholder?.let { { Text(it, color = YanjiTextTertiary) } },
+        placeholder = placeholder?.let { { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) } },
         isError = isError,
         supportingText = supportingText?.let { { Text(it) } },
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
-        shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
+        shape = RoundedCornerShape(YanjiRadius.InputRadius),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = YanjiSurface,
-            unfocusedContainerColor = YanjiSurfaceSoft,
-            focusedBorderColor = YanjiPrimary,
-            unfocusedBorderColor = YanjiBorder,
-            errorBorderColor = YanjiDanger,
-            focusedTextColor = YanjiTextPrimary,
-            unfocusedTextColor = YanjiTextPrimary
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            errorBorderColor = MaterialTheme.colorScheme.error,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
         )
     )
 }

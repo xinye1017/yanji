@@ -36,7 +36,8 @@ data class StatsUiState(
     /** 上一个 7 天窗口（第 8~14 天前）的有效时长，用于「较上周」对比。 */
     val previousWeekSeconds: Long,
     val latestReport: AiAnalysis?,
-    val isAnalyzing: Boolean
+    val isAnalyzing: Boolean,
+    val analysisError: String? = null
 )
 
 /**
@@ -45,6 +46,7 @@ data class StatsUiState(
  * 科目分布 Flow 依赖（时间范围 × 统计层级）两个选择态，用 flatMapLatest 跟随切换重订阅；
  * 其余选择态（tab、图表模式、AI 报告、分析中标记）合并进同一 UiState 流。
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class StatsViewModel(
     private val repo: YanjiRepository,
     private val statsRepo: StudyStatisticsRepository
@@ -55,6 +57,7 @@ class StatsViewModel(
     private val trendChartMode = MutableStateFlow(TrendMode.BAR)
     private val latestReport = MutableStateFlow<AiAnalysis?>(null)
     private val isAnalyzing = MutableStateFlow(false)
+    private val analysisError = MutableStateFlow<String?>(null)
 
     private val chartSelection = combine(selectedTimeTab, subjectStatsLevel) { tab, level ->
         tab to level
@@ -67,8 +70,8 @@ class StatsViewModel(
             .map { list -> list.filter { it.durationSeconds > 0L } }
     }
 
-    private val reportState = combine(latestReport, isAnalyzing, repo.aiAnalyses) { report, analyzing, all ->
-        Triple(report, analyzing, all)
+    private val reportState = combine(latestReport, isAnalyzing, repo.aiAnalyses, analysisError) { report, analyzing, all, error ->
+        ReportStateTuple(report, analyzing, all, error)
     }
 
     private val periodDurationFlow = selectedTimeTab.flatMapLatest { tab ->
@@ -94,7 +97,8 @@ class StatsViewModel(
         periodDurationSeconds = 0L,
         previousWeekSeconds = 0L,
         latestReport = repo.aiAnalyses.value.firstOrNull(),
-        isAnalyzing = false
+        isAnalyzing = false,
+        analysisError = null
     )
 
     val uiState: StateFlow<StatsUiState> = combine(
@@ -102,10 +106,10 @@ class StatsViewModel(
         subjectDistributionFlow,
         selectionMetrics,
         reportState
-    ) { weekly, distribution, metrics, reportTriple ->
+    ) { weekly, distribution, metrics, reportTuple ->
         val tab = metrics.tab
         val level = metrics.level
-        val (report, analyzing, allAnalyses) = reportTriple
+        val (report, analyzing, allAnalyses, error) = reportTuple
         StatsUiState(
             selectedTimeTab = tab,
             subjectStatsLevel = level,
@@ -117,7 +121,8 @@ class StatsViewModel(
             // Previous calendar week: Monday 00:00 through this Monday 00:00.
             previousWeekSeconds = metrics.previousWeekSeconds,
             latestReport = report ?: allAnalyses.firstOrNull(),
-            isAnalyzing = analyzing
+            isAnalyzing = analyzing,
+            analysisError = error
         )
     }.stateIn(
         scope = viewModelScope,
@@ -142,13 +147,20 @@ class StatsViewModel(
         trendChartMode.value = mode
     }
 
+    fun clearAnalysisError() {
+        analysisError.value = null
+    }
+
     /** 生成近 7 天的 AI 学情诊断；进行中重复点击直接忽略。 */
     fun generateAnalysis() {
         if (isAnalyzing.value) return
         viewModelScope.launch {
             isAnalyzing.value = true
+            analysisError.value = null
             try {
                 latestReport.value = repo.generateAiAnalysis(7)
+            } catch (e: Exception) {
+                analysisError.value = e.message ?: "生成学情诊断失败"
             } finally {
                 isAnalyzing.value = false
             }
@@ -167,5 +179,12 @@ class StatsViewModel(
         val chartMode: TrendMode,
         val periodSeconds: Long,
         val previousWeekSeconds: Long
+    )
+
+    private data class ReportStateTuple(
+        val report: AiAnalysis?,
+        val isAnalyzing: Boolean,
+        val allAnalyses: List<AiAnalysis>,
+        val error: String?
     )
 }

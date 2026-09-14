@@ -243,19 +243,22 @@ data class AiAnalysis(
 
 @Serializable
 data class UserSettings(
-    val targetExamDate: String = "2026-12-19",
-    val targetSchool: String = "浙江大学 计算机学院",
-    val targetMajor: String = "电子信息 (085400)",
-    val dailyGoalHours: Float = 10.0f,
+    val targetExamDate: String = "",
+    val targetSchool: String = "",
+    val targetMajor: String = "",
+    val dailyGoalHours: Float = 0f,
     val validStudyThresholdMinutes: Int = 30,
     val defaultSubjectId: String = "math_advanced",
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
-    val aiProvider: String = "DeepSeek",
-    val aiBaseUrl: String = "https://api.deepseek.com/v1",
+    val aiProvider: String = "",
+    val aiBaseUrl: String = "",
     val aiApiKey: String = "",
-    val aiModel: String = "deepseek-chat"
-)
+    val aiModel: String = ""
+) {
+    val isAiConfigured: Boolean
+        get() = aiApiKey.isNotBlank() || (aiBaseUrl.isNotBlank() && !aiBaseUrl.contains("api.deepseek.com"))
+}
 
 enum class ChatSender {
     USER, JUANJUAN

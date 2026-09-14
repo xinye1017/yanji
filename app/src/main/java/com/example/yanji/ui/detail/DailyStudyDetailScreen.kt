@@ -7,11 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,11 +17,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.*
-import com.example.yanji.data.StudyStatisticsRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiDetailTopBar
+import com.example.yanji.ui.components.YanjiPrimaryButton
 
 @Composable
 fun DailyStudyDetailScreen(
@@ -36,74 +35,56 @@ fun DailyStudyDetailScreen(
     onNavigateToExamDetail: (examId: String) -> Unit,
     onNavigateToStartFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: DailyStudyDetailViewModel = viewModel(
+    viewModel: DailyStudyDetailViewModel = yanjiViewModel(
         key = date
-    ) { DailyStudyDetailViewModel(StudyStatisticsRepository.getInstance(), date) }
+    ) { container -> DailyStudyDetailViewModel(container.statisticsRepository, date) }
 ) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
-                    tint = YanjiTextPrimary
-                )
-            }
-            Text(
-                text = DurationFormatter.formatDateWithWeekday(date),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
-            )
-        }
+        // Unified Detail TopBar
+        YanjiDetailTopBar(
+            title = DurationFormatter.formatDateWithWeekday(date),
+            onBack = onBack
+        )
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
             contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(YanjiSpacing.CardGap)
         ) {
             // Summary Card
             item {
-                Card(
+                YanjiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    variant = YanjiCardVariant.Standard
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                         Text(
                             text = "学习总览",
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
                                 text = DurationFormatter.formatHoursMinutes(summary.totalDurationSeconds),
-                                fontSize = 34.sp,
+                                style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "共 ${summary.focusCount} 次专注" + if (summary.examCount > 0) " · ${summary.examCount} 次模考" else "",
-                                fontSize = 13.sp,
-                                color = YanjiTextSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 6.dp)
                             )
                         }
@@ -112,9 +93,9 @@ fun DailyStudyDetailScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "科目投入分布",
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -148,15 +129,15 @@ fun DailyStudyDetailScreen(
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = subName,
-                                            fontSize = 12.sp,
-                                            color = YanjiTextSecondary
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = DurationFormatter.formatHoursMinutes(secs),
-                                            fontSize = 12.sp,
+                                            style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = YanjiTextPrimary
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -170,20 +151,18 @@ fun DailyStudyDetailScreen(
             item {
                 Text(
                     text = "学习轨迹明细",
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             if (summary.sessions.isEmpty()) {
                 // Empty state
                 item {
-                    Card(
+                    YanjiCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        variant = YanjiCardVariant.Standard
                     ) {
                         Column(
                             modifier = Modifier
@@ -195,17 +174,14 @@ fun DailyStudyDetailScreen(
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = "今天还没有留下学习轨迹。",
-                                fontSize = 14.sp,
-                                color = YanjiTextSecondary
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = onNavigateToStartFocus,
-                                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("开始专注", fontWeight = FontWeight.Bold)
-                            }
+                            YanjiPrimaryButton(
+                                text = "开始专注",
+                                onClick = onNavigateToStartFocus
+                            )
                         }
                     }
                 }
@@ -232,20 +208,23 @@ fun DailySessionRowCard(
     item: DailySessionItem,
     onClick: () -> Unit
 ) {
-    val tagColor = Color(android.graphics.Color.parseColor(item.subjectColor))
+    val tagColor = remember(item.subjectColor) {
+        try {
+            Color(android.graphics.Color.parseColor(item.subjectColor))
+        } catch (e: Exception) {
+            YanjiPrimary
+        }
+    }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    YanjiCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        variant = YanjiCardVariant.Compact
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(YanjiSpacing.CardPaddingCompact),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left color accent bar
@@ -263,20 +242,20 @@ fun DailySessionRowCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = DurationFormatter.formatTimeRange(item.startTime, item.endTime),
-                        fontSize = 12.sp,
-                        color = YanjiTextTertiary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(tagColor.copy(alpha = 0.10f))
+                            .background(tagColor.copy(alpha = 0.12f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = if (item.isExam) "模拟考试" else item.subjectName,
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = tagColor
                         )
@@ -287,33 +266,33 @@ fun DailySessionRowCard(
 
                 Text(
                     text = item.title,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = DurationFormatter.formatHoursMinutes(item.durationSeconds),
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiPrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
                 if (item.isExam && item.score != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "${item.score.toInt()} 分",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiSuccess
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 } else if (item.pauseCount > 0) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "暂停 ${item.pauseCount} 次",
-                        fontSize = 12.sp,
-                        color = YanjiTextTertiary
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
             }

@@ -17,10 +17,17 @@ import androidx.compose.ui.unit.dp
  *   - [TightGap]      very small visual gap (between a primary label and its value)
  */
 object YanjiSpacing {
+    val PageHorizontalPadding = 20.dp
     val PageTopGap = 24.dp       // was 16/20 — pick one
     val CardGap = 20.dp          // was 20/24/32 — pick one
+    val CardPadding = 20.dp
+    val CardPaddingCompact = 16.dp
     val SectionGap = 12.dp       // group title → card
+    val ItemGap = 12.dp
+    val ItemGapSmall = 8.dp
     val InnerGap = 12.dp         // inside a card, between text rows
     val InlineGap = 16.dp        // leading icon → label
     val TightGap = 4.dp          // primary label → its value
+    val TopBarHeight = 56.dp
 }
+

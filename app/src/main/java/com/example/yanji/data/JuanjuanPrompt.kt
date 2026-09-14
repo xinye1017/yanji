@@ -101,7 +101,7 @@ object JuanjuanPrompt {
         return """
             <研迹学习快照 data_only="true">
             当前日期：$today
-            目标：${settings.targetSchool.ifBlank { "未设置院校" }}/${settings.targetMajor.ifBlank { "未设置专业" }}；考试日期：${settings.targetExamDate.ifBlank { "未设置" }}；每日目标：${settings.dailyGoalHours} 小时。
+            目标：${settings.targetSchool.ifBlank { "未设置院校" }}/${settings.targetMajor.ifBlank { "未设置专业" }}；考试日期：${settings.targetExamDate.ifBlank { "未设置" }}；每日目标：${if (settings.dailyGoalHours > 0f) "${settings.dailyGoalHours} 小时" else "未设置"}。
             今日专注：${formatDuration(todaySeconds)}；今日科目分布：$subjectSummary。
             近 7 天专注：${formatDuration(recentFocus.sumOf { it.durationSeconds })}，共 ${recentFocus.size} 条记录。
             当前计时：${activeFocus?.let { "${it.subjectName}（进行中）" } ?: "无"}。

@@ -6,10 +6,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.yanji.ui.components.YanjiDetailTopBar
+import com.example.yanji.ui.components.YanjiPageHeader
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,63 +42,46 @@ fun ExamScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val examSessions = state.examSessions
     val timerServiceState by FocusTimerService.timerState.collectAsStateWithLifecycle()
-    var currentSubTab by remember { mutableIntStateOf(0) } // 0: 备考发起, 1: 走势与记录, 2: AI诊断
+    var currentSubTab by rememberSaveable { mutableIntStateOf(0) } // 0: 备考发起, 1: 走势与记录, 2: AI诊断
 
-    // Active exam state
-    var activeExamSubjectId by remember { mutableStateOf("other") }
-    var activeExamName by remember { mutableStateOf<String?>(null) }
-    var activeExamDurationSecs by remember { mutableLongStateOf(10800L) } // 3 hours
-    var activeExamStartTime by remember { mutableLongStateOf(0L) }
-    var isExamRunning by remember { mutableStateOf(false) }
-    var isExamPaused by remember { mutableStateOf(false) }
-    var remainingSeconds by remember { mutableLongStateOf(10800L) }
-
-    // 模考的业务状态由 ActiveSessionCoordinator 持有（进程级），不依赖本页面的 remember：
+    // 模考业务状态只来自可持久化的 ActiveSessionCoordinator，页面不再维护第二套计时真相。
     val businessSession by ActiveSessionCoordinator.active.collectAsStateWithLifecycle()
+    val activeExam = businessSession?.takeIf { it.kind == ActiveSessionKind.EXAM }
+    val isExamRunning = activeExam != null
+    val activeExamName = activeExam?.subjectName
+    val activeExamDurationSecs = activeExam?.targetDurationSeconds ?: 10_800L
+    val activeExamStartTime = activeExam?.startedAtEpochMs ?: 0L
+    val isExamPaused = activeExam?.paused == true
 
     var latestAiAnalysis by remember { mutableStateOf(state.aiAnalyses.firstOrNull()) }
+    // The request lives in the composition scope. Never restore a stale "loading" flag after the
+    // request was cancelled by Activity/process recreation.
     var isAnalyzingAi by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(state.aiAnalyses) {
         if (latestAiAnalysis == null) latestAiAnalysis = state.aiAnalyses.firstOrNull()
     }
-    LaunchedEffect(businessSession) {
-        val session = businessSession
-        if (session != null && session.kind == ActiveSessionKind.EXAM && activeExamName == null) {
-            activeExamSubjectId = session.subjectId
-            activeExamName = session.subjectName
-            activeExamDurationSecs = session.targetDurationSeconds
-            activeExamStartTime = session.startedAtEpochMs
-            remainingSeconds = (session.targetDurationSeconds - session.accumulatedActiveMs / 1000L)
-                .coerceAtLeast(0L)
-            isExamRunning = true
-            isExamPaused = session.paused
-        }
-    }
-
     // Dialog for score entry
-    var showScoreDialog by remember { mutableStateOf(false) }
-    var pendingExamSession by remember { mutableStateOf<ExamSession?>(null) }
+    var showScoreDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingExamSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingExamSession = pendingExamSessionId?.let { id -> examSessions.find { it.id == id } }
 
     val effectiveRemaining = if (timerServiceState.isRunning && timerServiceState.mode == TimerServiceMode.EXAM) {
         timerServiceState.remainingSeconds
     } else {
-        remainingSeconds
+        (activeExamDurationSecs - (activeExam?.accumulatedActiveMs ?: 0L) / 1000L).coerceAtLeast(0L)
     }
 
     val completedExam = state.lastCompletedExam
     LaunchedEffect(completedExam) {
         val finished = completedExam ?: return@LaunchedEffect
-        isExamRunning = false
-        isExamPaused = false
-        activeExamName = null
-        pendingExamSession = finished
+        pendingExamSessionId = finished.id
         showScoreDialog = true
     }
 
     fun dismissScoreDialog() {
         showScoreDialog = false
-        pendingExamSession = null
+        pendingExamSessionId = null
         viewModel.acknowledgeCompletedExam()
     }
 
@@ -112,10 +96,8 @@ fun ExamScreen(
             onPauseResume = {
                 if (isExamPaused) {
                     FocusTimerService.resumeTimer(context)
-                    isExamPaused = false
                 } else {
                     FocusTimerService.pauseTimer(context)
-                    isExamPaused = true
                 }
             },
             onEarlyFinish = {
@@ -124,50 +106,30 @@ fun ExamScreen(
             onQuit = {
                 FocusTimerService.discardTimer(context)
                 viewModel.abandonExam()
-                isExamRunning = false
-                activeExamName = null
             }
         )
     } else {
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .background(YanjiBackground)
+                .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding, vertical = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (onBack != null) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回",
-                            tint = YanjiTextPrimary
-                        )
-                    }
-                }
-                Column {
-                    Text(
-                        text = "模拟考试",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = YanjiTextPrimary
-                    )
-                    Text(
-                        text = "全真严格计时 · 考后复盘归档与AI诊断",
-                        fontSize = 13.sp,
-                        color = YanjiTextSecondary
-                    )
-                }
+            if (onBack != null) {
+                YanjiDetailTopBar(
+                    title = "模拟考试",
+                    subtitle = "全真严格计时 · 考后复盘归档与AI诊断",
+                    onBack = onBack
+                )
+            } else {
+                YanjiPageHeader(
+                    title = "模拟考试",
+                    subtitle = "全真严格计时 · 考后复盘归档与AI诊断"
+                )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
             // Sub-tabs
             PrimaryTabRow(
@@ -216,13 +178,6 @@ fun ExamScreen(
                                     ).show()
                                     return@launch
                                 }
-                                activeExamSubjectId = subjectId
-                                activeExamName = name
-                                activeExamDurationSecs = durationSecs
-                                remainingSeconds = durationSecs
-                                activeExamStartTime = session.startTime
-                                isExamRunning = true
-                                isExamPaused = false
                                 FocusTimerService.startExam(context, session.id, name, durationSecs)
                             }
                         }
@@ -256,10 +211,10 @@ fun ExamScreen(
     // Score Entry Dialog
     if (showScoreDialog && pendingExamSession != null) {
         ExamScoreDialog(
-            session = pendingExamSession!!,
+            session = pendingExamSession,
             onDismiss = { dismissScoreDialog() },
             onConfirm = { scoreVal, noteInput ->
-                viewModel.saveExamResult(pendingExamSession!!.copy(score = scoreVal, note = noteInput))
+                viewModel.saveExamResult(pendingExamSession.copy(score = scoreVal, note = noteInput))
                 dismissScoreDialog()
             }
         )

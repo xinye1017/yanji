@@ -5,6 +5,23 @@ plugins {
   alias(libs.plugins.ksp)
 }
 
+val releaseSigningStoreFile = providers.environmentVariable("YANJI_SIGNING_STORE_FILE").orNull
+val releaseSigningStorePassword = providers.environmentVariable("YANJI_SIGNING_STORE_PASSWORD").orNull
+val releaseSigningKeyAlias = providers.environmentVariable("YANJI_SIGNING_KEY_ALIAS").orNull
+val releaseSigningKeyPassword = providers.environmentVariable("YANJI_SIGNING_KEY_PASSWORD").orNull
+val releaseSigningValues = listOf(
+    releaseSigningStoreFile,
+    releaseSigningStorePassword,
+    releaseSigningKeyAlias,
+    releaseSigningKeyPassword
+)
+val hasAnyReleaseSigningValue = releaseSigningValues.any { !it.isNullOrBlank() }
+val hasCompleteReleaseSigningConfig = releaseSigningValues.all { !it.isNullOrBlank() }
+
+require(!hasAnyReleaseSigningValue || hasCompleteReleaseSigningConfig) {
+    "Release signing is only partially configured. Set all YANJI_SIGNING_* environment variables or none."
+}
+
 android {
     namespace = "com.example.yanji"
     compileSdk = 36
@@ -22,6 +39,21 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    signingConfigs {
+        if (hasCompleteReleaseSigningConfig) {
+            create("production") {
+                storeFile = file(releaseSigningStoreFile!!)
+                storePassword = releaseSigningStorePassword
+                keyAlias = releaseSigningKeyAlias
+                keyPassword = releaseSigningKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             // 开启代码压缩与资源压缩：缩包、去掉无用代码与调试符号。
@@ -29,7 +61,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            // Local/PR release builds are intentionally unsigned. The tag-only release workflow
+            // supplies the production signing identity through ephemeral environment variables.
+            signingConfig = signingConfigs.findByName("production")
         }
     }
     compileOptions {
@@ -45,7 +79,10 @@ android {
     }
 
     lint {
-        abortOnError = false
+        // Lint errors are a real build gate. Existing warnings stay visible in the archived report;
+        // they are not silently disabled or converted into an ever-growing baseline.
+        abortOnError = true
+        checkReleaseBuilds = true
         checkDependencies = true
         textReport = true
         htmlReport = true

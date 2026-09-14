@@ -24,6 +24,28 @@ colors:
   warning-soft: "#FFF5E3"
   danger: "#D94B4B"
   danger-soft: "#FDECEC"
+colors-dark:
+  primary: "#5B8BF5"
+  primary-strong: "#82A9F8"
+  primary-soft: "#1E293B"
+  on-primary: "#FFFFFF"
+  background: "#0F172A"
+  surface: "#1E293B"
+  surface-soft: "#243247"
+  surface-blue: "#1E293B"
+  text-primary: "#F1F5F9"
+  text-secondary: "#94A3B8"
+  text-tertiary: "#64748B"
+  border: "#334155"
+  divider: "#1E293B"
+  accent-lavender: "#A78BFA"
+  accent-lavender-soft: "#2A244D"
+  success: "#34D399"
+  success-soft: "#14382B"
+  warning: "#FBBF24"
+  warning-soft: "#3B2E14"
+  danger: "#F87171"
+  danger-soft: "#3B1818"
 typography:
   display-lg:
     fontFamily: "Roboto"
@@ -99,11 +121,21 @@ components:
   app-background:
     backgroundColor: "{colors.background}"
     textColor: "{colors.text-primary}"
+  card-hero:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    borderColor: "{colors.border}"
+    borderRadius: "{rounded.xxl}"
   card:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text-primary}"
     borderColor: "{colors.border}"
     borderRadius: "{rounded.xl}"
+  card-compact:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    borderColor: "{colors.border}"
+    borderRadius: "{rounded.md}"
   card-soft:
     backgroundColor: "{colors.surface-blue}"
     textColor: "{colors.text-primary}"
@@ -112,21 +144,21 @@ components:
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
-    borderRadius: "{rounded.lg}"
+    borderRadius: "{rounded.sm}"
   button-secondary:
     backgroundColor: "{colors.primary-soft}"
     textColor: "{colors.primary-strong}"
     borderColor: "{colors.border}"
-    borderRadius: "{rounded.lg}"
+    borderRadius: "{rounded.sm}"
   button-danger:
     backgroundColor: "{colors.danger-soft}"
     textColor: "{colors.danger}"
-    borderRadius: "{rounded.lg}"
+    borderRadius: "{rounded.sm}"
   input:
     backgroundColor: "{colors.surface-soft}"
     textColor: "{colors.text-primary}"
     borderColor: "{colors.border}"
-    borderRadius: "{rounded.lg}"
+    borderRadius: "{rounded.md}"
   nav-active:
     backgroundColor: "{colors.primary-soft}"
     textColor: "{colors.primary}"
@@ -595,15 +627,22 @@ No translucent glass panes are required.
 
 Every major component should visually belong to the same soft geometry family.
 
-Default radii:
+Default radii — 与工程实现的 `theme/Radius.kt`《`YanjiRadius`》一一对应：
 
 - small tag / compact item: 12 px
-- input: 20 px
-- normal button: 20 px
-- standard card: 24 px
+- input / content block: 16 px (`ContentBlockRadius`)
+- normal button: 12 px (`ButtonRadius`)
+- standard card: 24 px (`StandardCardRadius`, `YanjiCard` 默认 shape)
+- page / hero card: 24 px (`PageRadius`)
 - large hero card: 24–28 px
+- message bubble: 20 px (`MessageRadius`)
 - bottom sheet: 28 px top corners
-- pill / segmented control: fully rounded
+- pill / segmented control: fully rounded (`ChipRadius`)
+
+> 实现说明：圆角的**唯一事实来源是 `theme/Radius.kt`**。
+> v1.0.0 已发布的界面上，共享组件按上表取值且视觉稳定；
+> 本节曾经描述的「button / input = 20 px」从未在代码中落地，属于设计稿阶段的原始描述，
+> 现已按实际实现修正，避免文档与代码互相误导。
 
 Avoid rectangles with 4 px or 6 px corners unless a native Android control requires it.
 
@@ -622,7 +661,7 @@ Primary button:
 
 - blue background;
 - white label;
-- 20 px radius.
+- 12 px radius (`YanjiRadius.ButtonRadius`).
 
 Secondary button:
 

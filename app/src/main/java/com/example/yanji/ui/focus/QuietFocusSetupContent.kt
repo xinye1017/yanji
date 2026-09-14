@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -138,19 +139,19 @@ fun QuietFocusSetupContent(
     val todayIso = remember {
         YanjiTime.todayIso()
     }
-    var currentStep by remember { mutableStateOf(QuietFocusStep.CATEGORY) }
-    var selectedCategoryId by remember(subjects) {
+    var currentStep by rememberSaveable { mutableStateOf(QuietFocusStep.CATEGORY) }
+    var selectedCategoryId by rememberSaveable(subjects) {
         mutableStateOf(selectedSubject.parentId ?: selectedSubject.id)
     }
-    var isCountdownMode by remember(selectedMode) {
+    var isCountdownMode by rememberSaveable(selectedMode) {
         mutableStateOf(selectedMode != FocusModes.COUNT_UP)
     }
-    var selectedDurationMinutes by remember(selectedMode) {
+    var selectedDurationMinutes by rememberSaveable(selectedMode) {
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
         mutableStateOf(if (minutes > 0) minutes else 45)
     }
-    var showCustomDurationDialog by remember { mutableStateOf(false) }
-    var showSaveQuickDialog by remember { mutableStateOf(false) }
+    var showCustomDurationDialog by rememberSaveable { mutableStateOf(false) }
+    var showSaveQuickDialog by rememberSaveable { mutableStateOf(false) }
 
     val topCategories = remember(subjects) {
         subjects.filter {
@@ -843,7 +844,7 @@ private fun QuietCustomDurationDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    var input by remember(initialMinutes) { mutableStateOf("$initialMinutes") }
+    var input by rememberSaveable(initialMinutes) { mutableStateOf("$initialMinutes") }
     val commonMinutes = listOf(15, 30, 45, 60, 75, 90, 120, 150, 180)
 
     AlertDialog(
@@ -920,7 +921,7 @@ private fun QuietSaveQuickDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var label by remember(subjectName, mode) { mutableStateOf("开始$subjectName$mode") }
+    var label by rememberSaveable(subjectName, mode) { mutableStateOf("开始$subjectName$mode") }
 
     AlertDialog(
         onDismissRequest = onDismiss,

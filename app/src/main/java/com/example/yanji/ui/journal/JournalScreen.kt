@@ -18,11 +18,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.JournalEntry
-import com.example.yanji.data.StudyStatisticsRepository
-import com.example.yanji.data.YanjiRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.ui.components.AppContentInsets
@@ -34,8 +32,8 @@ fun JournalScreen(
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToJournalEditor: (journalId: String?, date: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
-    viewModel: JournalViewModel = viewModel {
-        JournalViewModel(YanjiRepository.getInstance(), StudyStatisticsRepository.getInstance())
+    viewModel: JournalViewModel = yanjiViewModel { container ->
+        JournalViewModel(container.repository, container.statisticsRepository)
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

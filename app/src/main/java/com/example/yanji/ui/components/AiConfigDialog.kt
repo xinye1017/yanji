@@ -22,8 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.yanji.data.YanjiRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.data.security.CleartextPolicy
 import com.example.yanji.theme.*
 import kotlinx.coroutines.launch
@@ -47,7 +46,7 @@ private val AI_PRESETS = listOf(
 @Composable
 fun AiConfigDialog(
     onDismissRequest: () -> Unit,
-    viewModel: AiConfigViewModel = viewModel { AiConfigViewModel(YanjiRepository.getInstance()) }
+    viewModel: AiConfigViewModel = yanjiViewModel { container -> AiConfigViewModel(container.repository) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.settings

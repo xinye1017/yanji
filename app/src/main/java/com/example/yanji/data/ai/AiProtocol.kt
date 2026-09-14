@@ -1,5 +1,6 @@
 package com.example.yanji.data.ai
 
+import com.example.yanji.data.ChatMessage
 import org.json.JSONObject
 
 /** 调用类型，决定错误文案（不同入口面向用户的措辞不同）。 */
@@ -85,8 +86,53 @@ internal object AiProtocol {
         val message = runCatching {
             JSONObject(body).optJSONObject("error")?.optString("message")
         }.getOrNull()
-        if (!message.isNullOrBlank()) return message
-        return if (body.length > 150) body.take(150) + "..." else body
+        if (!message.isNullOrBlank()) {
+            return message.replace(Regex("[\\r\\n\\t]+"), " ").trim().take(150)
+        }
+        return "服务未提供可读的 JSON 错误信息"
+    }
+
+    /**
+     * Selects newest history within a rough character budget. This is intentionally not a model-
+     * specific tokenizer: it is deterministic, provider-neutral, and prevents one very large
+     * message from exhausting the whole context window.
+     */
+    fun historyWithinCharacterBudget(
+        messages: List<ChatMessage>,
+        maxMessages: Int,
+        maxCharacters: Int
+    ): List<ChatMessage> {
+        require(maxMessages > 0)
+        require(maxCharacters > 0)
+        val selectedNewestFirst = mutableListOf<ChatMessage>()
+        var remaining = maxCharacters
+        for (message in messages.asReversed()) {
+            if (selectedNewestFirst.size >= maxMessages || remaining <= 0) break
+            val overhead = 16
+            val availableForContent = (remaining - overhead).coerceAtLeast(0)
+            if (availableForContent == 0) break
+            val content = if (message.content.length <= availableForContent) {
+                message.content
+            } else {
+                truncateKeepingEdges(message.content, availableForContent)
+            }
+            if (content.isEmpty()) break
+            selectedNewestFirst += message.copy(content = content)
+            remaining -= content.length + overhead
+            if (content.length < message.content.length) break
+        }
+        return selectedNewestFirst.asReversed()
+    }
+
+    private fun truncateKeepingEdges(value: String, limit: Int): String {
+        if (value.length <= limit) return value
+        if (limit <= 1) return value.take(limit)
+        val marker = "…"
+        if (limit <= marker.length + 2) return value.take(limit)
+        val contentBudget = limit - marker.length
+        val prefixLength = (contentBudget * 2) / 3
+        val suffixLength = contentBudget - prefixLength
+        return value.take(prefixLength) + marker + value.takeLast(suffixLength)
     }
 
     /** 统一的 HTTP 错误文案。保持与抽取前完全一致的措辞，避免改变用户已熟悉的提示。 */
@@ -114,4 +160,8 @@ internal object AiProtocol {
 }
 
 /** AI 调用失败。message 已经是**可直接展示给用户**的文案。 */
-internal class AiException(message: String, cause: Throwable? = null) : Exception(message, cause)
+internal class AiException(
+    message: String,
+    cause: Throwable? = null,
+    val failure: AiFailure? = null
+) : Exception(message, cause)

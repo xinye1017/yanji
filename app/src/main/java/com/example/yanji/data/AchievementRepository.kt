@@ -20,7 +20,7 @@ import java.time.ZoneId
  *  - 成就系列链条：支持在详情页查看成长梯进度；
  *  - 修复真实计时判定：模考严格基于 actualDurationSeconds，严禁以计划时长冒充实际耗时。
  */
-class AchievementRepository private constructor(
+class AchievementRepository internal constructor(
     private val repo: YanjiRepository = YanjiRepository.getInstance()
 ) {
     companion object {

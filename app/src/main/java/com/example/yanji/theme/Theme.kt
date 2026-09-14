@@ -4,12 +4,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = YanjiPrimary,
     onPrimary = YanjiOnPrimary,
     primaryContainer = YanjiPrimarySoft,
@@ -34,6 +35,31 @@ private val LightColorScheme = lightColorScheme(
     errorContainer = YanjiDangerSoft
 )
 
+internal val DarkColorScheme = darkColorScheme(
+    primary = YanjiDarkPrimary,
+    onPrimary = Color.White,
+    primaryContainer = YanjiDarkPrimarySoft,
+    onPrimaryContainer = YanjiDarkPrimaryStrong,
+    secondary = YanjiDarkLavender,
+    onSecondary = Color.White,
+    secondaryContainer = YanjiDarkLavenderSoft,
+    onSecondaryContainer = YanjiDarkLavender,
+    tertiary = YanjiDarkSuccess,
+    onTertiary = Color.White,
+    tertiaryContainer = YanjiDarkSuccessSoft,
+    onTertiaryContainer = YanjiDarkSuccess,
+    background = YanjiDarkBackground,
+    onBackground = YanjiDarkTextPrimary,
+    surface = YanjiDarkSurface,
+    onSurface = YanjiDarkTextPrimary,
+    surfaceVariant = YanjiDarkSurfaceSoft,
+    onSurfaceVariant = YanjiDarkTextSecondary,
+    outline = YanjiDarkBorder,
+    outlineVariant = YanjiDarkDivider,
+    error = YanjiDarkDanger,
+    errorContainer = YanjiDarkDangerSoft
+)
+
 val YanjiShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
@@ -44,12 +70,15 @@ val YanjiShapes = Shapes(
 
 @Composable
 fun YanjiTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     MaterialTheme(
-        colorScheme = LightColorScheme,
+        colorScheme = colorScheme,
         typography = Typography,
         shapes = YanjiShapes,
         content = content
     )
 }
+

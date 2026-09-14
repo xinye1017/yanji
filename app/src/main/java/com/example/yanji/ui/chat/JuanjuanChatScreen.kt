@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -48,28 +49,32 @@ fun JuanjuanChatScreen(
     val sessions = state.sessions
     val currentSessionId = state.currentSessionId
 
-    val activeModel = state.currentSession?.model ?: state.settings.aiModel.ifBlank { "deepseek-chat" }
-    val isNewConversation = messages.isEmpty()
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.cancelReply() }
+    }
 
-    var inputText by remember { mutableStateOf("") }
+    val activeModel = state.currentSession?.model ?: state.settings.aiModel
+    val isNewConversation = messages.none { it.sender == ChatSender.USER }
+
+    var inputText by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    var showHistorySheet by remember { mutableStateOf(false) }
-    var showAiSettings by remember { mutableStateOf(false) }
+    var showHistorySheet by rememberSaveable { mutableStateOf(false) }
+    var showAiSettings by rememberSaveable { mutableStateOf(false) }
 
     val contextSources = state.contextSources
 
     val quickQuestions = listOf(
-        "数学解答题草稿纸写乱",
-        "数学大题做不完怎么办？",
-        "今天做题错误率高很受挫",
-        "408知识点多怎么串联？",
-        "英语真题阅读第二遍怎么做？",
-        "政治大题背诵有什么技巧？"
+        "考研数学草稿纸分区与排版建议",
+        "数学大题做不完如何合理分配时间？",
+        "今天做题错误率高很受挫怎么办？",
+        "408专业课知识点多怎么建立体系？",
+        "考研英语真题精读与长难句拆解",
+        "考研政治分析题答题逻辑与技巧"
     )
 
-    var selectedModel by remember(activeModel) { mutableStateOf(activeModel) }
-    var thinkingIntensity by remember { mutableStateOf(ThinkingIntensity.DEEP) }
+    var selectedModel by rememberSaveable(activeModel) { mutableStateOf(activeModel) }
+    var thinkingIntensity by rememberSaveable { mutableStateOf(ThinkingIntensity.DEEP) }
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
@@ -144,7 +149,9 @@ fun JuanjuanChatScreen(
             if (isNewConversation) {
                 item {
                     ConversationWelcome(
-                        contextRecordCount = contextSources.sumOf { it.count }
+                        contextRecordCount = contextSources.sumOf { it.count },
+                        isAiConfigured = state.isAiConfigured,
+                        onOpenAiSettings = { showAiSettings = true }
                     )
                 }
             }
@@ -214,8 +221,13 @@ fun JuanjuanChatScreen(
                     QuickQuestionsRow(
                         questions = quickQuestions,
                         onQuestionClick = { question ->
-                            val cleanQuery = question.replace(Regex("^[^一-龥a-zA-Z0-9]+"), "").trim()
-                            viewModel.sendChatMessage(cleanQuery, model = selectedModel)
+                            if (!state.isAiConfigured) {
+                                Toast.makeText(context, "请先配置 AI 密钥与模型", Toast.LENGTH_SHORT).show()
+                                showAiSettings = true
+                            } else {
+                                val cleanQuery = question.replace(Regex("^[^一-龥a-zA-Z0-9]+"), "").trim()
+                                viewModel.sendChatMessage(cleanQuery, model = selectedModel)
+                            }
                         }
                     )
                 }
@@ -262,16 +274,23 @@ fun JuanjuanChatScreen(
             onTextChange = { inputText = it },
             onSend = {
                 if (inputText.isNotBlank()) {
-                    val text = inputText
-                    inputText = ""
-                    viewModel.sendChatMessage(text, model = selectedModel)
+                    if (!state.isAiConfigured) {
+                        Toast.makeText(context, "请先配置 AI 密钥与模型", Toast.LENGTH_SHORT).show()
+                        showAiSettings = true
+                    } else {
+                        val text = inputText
+                        inputText = ""
+                        viewModel.sendChatMessage(text, model = selectedModel)
+                    }
                 }
             },
+            isAiConfigured = state.isAiConfigured,
             activeModel = selectedModel,
+            availableModels = state.availableModels,
             onModelSelect = { newModel ->
                 selectedModel = newModel
                 viewModel.updateModel(newModel)
-                Toast.makeText(context, "已切换模型：${getModelDisplayName(newModel)}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "已切换模型：$newModel", Toast.LENGTH_SHORT).show()
             },
             thinkingIntensity = thinkingIntensity,
             onThinkingIntensityChange = { newIntensity ->

@@ -19,19 +19,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.fill.Trophy
-import com.example.yanji.data.AchievementRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.ui.achievement.AchievementsViewModel
 import com.example.yanji.ui.achievement.getAchievementIcon
 
 @Composable
 fun AchievementSummaryBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    achievementRepo: AchievementRepository = AchievementRepository.getInstance()
+    viewModel: AchievementsViewModel = yanjiViewModel { container ->
+        AchievementsViewModel(container.achievementRepository)
+    }
 ) {
-    val achievements by achievementRepo.achievements.collectAsStateWithLifecycle()
-    val unlockedCount by achievementRepo.unlockedCount.collectAsStateWithLifecycle()
-    val totalCount = achievementRepo.totalCount
+    val achievements by viewModel.achievements.collectAsStateWithLifecycle()
+    val unlockedCount by viewModel.unlockedCount.collectAsStateWithLifecycle()
+    val totalCount = viewModel.totalCount
     val recentUnlocked = remember(achievements) {
         achievements.filter { it.isUnlocked }.take(4)
     }

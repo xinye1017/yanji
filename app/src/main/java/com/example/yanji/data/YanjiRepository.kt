@@ -102,6 +102,18 @@ class YanjiRepository private constructor() {
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
 
+    private val _availableAiModels = MutableStateFlow<List<String>>(emptyList())
+    val availableAiModels: StateFlow<List<String>> = _availableAiModels.asStateFlow()
+
+    fun setAvailableAiModels(models: List<String>) {
+        _availableAiModels.value = models
+        val ctx = appContext ?: return
+        val prefs = ctx.getSharedPreferences("yanji_ai_models", Context.MODE_PRIVATE)
+        val jsonArray = JSONArray()
+        models.forEach { jsonArray.put(it) }
+        prefs.edit().putString("cached_models", jsonArray.toString()).apply()
+    }
+
     private val _settings = MutableStateFlow(UserSettings())
     val settings: StateFlow<UserSettings> = _settings.asStateFlow()
 
@@ -200,40 +212,7 @@ class YanjiRepository private constructor() {
      * SharedPreferences 标志保证只 seed 一次：用户删掉默认项后不会被重新插入。
      */
     private fun seedDefaultQuickActionsIfNeeded() {
-        val ctx = appContext ?: return
-        repoScope.launch {
-            val prefs = ctx.getSharedPreferences("yanji_prefs", Context.MODE_PRIVATE)
-            if (prefs.getBoolean(KEY_QUICK_ACTIONS_SEEDED, false)) return@launch
-            try {
-                val dao = database?.quickStartPresetDao() ?: return@launch
-                if (dao.count() == 0) {
-                    val defaults = listOf(
-                        QuickStartPreset(
-                            type = QuickStartPreset.TYPE_START_FOCUS,
-                            label = "开始专注",
-                            subLabel = "高效计时",
-                            sortOrder = 0
-                        ),
-                        QuickStartPreset(
-                            type = QuickStartPreset.TYPE_EXAM,
-                            label = "模拟考试",
-                            subLabel = "全真计时",
-                            sortOrder = 1
-                        ),
-                        QuickStartPreset(
-                            type = QuickStartPreset.TYPE_JOURNAL,
-                            label = "写今日日记",
-                            subLabel = "复盘沉淀",
-                            sortOrder = 2
-                        )
-                    )
-                    defaults.forEach { dao.insert(QuickStartPresetEntity.fromDomainModel(it)) }
-                }
-                prefs.edit().putBoolean(KEY_QUICK_ACTIONS_SEEDED, true).apply()
-            } catch (e: Exception) {
-                // seed 失败不阻塞应用启动；下次启动会重试
-            }
-        }
+        // 快捷操作已按用户要求从首页移除，不再写入默认预设数据
     }
 
     /**
@@ -479,6 +458,9 @@ class YanjiRepository private constructor() {
 
     suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
         val settings = _settings.value
+        if (!settings.isAiConfigured) {
+            throw com.example.yanji.data.ai.AiException("尚未配置 AI 模型 API Key，无法生成学情诊断。请在右上角【设置】中配置你的 API 密钥。")
+        }
         val snapshot = StudyDiagnosticSnapshot.from(
             periodDays = periodDays,
             settings = settings,
@@ -486,13 +468,10 @@ class YanjiRepository private constructor() {
             examSessions = timerStore.examSessions.value,
             journalEntries = journalStore.journalEntries.value
         )
-        val analysis = if (settings.aiApiKey.isNotBlank() && snapshot.sessionCount > 0) {
-            runCatching { callAiDiagnosticApi(snapshot, settings) }
-                .getOrNull()
-                ?: buildLocalAiAnalysis(snapshot, settings)
-        } else {
-            buildLocalAiAnalysis(snapshot, settings)
+        if (snapshot.sessionCount == 0) {
+            throw com.example.yanji.data.ai.AiException("本周期内暂无有效专注记录，无法生成阶段学情诊断。完成学习后再来诊断吧。")
         }
+        val analysis = callAiDiagnosticApi(snapshot, settings)
         _aiAnalyses.value = listOf(analysis) + _aiAnalyses.value
         analysis
     }
@@ -514,150 +493,26 @@ class YanjiRepository private constructor() {
     fun retryChatReply(sessionId: String, onFinished: () -> Unit = {}) =
         chatStore.retryFailedReply(sessionId, onFinished)
 
+    fun cancelChatReply(sessionId: String = currentSessionId.value) =
+        chatStore.cancelReply(sessionId)
+
     fun loadMoreChatMessages() = chatStore.loadMoreMessages()
 
     fun clearChatMessages() = chatStore.clearChatMessages()
 
-        private suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String = "deepseek-chat"): String {
-        val query = userMessage.content
+    private suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String = "deepseek-chat"): String {
         val currentSettings = _settings.value
         val hasKey = currentSettings.aiApiKey.isNotBlank()
         val hasCustomUrl = currentSettings.aiBaseUrl.isNotBlank() && !currentSettings.aiBaseUrl.contains("api.deepseek.com")
 
         if (hasKey || hasCustomUrl) {
-            Log.i("YanjiAI", "Requesting real AI backend: ${currentSettings.aiBaseUrl}, model: $model")
-            // Do not turn a transport failure into a successful assistant message. ChatStore maps
-            // the exception to typed AiFailure and keeps the original user message retryable.
-            return callAiApi(userMessage, currentSettings, model)
+            val effectiveModel = model.ifBlank { currentSettings.aiModel }.ifBlank { "deepseek-chat" }
+            Log.i("YanjiAI", "Requesting real AI backend: ${currentSettings.aiBaseUrl}, model: $effectiveModel")
+            return callAiApi(userMessage, currentSettings, effectiveModel)
         }
 
         // When user has not configured API Key or custom backend
-        return "【卷卷提醒 · 尚未配置 AI 后端】\n\n当前尚未配置大模型 API Key（已预置 DeepSeek 接口，兼容 OpenAI / 硅基流动 / 智谱等主流平台）。\n\n👉 请点击右上角设置图标（⚙️），填入你的 API Key 并测试连接，即可开启与卷卷的实时在线伴学！\n\n---\n以下是本地考研知识库建议：\n\n" + generateLocalFallbackReply(query)
-    }
-
-    private fun generateLocalFallbackReply(query: String): String {
-        return when {
-            query.contains("二次型") || query.contains("草稿") || query.contains("抄错") -> {
-                // 真实数据片段：最近 7 天的模考分数概况（无数据时不显示数字）。
-                val examStats = buildLocalExamStats()
-                val evidence = if (examStats != null) {
-                    "从你的描述来看，这是典型的过程性失分。结合$examStats，根因很可能是：草稿混乱 → 定位困难 → 转抄错误。"
-                } else {
-                    "从你的描述来看，这是典型的过程性失分。在没有更多模考分数佐证前，先不评判得分高低，根因很可能是：草稿混乱 → 定位困难 → 转抄错误。"
-                }
-                """
-                抱抱你，别自责！
-
-                $evidence
-
-                1. **草稿纸十字四折法**：拿到大草稿纸立刻横竖两折，划分出 4 个象限并从 ① 到 ④ 标号。每一道解答大题严格只允许占用一个象限，杜绝“见缝插针”式心算。
-                2. **特征值“迹和”双步秒核对**：求出特征多项式解出 λ 之后，务必花 5 秒口算验证：tr(A) = Σλ。如果不相等，不用往下抄答案，直接返回这一步纠错。
-                3. **初等行变换宁写勿跳**：规范答题卡上多写一行行变换，绝不心算负号倍加。考场上慢半拍，卷面就是稳稳的 12 分。
-
-                要将『草稿纸四分区』加为明早计划吗？
-                """.trimIndent()
-            }
-            query.contains("数学") || query.contains("线代") || query.contains("高数") || query.contains("积分") -> {
-                """
-                做数学题遇到瓶颈太正常了，别慌。
-
-                做真题和模拟卷时，遇到大题写不完往往是节奏被前置计算拖垮了：
-
-                1. **拆解大题卡点**：如果是计算量卡住，说明是常规积分技巧未熟练；如果是完全没有思路，检查是否忽略了隐蔽条件或定理推论。
-                2. **限时跳过原则**：在真实考场上，一道大题超过 12 分钟没有明确切入点，先做标记跳过，把能拿的基础分（选填60+）稳稳收下。
-                3. **错题重做法则**：今天先放过它，明天早上精力最好的前 30 分钟，不看答案重新做一遍。
-
-                要将『限时跳过原则』加为明早模考实践吗？
-                """.trimIndent()
-            }
-            query.contains("408") || query.contains("专业课") || query.contains("数据结构") || query.contains("计网") -> {
-                """
-                别被 408 庞大的知识网吓倒，深呼吸！
-
-                408 的四座大山之间有极强的内在联动逻辑：
-
-                1. **建立物理-逻辑映射**：比如计组流水线和操作系统进程调度联系起来看，计网的各层封装在草稿纸上画一遍协议头。
-                2. **真题代码白纸手写**：数据结构算法题不要只在脑海里想，务必在白纸上手写递归终止条件和指针边界操作。
-                3. **抓大放小建立直觉**：选择题考查面极广，每天刷 20 道错题建立直觉，大题重点突破树、图、虚拟内存与TCP拥塞控制。
-
-                要将『白纸手写算法』加为明日专业课复习计划吗？
-                """.trimIndent()
-            }
-            query.contains("焦虑") || query.contains("受挫") || query.contains("错误率") || query.contains("慌") || query.contains("来不及") || query.contains("别人") -> {
-                val todayHours = getTodayFocusDurationSeconds() / 3600.0f
-                val todayText = if (todayHours > 0) "今天你已经专注 ${String.format("%.1f", todayHours)} 小时，" else "虽然今天还没有完整的专注记录，"
-                """
-                抱抱你。请把手放在胸口，先缓缓吐出一口气。
-
-                ${todayText}请相信：研迹的轨迹不会骗人。
-
-                1. **暴露问题即是得分**：现在的每一道错题，都是在为你扫清考场上的地雷，这是天大的好事。
-                2. **专注微小确定性**：今天哪怕只弄懂了一个极限公式、记住了五个生词，那也是实打实刻进脑海的分数。
-                3. **学时轨迹从不骗人**：研迹记录着你这些天踏踏实实的学时，这些轨迹是骗不了人的。
-
-                放下手机，闭目养神 3 分钟，卷卷陪你专注当下的这一页。
-
-                要将『早睡调适与心态复盘』加为今晚计划吗？
-                """.trimIndent()
-            }
-            query.contains("英语") || query.contains("单词") || query.contains("阅读") -> {
-                """
-                英语的提升往往有明显的滞后效应，别因为近几篇阅读错得多就自我怀疑。
-
-                1. **真题精读而非刷量**：一篇真题阅读，把每一个长难句的主谓宾切分清楚，比浮光掠影做三篇管用得多。
-                2. **词汇语境化**：孤立背词容易遗忘，利用研迹的碎片时间，把错题里的核心动词和形容词摘录在今日日记标签里。
-                3. **分析命题人套路**：错题选项是无中生有、偷换概念还是张冠李戴？搞清出题逻辑，准确率自然回归。
-                """.trimIndent()
-            }
-            query.contains("政治") || query.contains("背") || query.contains("马原") -> {
-                """
-                政治复习讲究节奏感：
-
-                • 当前阶段以客观选择题为主，理解马原哲学框架（唯物论、辩证法、认识论、唯物史观），不要死记硬背。
-                • 毛中特和史纲结合时间轴去串联关键历史节点和主要矛盾。
-                • 大题背诵可以放在冲刺阶段（考前1个月），现在的重点是把高频选择题考点彻底扫盲。
-                """.trimIndent()
-            }
-            query.contains("时间") || query.contains("分析") || query.contains("进度") -> {
-                val todayHours = getTodayFocusDurationSeconds() / 3600.0f
-                val dist = getTodaySubjectDistribution()
-                val distText = dist.entries.joinToString("，") { "${it.key} ${(it.value / 3600.0f).let { h -> String.format("%.1f", h) }}h" }
-                val extraText = if (distText.isNotBlank()) "各科分布为：$distText。\n\n" else ""
-                """
-                为你盘点今天的学习情况：
-
-                今天你已经累计专注了 ${String.format("%.1f", todayHours)} 小时！
-                ${extraText}整体专注状态保持得很好。如果觉得疲惫，不妨停下来做一组伸展，或者写一篇简短的日记复盘今日心得。
-                """.trimIndent()
-            }
-            else -> {
-                """
-                收到了你的心声。备考是一场独自穿越风雨的修行，但你并不是孤身一人。
-
-                每一次遇到难题、每一次感到困倦时的咬牙坚持，都在为你积累破局的力量。只要今天的你比昨天多掌握一个考点，你就在无限接近梦想。
-
-                如果需要更深度的全学科生成式辅导，可以在【设置】页面填入你的 DeepSeek / OpenAI API Key，卷卷就能为你做更强大的实时学术与解题推演啦！
-                """.trimIndent()
-            }
-        }
-    }
-
-    /**
-     * 构造一段「来自真实数据」的模考概况描述。**绝不编造任何分数或统计**。
-     * 若无已记录模考，返回 null，调用方应改用「从你的描述来看…」。
-     */
-    private fun buildLocalExamStats(): String? {
-        val recent = timerStore.examSessions.value
-            .filter { it.score != null && SubjectCatalog.categoryIdOf(it.subjectId) == "math" }
-            .sortedByDescending { it.startTime }
-            .take(8)
-        if (recent.isEmpty()) return null
-        val scores = recent.mapNotNull { it.score }
-        val avg = scores.average()
-        val max = scores.max()
-        val min = scores.min()
-        val range = if (max - min < 0.5) "稳定在 ${max.toInt()} 分" else "${min.toInt()}～${max.toInt()} 分"
-        return "你近 ${recent.size} 套数学模考成绩$range，平均 ${String.format("%.1f", avg)} 分"
+        return "【卷卷提示 · 尚未接入 AI】\n\n当前尚未配置大模型 API 密钥。\n\n👉 请点击右上角设置图标（⚙️），填入你的 API Key 并测试连接，即可开启与卷卷的实时在线伴学！"
     }
 
     private suspend fun callAiApi(
@@ -666,7 +521,7 @@ class YanjiRepository private constructor() {
         model: String = settings.aiModel
     ): String {
         // 历史消息与运行时上下文由业务层提供；AiClient 只负责传输与协议。
-        val history = chatStore.currentMessages().takeLast(8).toMutableList()
+        val history = chatStore.currentMessages().toMutableList()
         if (history.lastOrNull()?.id != userMessage.id) history += userMessage
         return aiClient.completeChat(
             systemPrompt = JuanjuanPrompt.SYSTEM_PROMPT,
@@ -726,44 +581,6 @@ class YanjiRepository private constructor() {
             suggestions = suggestions
         )
     }.getOrNull()
-
-    private fun buildLocalAiAnalysis(snapshot: StudyDiagnosticSnapshot, settings: UserSettings): AiAnalysis {
-        val primarySubject = snapshot.subjectStats.firstOrNull()
-        val weakestSubject = snapshot.subjectStats.lastOrNull()?.takeIf { snapshot.subjectStats.size > 1 }
-        val strengths = buildList {
-            if (snapshot.activeDays > 0) add("本周期有 ${snapshot.activeDays} 天达到有效学习门槛，学习记录已具备复盘基础。")
-            primarySubject?.let { add("投入最多的科目是${it.name}（${formatHours(it.seconds)}），是当前主要复习重心。") }
-            if (snapshot.recentExams.isNotEmpty()) add("已记录 ${snapshot.recentExams.size} 次近期模考，可持续用分数与错因校准复习。")
-        }.ifEmpty { listOf("当前没有完成的专注记录，先完成一段有效计时后再诊断会更准确。") }
-        val weaknesses = buildList {
-            if (snapshot.goalDays < snapshot.periodDays) add("${snapshot.periodDays} 天中有 ${snapshot.periodDays - snapshot.goalDays} 天未达到 ${snapshot.dailyGoalHours} 小时目标，先关注节奏稳定性。")
-            weakestSubject?.let { add("${it.name}占比为${formatDecimal(it.share * 100)}%，请结合报考科目权重确认是否需要补足。") }
-            if (snapshot.recentExams.none { it.score != null }) add("近期模考缺少分数记录，暂时无法判断得分趋势与薄弱题型。")
-        }.ifEmpty { listOf("暂未发现明显的时长风险；后续结合模考分数和日记错因继续校准。") }
-        val dailyPlanHours = maxOf(1.0, snapshot.dailyGoalHours.toDouble())
-        val firstAction = weakestSubject?.name ?: primarySubject?.name ?: "核心科目"
-        return AiAnalysis(
-            id = UUID.randomUUID().toString(),
-            periodStart = snapshot.periodStart,
-            periodEnd = snapshot.periodEnd,
-            provider = "研迹本地诊断",
-            model = "规则引擎",
-            requestSnapshot = snapshot.requestSnapshot(),
-            overview = "基于 ${snapshot.periodStart} 至 ${snapshot.periodEnd} 的 ${snapshot.sessionCount} 条完成专注记录：累计${formatHours(snapshot.totalSeconds)}，日均${formatDecimal(snapshot.averageDailyHours)}小时。以下结论仅来自已记录的数据。",
-            strengths = strengths.take(3),
-            weaknesses = weaknesses.take(3),
-            trendAnalysis = if (snapshot.dailyHours.size >= 2 && snapshot.dailyHours.last() >= snapshot.dailyHours.first()) {
-                "最近一天的记录时长不低于周期首日；仍需连续记录以判断稳定趋势。"
-            } else {
-                "本周期日学习时长存在波动；优先建立固定开始时间，再逐步提高有效学习时长。"
-            },
-            suggestions = listOf(
-                "第 1 天：安排 ${formatDecimal(dailyPlanHours)} 小时有效专注，其中先给 $firstAction 留出一段 ${maxOf(60L, snapshot.longestSessionMinutes.coerceAtMost(120L))} 分钟的完整时段。",
-                "第 2 天：完成一次 $firstAction 错题或真题复盘；结束后在日记写下 1 个具体卡点和明天的处理动作。",
-                "第 3 天：按 ${formatDecimal(dailyPlanHours)} 小时目标学习，并补录一次模考/自测的分数、总分和主要失分原因。"
-            )
-        )
-    }
 
     // Helper query computations (Unified Single Source of Truth)
     fun getTodayFocusDurationSeconds(): Long =
@@ -927,7 +744,6 @@ class YanjiRepository private constructor() {
             // payload 是模板 ID，UI 处理复制/下载
             true
         }
-        else -> false
     }
 
     /**

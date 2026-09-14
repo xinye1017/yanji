@@ -1,3 +1,32 @@
 <resources>
     <string name="app_name">研迹</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">首页</string>
+    <string name="nav_focus">专注</string>
+    <string name="nav_journal">日记</string>
+    <string name="nav_stats">统计</string>
+    <string name="nav_profile">我的</string>
+
+    <!-- Common Actions -->
+    <string name="action_back">返回</string>
+    <string name="action_save">保存</string>
+    <string name="action_delete">删除</string>
+    <string name="action_confirm">确认</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_start_focus">开始专注</string>
+    <string name="action_start_exam">开始模考</string>
+
+    <!-- States & Placeholders -->
+    <string name="empty_focus_sessions">今天还没有留下学习轨迹</string>
+    <string name="empty_exam_sessions">尚未进行模拟考试，点击发起模考</string>
+    <string name="input_placeholder_note">备注本次学习要点（可选）</string>
+
+    <!-- Permissions -->
+    <string name="notification_permission_title">专注计时常驻通知</string>
+    <string name="notification_permission_rationale">为了在锁屏或切换到其他应用时能实时看到专注倒计时与控制暂停，研迹需要通知权限。即使未开启通知，前台计时也依然正常工作。</string>
+    <string name="notification_permission_grant">开启通知</string>
+    <string name="notification_permission_dismiss">暂不开启</string>
+    <string name="notification_permission_denied_toast">后台通知受限，前台计时仍将正常运行</string>
 </resources>

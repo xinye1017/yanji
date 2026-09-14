@@ -19,6 +19,11 @@ object YanjiRadius {
     val PageRadius = 24.dp
 
     /**
+     * Hero card radius — DESIGN.md「Shapes」: large hero card = 24–28px。
+     */
+    val HeroCardRadius = 28.dp
+
+    /**
      * Standard card radius — DESIGN.md「Shapes」规定 standard card = 24px。
      *
      * [com.example.yanji.ui.components.YanjiCard] 以此作为默认 shape，
@@ -27,8 +32,31 @@ object YanjiRadius {
      */
     val StandardCardRadius = 24.dp
 
+    /**
+     * Compact card radius — 子卡片、列表条目卡片、嵌套卡片使用 16dp。
+     */
+    val CompactCardRadius = 16.dp
+
     val MessageRadius = 20.dp
     val ContentBlockRadius = 16.dp
+
+    /**
+     * 小圆角 / 标签圆角 — 12dp。
+     */
+    val Small = 12.dp
+
+    /**
+     * 行动按钮圆角 — 12dp，保持与 [com.example.yanji.ui.components.YanjiButtons] 一致。
+     */
     val ButtonRadius = 12.dp
+
+    /**
+     * 输入框圆角 — 16dp，保持与 [com.example.yanji.ui.components.YanjiTextField] 一致。
+     */
+    val InputRadius = 16.dp
+
+    val DialogRadius = 24.dp
+    val SheetRadius = 28.dp
     val ChipRadius = 999.dp
 }
+

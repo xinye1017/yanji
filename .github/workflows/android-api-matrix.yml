@@ -1,0 +1,20 @@
+name: Android extended API matrix
+
+on:
+  schedule:
+    - cron: '23 19 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: android-api-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Min and target API regression
+    uses: ./.github/workflows/android-quality.yml
+    with:
+      api-levels: '[24,36]'

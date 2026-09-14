@@ -27,7 +27,11 @@ import com.example.yanji.theme.*
 import com.example.yanji.ui.components.JuanjuanAvatar
 
 @Composable
-fun ConversationWelcome(contextRecordCount: Int) {
+fun ConversationWelcome(
+    contextRecordCount: Int,
+    isAiConfigured: Boolean = false,
+    onOpenAiSettings: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -113,7 +117,7 @@ fun ConversationWelcome(contextRecordCount: Int) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "嗨，今天已经专注备考啦！🌱",
+                        text = "你好，我是卷卷！🌱",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = YanjiTextPrimary,
                             fontSize = 14.sp,
@@ -122,7 +126,11 @@ fun ConversationWelcome(contextRecordCount: Int) {
                     )
 
                     Text(
-                        text = "我刚刚看了你的近期模考成绩与研迹日记：核心基础整体非常扎实，准备好迎接今天的突破了吗？",
+                        text = if (contextRecordCount > 0) {
+                            "已为你同步近期的真实学习与复盘记录。复习中遇到任何疑难概念、大题思路卡点或备考心态波动，随时跟我聊聊！"
+                        } else {
+                            "你的考研专属学伴已就位。无论每天专注了多久，每一次计时、模考与日记，我都会认真记录下来。随时向我提出各科备考疑问吧！"
+                        },
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = YanjiTextPrimary,
                             lineHeight = 22.sp,
@@ -132,13 +140,19 @@ fun ConversationWelcome(contextRecordCount: Int) {
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = YanjiSurfaceBlue,
-                        modifier = Modifier.fillMaxWidth()
+                        color = if (!isAiConfigured) YanjiWarningSoft else YanjiSurfaceBlue,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (!isAiConfigured) Modifier.clickable { onOpenAiSettings() } else Modifier)
                     ) {
                         Text(
-                            text = "今天想聊聊考场时间分配、草稿折痕法，还是单纯想吐吐槽放松一下？卷卷随时在听哦。",
+                            text = if (!isAiConfigured) {
+                                "⚙️ 当前尚未配置 AI 模型密钥。点击此处或底部设置按钮填入 API Key，即可开启与卷卷的智能伴学。"
+                            } else {
+                                "💡 可以直接输入你正在推导的题目、错因复盘，或点击下方的考研问题快速开始。"
+                            },
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = YanjiTextSecondary,
+                                color = if (!isAiConfigured) YanjiTextPrimary else YanjiTextSecondary,
                                 lineHeight = 20.sp,
                                 fontSize = 13.sp
                             ),
@@ -158,7 +172,7 @@ fun ConversationWelcome(contextRecordCount: Int) {
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "已关联近 $contextRecordCount 项学习记录深度思考",
+                                text = "已关联近 $contextRecordCount 项真实学习记录",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = YanjiLavenderDeep,
                                     fontSize = 11.sp,

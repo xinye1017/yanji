@@ -22,9 +22,11 @@ data class ChatUiState(
     val settings: UserSettings,
     val sessions: List<ChatSession>,
     val currentSessionId: String,
-    val contextSources: List<ChatContextSource>
+    val contextSources: List<ChatContextSource>,
+    val availableModels: List<String> = emptyList()
 ) {
     val isAiReplying: Boolean get() = replyState.isReplying
+    val isAiConfigured: Boolean get() = settings.isAiConfigured
 
     val currentSession: ChatSession?
         get() = sessions.find { it.id == currentSessionId }
@@ -50,8 +52,9 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = combine(
         conversationState,
         repo.settings,
-        repo.chatSessions
-    ) { conversation, settings, sessions ->
+        repo.chatSessions,
+        repo.availableAiModels
+    ) { conversation, settings, sessions, models ->
         ChatUiState(
             messages = conversation.messages,
             replyState = conversation.replyState,
@@ -59,7 +62,8 @@ class ChatViewModel(
             settings = settings,
             sessions = sessions,
             currentSessionId = conversation.sessionId,
-            contextSources = repo.currentContextSources()
+            contextSources = repo.currentContextSources(),
+            availableModels = models
         )
     }.stateIn(
         scope = viewModelScope,
@@ -71,7 +75,8 @@ class ChatViewModel(
             settings = repo.settings.value,
             sessions = repo.chatSessions.value,
             currentSessionId = repo.currentSessionId.value,
-            contextSources = repo.currentContextSources()
+            contextSources = repo.currentContextSources(),
+            availableModels = repo.availableAiModels.value
         )
     )
 
@@ -86,6 +91,8 @@ class ChatViewModel(
         val sessionId = uiState.value.currentSessionId
         if (sessionId.isNotBlank()) repo.retryChatReply(sessionId)
     }
+
+    fun cancelReply() = repo.cancelChatReply(uiState.value.currentSessionId)
 
     fun loadMoreMessages() = repo.loadMoreChatMessages()
 
@@ -103,6 +110,11 @@ class ChatViewModel(
         }
         val currentSettings = uiState.value.settings
         repo.updateSettings(currentSettings.copy(aiModel = model))
+    }
+
+    override fun onCleared() {
+        repo.cancelChatReply(uiState.value.currentSessionId)
+        super.onCleared()
     }
 
     private data class ConversationState(

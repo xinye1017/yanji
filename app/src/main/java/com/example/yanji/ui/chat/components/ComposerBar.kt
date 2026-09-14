@@ -22,12 +22,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
+
+/** UI 测试定位锚点：与 androidTest 共享，避免断言依赖中文文案。 */
+const val ChatInputTestTag = "chat_input"
+const val ChatSendButtonTestTag = "chat_send_button"
 
 /**
  * 思考强度模式
@@ -44,42 +49,14 @@ enum class ThinkingIntensity(
     OFF("深度思考已关闭", "标准模式", "直接输出回答 · 无推理耗时", YanjiTextTertiary)
 }
 
-/**
- * 可选模型定义
- */
-data class ModelOption(
-    val id: String,
-    val displayName: String,
-    val description: String
-)
-
-val AVAILABLE_MODELS = listOf(
-    ModelOption("deepseek-reasoner", "DeepSeek-R1", "深度推理 · 强化学习长链思考"),
-    ModelOption("deepseek-chat", "DeepSeek-V3", "全面多能 · 高速日常伴学"),
-    ModelOption("glm-4-flash", "智谱 GLM-4", "开放平台 · 响应极速"),
-    ModelOption("gpt-4o-mini", "GPT-4o Mini", "OpenAI · 均衡高效"),
-    ModelOption("qwen2.5:latest", "Qwen 2.5", "本地/通义 · 语义理解")
-)
-
-fun getModelDisplayName(modelId: String): String {
-    val lower = modelId.lowercase()
-    return when {
-        lower.contains("reasoner") || lower.contains("r1") -> "DeepSeek-R1 (深度推理)"
-        lower.contains("v3") -> "DeepSeek-V3"
-        lower.contains("chat") -> "DeepSeek-V3"
-        lower.contains("glm") -> "智谱 GLM-4"
-        lower.contains("gpt") -> "GPT-4o Mini"
-        lower.contains("qwen") -> "Qwen 2.5"
-        else -> modelId.ifBlank { "DeepSeek-R1 (深度推理)" }
-    }
-}
-
 @Composable
 fun ComposerBar(
     inputText: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
-    activeModel: String = "deepseek-reasoner",
+    isAiConfigured: Boolean,
+    activeModel: String,
+    availableModels: List<String> = emptyList(),
     onModelSelect: (String) -> Unit = {},
     thinkingIntensity: ThinkingIntensity = ThinkingIntensity.DEEP,
     onThinkingIntensityChange: (ThinkingIntensity) -> Unit = {},
@@ -90,7 +67,11 @@ fun ComposerBar(
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var intensityMenuExpanded by remember { mutableStateOf(false) }
 
-    val displayModel = getModelDisplayName(activeModel)
+    val displayModel = if (!isAiConfigured) {
+        "未配置 AI"
+    } else {
+        activeModel.ifBlank { "已连接 AI" }
+    }
 
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -125,7 +106,15 @@ fun ComposerBar(
                     color = YanjiSurface,
                     shadowElevation = 0.5.dp,
                     border = BorderStroke(1.dp, YanjiBorder.copy(alpha = 0.8f)),
-                    modifier = Modifier.clip(CircleShape).clickable { modelMenuExpanded = true }
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable {
+                            if (!isAiConfigured) {
+                                onOpenAiSettings()
+                            } else {
+                                modelMenuExpanded = true
+                            }
+                        }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -133,9 +122,9 @@ fun ComposerBar(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Psychology,
+                            imageVector = if (!isAiConfigured) Icons.Default.Settings else Icons.Default.Psychology,
                             contentDescription = null,
-                            tint = YanjiLavender,
+                            tint = if (!isAiConfigured) YanjiTextSecondary else YanjiLavender,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
@@ -143,7 +132,7 @@ fun ComposerBar(
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = YanjiTextPrimary
+                                color = if (!isAiConfigured) YanjiTextSecondary else YanjiTextPrimary
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -157,66 +146,116 @@ fun ComposerBar(
                     }
                 }
 
-                // Inline Model Selection Dropdown (Zero shadow)
-                DropdownMenu(
-                    expanded = modelMenuExpanded,
-                    onDismissRequest = { modelMenuExpanded = false },
-                    modifier = Modifier.width(240.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    containerColor = YanjiSurface,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(1.dp, YanjiBorder)
-                ) {
-                    Text(
-                        text = "选择 AI 模型",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = YanjiTextSecondary
-                        ),
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
+                // Inline Model Selection Dropdown (Only when configured)
+                if (isAiConfigured) {
+                    DropdownMenu(
+                        expanded = modelMenuExpanded,
+                        onDismissRequest = { modelMenuExpanded = false },
+                        modifier = Modifier.width(240.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = YanjiSurface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
+                        border = BorderStroke(1.dp, YanjiBorder)
+                    ) {
+                        Text(
+                            text = "可用 AI 模型",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = YanjiTextSecondary
+                            ),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
 
-                    AVAILABLE_MODELS.forEach { model ->
-                        val isSelected = activeModel.equals(model.id, ignoreCase = true) ||
-                                (model.id == "deepseek-reasoner" && (activeModel.contains("reasoner", ignoreCase = true) || activeModel.contains("r1", ignoreCase = true))) ||
-                                (model.id == "deepseek-chat" && activeModel.contains("chat", ignoreCase = true) && !activeModel.contains("reasoner", ignoreCase = true))
-
-                        DropdownMenuItem(
-                            text = {
-                                Column(modifier = Modifier.weight(1f)) {
+                        if (availableModels.isNotEmpty()) {
+                            availableModels.forEach { modelName ->
+                                val isSelected = activeModel.equals(modelName, ignoreCase = true)
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = modelName,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 13.sp
+                                            ),
+                                            color = if (isSelected) YanjiPrimary else YanjiTextPrimary
+                                        )
+                                    },
+                                    trailingIcon = if (isSelected) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "已选择",
+                                                tint = YanjiPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    } else null,
+                                    onClick = {
+                                        modelMenuExpanded = false
+                                        onModelSelect(modelName)
+                                    },
+                                    modifier = Modifier
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else {
+                            // No list fetched yet, show current model
+                            DropdownMenuItem(
+                                text = {
                                     Text(
-                                        text = model.displayName,
+                                        text = activeModel.ifBlank { "当前模型" },
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp
                                         ),
-                                        color = if (isSelected) YanjiPrimary else YanjiTextPrimary
+                                        color = YanjiPrimary
                                     )
-                                    Text(
-                                        text = model.description,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 10.sp,
-                                            color = YanjiTextTertiary
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            },
-                            trailingIcon = if (isSelected) {
-                                {
+                                },
+                                trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "已选择",
                                         tint = YanjiPrimary,
                                         modifier = Modifier.size(18.dp)
                                     )
-                                }
-                            } else null,
+                                },
+                                onClick = { modelMenuExpanded = false },
+                                modifier = Modifier
+                                    .padding(horizontal = 6.dp, vertical = 1.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = YanjiDivider
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "AI 设置 / 刷新可用模型",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontSize = 12.sp,
+                                        color = YanjiTextSecondary
+                                    )
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = YanjiTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
                             onClick = {
                                 modelMenuExpanded = false
-                                onModelSelect(model.id)
+                                onOpenAiSettings()
                             },
                             modifier = Modifier
                                 .padding(horizontal = 6.dp, vertical = 1.dp)
@@ -224,39 +263,6 @@ fun ComposerBar(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = YanjiDivider
-                    )
-
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "更多 AI 配置 / API 密钥",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontSize = 12.sp,
-                                    color = YanjiTextSecondary
-                                )
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = YanjiTextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            modelMenuExpanded = false
-                            onOpenAiSettings()
-                        },
-                        modifier = Modifier
-                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    )
                 }
             }
 
@@ -389,7 +395,8 @@ fun ComposerBar(
                     onValueChange = onTextChange,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 8.dp)
+                        .testTag(ChatInputTestTag),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         color = YanjiTextPrimary,
                         fontSize = 14.sp
@@ -429,6 +436,7 @@ fun ComposerBar(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
+                        .testTag(ChatSendButtonTestTag)
                         .clickable(enabled = inputText.isNotBlank()) {
                             onSend()
                             focusManager.clearFocus()

@@ -17,6 +17,18 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * 卷卷伴学 Chat UI 契约测试。
+ *
+ * 定位策略：气泡 / 输入区 / 发送键一律通过组件导出的 testTag 常量定位
+ * （`ChatInputTestTag` / `ChatSendButtonTestTag` / `UserMessageBubbleTestTag` /
+ * `JuanjuanMessageBubbleTestTag`），不再依赖中文整句文案，避免文案迭代就把测试打红。
+ * 只有「欢迎语」这类「内容即产品」的区块才断言其文案。
+ *
+ * 注意：一个 test method 内**只能调用一次 `setContent`**——Compose 测试宿主 Activity
+ * 二次 setContent 会抛 `IllegalStateException: Activity has already called setContent`。
+ * 因此每个被测组件各自独立成一个测试。
+ */
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
 class JuanjuanChatScreenInstrumentedTest {
@@ -24,6 +36,22 @@ class JuanjuanChatScreenInstrumentedTest {
     val composeRule = createComposeRule(effectContext = object : MotionDurationScale {
         override val scaleFactor = 0f
     })
+
+    private fun userMessage() = ChatMessage(
+        id = "msg-user-1",
+        sessionId = "session-1",
+        sender = ChatSender.USER,
+        content = "复习高数中值定理有点卡壳",
+        timestamp = 1700000000000L
+    )
+
+    private fun juanjuanMessage() = ChatMessage(
+        id = "msg-ai-1",
+        sessionId = "session-1",
+        sender = ChatSender.JUANJUAN,
+        content = "中值定理的核心在于构造辅助函数。罗尔、拉格朗日、柯西是递进关系。",
+        timestamp = 1700000005000L
+    )
 
     @Test
     fun conversationWelcomeDisplaysGreetingsAndContextCount() {
@@ -35,8 +63,9 @@ class JuanjuanChatScreenInstrumentedTest {
 
         composeRule.onNodeWithText("卷卷").assertExists()
         composeRule.onNodeWithText("专属学伴").assertExists()
-        composeRule.onNodeWithText("嗨，今天已经专注备考啦！🌱").assertExists()
-        composeRule.onNodeWithText("已关联近 12 项学习记录深度思考").assertExists()
+        // 欢迎语与记录数是该区块的全部产品价值，文案即契约（与当前生产 UI 对齐）。
+        composeRule.onNodeWithText("你好，我是卷卷！🌱").assertExists()
+        composeRule.onNodeWithText("已关联近 12 项真实学习记录").assertExists()
     }
 
     @Test
@@ -59,38 +88,26 @@ class JuanjuanChatScreenInstrumentedTest {
     }
 
     @Test
-    fun userAndJuanjuanMessageBubblesRenderCorrectly() {
-        val userMsg = ChatMessage(
-            id = "msg-user-1",
-            sessionId = "session-1",
-            sender = ChatSender.USER,
-            content = "复习高数中值定理有点卡壳",
-            timestamp = 1700000000000L
-        )
-
-        val assistantMsg = ChatMessage(
-            id = "msg-ai-1",
-            sessionId = "session-1",
-            sender = ChatSender.JUANJUAN,
-            content = "中值定理的核心在于构造辅助函数。罗尔、拉格朗日、柯西是递进关系。",
-            timestamp = 1700000005000L
-        )
-
+    fun userMessageBubbleRendersCorrectly() {
         composeRule.setContent {
             YanjiTheme {
                 Box(Modifier.fillMaxSize()) {
-                    UserMessageBubble(content = userMsg.content)
+                    UserMessageBubble(content = userMessage().content)
                 }
             }
         }
 
+        composeRule.onNodeWithTag(UserMessageBubbleTestTag).assertExists()
         composeRule.onNodeWithText("复习高数中值定理有点卡壳").assertExists()
+    }
 
+    @Test
+    fun juanjuanMessageBubbleRendersCorrectly() {
         composeRule.setContent {
             YanjiTheme {
                 Box(Modifier.fillMaxSize()) {
                     JuanjuanMessageBubble(
-                        message = assistantMsg,
+                        message = juanjuanMessage(),
                         learningRecordCount = 5,
                         onActionClick = {},
                         onFollowupClick = {},
@@ -100,33 +117,35 @@ class JuanjuanChatScreenInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithTag(JuanjuanMessageBubbleTestTag).assertExists()
         composeRule.onNodeWithText("卷卷").assertExists()
-        composeRule.onNodeWithText("中值定理的核心在于构造辅助函数。罗尔、拉格朗日、柯西是递进关系。").assertExists()
+        composeRule.onNodeWithText("中值定理的核心在于构造辅助函数。罗尔、拉格朗日、柯西是递进关系。")
+            .assertExists()
     }
 
     @Test
-    fun composerBarHandlesTextInputAndSend() {
-        var text = mutableStateOf("")
-        var sentText = ""
+    fun composerBarAcceptsInputAndDispatchesSend() {
+        val text = mutableStateOf("")
+        var sentText: String? = null
 
         composeRule.setContent {
             YanjiTheme {
                 ComposerBar(
                     inputText = text.value,
                     onTextChange = { text.value = it },
-                    onSend = {
-                        sentText = text.value
-                        text.value = ""
-                    },
+                    onSend = { sentText = text.value },
+                    isAiConfigured = true,
                     activeModel = "deepseek-chat",
-                    onModelSelect = {},
-                    thinkingIntensity = ThinkingIntensity.DEEP,
-                    onThinkingIntensityChange = {},
-                    onOpenAiSettings = {}
+                    thinkingIntensity = ThinkingIntensity.DEEP
                 )
             }
         }
 
-        composeRule.onNodeWithText("问卷卷任何考研问题…").assertExists()
+        val draft = "中值定理怎么构造辅助函数？"
+        composeRule.onNodeWithTag(ChatInputTestTag).assertExists().performTextInput(draft)
+        assertEquals("输入应回写到受控状态", draft, text.value)
+
+        composeRule.onNodeWithTag(ChatSendButtonTestTag).performClick()
+        assertEquals("点击发送应把当前草稿交给 onSend", draft, sentText)
     }
 }

@@ -13,12 +13,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiDetailTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +40,7 @@ import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.data.Achievement
 import com.example.yanji.data.AchievementCategory
 import com.example.yanji.data.AchievementRarity
-import com.example.yanji.data.AchievementRepository
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.ui.components.JuanjuanAvatar
@@ -98,23 +96,23 @@ fun getAchievementIcon(iconKey: String, isUnlocked: Boolean): ImageVector {
 
 fun rarityColor(rarity: AchievementRarity): Color {
     return when (rarity) {
-        AchievementRarity.COMMON -> Color(0xFF64748B) // Slate
-        AchievementRarity.UNCOMMON -> Color(0xFF10B981) // Emerald
-        AchievementRarity.RARE -> Color(0xFF2563EB) // Royal Blue
-        AchievementRarity.EPIC -> Color(0xFF8B5CF6) // Purple
-        AchievementRarity.LEGENDARY -> Color(0xFFF59E0B) // Amber Gold
-        AchievementRarity.MYTHIC -> Color(0xFFEF4444) // Crimson Red
+        AchievementRarity.COMMON -> AchievementCommon
+        AchievementRarity.UNCOMMON -> AchievementUncommon
+        AchievementRarity.RARE -> AchievementRare
+        AchievementRarity.EPIC -> AchievementEpic
+        AchievementRarity.LEGENDARY -> AchievementLegendary
+        AchievementRarity.MYTHIC -> AchievementMythic
     }
 }
 
 fun rarityBackground(rarity: AchievementRarity): Color {
     return when (rarity) {
-        AchievementRarity.COMMON -> Color(0xFFF1F5F9)
-        AchievementRarity.UNCOMMON -> Color(0xFFECFDF5)
-        AchievementRarity.RARE -> Color(0xFFEFF6FF)
-        AchievementRarity.EPIC -> Color(0xFFF5F3FF)
-        AchievementRarity.LEGENDARY -> Color(0xFFFFFBEB)
-        AchievementRarity.MYTHIC -> Color(0xFFFEF2F2)
+        AchievementRarity.COMMON -> AchievementCommonContainer
+        AchievementRarity.UNCOMMON -> AchievementUncommonContainer
+        AchievementRarity.RARE -> AchievementRareContainer
+        AchievementRarity.EPIC -> AchievementEpicContainer
+        AchievementRarity.LEGENDARY -> AchievementLegendaryContainer
+        AchievementRarity.MYTHIC -> AchievementMythicContainer
     }
 }
 
@@ -122,19 +120,19 @@ fun rarityBorderBrush(rarity: AchievementRarity, isUnlocked: Boolean): Brush {
     return if (isUnlocked) {
         when (rarity) {
             AchievementRarity.MYTHIC -> Brush.linearGradient(
-                colors = listOf(Color(0xFFEF4444), Color(0xFFF59E0B), Color(0xFF8B5CF6))
+                colors = listOf(AchievementMythic, AchievementLegendary, AchievementEpic)
             )
             AchievementRarity.LEGENDARY -> Brush.linearGradient(
-                colors = listOf(Color(0xFFF59E0B), Color(0xFFFCD34D))
+                colors = listOf(AchievementLegendary, AchievementLegendaryGradientEnd)
             )
             AchievementRarity.EPIC -> Brush.linearGradient(
-                colors = listOf(Color(0xFF8B5CF6), Color(0xFFC4B5FD))
+                colors = listOf(AchievementEpic, AchievementEpicGradientEnd)
             )
             AchievementRarity.RARE -> Brush.linearGradient(
-                colors = listOf(Color(0xFF2563EB), Color(0xFF93C5FD))
+                colors = listOf(AchievementRare, AchievementRareGradientEnd)
             )
             AchievementRarity.UNCOMMON -> Brush.linearGradient(
-                colors = listOf(Color(0xFF10B981), Color(0xFFA7F3D0))
+                colors = listOf(AchievementUncommon, AchievementUncommonGradientEnd)
             )
             AchievementRarity.COMMON -> Brush.linearGradient(
                 colors = listOf(YanjiPrimary.copy(alpha = 0.35f), YanjiPrimarySoft)
@@ -151,11 +149,13 @@ fun rarityBorderBrush(rarity: AchievementRarity, isUnlocked: Boolean): Brush {
 fun AchievementsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    achievementRepo: AchievementRepository = AchievementRepository.getInstance()
+    viewModel: AchievementsViewModel = yanjiViewModel { container ->
+        AchievementsViewModel(container.achievementRepository)
+    }
 ) {
-    val achievements by achievementRepo.achievements.collectAsStateWithLifecycle()
-    val unlockedCount by achievementRepo.unlockedCount.collectAsStateWithLifecycle()
-    val totalCount = achievementRepo.totalCount
+    val achievements by viewModel.achievements.collectAsStateWithLifecycle()
+    val unlockedCount by viewModel.unlockedCount.collectAsStateWithLifecycle()
+    val totalCount = viewModel.totalCount
 
     var selectedCategory by remember { mutableStateOf<AchievementCategory?>(null) }
     var viewingAchievement by remember { mutableStateOf<Achievement?>(null) }
@@ -206,51 +206,20 @@ fun AchievementsScreen(
         ) {
             // 1. Top Bar
             item(span = { GridItemSpan(2) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(YanjiSurface)
-                            .clickable { onBack() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回",
-                            tint = YanjiTextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "考研成就殿堂",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
-                        )
-                        Text(
-                            text = "记录考研路上的每一个高光时刻",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = YanjiTextSecondary
-                        )
-                    }
-                }
+                YanjiDetailTopBar(
+                    title = "考研成就殿堂",
+                    subtitle = "记录考研路上的每一个高光时刻",
+                    onBack = onBack
+                )
             }
 
             // 2. Banner Showcase Card
             item(span = { GridItemSpan(2) }) {
-                Card(
+                YanjiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = YanjiSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    variant = YanjiCardVariant.Hero
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -452,7 +421,7 @@ fun AchievementsScreen(
                                 text = "$title ($count)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else YanjiTextSecondary,
+                                color = if (isSelected) YanjiOnPrimary else YanjiTextSecondary,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             )
                         }
@@ -473,7 +442,6 @@ fun AchievementsScreen(
         viewingAchievement?.let { item ->
             AchievementDetailDialog(
                 achievement = item,
-                achievementRepo = achievementRepo,
                 allAchievements = achievements,
                 onDismiss = { viewingAchievement = null }
             )
@@ -579,7 +547,7 @@ fun AchievementGridCard(
 ) {
     val isUnlocked = achievement.isUnlocked
     val isHiddenLocked = achievement.isHidden && !isUnlocked
-    val icon = if (isHiddenLocked) Icons.Default.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
+    val icon = if (isHiddenLocked) PhosphorIcons.Regular.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
     val rarityColor = rarityColor(achievement.rarity)
 
     Card(
@@ -704,7 +672,7 @@ fun AchievementGridCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Check,
+                                imageVector = PhosphorIcons.Regular.Check,
                                 contentDescription = null,
                                 tint = rarityColor,
                                 modifier = Modifier.size(11.dp)
@@ -728,7 +696,7 @@ fun AchievementGridCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Lock,
+                                imageVector = PhosphorIcons.Regular.Lock,
                                 contentDescription = null,
                                 tint = YanjiTextTertiary,
                                 modifier = Modifier.size(10.dp)
@@ -774,13 +742,12 @@ fun AchievementGridCard(
 @Composable
 fun AchievementDetailDialog(
     achievement: Achievement,
-    achievementRepo: AchievementRepository,
     allAchievements: List<Achievement>,
     onDismiss: () -> Unit
 ) {
     val isUnlocked = achievement.isUnlocked
     val isHiddenLocked = achievement.isHidden && !isUnlocked
-    val icon = if (isHiddenLocked) Icons.Default.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
+    val icon = if (isHiddenLocked) PhosphorIcons.Regular.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
     val rarityColor = rarityColor(achievement.rarity)
     val unlockDateStr = remember(achievement.unlockedAt) {
         achievement.unlockedAt?.let {
@@ -790,8 +757,10 @@ fun AchievementDetailDialog(
     }
 
     // Series progression ladder if applicable
-    val seriesList = remember(achievement.seriesId) {
-        achievement.seriesId?.let { achievementRepo.getSeries(it) } ?: emptyList()
+    val seriesList = remember(achievement.seriesId, allAchievements) {
+        achievement.seriesId?.let { seriesId ->
+            allAchievements.filter { it.seriesId == seriesId }.sortedBy { it.seriesOrder }
+        } ?: emptyList()
     }
 
     Dialog(
@@ -958,8 +927,7 @@ fun AchievementDetailDialog(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 seriesList.forEachIndexed { index, def ->
-                                    val fullAch = allAchievements.find { it.id == def.id }
-                                    val isUnlockedDef = fullAch?.isUnlocked == true
+                                    val isUnlockedDef = def.isUnlocked
                                     val isCurrent = def.id == achievement.id
 
                                     Surface(
@@ -994,7 +962,7 @@ fun AchievementDetailDialog(
                                             )
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
-                                                text = "${def.target}${def.unit}",
+                                                text = "${def.targetProgress}${def.unit}",
                                                 fontSize = 11.sp,
                                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                                                 color = if (isUnlockedDef || isCurrent) YanjiTextPrimary else YanjiTextTertiary
@@ -1055,7 +1023,7 @@ fun AchievementDetailDialog(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = YanjiPrimary,
-                        contentColor = Color.White
+                        contentColor = YanjiOnPrimary
                     )
                 ) {
                     Text("关 闭", fontSize = 14.sp)

@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.example.yanji.data.ChatMessage
+import com.example.yanji.data.ChatSender
 
 /**
  * AI 协议层的纯 JVM 测试。
@@ -13,6 +15,33 @@ import org.junit.Test
  * 字符串数组），解析失败会直接导致"测试连接"报错。
  */
 class AiProtocolTest {
+    @Test
+    fun historyBudgetKeepsNewestMessagesAndTruncatesOneOversizedMessage() {
+        val messages = listOf(
+            ChatMessage("old", "s", ChatSender.USER, "old".repeat(100), 1L),
+            ChatMessage("middle", "s", ChatSender.JUANJUAN, "middle".repeat(30), 2L),
+            ChatMessage("new", "s", ChatSender.USER, "N".repeat(600), 3L)
+        )
+
+        val selected = AiProtocol.historyWithinCharacterBudget(
+            messages = messages,
+            maxMessages = 10,
+            maxCharacters = 220
+        )
+
+        assertEquals(listOf("new"), selected.map { it.id })
+        assertTrue(selected.single().content.length <= 204)
+        assertTrue(selected.single().content.contains("…"))
+        assertTrue(selected.single().content.startsWith("N"))
+        assertTrue(selected.single().content.endsWith("N"))
+    }
+
+    @Test
+    fun nonJsonProviderErrorBodyIsNeverReturnedToUi() {
+        val detail = AiProtocol.extractErrorDetail("<html>secret provider diagnostics</html>")
+        assertFalse(detail.contains("secret"))
+        assertEquals("服务未提供可读的 JSON 错误信息", detail)
+    }
 
     // ---------------------------------------------------------------- URL 拼接
 
@@ -97,11 +126,11 @@ class AiProtocolTest {
     }
 
     @Test
-    fun `extractErrorDetail truncates long raw bodies`() {
+    fun `extractErrorDetail does not expose unstructured provider bodies`() {
         val body = "x".repeat(500)
         val detail = AiProtocol.extractErrorDetail(body)
-        assertEquals(150 + 3, detail.length)
-        assertTrue(detail.endsWith("..."))
+        assertEquals("服务未提供可读的 JSON 错误信息", detail)
+        assertFalse(detail.contains("x"))
     }
 
     @Test

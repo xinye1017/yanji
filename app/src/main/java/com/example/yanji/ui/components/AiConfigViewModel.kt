@@ -38,12 +38,20 @@ class AiConfigViewModel(
             initialValue = AiConfigUiState(repo.settings.value)
         )
 
-    suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> =
-        repo.fetchAvailableModels(baseUrl, apiKey)
+    suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> {
+        val result = repo.fetchAvailableModels(baseUrl, apiKey)
+        result.onSuccess { models ->
+            repo.setAvailableAiModels(models)
+        }
+        return result
+    }
 
     /** Returns false when Android Keystore could not durably save the key. */
-    fun updateSettings(newSettings: UserSettings): Boolean =
-        when (repo.updateSettings(newSettings)) {
+    fun updateSettings(newSettings: UserSettings): Boolean {
+        if (newSettings.aiModel.isNotBlank() && repo.availableAiModels.value.isEmpty()) {
+            repo.setAvailableAiModels(listOf(newSettings.aiModel))
+        }
+        return when (repo.updateSettings(newSettings)) {
             SettingsUpdateResult.Saved -> {
                 securityError.value = null
                 true
@@ -53,6 +61,7 @@ class AiConfigViewModel(
                 false
             }
         }
+    }
 
     fun clearSecurityError() {
         securityError.value = null

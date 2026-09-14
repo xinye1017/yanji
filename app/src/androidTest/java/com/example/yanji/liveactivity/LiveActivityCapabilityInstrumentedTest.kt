@@ -13,6 +13,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -23,12 +25,19 @@ import java.io.File
  * 为什么必须在真机上跑：promoted ongoing 的可用性由**系统**决定（系统版本、ROM 是否提供该
  * framework 方法、权限、渠道重要性），模拟器与 JVM 单测都给不出答案。
  *
- * 本测试做两件事：
+ * 本测试做三件事：
  *  1. 把 [LiveActivityCapability] 的探测结果落盘（`externalCacheDir/live-activity-capability.txt`），
  *     便于 `adb pull` 取证，不必在真机上翻 logcat；
  *  2. 守住一条关键不变量——**只要系统报告 promoted 能力可用，我们构造出来的常驻通知就必须
  *     通过 `hasPromotableCharacteristics()`**。如果哪天有人改坏了通知结构（比如加了自定义
  *     RemoteViews、把渠道降成 IMPORTANCE_MIN、少了标题），系统会静默拒绝提升，而这条断言会先失败。
+ *  3. 把「系统版本带来的能力」与「运行时通知可用性」拆成两条各自独立的不变量，见下面两个测试。
+ *
+ * 三类状态必须分清，混在一起断言会得出错误结论：
+ *  - **API Level 能力**：`sdkInt < 36` ⇒ 一律不可能有 promoted ongoing（稳定不变量）；
+ *  - **运行时权限/开关**：用户可以关掉通知。关掉时 tier 降级为
+ *    [LiveActivityCapability.Tier.NOTIFICATIONS_DISABLED]，而不是 STANDARD_ONGOING；
+ *  - **厂商呈现**：ColorOS 系 ROM 在 promoted 可用时由系统侧渲染成流体云，不由本应用控制。
  *
  * 不写数据库、不改用户数据。
  */
@@ -126,13 +135,50 @@ class LiveActivityCapabilityInstrumentedTest {
         Log.i(TAG, report)
     }
 
+    /**
+     * 不变量一（纯系统能力）：Android 16 以下**绝不允许**声称支持 promoted ongoing。
+     * 与通知开关、权限、厂商名都无关——这是 API Level 的硬边界。
+     */
     @Test
     fun capabilityDetectionNeverClaimsPromotionBelowApi36() {
         val capability = LiveActivityCapabilityDetector.detect(context)
-        // 低版本系统上必须一律降级，不允许凭厂商名硬开。
-        if (capability.sdkInt < 36) {
-            assertFalse(capability.canPostPromotedOngoing)
-            assertEquals(LiveActivityCapability.Tier.STANDARD_ONGOING, capability.tier)
+        assumeTrue(
+            "API 36 及以上不适用本不变量，仅在低版本系统上校验",
+            capability.sdkInt < 36
+        )
+        assertFalse(
+            "Android 16 (API 36) 以下的系统绝不能声称支持 promoted ongoing",
+            capability.canPostPromotedOngoing
+        )
+    }
+
+    /**
+     * 不变量二（运行时可用性）：当系统不提供 promoted ongoing 时，最终 tier 由**通知是否可用**决定：
+     *  - 通知可用 ⇒ [LiveActivityCapability.Tier.STANDARD_ONGOING]（走普通常驻通知 + Chronometer）；
+     *  - 通知被用户关闭 ⇒ [LiveActivityCapability.Tier.NOTIFICATIONS_DISABLED]（计时不受影响，仅展示降级）。
+     *
+     * 之前的写法把「tier 一定是 STANDARD_ONGOING」当成无条件成立，在通知未授权的模拟器上必然失败；
+     * 根因是把「系统能力」和「运行时权限」当成了同一件事。
+     */
+    @Test
+    fun tierFollowsNotificationAvailabilityWhenPromotionIsUnavailable() {
+        val capability = LiveActivityCapabilityDetector.detect(context)
+        assumeFalse(
+            "系统提供了 promoted ongoing 时 tier 另由系统层级决定，本不变量不适用",
+            capability.canPostPromotedOngoing
+        )
+        if (capability.notificationsEnabled) {
+            assertEquals(
+                "通知可用且无系统级 promoted 能力时，应降级为标准常驻通知",
+                LiveActivityCapability.Tier.STANDARD_ONGOING,
+                capability.tier
+            )
+        } else {
+            assertEquals(
+                "通知被关闭时，tier 必须如实反映为 NOTIFICATIONS_DISABLED",
+                LiveActivityCapability.Tier.NOTIFICATIONS_DISABLED,
+                capability.tier
+            )
         }
     }
 

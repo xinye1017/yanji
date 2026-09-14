@@ -21,7 +21,7 @@ data class JournalUiState(
  * 日记 Feature ViewModel：日记列表 + 保存动作 + 当日学时摘要查询。
  * JournalScreen 与 JournalEditorScreen 共享同一实例（Activity scope）。
  */
-class JournalViewModel(
+open class JournalViewModel(
     private val repo: YanjiRepository,
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
@@ -34,7 +34,12 @@ class JournalViewModel(
             initialValue = JournalUiState(repo.journalEntries.value)
         )
 
-    fun saveJournal(entry: JournalEntry) = repo.addOrUpdateJournal(entry)
+    /**
+     * 落库入口。声明为 `open` 是为了让插桩测试注入一个「不落库」的子类：
+     * 插桩测试必须使用一次性数据库，默认实现会写入 App 全局单例所指向的**用户真实库**，
+     * 因此在 UI 测试里必须被覆盖掉，否则会污染用户数据。
+     */
+    open fun saveJournal(entry: JournalEntry) = repo.addOrUpdateJournal(entry)
 
     /** 用户设置（同步读缓存），编辑页用于计算初试倒计时。 */
     val settings: StateFlow<UserSettings> get() = repo.settings

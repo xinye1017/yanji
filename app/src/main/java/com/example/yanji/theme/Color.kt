@@ -74,3 +74,66 @@ val SubjectMajorSoft = Color(0xFFEEF3FF)
 val SubjectEnglishSoft = YanjiLavenderSoftDeep
 val SubjectPoliticsSoft = Color(0xFFEDF6FA)
 val SubjectOtherSoft = YanjiSurfaceSoft   // #F1F5FB
+
+// --- Yanji Dark Slate Color Palette (Calm & Soft, not pure black #000000) ---
+val YanjiDarkBackground = Color(0xFF0F141C)
+val YanjiDarkSurface = Color(0xFF192231)
+val YanjiDarkSurfaceSoft = Color(0xFF222C3D)
+val YanjiDarkSurfaceBlue = Color(0xFF1C273C)
+
+val YanjiDarkTextPrimary = Color(0xFFF0F4F8)
+val YanjiDarkTextSecondary = Color(0xFFA0ABC0)
+val YanjiDarkTextTertiary = Color(0xFF687890)
+
+val YanjiDarkBorder = Color(0xFF273448)
+val YanjiDarkDivider = Color(0xFF1E2838)
+val YanjiDarkBorderSoft = Color(0xFF202B3B)
+
+val YanjiDarkPrimary = Color(0xFF5386F5)
+val YanjiDarkPrimaryStrong = Color(0xFF7CA6F8)
+val YanjiDarkPrimarySoft = Color(0xFF1D2C4A)
+
+val YanjiDarkLavender = Color(0xFFA79BFA)
+val YanjiDarkLavenderSoft = Color(0xFF2B2544)
+val YanjiDarkLavenderDeep = Color(0xFF8B7CF6)
+val YanjiDarkLavenderSoftDeep = Color(0xFF26203D)
+
+val YanjiDarkSuccess = Color(0xFF38B27A)
+val YanjiDarkSuccessSoft = Color(0xFF163324)
+
+val YanjiDarkWarning = Color(0xFFE5A43B)
+val YanjiDarkWarningSoft = Color(0xFF3B2C15)
+
+val YanjiDarkDanger = Color(0xFFE56363)
+val YanjiDarkDangerSoft = Color(0xFF3B1B1B)
+val YanjiDarkError = YanjiDarkDanger
+
+
+
+// ---------------------------------------------------------------------------
+// Achievement rarity tokens（成就稀有度）
+//
+// 单列一组的原因：稀有度是成就系统独有的六阶语义色（前景色 / 极浅容器 / 渐变收尾色），
+// 与主蓝、Lavender、Success/Warning/Danger 均不重合，复用既有 token 会破坏语义。
+// UI 层（AchievementsScreen）只允许引用这些 token，不得内联 Color(0x...)。
+// ---------------------------------------------------------------------------
+
+val AchievementCommon = Color(0xFF64748B)      // Slate
+val AchievementUncommon = Color(0xFF10B981)    // Emerald
+val AchievementRare = Color(0xFF2563EB)        // Royal Blue
+val AchievementEpic = Color(0xFF8B5CF6)        // Purple
+val AchievementLegendary = Color(0xFFF59E0B)   // Amber Gold
+val AchievementMythic = Color(0xFFEF4444)      // Crimson Red
+
+val AchievementCommonContainer = Color(0xFFF1F5F9)
+val AchievementUncommonContainer = Color(0xFFECFDF5)
+val AchievementRareContainer = Color(0xFFEFF6FF)
+val AchievementEpicContainer = Color(0xFFF5F3FF)
+val AchievementLegendaryContainer = Color(0xFFFFFBEB)
+val AchievementMythicContainer = Color(0xFFFEF2F2)
+
+/** 徽章线性渐变的主色之后的收尾色（比主色浅一档）。MYTHIC 为三段渐变，无收尾色。 */
+val AchievementUncommonGradientEnd = Color(0xFFA7F3D0)
+val AchievementRareGradientEnd = Color(0xFF93C5FD)
+val AchievementEpicGradientEnd = Color(0xFFC4B5FD)
+val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)

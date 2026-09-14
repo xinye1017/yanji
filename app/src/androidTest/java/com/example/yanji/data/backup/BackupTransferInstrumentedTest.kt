@@ -2,6 +2,7 @@ package com.example.yanji.data.backup
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.withTransaction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.yanji.data.CheckIn
@@ -112,6 +113,44 @@ class BackupTransferInstrumentedTest {
         assertEquals(0, db.quickStartPresetDao().count())
         // settings 为空表示"备份里没有设置"，此时保留本机设置比清空更安全
         assertEquals(1, db.userSettingsDao().count())
+    }
+
+    @Test
+    fun repeatedApplyIsIdempotent() = runBlocking {
+        val backup = YanjiBackup(exportedAt = epoch, focusSessions = listOf(focus("fs-stable", "same")))
+
+        BackupTransfer.applyInTransaction(db, backup)
+        BackupTransfer.applyInTransaction(db, backup)
+
+        val rows = db.focusSessionDao().getAll().first()
+        assertEquals("重复恢复同一备份不能产生重复记录", 1, rows.size)
+        assertEquals("fs-stable", rows.single().id)
+        assertEquals("same", rows.single().note)
+    }
+
+    @Test
+    fun transactionRollsBackEveryTableWhenRestoreFailsBeforeCommit() = runBlocking {
+        db.focusSessionDao().insert(FocusSessionEntity.fromDomainModel(focus("fs-original", "keep")))
+        val replacement = YanjiBackup(
+            exportedAt = epoch,
+            focusSessions = listOf(focus("fs-replacement", "must-roll-back"))
+        )
+
+        var failureObserved = false
+        try {
+            db.withTransaction {
+                BackupTransfer.apply(db, replacement)
+                error("injected restore failure")
+            }
+        } catch (_: IllegalStateException) {
+            failureObserved = true
+        }
+
+        assertTrue("测试必须真的在提交前失败", failureObserved)
+        val rows = db.focusSessionDao().getAll().first()
+        assertEquals("失败恢复不得留下半写入状态", 1, rows.size)
+        assertEquals("fs-original", rows.single().id)
+        assertEquals("keep", rows.single().note)
     }
 
     // ---------------------------------------------------------------- 全量往返
