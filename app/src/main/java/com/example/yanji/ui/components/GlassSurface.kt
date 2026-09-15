@@ -57,6 +57,14 @@ fun GlassSurface(
             blurRadius = tokens.blurRadius
             tints = listOf(HazeTint(baseTint))
             noiseFactor = tokens.noiseFactor
+            // haze 1.5.4 的 RenderEffect 路径（API 31+）会在 drawScaledContentLayer 中
+            // 硬性校验 resolveBackgroundColor().isSpecified，其解析链为
+            // node.backgroundColor → style.backgroundColor → compositionLocalStyle.backgroundColor。
+            // 三级全空时抛 IllegalArgumentException("backgroundColor not specified")，
+            // 导致真机启动即崩溃（模拟器同样受影响，仅取决于是否走 RenderEffect 分支）。
+            // 玻璃面板本身需要透出底层内容，故以 Transparent 垫底：
+            // 绘制透明矩形是 no-op，不改变原本的通透观感。着色仍由上面的 tints 负责。
+            backgroundColor = Color.Transparent
         }
     } else {
         Modifier.background(baseTint)
