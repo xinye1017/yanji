@@ -185,41 +185,50 @@ fun CheckInCard(
             // 局部捕获：state 是委托属性，块内多次访问无法 smart cast
             val todayCheckIn = state.todayCheckIn
             if (state.isCheckedInToday && todayCheckIn != null) {
-                // Today Checked-In Info Bar
-                Box(
+                // Today Checked-In Info: Clean, unnested clickable row
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.background)
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
                         .clickable { onCheckInSuccess(todayCheckIn) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "已连续打卡 ${todayCheckIn.streak} 天",
+                                text = "已连续打卡 ",
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            RollingNumber(
+                                text = "${todayCheckIn.streak}",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = MaterialTheme.colorScheme.primary
+                            )
                             Text(
-                                text = todayCheckIn.note.ifBlank { "稳扎稳打，静待花开。" },
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = " 天",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "查看 >",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
+                            text = todayCheckIn.note.ifBlank { "稳扎稳打，静待花开。" },
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = "查看 >",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             } else {
                 // Check-in Action: Direct Button
@@ -233,7 +242,7 @@ fun CheckInCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White

@@ -62,6 +62,8 @@ import com.example.yanji.ui.components.CheckInCard
 import com.example.yanji.ui.components.CheckInCelebrationDialog
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.JuanjuanEncouragementBanner
+import com.example.yanji.ui.components.RollingNumber
+import com.example.yanji.ui.components.YanjiSection
 import java.util.*
 
 @Composable
@@ -164,12 +166,13 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (daysRemaining != null) {
-                            Text(
+                            RollingNumber(
                                 text = "$daysRemaining",
-                                style = MaterialTheme.typography.displayMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                lineHeight = 44.sp
+                                style = MaterialTheme.typography.displayMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    lineHeight = 44.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -260,10 +263,11 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
+                        RollingNumber(
                             text = "${todayHours}h ${todayMins}m",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(10.dp))
