@@ -1,25 +1,32 @@
 package com.example.yanji.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.JuanjuanAvatar
 import java.util.Locale
 
@@ -34,7 +41,7 @@ fun ProfileIdentityCard(settings: UserSettings) {
             .fillMaxWidth()
             .heightIn(min = 128.dp),
         shape = RoundedCornerShape(20.dp),
-        color = YanjiSurface
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
@@ -51,19 +58,19 @@ fun ProfileIdentityCard(settings: UserSettings) {
                 Text(
                     text = examYear?.let { "$it 考研备战" } ?: "考研备战",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = settings.targetSchool.ifBlank { "点击设置目标院校" },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (settings.targetSchool.isBlank()) YanjiTextTertiary else YanjiTextSecondary,
+                    color = if (settings.targetSchool.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = settings.targetMajor.ifBlank { "未设置专业" },
                     style = MaterialTheme.typography.labelMedium,
-                    color = YanjiTextTertiary,
+                    color = YanjiColors.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -85,7 +92,7 @@ fun PreparationOverviewCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = YanjiSurface
+        color = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -103,7 +110,7 @@ fun PreparationOverviewCard(
                             "距离初试"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(
                         verticalAlignment = Alignment.Bottom,
@@ -114,13 +121,13 @@ fun PreparationOverviewCard(
                             fontSize = 48.sp,
                             lineHeight = 54.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         if (safeDays != null) {
                             Text(
                                 text = "天",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = YanjiTextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 7.dp)
                             )
                         }
@@ -130,17 +137,17 @@ fun PreparationOverviewCard(
                     Text(
                         text = formatExamDateCompact(settings.targetExamDate),
                         style = MaterialTheme.typography.titleMedium,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "初试",
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextTertiary
+                        color = YanjiColors.textTertiary
                     )
                 }
             }
 
-            HorizontalDivider(color = YanjiDivider, thickness = 0.8.dp)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.8.dp)
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
@@ -151,12 +158,12 @@ fun PreparationOverviewCard(
                     Text(
                         text = "今日学习",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "${formatStudyDuration(todayStudySeconds)} / ${formatGoalHours(settings.dailyGoalHours)}",
                         style = MaterialTheme.typography.labelLarge,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Box(
@@ -164,13 +171,13 @@ fun PreparationOverviewCard(
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(CircleShape)
-                        .background(YanjiPrimarySoft)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(progress)
-                            .background(YanjiPrimary)
+                            .background(MaterialTheme.colorScheme.primary)
                     )
                 }
             }
@@ -195,7 +202,7 @@ fun ProfileSectionHeader(
             text = title,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
-            color = YanjiTextSecondary
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.weight(1f))
         when {
@@ -208,7 +215,7 @@ fun ProfileSectionHeader(
                     Text(
                         text = actionLabel,
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiPrimary
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -226,13 +233,13 @@ fun LocalDataStatus() {
         Icon(
             imageVector = Icons.Outlined.Lock,
             contentDescription = null,
-            tint = YanjiTextTertiary,
+            tint = YanjiColors.textTertiary,
             modifier = Modifier.size(14.dp)
         )
         Text(
             text = "本地优先 · 可随系统迁移",
             style = MaterialTheme.typography.labelMedium,
-            color = YanjiTextTertiary
+            color = YanjiColors.textTertiary
         )
     }
 }
@@ -244,7 +251,7 @@ fun ProfileSettingsGroup(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = YanjiSurface,
+        color = MaterialTheme.colorScheme.surface,
         content = { Column(content = content) }
     )
 }
@@ -267,7 +274,7 @@ fun ProfileSettingsItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (enabled) YanjiTextSecondary else YanjiTextTertiary,
+            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else YanjiColors.textTertiary,
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -275,13 +282,13 @@ fun ProfileSettingsItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
-                color = if (enabled) YanjiTextPrimary else YanjiTextTertiary
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelMedium,
-                color = YanjiTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -290,9 +297,111 @@ fun ProfileSettingsItem(
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = YanjiTextTertiary,
+            tint = YanjiColors.textTertiary,
             modifier = Modifier.size(18.dp)
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 外观（主题）切换
+// ---------------------------------------------------------------------------
+
+/** UI 测试定位锚点：与设置页的插桩测试共享，避免依赖中文文案。 */
+object ProfileThemeTags {
+    fun option(mode: YanjiThemeMode) = "profile_theme_" + mode.name.lowercase()
+}
+
+/** 主题模式的中文标签。 */
+fun YanjiThemeMode.displayLabel(): String = when (this) {
+    YanjiThemeMode.SYSTEM -> "跟随系统"
+    YanjiThemeMode.LIGHT -> "浅色"
+    YanjiThemeMode.DARK -> "深色"
+}
+
+/**
+ * 外观选择器：跟随系统 / 浅色 / 深色 三档，一行点选、不弹窗。
+ *
+ * 用 [Modifier.selectable] 而不是 `clickable`：TalkBack 会朗读「已选中」，
+ * 插桩测试也能直接用 `assertIsSelected()` 断言选中态，而不是比对颜色。
+ */
+@Composable
+fun ProfileThemeSelector(
+    selected: YanjiThemeMode,
+    onSelect: (YanjiThemeMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.DarkMode,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "外观",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "选择研迹的显示主题",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 36.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            YanjiThemeMode.entries.forEach { mode ->
+                val isSelected = mode == selected
+                val shape = RoundedCornerShape(YanjiRadius.ChipRadius)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(ProfileThemeTags.option(mode))
+                        .clip(shape)
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline,
+                            shape = shape
+                        )
+                        .selectable(
+                            selected = isSelected,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(mode) }
+                        )
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = mode.displayLabel(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
 

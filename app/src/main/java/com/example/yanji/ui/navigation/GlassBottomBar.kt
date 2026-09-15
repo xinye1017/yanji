@@ -41,6 +41,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
+import com.example.yanji.theme.YanjiDarkDockPanel
+import com.example.yanji.theme.YanjiDarkDockPill
+import com.example.yanji.theme.YanjiDockPanel
+import com.example.yanji.theme.yanjiThemeColor
 import kotlin.math.abs
 
 private val DockHeight = 52.dp
@@ -94,8 +98,13 @@ fun GlassBottomBar(
         val indicatorWidth = DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
         val indicatorCenter = slotWidth * (indicatorPosition.value + 0.5f)
 
-        val dockPanelColor = MaterialTheme.colorScheme.surface
-        val dockPillColor = MaterialTheme.colorScheme.primaryContainer
+        // design_dark.md §3.2：暗色底栏是**半透明**玻璃面板（rgba(21,27,40,0.78)），
+        // 激活胶囊用微发光蓝（rgba(79,125,243,0.22)）；亮色保持不透明白，视觉不变。
+        // 注：规范里的 backdrop-filter blur 在 Compose 没有「背景滤镜」等价物
+        //（Modifier.blur 模糊的是自身内容而非身后内容，且需 API 31+），
+        // 因此以半透明面板 + 既有柔和投影表达同一意图，不引入平台版本分叉。
+        val dockPanelColor = yanjiThemeColor(YanjiDockPanel, YanjiDarkDockPanel)
+        val dockPillColor = yanjiThemeColor(MaterialTheme.colorScheme.primaryContainer, YanjiDarkDockPill)
         val dockBorderColor = MaterialTheme.colorScheme.outlineVariant
         val dockShadowColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         val dockShadowColorStrong = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)

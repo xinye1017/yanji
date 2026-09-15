@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      启动窗口（Starting Window / Splash）的底色。
+      冷启动时 Compose 首帧尚未绘制，状态栏背后的区域显示的就是这个颜色，
+      因此它必须与 theme/Color.kt 的 YanjiBackground 保持一致，
+      否则启动瞬间会出现「底色与状态栏图标同色」而看不清的问题。
+    -->
+    <color name="yanji_window_background">#F7F9FC</color>
+</resources>

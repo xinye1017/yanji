@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.ChatSender
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.chat.components.*
 import com.example.yanji.ui.components.AiConfigDialog
 import java.time.Instant
@@ -95,7 +97,7 @@ fun JuanjuanChatScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Chat Stream Body
         LazyColumn(
@@ -129,14 +131,14 @@ fun JuanjuanChatScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = YanjiSurfaceSoft
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text = Instant.now().atZone(ZoneId.systemDefault()).format(
                                 DateTimeFormatter.ofPattern("'今天' HH:mm", Locale.getDefault())
                             ),
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = YanjiTextTertiary,
+                                color = YanjiColors.textTertiary,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 11.sp
                             ),
@@ -192,8 +194,8 @@ fun JuanjuanChatScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-                        color = YanjiDangerSoft,
-                        border = BorderStroke(1.dp, YanjiDanger.copy(alpha = 0.22f))
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.22f))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -203,13 +205,13 @@ fun JuanjuanChatScreen(
                                 text = failure.userMessage,
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             TextButton(
                                 onClick = viewModel::retryFailedReply,
                                 enabled = !isAiReplying
                             ) {
-                                Text("重试", color = YanjiPrimary)
+                                Text("重试", color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -244,10 +246,10 @@ fun JuanjuanChatScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            YanjiBackground.copy(alpha = 0.96f),
-                            YanjiBackground.copy(alpha = 0.85f),
-                            YanjiBackground.copy(alpha = 0.45f),
-                            YanjiBackground.copy(alpha = 0.12f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.12f),
                             Color.Transparent
                         )
                     )

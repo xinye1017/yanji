@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.timer.formatFocusClock
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
@@ -78,7 +80,7 @@ fun ActiveFocusContent(
     val targetSeconds = FocusModes.targetSeconds(session.mode)
     var showCancelDialog by rememberSaveable(session.id) { mutableStateOf(false) }
     val timerColor by animateColorAsState(
-        targetValue = if (isPaused) YanjiTextSecondary else YanjiPrimary,
+        targetValue = if (isPaused) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
         animationSpec = tween(360),
         label = "focusTimerColor"
     )
@@ -86,7 +88,7 @@ fun ActiveFocusContent(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
@@ -162,7 +164,7 @@ private fun FocusSystemBarAppearance() {
 @Composable
 private fun FocusSessionHeader(session: FocusSession, targetSeconds: Long, isPaused: Boolean) {
     val statusColor by animateColorAsState(
-        targetValue = if (isPaused) YanjiWarning else YanjiPrimary,
+        targetValue = if (isPaused) YanjiColors.warning else MaterialTheme.colorScheme.primary,
         animationSpec = tween(360),
         label = "focusStatusColor"
     )
@@ -183,14 +185,14 @@ private fun FocusSessionHeader(session: FocusSession, targetSeconds: Long, isPau
                     else -> "正向专注"
                 },
                 style = MaterialTheme.typography.labelLarge,
-                color = if (isPaused) YanjiTextSecondary else YanjiPrimary,
+                color = if (isPaused) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
         }
         Text(
             text = session.subjectName,
             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Medium),
-            color = YanjiTextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -199,7 +201,7 @@ private fun FocusSessionHeader(session: FocusSession, targetSeconds: Long, isPau
             Text(
                 text = session.note,
                 style = MaterialTheme.typography.bodyMedium,
-                color = YanjiTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -227,26 +229,61 @@ private fun CountdownFocusBody(elapsedSeconds: State<Long>, targetSeconds: Long,
             modifier = Modifier.widthIn(max = 228.dp).fillMaxWidth().aspectRatio(1f),
             contentAlignment = Alignment.Center
         ) {
+            // design_dark.md §3.3：亮色底轨是 8% 主蓝；暗色换成 6% 白，避免在深底上发闷。
+            val darkRing = yanjiIsDarkTheme()
+            val trackRingColor = yanjiThemeColor(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                YanjiDarkTrack
+            )
+            val ringGlowColor = if (darkRing) YanjiDarkPrimaryGlow else Color.Transparent
+            // 暗色运行态：圆环由主蓝渐变到微光紫；暂停态仍走警示色，语义不丢。
+            val ringBrush = if (darkRing && !isPaused) {
+                Brush.sweepGradient(
+                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                )
+            } else {
+                null
+            }
             Canvas(Modifier.matchParentSize()) {
                 val strokeWidth = 4.dp.toPx()
                 val inset = strokeWidth / 2
                 val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+                if (ringGlowColor != Color.Transparent) {
+                    // 夜间自发光呼吸微感：整圈铺一层更宽的低透明蓝，形成环境柔光。
+                    drawCircle(
+                        color = ringGlowColor,
+                        radius = (size.minDimension - strokeWidth) / 2,
+                        style = Stroke(strokeWidth * 2.6f)
+                    )
+                }
                 drawCircle(
-                    color = YanjiPrimary.copy(alpha = 0.08f),
+                    color = trackRingColor,
                     radius = (size.minDimension - strokeWidth) / 2,
                     style = Stroke(strokeWidth)
                 )
                 if (displayedProgress.value > 0f) {
                     // Butt ends preserve a genuinely tiny starting arc instead of a round dot.
-                    drawArc(
-                        color = timerColor,
-                        startAngle = -90f,
-                        sweepAngle = displayedProgress.value * 360f,
-                        useCenter = false,
-                        topLeft = Offset(inset, inset),
-                        size = arcSize,
-                        style = Stroke(strokeWidth, cap = StrokeCap.Butt)
-                    )
+                    if (ringBrush != null) {
+                        drawArc(
+                            brush = ringBrush,
+                            startAngle = -90f,
+                            sweepAngle = displayedProgress.value * 360f,
+                            useCenter = false,
+                            topLeft = Offset(inset, inset),
+                            size = arcSize,
+                            style = Stroke(strokeWidth, cap = StrokeCap.Butt)
+                        )
+                    } else {
+                        drawArc(
+                            color = timerColor,
+                            startAngle = -90f,
+                            sweepAngle = displayedProgress.value * 360f,
+                            useCenter = false,
+                            topLeft = Offset(inset, inset),
+                            size = arcSize,
+                            style = Stroke(strokeWidth, cap = StrokeCap.Butt)
+                        )
+                    }
                 }
             }
             Column(
@@ -258,7 +295,7 @@ private fun CountdownFocusBody(elapsedSeconds: State<Long>, targetSeconds: Long,
                 Text(
                     text = if (isPaused) "计时已暂停" else "剩余时间",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
@@ -266,7 +303,7 @@ private fun CountdownFocusBody(elapsedSeconds: State<Long>, targetSeconds: Long,
         Text(
             text = "已完成 ${(elapsed * 100 / targetSeconds).toInt()}%",
             style = MaterialTheme.typography.bodyMedium,
-            color = YanjiTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
     }
@@ -289,7 +326,7 @@ private fun FlowFocusBody(elapsedSeconds: State<Long>, isPaused: Boolean, timerC
             Text(
                 text = if (isPaused) "计时已暂停" else "持续专注中",
                 style = MaterialTheme.typography.bodyMedium,
-                color = YanjiTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }
@@ -325,6 +362,7 @@ private fun FlowBreathingField(isPaused: Boolean, modifier: Modifier = Modifier)
             }
         }
     }
+    val glowColor = MaterialTheme.colorScheme.primary
     Canvas(
         modifier.graphicsLayer {
             // Read animation values in the drawing layer: no per-frame sizing or re-layout.
@@ -335,9 +373,9 @@ private fun FlowBreathingField(isPaused: Boolean, modifier: Modifier = Modifier)
     ) {
         drawCircle(
             brush = Brush.radialGradient(
-                0f to YanjiPrimary,
-                0.4f to YanjiPrimary.copy(alpha = 0.35f),
-                1f to YanjiPrimary.copy(alpha = 0f),
+                0f to glowColor,
+                0.4f to glowColor.copy(alpha = 0.35f),
+                1f to glowColor.copy(alpha = 0f),
                 center = center,
                 radius = size.minDimension / 2
             ),
@@ -395,17 +433,17 @@ private fun FocusControls(
             onClick = if (isPaused) onResume else onPause,
             modifier = Modifier.widthIn(max = 200.dp).fillMaxWidth().heightIn(min = 56.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary, contentColor = YanjiOnPrimary)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
         ) {
             Icon(if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(if (isPaused) "继续专注" else "暂停", style = MaterialTheme.typography.titleMedium)
         }
         TextButton(onClick = onFinish, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text("结束并保存", style = MaterialTheme.typography.bodyMedium, color = YanjiTextSecondary)
+            Text("结束并保存", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text("放弃本次记录", style = MaterialTheme.typography.labelMedium, color = YanjiDanger)
+            Text("放弃本次记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -415,14 +453,14 @@ private fun FocusCancelDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("放弃本次专注？", fontWeight = FontWeight.SemiBold) },
-        text = { Text("放弃后，本次计时时长将不予保存。", color = YanjiTextSecondary) },
+        text = { Text("放弃后，本次计时时长将不予保存。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("确认放弃", color = YanjiDanger) }
+            TextButton(onClick = onConfirm) { Text("确认放弃", color = MaterialTheme.colorScheme.error) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("保留记录", color = YanjiTextSecondary) }
+            TextButton(onClick = onDismiss) { Text("保留记录", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         },
         shape = RoundedCornerShape(24.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }

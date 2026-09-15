@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,6 +21,7 @@ import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiThemeMode
 import com.example.yanji.ui.components.AchievementSummaryBanner
 import com.example.yanji.ui.components.AiConfigDialog
 import com.example.yanji.ui.components.AppContentInsets
@@ -127,7 +129,7 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
@@ -174,6 +176,17 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        ProfileSectionHeader(title = "偏好")
+        Spacer(modifier = Modifier.height(8.dp))
+        ProfileSettingsGroup {
+            ProfileThemeSelector(
+                selected = YanjiThemeMode.fromStorage(settings.themeMode),
+                onSelect = { mode -> viewModel.updateSettings(settings.copy(themeMode = mode.name)) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         ProfileSectionHeader(
             title = "数据与隐私",
             trailingContent = { LocalDataStatus() }
@@ -192,7 +205,7 @@ fun ProfileScreen(
                 onClick = { startExport() }
             )
             HorizontalDivider(
-                color = YanjiDivider,
+                color = MaterialTheme.colorScheme.outlineVariant,
                 thickness = 0.8.dp,
                 modifier = Modifier.padding(start = 52.dp, end = 16.dp)
             )

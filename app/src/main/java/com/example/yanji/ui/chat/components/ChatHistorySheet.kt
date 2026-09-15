@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.ChatSession
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -42,7 +44,7 @@ fun ChatHistorySheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = YanjiSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() },
         shape = RoundedCornerShape(topStart = YanjiRadius.PageRadius, topEnd = YanjiRadius.PageRadius)
     ) {
@@ -62,18 +64,18 @@ fun ChatHistorySheet(
                         text = "历史对话",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         shape = CircleShape,
-                        color = YanjiSurfaceSoft
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text = "${sessions.size}",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = YanjiTextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.SemiBold
                             ),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -83,7 +85,7 @@ fun ChatHistorySheet(
 
                 Button(
                     onClick = onNewChat,
-                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
                 ) {
@@ -106,7 +108,7 @@ fun ChatHistorySheet(
                         .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("暂无历史对话记录", color = YanjiTextTertiary, style = MaterialTheme.typography.bodyMedium)
+                    Text("暂无历史对话记录", color = YanjiColors.textTertiary, style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 LazyColumn(
@@ -119,8 +121,8 @@ fun ChatHistorySheet(
                         val isSelected = s.id == currentSessionId
                         Surface(
                             shape = RoundedCornerShape(YanjiRadius.MessageRadius),
-                            color = if (isSelected) YanjiPrimarySoft.copy(alpha = 0.45f) else YanjiSurfaceSoft,
-                            border = if (isSelected) BorderStroke(1.5.dp, YanjiPrimary) else BorderStroke(0.5.dp, YanjiDivider),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onSelectSession(s.id) }
@@ -134,7 +136,7 @@ fun ChatHistorySheet(
                                 Icon(
                                     imageVector = if (isSelected) Icons.Default.ChatBubble else Icons.Default.ChatBubbleOutline,
                                     contentDescription = null,
-                                    tint = if (isSelected) YanjiPrimary else YanjiTextSecondary,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
 
@@ -146,7 +148,7 @@ fun ChatHistorySheet(
                                             text = s.title,
                                             style = MaterialTheme.typography.bodyMedium.copy(
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) YanjiPrimary else YanjiTextPrimary
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                             ),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
@@ -156,7 +158,7 @@ fun ChatHistorySheet(
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(YanjiRadius.ChipRadius),
-                                                color = YanjiPrimary
+                                                color = MaterialTheme.colorScheme.primary
                                             ) {
                                                 Text(
                                                     text = "当前",
@@ -177,14 +179,14 @@ fun ChatHistorySheet(
                                                 .atZone(ZoneId.systemDefault())
                                                 .format(dateFormat),
                                             style = MaterialTheme.typography.labelMedium.copy(
-                                                color = YanjiTextTertiary
+                                                color = YanjiColors.textTertiary
                                             )
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "·  ${s.model}",
                                             style = MaterialTheme.typography.labelMedium.copy(
-                                                color = YanjiTextTertiary
+                                                color = YanjiColors.textTertiary
                                             ),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -199,7 +201,7 @@ fun ChatHistorySheet(
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
                                         contentDescription = "删除对话",
-                                        tint = YanjiTextTertiary,
+                                        tint = YanjiColors.textTertiary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -221,7 +223,7 @@ fun ChatHistorySheet(
                                     sessionToDelete = null
                                 }
                             ) {
-                                Text("删除", color = YanjiDanger, fontWeight = FontWeight.Bold)
+                                Text("删除", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                             }
                         },
                         dismissButton = {

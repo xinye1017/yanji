@@ -21,7 +21,7 @@ import java.io.File
         UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -372,6 +372,23 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v11 → v12：`user_settings` 新增「外观」偏好列。
+         *
+         * 采用最简单的 `ALTER TABLE ... ADD COLUMN ... NOT NULL DEFAULT 'SYSTEM'`：
+         *  - 不涉及 `DROP COLUMN`（minSdk 24 的真机 SQLite < 3.35，不支持该语法）；
+         *  - 默认值让**所有存量用户自动回落到「跟随系统」**，即升级后视觉与升级前完全一致；
+         *  - Room 的 TableInfo 校验允许「entity 侧无 DEFAULT、DB 侧有 DEFAULT」。
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "ALTER TABLE user_settings " +
+                        "ADD COLUMN themeMode TEXT NOT NULL DEFAULT 'SYSTEM'"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -388,7 +405,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             migration7to8 { value -> persistLegacyApiKey(context, value) },
             MIGRATION_8_9,
             MIGRATION_9_10,
-            MIGRATION_10_11
+            MIGRATION_10_11,
+            MIGRATION_11_12
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

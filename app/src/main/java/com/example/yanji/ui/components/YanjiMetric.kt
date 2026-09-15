@@ -15,8 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
 
 /**
  * 研迹大数字/统计指标组件（DESIGN.md metric-xl）。
@@ -28,8 +26,8 @@ fun YanjiMetric(
     label: String,
     modifier: Modifier = Modifier,
     unit: String? = null,
-    valueColor: Color = YanjiTextPrimary,
-    labelColor: Color = YanjiTextSecondary,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     fontSize: TextUnit = 36.sp,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start
 ) {

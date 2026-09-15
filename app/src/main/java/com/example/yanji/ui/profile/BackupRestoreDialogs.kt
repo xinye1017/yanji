@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -12,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.JuanjuanAvatar
 
 @Composable
@@ -28,7 +30,7 @@ fun ImportConfirmDialog(
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiDanger),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("确认覆盖本机数据", fontWeight = FontWeight.Bold)
@@ -36,7 +38,7 @@ fun ImportConfirmDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消", color = YanjiTextSecondary)
+                Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         title = { Text("确认从备份恢复？", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
@@ -45,38 +47,38 @@ fun ImportConfirmDialog(
                 Text(
                     "本机现有的专注、模考、日记、对话、打卡与成就将被整体替换为备份内容。",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(YanjiSurfaceSoft)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(12.dp)
                 ) {
                     Text(
                         "备份内容：${backup.countsSummary()}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 if (warnings.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     warnings.forEach { warning ->
-                        Text("· $warning", style = MaterialTheme.typography.labelMedium, color = YanjiWarning)
+                        Text("· $warning", style = MaterialTheme.typography.labelMedium, color = YanjiColors.warning)
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     "导入前会自动在本机留一份快照，可随时找回。",
                     style = MaterialTheme.typography.labelMedium,
-                    color = YanjiTextTertiary
+                    color = YanjiColors.textTertiary
                 )
             }
         },
         shape = RoundedCornerShape(20.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -90,16 +92,16 @@ fun ImportErrorDialog(
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("知道了", fontWeight = FontWeight.Bold)
             }
         },
         title = { Text("导入未执行", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
-        text = { Text(message, style = MaterialTheme.typography.bodyMedium, color = YanjiTextPrimary) },
+        text = { Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface) },
         shape = RoundedCornerShape(20.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -112,7 +114,7 @@ fun AboutYanjiDialog(
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("了解", fontWeight = FontWeight.Bold)
@@ -130,11 +132,11 @@ fun AboutYanjiDialog(
                 Text(
                     text = "研迹（Yanji）是一款仅供个人使用的 Android 考研日记与学习管理应用。\n\n核心价值：记录、专注、积累、复盘。\n\n设计原则：\n• Local First：研迹不提供自建云同步；学习数据库可按 Android 系统设置参与云备份或设备迁移，AI Key 与活动计时快照不参与备份\n• 真实记录：专注计时基于真实时间戳\n• 低干扰：不做复杂社交、排行榜和过度鸡血\n• 卷卷陪伴：拟人化圆角笔记本伙伴，安静陪伴你的考研全程。",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         },
         shape = RoundedCornerShape(24.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }

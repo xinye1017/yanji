@@ -29,7 +29,12 @@ data class UserSettingsBackup(
     val vibrationEnabled: Boolean,
     val aiProvider: String,
     val aiBaseUrl: String,
-    val aiModel: String
+    val aiModel: String,
+    /**
+     * 外观偏好。**必须带默认值**：v1 及更早导出的备份里没有这个字段，
+     * 缺省值让它们仍能正常反序列化（导入后回落到跟随系统）。
+     */
+    val themeMode: String = "SYSTEM"
 ) {
     fun toDomain(): UserSettings = UserSettings(
         targetExamDate = targetExamDate,
@@ -43,7 +48,8 @@ data class UserSettingsBackup(
         aiProvider = aiProvider,
         aiBaseUrl = aiBaseUrl,
         aiApiKey = "",
-        aiModel = aiModel
+        aiModel = aiModel,
+        themeMode = themeMode
     )
 
     companion object {
@@ -58,7 +64,8 @@ data class UserSettingsBackup(
             vibrationEnabled = settings.vibrationEnabled,
             aiProvider = settings.aiProvider,
             aiBaseUrl = settings.aiBaseUrl,
-            aiModel = settings.aiModel
+            aiModel = settings.aiModel,
+            themeMode = settings.themeMode
         )
     }
 }

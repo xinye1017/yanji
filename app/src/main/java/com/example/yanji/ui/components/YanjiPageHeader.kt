@@ -15,8 +15,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiSpacing
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
 
 /**
  * 标准页面页眉 —— DESIGN.md「Components / 1. App header」的工程化实现。
@@ -57,14 +55,14 @@ fun YanjiPageHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineMedium,
-                color = YanjiTextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() }
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

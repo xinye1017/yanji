@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.ExamSession
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 
 @Composable
@@ -26,7 +28,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-            colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -34,13 +36,13 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                     text = "模考均分走势",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "近 4 次模拟全真成绩统计",
                     fontSize = 12.sp,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -56,18 +58,19 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiSurfaceSoft)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(vertical = 28.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "暂无模考成绩，完成模考并录入分数后展示走势",
                             fontSize = 12.sp,
-                            color = YanjiTextTertiary
+                            color = YanjiColors.textTertiary
                         )
                     }
                 } else {
                     // Score trend canvas
+                    val trendLineColor = MaterialTheme.colorScheme.primary
                     Canvas(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -89,7 +92,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                         // Draw connecting lines
                         for (i in 0 until points.size - 1) {
                             drawLine(
-                                color = YanjiPrimary,
+                                color = trendLineColor,
                                 start = points[i],
                                 end = points[i + 1],
                                 strokeWidth = 3.dp.toPx(),
@@ -99,7 +102,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
 
                         // Draw points
                         points.forEach { pt ->
-                            drawCircle(color = YanjiPrimary, radius = 5.dp.toPx(), center = pt)
+                            drawCircle(color = trendLineColor, radius = 5.dp.toPx(), center = pt)
                             drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = pt)
                         }
                     }
@@ -122,7 +125,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                                 text = "第${numberingOffset + index + 1}次: ${scoreText}分",
                                 fontSize = 12.sp,
                                 fontWeight = if (isLatest) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isLatest) YanjiPrimary else YanjiTextTertiary
+                                color = if (isLatest) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary
                             )
                         }
                     }
@@ -135,14 +138,14 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
             text = "模考历史归档",
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            color = YanjiTextPrimary
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         examSessions.forEach { session ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -155,7 +158,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                             text = session.subjectName,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         if (session.score != null) {
@@ -163,10 +166,10 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                                 text = "${session.score.toInt()} 分",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         } else {
-                            Text("未录入成绩", fontSize = 12.sp, color = YanjiTextTertiary)
+                            Text("未录入成绩", fontSize = 12.sp, color = YanjiColors.textTertiary)
                         }
                     }
 
@@ -175,7 +178,7 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                     Text(
                         text = "实际用时：${session.actualDurationSeconds / 60} 分钟 · 满分 ${session.maxScore.toInt()}",
                         fontSize = 12.sp,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     if (session.note.isNotBlank()) {
@@ -184,13 +187,13 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .background(YanjiSurfaceSoft)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(10.dp)
                         ) {
                             Text(
                                 text = session.note,
                                 fontSize = 12.sp,
-                                color = YanjiTextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 lineHeight = 18.sp
                             )
                         }

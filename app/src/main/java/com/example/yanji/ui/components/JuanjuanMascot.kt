@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.R
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 @Composable
 fun JuanjuanAvatar(
@@ -30,7 +31,7 @@ fun JuanjuanAvatar(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(YanjiLavenderSoft),
+            .background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
     ) {
         Image(
@@ -59,7 +60,7 @@ fun JuanjuanEncouragementBanner(
         modifier = clickableModifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(YanjiSurfaceBlue)
+            .background(YanjiColors.surfaceBlue)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -67,7 +68,7 @@ fun JuanjuanEncouragementBanner(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(YanjiLavenderSoft),
+                .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -86,19 +87,19 @@ fun JuanjuanEncouragementBanner(
                     text = "卷卷说",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = YanjiLavender
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .background(YanjiLavenderSoft)
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
                         .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {
                     Text(
                         text = if (onClick != null) "点击找卷卷聊聊 ›" else "研迹陪伴",
                         fontSize = 10.sp,
-                        color = YanjiLavender,
+                        color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -108,7 +109,7 @@ fun JuanjuanEncouragementBanner(
                 text = message,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
-                color = YanjiTextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 lineHeight = 20.sp
             )
             if (subMessage != null) {
@@ -116,7 +117,7 @@ fun JuanjuanEncouragementBanner(
                 Text(
                     text = subMessage,
                     fontSize = 12.sp,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

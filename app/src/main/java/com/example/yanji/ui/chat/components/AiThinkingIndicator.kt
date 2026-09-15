@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +57,7 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
                     .align(Alignment.BottomEnd)
                     .offset(x = 2.dp, y = 2.dp)
                     .clip(CircleShape)
-                    .background(YanjiLavender),
+                    .background(MaterialTheme.colorScheme.secondary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -78,9 +79,9 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
                 bottomStart = 16.dp,
                 bottomEnd = 16.dp
             ),
-            color = YanjiSurface,
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 1.dp,
-            border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f))
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -96,7 +97,7 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
                             .graphicsLayer { this.scaleX = scale; this.scaleY = scale }
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(YanjiLavender.copy(alpha = 0.5f + 0.5f * scale))
+                            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f + 0.5f * scale))
                     )
                 }
 
@@ -105,7 +106,7 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
                 Text(
                     text = "卷卷正在深度思考…",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
                 )

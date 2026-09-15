@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -134,8 +135,8 @@ fun ExamScreen(
             // Sub-tabs
             PrimaryTabRow(
                 selectedTabIndex = currentSubTab,
-                containerColor = YanjiSurfaceSoft,
-                contentColor = YanjiPrimary,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(YanjiRadius.Small)),
@@ -151,13 +152,13 @@ fun ExamScreen(
                                 text = title,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) YanjiPrimary else YanjiTextSecondary
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         modifier = Modifier
                             .padding(4.dp)
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(if (isSelected) YanjiSurface else Color.Transparent)
+                            .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
                     )
                 }
             }

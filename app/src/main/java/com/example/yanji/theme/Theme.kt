@@ -7,6 +7,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 internal val LightColorScheme = lightColorScheme(
@@ -56,7 +59,15 @@ internal val DarkColorScheme = darkColorScheme(
     outline = YanjiDarkBorder,
     outlineVariant = YanjiDarkDivider,
     error = YanjiDarkDanger,
-    errorContainer = YanjiDarkDangerSoft
+    errorContainer = YanjiDarkDangerSoft,
+    // design_dark.md §1.2：暗色靠「表面明度递进」而不是阴影表达海拔层级。
+    surfaceDim = YanjiDarkBackground,
+    surfaceBright = YanjiDarkSurfaceFloating,
+    surfaceContainerLowest = YanjiDarkBackground,
+    surfaceContainerLow = YanjiDarkSurface,
+    surfaceContainer = YanjiDarkSurfaceSoft,
+    surfaceContainerHigh = YanjiDarkSurfaceFloating,
+    surfaceContainerHighest = YanjiDarkSurfaceFloating
 )
 
 /**
@@ -74,17 +85,69 @@ val YanjiShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp)
 )
 
+/**
+ * 主题模式：跟随系统 / 强制浅色 / 强制深色。
+ *
+ * 持久化在 `user_settings.themeMode`（存 [name] 字符串，与 `aiProvider` 等同为 String 字段，
+ * 便于 Room 迁移与旧备份兼容）。未知值一律回退 [SYSTEM]，保证前/后向兼容都不崩。
+ */
+enum class YanjiThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK;
+
+    companion object {
+        val DEFAULT = SYSTEM
+
+        /** 宽松解析：null / 空串 / 历史遗留值 / 未来新增值 全部安全回退到 [SYSTEM]。 */
+        fun fromStorage(raw: String?): YanjiThemeMode =
+            entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) } ?: DEFAULT
+    }
+}
+
+/**
+ * 当前是否处于暗色主题。
+ *
+ * 为什么需要它：M3 的 `ColorScheme` 只覆盖语义色槽，而 design_dark.md 还规定了一批
+ * **暗色专属值**（液态玻璃底栏面板、专注圆环自发光、学科序列色、AI 紫雾卡）。
+ * 这些值无法塞进 ColorScheme，统一通过本 CompositionLocal 判定后再取色，
+ * 保证「亮色视觉 100% 不变、暗色按规范单独呈现」。
+ */
+val LocalYanjiDarkTheme = staticCompositionLocalOf { false }
+
+@Composable
+fun yanjiIsDarkTheme(): Boolean = LocalYanjiDarkTheme.current
+
+/** 按当前主题在「亮色值 / 暗色值」之间取色。 */
+@Composable
+fun yanjiThemeColor(light: Color, dark: Color): Color =
+    if (LocalYanjiDarkTheme.current) dark else light
+
+/** 把主题模式解析为「当前是否使用暗色」。 */
+@Composable
+fun YanjiThemeMode.resolveDarkTheme(): Boolean = when (this) {
+    YanjiThemeMode.SYSTEM -> isSystemInDarkTheme()
+    YanjiThemeMode.LIGHT -> false
+    YanjiThemeMode.DARK -> true
+}
+
 @Composable
 fun YanjiTheme(
-    darkTheme: Boolean = false,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = YanjiShapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalYanjiDarkTheme provides darkTheme,
+        LocalYanjiExtraColors provides if (darkTheme) DarkExtraColors else LightExtraColors
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = YanjiShapes,
+            content = content
+        )
+    }
 }
+
 

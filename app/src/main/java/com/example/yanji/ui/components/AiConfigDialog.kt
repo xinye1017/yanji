@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.data.security.CleartextPolicy
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import kotlinx.coroutines.launch
 
 private data class ProviderPreset(
@@ -70,13 +72,13 @@ fun AiConfigDialog(
     AlertDialog(
         onDismissRequest = onDismissRequest,
         shape = RoundedCornerShape(20.dp),
-        containerColor = YanjiSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Outlined.Psychology,
                     contentDescription = null,
-                    tint = YanjiPrimary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -92,7 +94,7 @@ fun AiConfigDialog(
                 Text(
                     text = "兼容 OpenAI 格式。支持下拉选择主流预设或完全自定义提供商与地址，手机联网即可直连。",
                     fontSize = 12.sp,
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp
                 )
                 Spacer(modifier = Modifier.height(14.dp))
@@ -134,15 +136,15 @@ fun AiConfigDialog(
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
                             .heightIn(max = 300.dp)
-                            .background(YanjiSurface)
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Text(
                             text = "选择服务商预设 (自动填充默认地址)",
                             fontSize = 12.sp,
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
-                        HorizontalDivider(color = YanjiDivider, thickness = 0.5.dp)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 
                         AI_PRESETS.forEach { preset ->
                             DropdownMenuItem(
@@ -153,14 +155,14 @@ fun AiConfigDialog(
                                                 text = preset.name,
                                                 fontSize = 13.sp,
                                                 fontWeight = if (provider == preset.name) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (provider == preset.name) YanjiPrimary else YanjiTextPrimary
+                                                color = if (provider == preset.name) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                             )
                                             if (preset.description.isNotBlank()) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
                                                     text = "(${preset.description})",
                                                     fontSize = 11.sp,
-                                                    color = YanjiTextTertiary
+                                                    color = YanjiColors.textTertiary
                                                 )
                                             }
                                         }
@@ -168,7 +170,7 @@ fun AiConfigDialog(
                                             Text(
                                                 text = preset.baseUrl,
                                                 fontSize = 10.sp,
-                                                color = YanjiTextTertiary,
+                                                color = YanjiColors.textTertiary,
                                                 maxLines = 1
                                             )
                                         }
@@ -193,7 +195,7 @@ fun AiConfigDialog(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = YanjiPrimary,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -228,7 +230,7 @@ fun AiConfigDialog(
                                 text = message,
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp,
-                                color = YanjiWarning
+                                color = YanjiColors.warning
                             )
                         }
                     }
@@ -266,7 +268,7 @@ fun AiConfigDialog(
                                 text = message,
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp,
-                                color = YanjiDanger
+                                color = MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -312,15 +314,15 @@ fun AiConfigDialog(
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
                             .heightIn(max = 260.dp)
-                            .background(YanjiSurface)
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Text(
                             text = "在线探测可用模型 (${availableModels.size})",
                             fontSize = 12.sp,
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
-                        HorizontalDivider(color = YanjiDivider, thickness = 0.5.dp)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 
                         availableModels.forEach { m ->
                             DropdownMenuItem(
@@ -329,7 +331,7 @@ fun AiConfigDialog(
                                         text = m,
                                         fontSize = 13.sp,
                                         fontWeight = if (m == model) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (m == model) YanjiPrimary else YanjiTextPrimary
+                                        color = if (m == model) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                     )
                                 },
                                 onClick = {
@@ -343,7 +345,7 @@ fun AiConfigDialog(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = YanjiPrimary,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -358,10 +360,10 @@ fun AiConfigDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (connectionSucceeded == true) YanjiSuccess.copy(alpha = 0.1f) else YanjiError.copy(alpha = 0.1f),
+                        color = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
                         border = BorderStroke(
                             1.dp,
-                            if (connectionSucceeded == true) YanjiSuccess.copy(alpha = 0.3f) else YanjiError.copy(alpha = 0.3f)
+                            if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -377,14 +379,14 @@ fun AiConfigDialog(
                                     Icons.Outlined.ErrorOutline
                                 },
                                 contentDescription = null,
-                                tint = if (connectionSucceeded == true) YanjiSuccess else YanjiError,
+                                tint = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = message,
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
-                                color = if (connectionSucceeded == true) YanjiSuccess else YanjiError
+                                color = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -394,8 +396,8 @@ fun AiConfigDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = YanjiError.copy(alpha = 0.1f),
-                        border = BorderStroke(1.dp, YanjiError.copy(alpha = 0.3f)),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -406,13 +408,13 @@ fun AiConfigDialog(
                             Icon(
                                 imageVector = Icons.Outlined.Lock,
                                 contentDescription = null,
-                                tint = YanjiError,
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = message,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = YanjiError
+                                color = MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -469,17 +471,17 @@ fun AiConfigDialog(
                     enabled = !isTestingConnection,
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = YanjiPrimarySoft,
-                        contentColor = YanjiPrimary
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.primary
                     ),
-                    border = BorderStroke(1.dp, YanjiPrimary.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     if (isTestingConnection) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
                             strokeWidth = 2.dp,
-                            color = YanjiPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("测试中...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -503,7 +505,7 @@ fun AiConfigDialog(
                         onClick = onDismissRequest,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text("取消", color = YanjiTextSecondary, fontSize = 13.sp)
+                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                     Button(
                         onClick = {
@@ -517,7 +519,7 @@ fun AiConfigDialog(
                             )
                             if (saved) onDismissRequest()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {

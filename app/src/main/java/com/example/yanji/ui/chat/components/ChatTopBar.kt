@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +42,9 @@ fun ChatTopBar(
         Surface(
             modifier = Modifier.size(36.dp),
             shape = CircleShape,
-            color = YanjiSurface,
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 1.dp,
-            border = BorderStroke(0.5.dp, YanjiBorder)
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -54,7 +55,7 @@ fun ChatTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
-                    tint = YanjiTextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -67,9 +68,9 @@ fun ChatTopBar(
             Surface(
                 modifier = Modifier.size(36.dp),
                 shape = CircleShape,
-                color = YanjiSurface,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
-                border = BorderStroke(0.5.dp, YanjiBorder)
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -80,7 +81,7 @@ fun ChatTopBar(
                     Icon(
                         imageVector = Icons.Default.MoreHoriz,
                         contentDescription = "更多操作",
-                        tint = YanjiTextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -91,10 +92,10 @@ fun ChatTopBar(
                 onDismissRequest = { expanded = false },
                 modifier = Modifier.width(180.dp),
                 shape = RoundedCornerShape(16.dp),
-                containerColor = YanjiSurface,
+                containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp, // 彻底去掉阴影，解决阴影与卡片加载割裂问题
-                border = BorderStroke(1.dp, YanjiBorder)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 DropdownMenuItem(
                     text = {
@@ -104,14 +105,14 @@ fun ChatTopBar(
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp
                             ),
-                            color = YanjiPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.AddComment,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -133,14 +134,14 @@ fun ChatTopBar(
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 14.sp
                             ),
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = YanjiTextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -156,7 +157,7 @@ fun ChatTopBar(
 
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    color = YanjiDivider
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
 
                 DropdownMenuItem(
@@ -167,14 +168,14 @@ fun ChatTopBar(
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 14.sp
                             ),
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = null,
-                            tint = YanjiTextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     },

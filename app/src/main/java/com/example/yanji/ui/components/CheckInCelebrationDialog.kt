@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import com.adamglin.phosphoricons.fill.Fire
 import com.adamglin.phosphoricons.fill.Sparkle
 import com.example.yanji.data.CheckIn
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 @Composable
 fun CheckInCelebrationDialog(
@@ -55,8 +57,8 @@ fun CheckInCelebrationDialog(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
                 .clip(RoundedCornerShape(28.dp))
-                .background(YanjiSurface)
-                .border(1.dp, YanjiPrimarySoft, RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(28.dp))
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -73,7 +75,7 @@ fun CheckInCelebrationDialog(
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
-                                    colors = listOf(YanjiPrimarySoft, YanjiSurface)
+                                    colors = listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surface)
                                 )
                             )
                             .padding(4.dp),
@@ -87,8 +89,8 @@ fun CheckInCelebrationDialog(
                         modifier = Modifier
                             .size(26.dp)
                             .clip(CircleShape)
-                            .background(YanjiSuccess)
-                            .border(2.dp, YanjiSurface, CircleShape),
+                            .background(MaterialTheme.colorScheme.tertiary)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -110,7 +112,7 @@ fun CheckInCelebrationDialog(
                     Icon(
                         imageVector = PhosphorIcons.Fill.Sparkle,
                         contentDescription = null,
-                        tint = YanjiWarning,
+                        tint = YanjiColors.warning,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -118,13 +120,13 @@ fun CheckInCelebrationDialog(
                         text = "今日打卡成功！",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
                         imageVector = PhosphorIcons.Fill.Sparkle,
                         contentDescription = null,
-                        tint = YanjiWarning,
+                        tint = YanjiColors.warning,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -134,7 +136,7 @@ fun CheckInCelebrationDialog(
                 // Streak pill
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius),
-                    color = YanjiPrimarySoft,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     Row(
@@ -144,7 +146,7 @@ fun CheckInCelebrationDialog(
                         Icon(
                             imageVector = PhosphorIcons.Fill.Fire,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -152,7 +154,7 @@ fun CheckInCelebrationDialog(
                             text = "已连续打卡 ${checkIn.streak} 天",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -164,7 +166,7 @@ fun CheckInCelebrationDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(YanjiRadius.ContentBlockRadius))
-                        .background(YanjiBackground)
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(16.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -172,7 +174,7 @@ fun CheckInCelebrationDialog(
                             text = "“把每一天的微小坚持，化作考场上的绝对从容。研途万里，卷卷始终陪着你！”",
                             fontSize = 13.sp,
                             lineHeight = 20.sp,
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -191,7 +193,7 @@ fun CheckInCelebrationDialog(
                             .weight(1f)
                             .height(44.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = YanjiTextSecondary)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
                     ) {
                         Text("知道了", fontSize = 14.sp)
                     }
@@ -207,7 +209,7 @@ fun CheckInCelebrationDialog(
                                 .height(44.dp),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = YanjiPrimary,
+                                containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = Color.White
                             )
                         ) {

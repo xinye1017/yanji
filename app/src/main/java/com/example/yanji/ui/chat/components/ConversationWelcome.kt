@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.JuanjuanAvatar
 
 @Composable
@@ -48,7 +49,7 @@ fun ConversationWelcome(
                     .align(Alignment.BottomEnd)
                     .offset(x = 2.dp, y = 2.dp)
                     .clip(CircleShape)
-                    .background(YanjiPrimary),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -77,7 +78,7 @@ fun ConversationWelcome(
                 Text(
                     text = "卷卷",
                     style = MaterialTheme.typography.labelMedium.copy(
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
                     )
@@ -85,12 +86,12 @@ fun ConversationWelcome(
 
                 Surface(
                     shape = CircleShape,
-                    color = YanjiPrimarySoft
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
                         text = "专属学伴",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = YanjiPrimaryStrong,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp
                         ),
@@ -107,9 +108,9 @@ fun ConversationWelcome(
                     bottomStart = 16.dp,
                     bottomEnd = 16.dp
                 ),
-                color = YanjiSurface,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
-                border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f)),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -119,7 +120,7 @@ fun ConversationWelcome(
                     Text(
                         text = "你好，我是卷卷！🌱",
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -132,7 +133,7 @@ fun ConversationWelcome(
                             "你的考研专属学伴已就位。无论每天专注了多久，每一次计时、模考与日记，我都会认真记录下来。随时向我提出各科备考疑问吧！"
                         },
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 22.sp,
                             fontSize = 14.sp
                         )
@@ -140,7 +141,7 @@ fun ConversationWelcome(
 
                     Surface(
                         shape = RoundedCornerShape(YanjiRadius.Small),
-                        color = if (!isAiConfigured) YanjiWarningSoft else YanjiSurfaceBlue,
+                        color = if (!isAiConfigured) YanjiColors.warningSoft else YanjiColors.surfaceBlue,
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (!isAiConfigured) Modifier.clickable { onOpenAiSettings() } else Modifier)
@@ -152,7 +153,7 @@ fun ConversationWelcome(
                                 "💡 可以直接输入你正在推导的题目、错因复盘，或点击下方的考研问题快速开始。"
                             },
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = if (!isAiConfigured) YanjiTextPrimary else YanjiTextSecondary,
+                                color = if (!isAiConfigured) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 20.sp,
                                 fontSize = 13.sp
                             ),
@@ -168,13 +169,13 @@ fun ConversationWelcome(
                             Icon(
                                 imageVector = Icons.Default.Psychology,
                                 contentDescription = null,
-                                tint = YanjiLavender,
+                                tint = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = "已关联近 $contextRecordCount 项真实学习记录",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = YanjiLavenderDeep,
+                                    color = YanjiColors.lavenderDeep,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -199,7 +200,7 @@ fun QuickQuestionsRow(
         Text(
             text = "可以从这些开始",
             style = MaterialTheme.typography.labelMedium.copy(
-                color = YanjiTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp
             ),
@@ -215,8 +216,8 @@ fun QuickQuestionsRow(
             questions.forEach { question ->
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = YanjiSurface,
-                    border = BorderStroke(1.dp, YanjiBorder),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shadowElevation = 0.5.dp,
                     modifier = Modifier
                         .clickable { onQuestionClick(question) }
@@ -229,14 +230,14 @@ fun QuickQuestionsRow(
                         Icon(
                             imageVector = Icons.Default.NorthEast,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = question,
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = YanjiTextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Normal,
                                 fontSize = 12.sp
                             ),

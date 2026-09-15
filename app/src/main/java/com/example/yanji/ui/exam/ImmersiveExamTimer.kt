@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import java.util.Locale
 
@@ -50,7 +52,7 @@ fun ImmersiveExamTimer(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
@@ -63,14 +65,14 @@ fun ImmersiveExamTimer(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(if (isPaused) YanjiWarningSoft else YanjiLavenderSoft)
+                    .background(if (isPaused) YanjiColors.warningSoft else MaterialTheme.colorScheme.secondaryContainer)
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = if (isPaused) "考试已暂停" else "全真模拟进行中",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isPaused) YanjiWarning else YanjiLavender
+                    color = if (isPaused) YanjiColors.warning else MaterialTheme.colorScheme.secondary
                 )
             }
 
@@ -80,7 +82,7 @@ fun ImmersiveExamTimer(
                 text = examName,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -88,7 +90,7 @@ fun ImmersiveExamTimer(
             Text(
                 text = "考试时间：$startStr - $endStr · 请专心答卷",
                 fontSize = 13.sp,
-                color = YanjiTextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -98,7 +100,7 @@ fun ImmersiveExamTimer(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
             shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
-            colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(
@@ -109,7 +111,7 @@ fun ImmersiveExamTimer(
                     text = "剩余考试时间",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -118,7 +120,7 @@ fun ImmersiveExamTimer(
                     text = timeFormatted,
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCritical) YanjiWarning else YanjiPrimary,
+                    color = if (isCritical) YanjiColors.warning else MaterialTheme.colorScheme.primary,
                     letterSpacing = (-1).sp
                 )
 
@@ -127,13 +129,13 @@ fun ImmersiveExamTimer(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiWarningSoft)
+                            .background(YanjiColors.warningSoft)
                             .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "剩余不足 15 分钟 · 请安排收尾检查",
                             fontSize = 12.sp,
-                            color = YanjiWarning
+                            color = YanjiColors.warning
                         )
                     }
                 }
@@ -146,8 +148,8 @@ fun ImmersiveExamTimer(
                         .fillMaxWidth()
                         .height(8.dp)
                         .clip(RoundedCornerShape(12.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                    color = YanjiPrimary,
-                    trackColor = YanjiPrimarySoft
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primaryContainer
                 )
             }
         }
@@ -184,7 +186,7 @@ fun ImmersiveExamTimer(
                         .weight(1f)
                         .height(54.dp),
                     shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(imageVector = Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
@@ -195,7 +197,7 @@ fun ImmersiveExamTimer(
             Spacer(modifier = Modifier.height(12.dp))
 
             TextButton(onClick = onQuit) {
-                Text("退出考试", fontSize = 13.sp, color = YanjiTextTertiary)
+                Text("退出考试", fontSize = 13.sp, color = YanjiColors.textTertiary)
             }
         }
     }

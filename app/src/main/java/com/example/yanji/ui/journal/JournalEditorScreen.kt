@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.ArrowLeft
@@ -45,6 +46,7 @@ import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -174,7 +176,7 @@ fun JournalEditorScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ---- 顶部导航（保持计时器页样式：大标题 + 今日累计徽章 + 副标题）----
         Column(
@@ -212,14 +214,14 @@ fun JournalEditorScreen(
                             fontSize = 24.sp,
                             letterSpacing = (-0.5).sp
                         ),
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 // 今日累计徽章（点击进入当日学习明细）
                 Surface(
                     shape = CircleShape,
-                    color = YanjiPrimarySoft,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.clickable { onNavigateToDailyDetail(date) }
                 ) {
                     Row(
@@ -230,7 +232,7 @@ fun JournalEditorScreen(
                         Icon(
                             imageVector = Icons.Default.Schedule,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
@@ -239,7 +241,7 @@ fun JournalEditorScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 12.sp
                             ),
-                            color = YanjiPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -250,7 +252,7 @@ fun JournalEditorScreen(
                     if (countdownDays != null) append(" · 初试倒计时 $countdownDays 天")
                 },
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
             )
@@ -276,13 +278,13 @@ fun JournalEditorScreen(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .background(YanjiPrimarySoft, RoundedCornerShape(14.dp)),
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -292,14 +294,14 @@ fun JournalEditorScreen(
                                 text = "今日累计专注",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = DurationFormatter.formatHoursMinutes(studyDuration),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                         Spacer(modifier = Modifier.height(2.dp))
@@ -307,7 +309,7 @@ fun JournalEditorScreen(
                             text = formatSubjectDistribution(dailySummary.subjectDistribution),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = YanjiTextTertiary,
+                            color = YanjiColors.textTertiary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -321,7 +323,7 @@ fun JournalEditorScreen(
                     title = "今日专注心境",
                     hint = "快速标记",
                     icon = Icons.Default.Star,
-                    iconTint = YanjiPrimary
+                    iconTint = MaterialTheme.colorScheme.primary
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MOOD_OPTIONS.forEach { option ->
@@ -332,15 +334,15 @@ fun JournalEditorScreen(
                                 .testTag(JournalEditorTags.moodOption(option.score))
                                 .clip(RoundedCornerShape(YanjiRadius.ContentBlockRadius))
                                 .background(
-                                    if (selected) YanjiPrimarySoft else YanjiSurface,
+                                    if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                                     RoundedCornerShape(16.dp)
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = if (selected) {
-                                        YanjiPrimary.copy(alpha = 0.4f)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                                     } else {
-                                        YanjiBorder
+                                        MaterialTheme.colorScheme.outline
                                     },
                                     shape = RoundedCornerShape(16.dp)
                                 )
@@ -355,7 +357,7 @@ fun JournalEditorScreen(
                             Icon(
                                 imageVector = option.icon,
                                 contentDescription = option.label,
-                                tint = if (selected) YanjiPrimary else YanjiTextSecondary,
+                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -363,7 +365,7 @@ fun JournalEditorScreen(
                                 text = option.label,
                                 fontSize = 11.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (selected) YanjiPrimary else YanjiTextSecondary,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1
                             )
                         }
@@ -377,7 +379,7 @@ fun JournalEditorScreen(
                     title = "今日复盘与收获",
                     hint = "2~3句话归纳突破",
                     icon = Icons.Default.EditNote,
-                    iconTint = YanjiPrimary
+                    iconTint = MaterialTheme.colorScheme.primary
                 )
                 PlainInputCard(
                     value = content,
@@ -394,7 +396,7 @@ fun JournalEditorScreen(
                     title = "遇到的困难 / 卡点",
                     hint = "快速诊断",
                     icon = Icons.Default.HelpOutline,
-                    iconTint = YanjiWarning
+                    iconTint = YanjiColors.warning
                 )
                 PlainInputCard(
                     value = blockers,
@@ -411,7 +413,7 @@ fun JournalEditorScreen(
                     title = "明日规划",
                     hint = if (planTasks.isEmpty()) "为明天列 1~3 项核心任务" else "已列 ${planTasks.size} 项",
                     icon = Icons.Default.Flag,
-                    iconTint = YanjiSuccess
+                    iconTint = MaterialTheme.colorScheme.tertiary
                 )
                 JournalEditorCard {
                     Column(
@@ -424,20 +426,20 @@ fun JournalEditorScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(YanjiBackground, RoundedCornerShape(YanjiRadius.ContentBlockRadius))
+                                    .background(MaterialTheme.colorScheme.background, RoundedCornerShape(YanjiRadius.ContentBlockRadius))
                                     .padding(horizontal = 10.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 PlanIndexBadge(
                                     index = index + 1,
-                                    container = YanjiPrimarySoft,
-                                    textColor = YanjiPrimary
+                                    container = MaterialTheme.colorScheme.primaryContainer,
+                                    textColor = MaterialTheme.colorScheme.primary
                                 )
                                 Text(
                                     text = task,
                                     fontSize = 13.sp,
-                                    color = YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f),
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -452,14 +454,14 @@ fun JournalEditorScreen(
                                     Icon(
                                         imageVector = Icons.Default.Close,
                                         contentDescription = "删除任务",
-                                        tint = YanjiTextTertiary,
+                                        tint = YanjiColors.textTertiary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
                         }
 
-                        HorizontalDivider(color = YanjiDivider)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -468,8 +470,8 @@ fun JournalEditorScreen(
                         ) {
                             PlanIndexBadge(
                                 index = planTasks.size + 1,
-                                container = YanjiSurfaceSoft,
-                                textColor = YanjiTextTertiary
+                                container = MaterialTheme.colorScheme.surfaceVariant,
+                                textColor = YanjiColors.textTertiary
                             )
                             BasicTextField(
                                 value = planInput,
@@ -479,9 +481,9 @@ fun JournalEditorScreen(
                                     .testTag(JournalEditorTags.PlanInput),
                                 textStyle = TextStyle(
                                     fontSize = 13.sp,
-                                    color = YanjiTextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 ),
-                                cursorBrush = SolidColor(YanjiPrimary),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                 keyboardActions = KeyboardActions(onDone = {
@@ -497,7 +499,7 @@ fun JournalEditorScreen(
                                             Text(
                                                 text = "输入明日核心任务，回车或点击添加",
                                                 fontSize = 13.sp,
-                                                color = YanjiTextTertiary,
+                                                color = YanjiColors.textTertiary,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -508,7 +510,7 @@ fun JournalEditorScreen(
                             )
                             Surface(
                                 shape = CircleShape,
-                                color = YanjiPrimary,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .testTag(JournalEditorTags.PlanAddButton)
                                     .clickable {
@@ -527,14 +529,14 @@ fun JournalEditorScreen(
                                     Icon(
                                         imageVector = Icons.Default.Add,
                                         contentDescription = null,
-                                        tint = YanjiOnPrimary,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = "添加",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = YanjiOnPrimary
+                                        color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
                             }
@@ -557,7 +559,7 @@ fun JournalEditorScreen(
                         .height(54.dp)
                         .testTag(JournalEditorTags.SaveButton),
                     shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                 ) {
                     Icon(
@@ -577,7 +579,7 @@ fun JournalEditorScreen(
                     text = "日记将自动关联今日学习数据，可在日记时间轴中回顾",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = YanjiTextTertiary
+                    color = YanjiColors.textTertiary
                 )
             }
 
@@ -605,9 +607,9 @@ private fun JournalEditorCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, YanjiBorder.copy(alpha = 0.8f), RoundedCornerShape(YanjiRadius.StandardCardRadius)),
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.8f), RoundedCornerShape(YanjiRadius.StandardCardRadius)),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(content = content)
@@ -638,10 +640,10 @@ private fun SectionHeader(title: String, hint: String, icon: ImageVector, iconTi
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
-        Text(text = hint, fontSize = 12.sp, color = YanjiTextTertiary)
+        Text(text = hint, fontSize = 12.sp, color = YanjiColors.textTertiary)
     }
 }
 
@@ -661,7 +663,7 @@ private fun PlainInputCard(
                     text = placeholder,
                     fontSize = 14.sp,
                     lineHeight = 22.sp,
-                    color = YanjiTextTertiary,
+                    color = YanjiColors.textTertiary,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -674,9 +676,9 @@ private fun PlainInputCard(
                 textStyle = TextStyle(
                     fontSize = 14.sp,
                     lineHeight = 22.sp,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 ),
-                cursorBrush = SolidColor(YanjiPrimary),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 minLines = minLines,
                 maxLines = 12
             )

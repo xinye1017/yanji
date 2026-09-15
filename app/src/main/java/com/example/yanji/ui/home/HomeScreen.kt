@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
@@ -270,7 +271,7 @@ fun HomeScreen(
                             text = if (settings.dailyGoalHours > 0f) "达成 ${(progress * 100).toInt()}%" else "达成 -",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium,
-                            color = if (progress >= 1f && settings.dailyGoalHours > 0f) YanjiSuccess else MaterialTheme.colorScheme.primary,
+                            color = if (progress >= 1f && settings.dailyGoalHours > 0f) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }
@@ -355,13 +356,13 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(YanjiRadius.ButtonRadius))
-                            .background(YanjiLavenderSoft),
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.ChartLineUp,
                             contentDescription = "模考看板",
-                            tint = YanjiLavender,
+                            tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -382,7 +383,7 @@ fun HomeScreen(
                                     text = "均分 ${String.format(Locale.US, "%.1f", avgScore)}",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = YanjiSuccess
+                                    color = MaterialTheme.colorScheme.tertiary
                                 )
                             }
                         }
@@ -667,9 +668,9 @@ fun FloatingJuanjuanBall(
                 }
             },
         shape = CircleShape,
-        color = YanjiSurface,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = if (isDragging) 8.dp else 4.dp,
-        border = BorderStroke(1.5.dp, YanjiPrimarySoft)
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primaryContainer)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),

@@ -188,7 +188,8 @@ data class UserSettingsEntity(
     val vibrationEnabled: Boolean,
     val aiProvider: String,
     val aiBaseUrl: String,
-    val aiModel: String
+    val aiModel: String,
+    val themeMode: String
 ) {
     fun toDomainModel(): UserSettings {
         return UserSettings(
@@ -203,7 +204,8 @@ data class UserSettingsEntity(
             aiProvider = aiProvider,
             aiBaseUrl = aiBaseUrl,
             aiApiKey = "",
-            aiModel = aiModel
+            aiModel = aiModel,
+            themeMode = themeMode
         )
     }
 
@@ -221,7 +223,8 @@ data class UserSettingsEntity(
                 vibrationEnabled = model.vibrationEnabled,
                 aiProvider = model.aiProvider,
                 aiBaseUrl = model.aiBaseUrl,
-                aiModel = model.aiModel
+                aiModel = model.aiModel,
+                themeMode = model.themeMode
             )
         }
     }

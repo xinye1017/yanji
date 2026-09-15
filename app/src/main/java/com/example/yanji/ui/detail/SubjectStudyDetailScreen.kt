@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.StudyTimeRange
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.yanjiSeriesColor
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
@@ -52,13 +54,11 @@ fun SubjectStudyDetailScreen(
         viewModel.selectRange(selectedRange)
     }
 
-    val subjectColor = remember(summary.subjectColor) {
-        try {
-            Color(summary.subjectColor.toColorInt())
-        } catch (e: Exception) {
-            YanjiPrimary
-        }
+    val seriesFallback = MaterialTheme.colorScheme.primary
+    val rawSubjectColor = remember(summary.subjectColor, seriesFallback) {
+        runCatching { Color(summary.subjectColor.toColorInt()) }.getOrDefault(seriesFallback)
     }
+    val subjectColor = yanjiSeriesColor(summary.subjectColor, rawSubjectColor)
 
     Column(
         modifier = modifier

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +23,7 @@ import com.example.yanji.data.DayBarData
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.YanjiPageHeader
 
@@ -46,7 +48,7 @@ fun StatsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
@@ -64,7 +66,7 @@ fun StatsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(50))
-                .background(YanjiSurfaceSoft)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -73,7 +75,7 @@ fun StatsScreen(
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(50),
-                    color = if (isSelected) YanjiSurface else Color.Transparent,
+                    color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
                     shadowElevation = if (isSelected) 2.dp else 0.dp,
                     onClick = { viewModel.selectTimeTab(index) }
                 ) {
@@ -85,7 +87,7 @@ fun StatsScreen(
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) YanjiPrimary else YanjiTextSecondary
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -135,8 +137,8 @@ fun StatsScreen(
         ) {
             MetricMiniCard(
                 icon = Icons.Default.LocalFireDepartment,
-                iconTint = YanjiWarning,
-                iconBg = YanjiWarningSoft,
+                iconTint = YanjiColors.warning,
+                iconBg = YanjiColors.warningSoft,
                 title = "连续研读",
                 value = "${state.weeklySummary.streakDays}",
                 unit = "天",
@@ -146,8 +148,8 @@ fun StatsScreen(
             val longest = state.weeklySummary.longestSession
             MetricMiniCard(
                 icon = Icons.Default.Timelapse,
-                iconTint = YanjiPrimary,
-                iconBg = YanjiPrimarySoft,
+                iconTint = MaterialTheme.colorScheme.primary,
+                iconBg = MaterialTheme.colorScheme.primaryContainer,
                 title = "单次最长",
                 value = DurationFormatter.formatHoursMinutes(longest?.durationSeconds ?: 0L),
                 modifier = Modifier.weight(1f),
@@ -156,8 +158,8 @@ fun StatsScreen(
 
             MetricMiniCard(
                 icon = Icons.Default.Quiz,
-                iconTint = YanjiLavender,
-                iconBg = YanjiLavenderSoft,
+                iconTint = MaterialTheme.colorScheme.secondary,
+                iconBg = MaterialTheme.colorScheme.secondaryContainer,
                 title = "全真模拟",
                 value = "${state.weeklySummary.examCount}",
                 unit = "场",

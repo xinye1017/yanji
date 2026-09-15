@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 系统深色模式下的启动窗口底色，与 theme/Color.kt 的 YanjiDarkBackground 一致。 -->
+    <color name="yanji_window_background">#0D111A</color>
+</resources>

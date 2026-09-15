@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -75,8 +77,8 @@ fun YanjiExamDatePickerDialog(
                 .fillMaxWidth(0.9f)
                 .widthIn(max = 420.dp),
             shape = RoundedCornerShape(28.dp),
-            color = YanjiSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, YanjiBorder),
+            color = MaterialTheme.colorScheme.surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             shadowElevation = 10.dp
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -84,14 +86,14 @@ fun YanjiExamDatePickerDialog(
                     text = "选择考研初试日期",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = formatExamDateDisplayFromUtcMillis(selectedDateMillis),
                     fontSize = 25.sp,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiPrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -105,19 +107,19 @@ fun YanjiExamDatePickerDialog(
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
                         onClick = { moveMonth(-1) },
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(YanjiSurfaceSoft)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronLeft,
                             contentDescription = "上个月",
-                            tint = YanjiTextSecondary
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -126,18 +128,18 @@ fun YanjiExamDatePickerDialog(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(YanjiSurfaceSoft)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = "下个月",
-                            tint = YanjiTextSecondary
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = YanjiDivider, thickness = 1.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -152,7 +154,7 @@ fun YanjiExamDatePickerDialog(
                                 text = weekday,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = YanjiTextTertiary
+                                color = YanjiColors.textTertiary
                             )
                         }
                     }
@@ -179,10 +181,10 @@ fun YanjiExamDatePickerDialog(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(if (isSelected) YanjiPrimary else Color.Transparent)
+                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                                             .then(
                                                 if (isToday && !isSelected) {
-                                                    Modifier.border(1.dp, YanjiPrimary, CircleShape)
+                                                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                                 } else {
                                                     Modifier
                                                 }
@@ -204,8 +206,8 @@ fun YanjiExamDatePickerDialog(
                                             },
                                             color = when {
                                                 isSelected -> Color.White
-                                                isToday -> YanjiPrimary
-                                                else -> YanjiTextPrimary
+                                                isToday -> MaterialTheme.colorScheme.primary
+                                                else -> MaterialTheme.colorScheme.onSurface
                                             }
                                         )
                                     }
@@ -228,13 +230,13 @@ fun YanjiExamDatePickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismissRequest) {
-                        Text("取消", color = YanjiTextSecondary)
+                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { onDateSelected(selectedDateMillis) },
                         shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-                        colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("确定", fontWeight = FontWeight.SemiBold)
                     }

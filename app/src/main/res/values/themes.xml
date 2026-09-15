@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Yanji" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      启动窗口（Starting Window / Splash）主题：只在 App 进程起来、Compose 首帧绘制之前生效。
+      它必须自己保证「底色 × 系统栏图标」有对比，否则冷启动瞬间状态栏会看不清。
+      运行期的系统栏图标由 ui/SystemBarAppearance.kt 按 App 主题（user_settings.themeMode）驱动，
+      不再依赖 enableEdgeToEdge() 默认的系统 uiMode 判定。
+    -->
+    <style name="Theme.Yanji" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/yanji_window_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

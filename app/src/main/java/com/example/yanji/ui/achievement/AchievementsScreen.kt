@@ -14,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -116,6 +118,7 @@ fun rarityBackground(rarity: AchievementRarity): Color {
     }
 }
 
+@Composable
 fun rarityBorderBrush(rarity: AchievementRarity, isUnlocked: Boolean): Brush {
     return if (isUnlocked) {
         when (rarity) {
@@ -135,12 +138,12 @@ fun rarityBorderBrush(rarity: AchievementRarity, isUnlocked: Boolean): Brush {
                 colors = listOf(AchievementUncommon, AchievementUncommonGradientEnd)
             )
             AchievementRarity.COMMON -> Brush.linearGradient(
-                colors = listOf(YanjiPrimary.copy(alpha = 0.35f), YanjiPrimarySoft)
+                colors = listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), MaterialTheme.colorScheme.primaryContainer)
             )
         }
     } else {
         Brush.linearGradient(
-            colors = listOf(YanjiDivider.copy(alpha = 0.6f), YanjiDivider.copy(alpha = 0.3f))
+            colors = listOf(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         )
     }
 }
@@ -190,7 +193,7 @@ fun AchievementsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -231,18 +234,18 @@ fun AchievementsScreen(
                                     .background(
                                         Brush.radialGradient(
                                             colors = listOf(
-                                                YanjiPrimarySoft,
-                                                YanjiSurface
+                                                MaterialTheme.colorScheme.primaryContainer,
+                                                MaterialTheme.colorScheme.surface
                                             )
                                         )
                                     )
-                                    .border(1.5.dp, YanjiPrimarySoft, CircleShape),
+                                    .border(1.5.dp, MaterialTheme.colorScheme.primaryContainer, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Fill.Trophy,
                                     contentDescription = null,
-                                    tint = YanjiPrimary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(30.dp)
                                 )
                             }
@@ -259,13 +262,13 @@ fun AchievementsScreen(
                                         text = "已点亮 $unlockedCount / $totalCount 枚徽章",
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = YanjiTextPrimary
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         text = "$progressPercent%",
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold,
-                                        color = YanjiPrimary
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
 
@@ -277,8 +280,8 @@ fun AchievementsScreen(
                                         .fillMaxWidth()
                                         .height(8.dp)
                                         .clip(RoundedCornerShape(4.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                                    color = YanjiPrimary,
-                                    trackColor = YanjiBackground,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.background,
                                 )
                             }
                         }
@@ -329,13 +332,13 @@ fun AchievementsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .background(YanjiBackground)
+                                .background(MaterialTheme.colorScheme.background)
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = "“每一枚被点亮的徽章，都是你打败拖延与迷茫的铁证。”",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -353,7 +356,7 @@ fun AchievementsScreen(
                             Icon(
                                 imageVector = PhosphorIcons.Fill.Sparkle,
                                 contentDescription = null,
-                                tint = YanjiPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -361,13 +364,13 @@ fun AchievementsScreen(
                                 text = "即将点亮",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "最接近突破的下一个目标",
                                 fontSize = 11.sp,
-                                color = YanjiTextTertiary
+                                color = YanjiColors.textTertiary
                             )
                         }
 
@@ -413,7 +416,7 @@ fun AchievementsScreen(
                         val isSelected = selectedCategory == cat
                         Surface(
                             shape = RoundedCornerShape(YanjiRadius.Small),
-                            color = if (isSelected) YanjiPrimary else YanjiSurface,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                             modifier = Modifier.clickable { selectedCategory = cat }
                         ) {
                             val count = if (cat == null) totalCount else achievements.count { it.category == cat }
@@ -421,7 +424,7 @@ fun AchievementsScreen(
                                 text = "$title ($count)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) YanjiOnPrimary else YanjiTextSecondary,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             )
                         }
@@ -464,8 +467,8 @@ fun UpcomingAchievementCard(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = YanjiSurface,
-        border = BorderStroke(1.dp, YanjiDivider.copy(alpha = 0.5f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.width(180.dp)
     ) {
         Column(
@@ -480,13 +483,13 @@ fun UpcomingAchievementCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(YanjiBackground),
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = YanjiTextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -511,7 +514,7 @@ fun UpcomingAchievementCard(
                 text = achievement.title,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -521,7 +524,7 @@ fun UpcomingAchievementCard(
             Text(
                 text = "还差 $remaining ${achievement.unit}",
                 fontSize = 11.sp,
-                color = YanjiPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
             )
 
@@ -533,8 +536,8 @@ fun UpcomingAchievementCard(
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                color = YanjiPrimary,
-                trackColor = YanjiBackground
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.background
             )
         }
     }
@@ -555,7 +558,7 @@ fun AchievementGridCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = YanjiSurface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         border = CardDefaults.outlinedCardBorder().copy(
             width = if (isUnlocked && (achievement.rarity == AchievementRarity.MYTHIC || achievement.rarity == AchievementRarity.LEGENDARY)) 1.5.dp else 1.dp,
@@ -600,12 +603,12 @@ fun AchievementGridCard(
                             Brush.radialGradient(
                                 colors = listOf(
                                     rarityBackground(achievement.rarity),
-                                    YanjiSurface
+                                    MaterialTheme.colorScheme.surface
                                 )
                             )
                         } else {
                             Brush.radialGradient(
-                                colors = listOf(YanjiBackground, YanjiSurface)
+                                colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface)
                             )
                         }
                     )
@@ -619,7 +622,7 @@ fun AchievementGridCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isUnlocked) rarityColor else YanjiTextTertiary,
+                    tint = if (isUnlocked) rarityColor else YanjiColors.textTertiary,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -631,7 +634,7 @@ fun AchievementGridCard(
                 text = if (isHiddenLocked) "???" else achievement.title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isUnlocked) YanjiTextPrimary else YanjiTextSecondary,
+                color = if (isUnlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 1,
@@ -644,7 +647,7 @@ fun AchievementGridCard(
             Text(
                 text = if (isHiddenLocked) "这是一项隐藏成就，达成后揭晓" else achievement.description,
                 fontSize = 11.sp,
-                color = YanjiTextTertiary,
+                color = YanjiColors.textTertiary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
@@ -689,7 +692,7 @@ fun AchievementGridCard(
                 } else if (isHiddenLocked) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = YanjiBackground
+                        color = MaterialTheme.colorScheme.background
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -698,14 +701,14 @@ fun AchievementGridCard(
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Lock,
                                 contentDescription = null,
-                                tint = YanjiTextTertiary,
+                                tint = YanjiColors.textTertiary,
                                 modifier = Modifier.size(10.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "未探索",
                                 fontSize = 10.sp,
-                                color = YanjiTextTertiary
+                                color = YanjiColors.textTertiary
                             )
                         }
                     }
@@ -721,14 +724,14 @@ fun AchievementGridCard(
                                 .fillMaxWidth(0.85f)
                                 .height(5.dp)
                                 .clip(RoundedCornerShape(3.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                            color = YanjiPrimary.copy(alpha = 0.6f),
-                            trackColor = YanjiBackground
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            trackColor = MaterialTheme.colorScheme.background
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "${achievement.currentProgress}/${achievement.targetProgress} ${achievement.unit}",
                             fontSize = 10.sp,
-                            color = YanjiTextTertiary,
+                            color = YanjiColors.textTertiary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -771,7 +774,7 @@ fun AchievementDetailDialog(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
                 .clip(RoundedCornerShape(26.dp))
-                .background(YanjiSurface)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -789,18 +792,18 @@ fun AchievementDetailDialog(
                                 Brush.radialGradient(
                                     colors = listOf(
                                         rarityBackground(achievement.rarity),
-                                        YanjiSurface
+                                        MaterialTheme.colorScheme.surface
                                     )
                                 )
                             } else {
                                 Brush.radialGradient(
-                                    colors = listOf(YanjiBackground, YanjiSurface)
+                                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface)
                                 )
                             }
                         )
                         .border(
                             2.dp,
-                            if (isUnlocked) rarityColor else YanjiDivider,
+                            if (isUnlocked) rarityColor else MaterialTheme.colorScheme.outlineVariant,
                             CircleShape
                         ),
                     contentAlignment = Alignment.Center
@@ -808,7 +811,7 @@ fun AchievementDetailDialog(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isUnlocked) rarityColor else YanjiTextTertiary,
+                        tint = if (isUnlocked) rarityColor else YanjiColors.textTertiary,
                         modifier = Modifier.size(38.dp)
                     )
                 }
@@ -820,7 +823,7 @@ fun AchievementDetailDialog(
                     text = if (isHiddenLocked) "???" else achievement.title,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -848,12 +851,12 @@ fun AchievementDetailDialog(
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = YanjiBackground
+                        color = MaterialTheme.colorScheme.background
                     ) {
                         Text(
                             text = achievement.category.title,
                             fontSize = 11.sp,
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
@@ -865,7 +868,7 @@ fun AchievementDetailDialog(
                 Text(
                     text = if (isHiddenLocked) "达成条件：这是一项隐藏成就，达成后揭晓。" else "达成条件：${achievement.description}",
                     fontSize = 13.sp,
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -877,7 +880,7 @@ fun AchievementDetailDialog(
                     Text(
                         text = "达成时间：${unlockDateStr ?: "已点亮"}",
                         fontSize = 12.sp,
-                        color = YanjiSuccess,
+                        color = MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -886,7 +889,7 @@ fun AchievementDetailDialog(
                     Text(
                         text = "探索状态：未解锁（继续你的考研征途以揭晓）",
                         fontSize = 12.sp,
-                        color = YanjiTextTertiary,
+                        color = YanjiColors.textTertiary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -894,7 +897,7 @@ fun AchievementDetailDialog(
                     Text(
                         text = "当前进度：${achievement.currentProgress} / ${achievement.targetProgress} ${achievement.unit}",
                         fontSize = 12.sp,
-                        color = YanjiPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -908,7 +911,7 @@ fun AchievementDetailDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiBackground)
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(10.dp)
                     ) {
                         Column {
@@ -916,7 +919,7 @@ fun AchievementDetailDialog(
                                 text = "成长阶梯系列",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -933,16 +936,16 @@ fun AchievementDetailDialog(
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = when {
-                                            isUnlockedDef -> YanjiSuccessSoft
-                                            isCurrent -> YanjiPrimarySoft
-                                            else -> YanjiSurface
+                                            isUnlockedDef -> MaterialTheme.colorScheme.tertiaryContainer
+                                            isCurrent -> MaterialTheme.colorScheme.primaryContainer
+                                            else -> MaterialTheme.colorScheme.surface
                                         },
                                         border = BorderStroke(
                                             1.dp,
                                             when {
-                                                isUnlockedDef -> YanjiSuccess.copy(alpha = 0.5f)
-                                                isCurrent -> YanjiPrimary
-                                                else -> YanjiDivider.copy(alpha = 0.6f)
+                                                isUnlockedDef -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
+                                                isCurrent -> MaterialTheme.colorScheme.primary
+                                                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                             }
                                         )
                                     ) {
@@ -955,9 +958,9 @@ fun AchievementDetailDialog(
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = when {
-                                                    isUnlockedDef -> YanjiSuccess
-                                                    isCurrent -> YanjiPrimary
-                                                    else -> YanjiTextTertiary
+                                                    isUnlockedDef -> MaterialTheme.colorScheme.tertiary
+                                                    isCurrent -> MaterialTheme.colorScheme.primary
+                                                    else -> YanjiColors.textTertiary
                                                 }
                                             )
                                             Spacer(modifier = Modifier.width(3.dp))
@@ -965,7 +968,7 @@ fun AchievementDetailDialog(
                                                 text = "${def.targetProgress}${def.unit}",
                                                 fontSize = 11.sp,
                                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isUnlockedDef || isCurrent) YanjiTextPrimary else YanjiTextTertiary
+                                                color = if (isUnlockedDef || isCurrent) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
                                             )
                                         }
                                     }
@@ -973,7 +976,7 @@ fun AchievementDetailDialog(
                                         Text(
                                             text = "→",
                                             fontSize = 11.sp,
-                                            color = YanjiTextTertiary
+                                            color = YanjiColors.textTertiary
                                         )
                                     }
                                 }
@@ -989,7 +992,7 @@ fun AchievementDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(YanjiBackground)
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(14.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
@@ -1000,14 +1003,14 @@ fun AchievementDetailDialog(
                                 text = "卷卷的话：",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isHiddenLocked) "“坚持做正确的事，惊喜会在不经意间降临。”" else "“${achievement.rewardQuote}”",
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1022,8 +1025,8 @@ fun AchievementDetailDialog(
                         .height(42.dp),
                     shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = YanjiPrimary,
-                        contentColor = YanjiOnPrimary
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text("关 闭", fontSize = 14.sp)

@@ -20,7 +20,6 @@ import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.fill.*
 import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.di.LocalAppContainer
-import com.example.yanji.theme.YanjiBackground
 import com.example.yanji.ui.achievement.AchievementsScreen
 import com.example.yanji.ui.chat.JuanjuanChatScreen
 import com.example.yanji.ui.detail.DailyStudyDetailScreen
@@ -116,7 +115,7 @@ fun MainNavigation() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Box(
             modifier = Modifier

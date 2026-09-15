@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 enum class YanjiChipStyle {
     PRIMARY,
@@ -38,13 +39,13 @@ fun YanjiChip(
     onClick: (() -> Unit)? = null
 ) {
     val (backgroundColor, textColor, borderColor) = when {
-        selected -> Triple(YanjiPrimary, YanjiOnPrimary, null)
-        style == YanjiChipStyle.PRIMARY -> Triple(YanjiPrimarySoft, YanjiPrimaryStrong, YanjiBorder)
-        style == YanjiChipStyle.LAVENDER -> Triple(YanjiLavenderSoft, YanjiLavenderDeep, null)
-        style == YanjiChipStyle.SUCCESS -> Triple(YanjiSuccessSoft, YanjiSuccess, null)
-        style == YanjiChipStyle.WARNING -> Triple(YanjiWarningSoft, YanjiWarning, null)
-        style == YanjiChipStyle.DANGER -> Triple(YanjiDangerSoft, YanjiDanger, null)
-        else -> Triple(YanjiSurface, YanjiTextSecondary, YanjiBorder)
+        selected -> Triple(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary, null)
+        style == YanjiChipStyle.PRIMARY -> Triple(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer, MaterialTheme.colorScheme.outline)
+        style == YanjiChipStyle.LAVENDER -> Triple(MaterialTheme.colorScheme.secondaryContainer, YanjiColors.lavenderDeep, null)
+        style == YanjiChipStyle.SUCCESS -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.tertiary, null)
+        style == YanjiChipStyle.WARNING -> Triple(YanjiColors.warningSoft, YanjiColors.warning, null)
+        style == YanjiChipStyle.DANGER -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, null)
+        else -> Triple(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.outline)
     }
 
     val shape = RoundedCornerShape(YanjiRadius.ChipRadius)

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import com.example.yanji.data.ChatContextSource
 import com.example.yanji.data.JuanjuanAction
 import com.example.yanji.data.JuanjuanActionType
 import com.example.yanji.data.JuanjuanBlockKind
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.chat.JuanjuanResponseParser
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.theme.*
@@ -73,7 +75,7 @@ fun JuanjuanMessageBubble(
                     .align(Alignment.BottomEnd)
                     .offset(x = 2.dp, y = 2.dp)
                     .clip(CircleShape)
-                    .background(if (hasDeepAnalysis) YanjiLavender else YanjiPrimary),
+                    .background(if (hasDeepAnalysis) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -102,7 +104,7 @@ fun JuanjuanMessageBubble(
                 Text(
                     text = "卷卷",
                     style = MaterialTheme.typography.labelMedium.copy(
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
                     )
@@ -110,12 +112,12 @@ fun JuanjuanMessageBubble(
 
                 Surface(
                     shape = CircleShape,
-                    color = if (hasDeepAnalysis) YanjiLavenderSoft else YanjiPrimarySoft
+                    color = if (hasDeepAnalysis) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
                         text = if (hasDeepAnalysis) "深度解析" else "专属学伴",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = if (hasDeepAnalysis) YanjiLavenderDeep else YanjiPrimaryStrong,
+                            color = if (hasDeepAnalysis) YanjiColors.lavenderDeep else MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp
                         ),
@@ -128,7 +130,7 @@ fun JuanjuanMessageBubble(
             if (hasDeepAnalysis || learningRecordCount > 0 || parsed.contextSources.isNotEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = YanjiSurfaceSoft,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showThoughtDetails = !showThoughtDetails }
@@ -145,14 +147,14 @@ fun JuanjuanMessageBubble(
                             Icon(
                                 imageVector = Icons.Default.Psychology,
                                 contentDescription = null,
-                                tint = YanjiLavender,
+                                tint = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.size(15.dp)
                             )
                             val recordCount = if (learningRecordCount > 0) learningRecordCount else parsed.contextSources.sumOf { it.count }.coerceAtLeast(6)
                             Text(
                                 text = "已结合近 $recordCount 套模考错题库深度思考 · 耗时 1.8s",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = YanjiLavenderDeep,
+                                    color = YanjiColors.lavenderDeep,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -162,7 +164,7 @@ fun JuanjuanMessageBubble(
                         Icon(
                             imageVector = if (showThoughtDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = null,
-                            tint = YanjiTextTertiary,
+                            tint = YanjiColors.textTertiary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -185,9 +187,9 @@ fun JuanjuanMessageBubble(
                     bottomStart = 16.dp,
                     bottomEnd = 16.dp
                 ),
-                color = YanjiSurface,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
-                border = BorderStroke(0.5.dp, YanjiBorder.copy(alpha = 0.6f)),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -204,13 +206,13 @@ fun JuanjuanMessageBubble(
                             Icon(
                                 imageVector = Icons.Default.Favorite,
                                 contentDescription = null,
-                                tint = YanjiPrimaryStrong,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = diag,
                                 style = MaterialTheme.typography.titleSmall.copy(
-                                    color = YanjiPrimaryStrong,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
@@ -270,7 +272,7 @@ private fun MainTextBlock(text: String, modifier: Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium.copy(
-            color = YanjiTextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             lineHeight = 22.sp,
             fontSize = 14.sp
         ),
@@ -305,7 +307,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
         steps.forEachIndexed { stepIndex, (title, detail) ->
             Surface(
                 shape = RoundedCornerShape(YanjiRadius.Small),
-                color = YanjiSurfaceSoft,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -318,7 +320,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = YanjiPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -336,7 +338,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
                             text = title,
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiTextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 14.sp
                             )
                         )
@@ -345,7 +347,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
                     Text(
                         text = detail,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 20.sp,
                             fontSize = 13.sp
                         ),
@@ -361,7 +363,7 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
 private fun ActionHintBlock(text: String, modifier: Modifier) {
     Surface(
         shape = RoundedCornerShape(YanjiRadius.Small),
-        color = YanjiLavenderSoft,
+        color = MaterialTheme.colorScheme.secondaryContainer,
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
@@ -372,13 +374,13 @@ private fun ActionHintBlock(text: String, modifier: Modifier) {
             Icon(
                 imageVector = Icons.Default.Checklist,
                 contentDescription = null,
-                tint = YanjiLavenderDeep,
+                tint = YanjiColors.lavenderDeep,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    color = YanjiLavenderDeep,
+                    color = YanjiColors.lavenderDeep,
                     fontWeight = FontWeight.Medium,
                     fontSize = 12.sp
                 )
@@ -400,7 +402,7 @@ private fun ActionButtonRow(
         actions.forEach { action ->
             Surface(
                 shape = RoundedCornerShape(YanjiRadius.Small),
-                color = YanjiLavenderSoft,
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -418,7 +420,7 @@ private fun ActionButtonRow(
                         Icon(
                             imageVector = Icons.Default.Checklist,
                             contentDescription = null,
-                            tint = YanjiLavenderDeep,
+                            tint = YanjiColors.lavenderDeep,
                             modifier = Modifier.size(18.dp)
                         )
                         val promptText = if (action.type == JuanjuanActionType.CREATE_PLAN) {
@@ -429,7 +431,7 @@ private fun ActionButtonRow(
                         Text(
                             text = promptText,
                             style = MaterialTheme.typography.labelMedium.copy(
-                                color = YanjiLavenderDeep,
+                                color = YanjiColors.lavenderDeep,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 12.sp
                             )
@@ -438,7 +440,7 @@ private fun ActionButtonRow(
 
                     Surface(
                         shape = CircleShape,
-                        color = YanjiLavenderDeep,
+                        color = YanjiColors.lavenderDeep,
                         shadowElevation = 1.dp,
                         modifier = Modifier.clickable { onClick(action) }
                     ) {
@@ -473,14 +475,14 @@ private fun FollowupChipsRow(
         followups.forEach { label ->
             Surface(
                 shape = CircleShape,
-                color = YanjiSurfaceSoft,
-                border = BorderStroke(1.dp, YanjiBorder),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier.clickable { onClick(label) }
             ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium.copy(
-                        color = YanjiTextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
                     ),
@@ -540,7 +542,7 @@ private fun QuickInteractionBar(
         InteractionItem(
             icon = Icons.Default.ThumbUp,
             label = if (isLiked) "已点赞" else "超有用",
-            tint = if (isLiked) YanjiPrimaryStrong else YanjiTextTertiary,
+            tint = if (isLiked) MaterialTheme.colorScheme.onPrimaryContainer else YanjiColors.textTertiary,
             fontWeight = if (isLiked) FontWeight.Bold else FontWeight.Normal,
             onClick = { isLiked = !isLiked }
         )
@@ -551,7 +553,7 @@ private fun QuickInteractionBar(
 private fun InteractionItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    tint: Color = YanjiTextTertiary,
+    tint: Color = YanjiColors.textTertiary,
     fontWeight: FontWeight = FontWeight.Normal,
     onClick: () -> Unit
 ) {
@@ -592,8 +594,8 @@ private fun ContextSourceCard(
         sources.forEach { source ->
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = YanjiSurface,
-                border = BorderStroke(0.5.dp, YanjiBorder),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onSourceClick(source) }
@@ -618,13 +620,13 @@ private fun ContextSourceCard(
                                     com.example.yanji.data.ContextSourceType.CURRENT_CONVERSATION -> Icons.AutoMirrored.Filled.Chat
                                 },
                                 contentDescription = null,
-                                tint = YanjiTextSecondary,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = source.type.name.replace("_", " "),
                                 style = MaterialTheme.typography.labelMedium.copy(
-                                    color = YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 12.sp
                                 )
@@ -634,7 +636,7 @@ private fun ContextSourceCard(
                         Text(
                             text = source.summary,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = YanjiTextTertiary,
+                                color = YanjiColors.textTertiary,
                                 fontSize = 11.sp
                             )
                         )
@@ -642,7 +644,7 @@ private fun ContextSourceCard(
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
                         contentDescription = null,
-                        tint = YanjiTextTertiary,
+                        tint = YanjiColors.textTertiary,
                         modifier = Modifier.size(16.dp)
                     )
                 }

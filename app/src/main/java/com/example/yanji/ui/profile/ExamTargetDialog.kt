@@ -5,6 +5,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 @Composable
 fun ExamTargetDialog(
@@ -40,7 +42,7 @@ fun ExamTargetDialog(
                         )
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("保存设置", fontWeight = FontWeight.Bold)
@@ -48,7 +50,7 @@ fun ExamTargetDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消", color = YanjiTextSecondary)
+                Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         title = { Text("考研目标设置", fontWeight = FontWeight.Bold) },
@@ -88,19 +90,19 @@ fun ExamTargetDialog(
                             Text(
                                 text = "考研初试日期",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = date.ifBlank { "点击选择初试日期" },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = if (date.isBlank()) YanjiTextTertiary else YanjiTextPrimary
+                                color = if (date.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Icon(
                             imageVector = Icons.Outlined.CalendarMonth,
                             contentDescription = "选择考研初试日期",
-                            tint = YanjiPrimary
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -116,7 +118,7 @@ fun ExamTargetDialog(
             }
         },
         shape = RoundedCornerShape(24.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 
     if (showExamDatePicker) {

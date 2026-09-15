@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.text.style.TextAlign
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.YanjiCard as Card
 
@@ -40,7 +42,7 @@ fun MetricMiniCard(
             if (onClick != null) Modifier.clickable { onClick() } else Modifier
         ),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -60,20 +62,20 @@ fun MetricMiniCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
-            Text(text = title, style = MaterialTheme.typography.labelMedium, color = YanjiTextTertiary)
+            Text(text = title, style = MaterialTheme.typography.labelMedium, color = YanjiColors.textTertiary)
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = value,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
                 if (unit != null) {
                     Text(
                         text = unit,
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
                     )
                 }
@@ -92,7 +94,7 @@ fun StatsAiReportCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -109,12 +111,12 @@ fun StatsAiReportCard(
                             text = "卷卷 · AI 阶段学情诊断",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "基于真实学习与日记数据深度分析",
                             style = MaterialTheme.typography.labelMedium,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -122,14 +124,14 @@ fun StatsAiReportCard(
                 Button(
                     onClick = onGenerate,
                     enabled = !isAnalyzing,
-                    colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     if (isAnalyzing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
-                            color = YanjiOnPrimary,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -148,8 +150,8 @@ fun StatsAiReportCard(
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = YanjiWarningSoft,
-                    border = BorderStroke(1.dp, YanjiWarning.copy(alpha = 0.3f)),
+                    color = YanjiColors.warningSoft,
+                    border = BorderStroke(1.dp, YanjiColors.warning.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -160,13 +162,13 @@ fun StatsAiReportCard(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = YanjiWarning,
+                            tint = YanjiColors.warning,
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
                             text = errorMessage,
                             style = MaterialTheme.typography.bodySmall,
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 18.sp
                         )
                     }
@@ -177,14 +179,14 @@ fun StatsAiReportCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .background(YanjiSurfaceSoft)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(vertical = 20.dp, horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "尚未生成学情诊断。\n配置 AI 并在本周期产生专注记录后，点击右上角「生成诊断」，卷卷将只依据你的真实记录进行深度分析，绝不伪造虚假数据。",
                         style = MaterialTheme.typography.bodySmall,
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp
                     )
@@ -198,7 +200,7 @@ fun StatsAiReportCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .background(YanjiSurfaceSoft)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(16.dp)
                 ) {
                     Column {
@@ -206,13 +208,13 @@ fun StatsAiReportCard(
                             text = "学情概览 (${report.periodStart} ~ ${report.periodEnd})",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = report.overview,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp
                         )
 
@@ -222,13 +224,13 @@ fun StatsAiReportCard(
                                 text = "优势亮点",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiSuccess
+                                color = MaterialTheme.colorScheme.tertiary
                             )
                             report.strengths.forEach { s ->
                                 Text(
                                     text = "• $s",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     lineHeight = 18.sp
                                 )
                             }
@@ -240,13 +242,13 @@ fun StatsAiReportCard(
                                 text = "薄弱卡点",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiWarning
+                                color = YanjiColors.warning
                             )
                             report.weaknesses.forEach { w ->
                                 Text(
                                     text = "• $w",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     lineHeight = 18.sp
                                 )
                             }
@@ -258,13 +260,13 @@ fun StatsAiReportCard(
                                 text = "未来三天建议",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = YanjiPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                             report.suggestions.forEach { sg ->
                                 Text(
                                     text = "• $sg",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     lineHeight = 18.sp
                                 )
                             }

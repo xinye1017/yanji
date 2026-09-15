@@ -113,3 +113,63 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 | **查看特定业务日志** | `adb logcat -s FocusTimer:V RoomDatabase:V StudyStats:V` |
 | **清除应用所有本地数据（慎用）** | `adb shell pm clear com.example.yanji` |
 | **屏幕截图导出** | `adb exec-out screencap -p > screenshot.png` |
+
+---
+
+## 六、真机 UI 定位与截图验证（视觉 / 主题类改动）
+
+改动涉及**系统栏、主题、暗色模式**这类视觉效果时，只看代码不够，必须在真机上截图比对。
+
+### 1. 设备会间歇性掉线 —— 必须带等待重试
+
+无线调试的 mDNS 广播并不稳定（实测同一轮操作中会先 `device`、随后 `no devices/emulators found`），
+且 `adb` server 会随每次工具调用被回收。**把所有步骤放在同一次调用内，并在开头等待设备上线**：
+
+```bash
+adb start-server >/dev/null 2>&1
+try=0; until [ "$(adb devices | grep -c '_adb-tls-connect.*device')" -gt 0 ]; do
+  try=$((try+1)); [ $try -ge 15 ] && break; sleep 3
+done
+```
+确认在线后再执行 `install` / `shell` / `pull`。安装 33 MB 的 debug APK 走无线约需十几秒，
+不要因为前一条命令报 `not found` 就判定失败——重新发现设备后重试即可。
+
+### 2. 定位控件：uiautomator dump + 坐标点击
+
+`uiautomator dump` 的 XML 是**单行**的，因此 `grep '…' | grep -o 'bounds="…"'` 会把整个文件的
+bounds 全部抓出来、无法与控件配对。用 `scripts/dump_ui.py` 解析最省事：
+
+```bash
+adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+adb pull /sdcard/ui.xml build/ui.xml
+python scripts/dump_ui.py build/ui.xml          # 输出「可见文本/描述 -> 中心坐标」
+adb shell input tap <x> <y>
+```
+
+- dump **只包含当前视口内**的元素；目标不在屏内时先滚动再 dump：
+  `adb shell input swipe 628 2200 628 700 400`
+- Compose 的底部 Tab 走 `content-desc`（如 `我的`、`统计`），正文走 `text`。
+- 真机 `PKB110` 逻辑分辨率是 **1256×2760**（不是 1080×2400），点击坐标按 dump 结果来。
+
+### 3. 截图
+
+优先 `screencap` 落盘再 `pull`（`exec-out … > file.png` 在 Git Bash 下可能被改动行尾）：
+
+```bash
+adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png build/s.png
+```
+
+截系统栏时注意：**系统提示横幅（如「已连接到无线调试」）会盖住状态栏**，等几秒让横幅消失再截。
+
+### 4. 验证「App 主题 × 系统深色模式」的交叉组合
+
+App 主题可被用户显式覆盖系统，所以只测一种组合不够。系统模式可临时强制、**用完务必还原为原值**：
+
+```bash
+adb shell cmd uimode night       # 先读原值（本机为 auto）
+adb shell cmd uimode night yes   # 强制系统深色
+adb shell cmd uimode night auto  # 还原
+```
+
+判定标准：**状态栏底色与图标色必须互为对比色**；且 App 显式设为 LIGHT / DARK 时，
+结果**不应**随系统模式变化。两张截图字节完全一致，即是「不受系统影响」的有力证据。

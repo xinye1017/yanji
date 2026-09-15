@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 /** UI 测试定位锚点：与 androidTest 共享，避免断言依赖中文文案。 */
 const val UserMessageBubbleTestTag = "user_message_bubble"
@@ -41,7 +42,7 @@ fun UserMessageBubble(
             Text(
                 text = "我",
                 style = MaterialTheme.typography.labelMedium.copy(
-                    color = YanjiTextTertiary,
+                    color = YanjiColors.textTertiary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -54,7 +55,7 @@ fun UserMessageBubble(
                     bottomStart = 16.dp,
                     bottomEnd = 16.dp
                 ),
-                color = YanjiPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 shadowElevation = 1.dp,
                 modifier = Modifier.widthIn(max = 280.dp)
             ) {
@@ -74,7 +75,7 @@ fun UserMessageBubble(
         Surface(
             modifier = Modifier.size(40.dp),
             shape = CircleShape,
-            color = YanjiSurfaceSoft,
+            color = MaterialTheme.colorScheme.surfaceVariant,
             shadowElevation = 1.dp
         ) {
             Box(
@@ -84,7 +85,7 @@ fun UserMessageBubble(
                 Text(
                     text = "研",
                     style = MaterialTheme.typography.labelLarge.copy(
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )

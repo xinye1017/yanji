@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,7 +48,7 @@ fun JournalScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -62,7 +64,7 @@ fun JournalScreen(
                     trailing = {
                         Button(
                             onClick = { onNavigateToJournalEditor(null, todayStr) },
-                            colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(20.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                         ) {
@@ -102,7 +104,7 @@ fun JournalCard(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -117,14 +119,14 @@ fun JournalCard(
                         text = entry.date,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiPrimary
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     // Clickable study duration chip linking to DailyStudyDetail
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiPrimarySoft)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .clickable { onStudyDurationClick() }
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
@@ -132,7 +134,7 @@ fun JournalCard(
                             text = DurationFormatter.formatHoursMinutes(durationSecs),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = YanjiPrimaryStrong
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
@@ -143,7 +145,7 @@ fun JournalCard(
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = YanjiWarning,
+                            tint = YanjiColors.warning,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -157,7 +159,7 @@ fun JournalCard(
                 text = entry.title.ifEmpty { "学习随记与复盘" },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -166,7 +168,7 @@ fun JournalCard(
             Text(
                 text = entry.content,
                 style = MaterialTheme.typography.bodyMedium,
-                color = YanjiTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3
             )
 
@@ -176,7 +178,7 @@ fun JournalCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .background(YanjiSurfaceSoft)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(10.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
@@ -184,12 +186,12 @@ fun JournalCard(
                             text = "明日计划: ",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiLavender
+                            color = MaterialTheme.colorScheme.secondary
                         )
                         Text(
                             text = entry.tomorrowPlan,
                             style = MaterialTheme.typography.labelMedium,
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 2
                         )
                     }

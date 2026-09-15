@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 11
+    private val CURRENT_VERSION = 12
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -179,7 +179,8 @@ class YanjiMigrationTest {
         YanjiDatabase.migration7to8(legacyKeySink),
         YanjiDatabase.MIGRATION_8_9,
         YanjiDatabase.MIGRATION_9_10,
-        YanjiDatabase.MIGRATION_10_11
+        YanjiDatabase.MIGRATION_10_11,
+        YanjiDatabase.MIGRATION_11_12
     )
 
     /** 用驱动直接把手工 DDL + 种子数据写进目标文件，并把 user_version 设成 [version]。 */
@@ -318,7 +319,8 @@ class YanjiMigrationTest {
                 YanjiDatabase.migration7to8 { legacyKeys += it },
                 YanjiDatabase.MIGRATION_8_9,
                 YanjiDatabase.MIGRATION_9_10,
-                YanjiDatabase.MIGRATION_10_11
+                YanjiDatabase.MIGRATION_10_11,
+                YanjiDatabase.MIGRATION_11_12
             )
         )
 
@@ -351,7 +353,8 @@ class YanjiMigrationTest {
                 YanjiDatabase.migration7to8 { legacyKeys += it },
                 YanjiDatabase.MIGRATION_8_9,
                 YanjiDatabase.MIGRATION_9_10,
-                YanjiDatabase.MIGRATION_10_11
+                YanjiDatabase.MIGRATION_10_11,
+                YanjiDatabase.MIGRATION_11_12
             )
         )
 
@@ -398,7 +401,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11)
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12)
         )
 
         assertTrue("blockers 列应已存在", "blockers" in db.columnNames("journal_entries"))
@@ -415,10 +418,62 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11)
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12)
         )
 
         assertEquals("迁移不应向 journal_entries 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 11 -> 12 外观设置
+
+    /**
+     * v11 起点结构：列结构与 v10 相同（MIGRATION_10_11 只做去重与索引，不动列），
+     * 但索引必须是 v11 的最终形态（journal_entries.date 唯一索引 + chat 复合索引）。
+     * 这些索引会与 12.json 逐项校验，因此 seed 必须建齐。
+     */
+    private val v11IndexDdl: List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_focus_sessions_startTime` ON `focus_sessions` (`startTime`)",
+        "CREATE INDEX IF NOT EXISTS `index_exam_sessions_startTime` ON `exam_sessions` (`startTime`)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS `index_journal_entries_date` ON `journal_entries` (`date`)",
+        "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId` ON `chat_messages` (`sessionId`)",
+        "CREATE INDEX IF NOT EXISTS `index_chat_messages_timestamp` ON `chat_messages` (`timestamp`)",
+        "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId_timestamp` ON `chat_messages` (`sessionId`, `timestamp`)",
+        "CREATE INDEX IF NOT EXISTS `index_quick_start_presets_sortOrder` ON `quick_start_presets` (`sortOrder`)"
+    )
+
+    @Test
+    fun migrate11To12_addsThemeModeColumnDefaultingToSystemAndPreservesSettings() {
+        seedRawDatabase(
+            version = 11,
+            ddl = v10Ddl + v11IndexDdl,
+            statements = listOf(
+                "INSERT INTO user_settings VALUES (1,'2026-12-19','目标大学','计算机',8.0,30,'math_advanced',1,1,'deepseek','https://api.deepseek.com','deepseek-chat')"
+            )
+        )
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12))
+
+        assertTrue("themeMode 列应已存在", "themeMode" in db.columnNames("user_settings"))
+        assertEquals(
+            "存量用户升级后必须一律回落到「跟随系统」，保证视觉与升级前一致",
+            "SYSTEM",
+            db.textValue("SELECT themeMode FROM user_settings WHERE id=1")
+        )
+        assertEquals("目标大学", db.textValue("SELECT targetSchool FROM user_settings WHERE id=1"))
+        assertEquals("2026-12-19", db.textValue("SELECT targetExamDate FROM user_settings WHERE id=1"))
+        assertEquals("deepseek-chat", db.textValue("SELECT aiModel FROM user_settings WHERE id=1"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM user_settings"))
+        db.close()
+    }
+
+    @Test
+    fun migrate11To12_doesNotFabricateASettingsRow() {
+        seedRawDatabase(version = 11, ddl = v10Ddl + v11IndexDdl)
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12))
+
+        assertEquals("迁移不应凭空创建 settings 行", 0, db.intValue("SELECT COUNT(*) FROM user_settings"))
         db.close()
     }
 
@@ -470,7 +525,7 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11))
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12))
 
         assertEquals(4, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         assertEquals("updated", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-01'"))

@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,7 +45,7 @@ fun AchievementSummaryBanner(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = null
     ) {
@@ -57,13 +59,13 @@ fun AchievementSummaryBanner(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(YanjiRadius.Small))
-                    .background(YanjiPrimarySoft),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = PhosphorIcons.Fill.Trophy,
                     contentDescription = null,
-                    tint = YanjiPrimary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(21.dp)
                 )
             }
@@ -78,7 +80,7 @@ fun AchievementSummaryBanner(
                     text = "$unlockedCount / $totalCount 已解锁",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 if (recentUnlocked.isNotEmpty()) {
@@ -88,13 +90,13 @@ fun AchievementSummaryBanner(
                                 modifier = Modifier
                                     .size(24.dp)
                                     .clip(CircleShape)
-                                    .background(YanjiPrimarySoft),
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = getAchievementIcon(item.iconKey, isUnlocked = true),
                                     contentDescription = item.title,
-                                    tint = YanjiPrimary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
@@ -104,7 +106,7 @@ fun AchievementSummaryBanner(
                     Text(
                         text = "完成一次专注，点亮第一枚成就",
                         fontSize = 12.sp,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -114,7 +116,7 @@ fun AchievementSummaryBanner(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "查看全部成就",
-                tint = YanjiTextTertiary,
+                tint = YanjiColors.textTertiary,
                 modifier = Modifier.size(18.dp)
             )
         }

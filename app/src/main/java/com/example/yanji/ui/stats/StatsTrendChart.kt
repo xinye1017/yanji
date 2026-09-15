@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,7 @@ fun StatsTrendChart(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -52,7 +53,7 @@ fun StatsTrendChart(
                     text = if (selectedTimeTab == 0) "本周学习时长趋势" else "每日学时分布",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -102,7 +103,7 @@ fun StatsTrendChart(
                                         .fillMaxWidth()
                                         .fillMaxHeight(ratio)
                                         .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
-                                        .background(if (isToday) YanjiPrimary else YanjiPrimary.copy(alpha = 0.40f))
+                                        .background(if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.40f))
                                 )
                             }
 
@@ -112,7 +113,7 @@ fun StatsTrendChart(
                                 text = day.dayLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isToday) YanjiPrimary else YanjiTextSecondary,
+                                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1
                             )
                         }
@@ -124,6 +125,8 @@ fun StatsTrendChart(
                         .fillMaxWidth()
                         .height(140.dp)
                 ) {
+                    val chartLineColor = MaterialTheme.colorScheme.primary
+                    val chartTodayFill = MaterialTheme.colorScheme.primaryContainer
                     Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
                         val n = days.size
                         if (n > 0) {
@@ -150,7 +153,7 @@ fun StatsTrendChart(
                             }
                             drawPath(
                                 path = path,
-                                color = YanjiPrimary,
+                                color = chartLineColor,
                                 style = Stroke(
                                     width = 3.dp.toPx(),
                                     cap = StrokeCap.Round,
@@ -161,9 +164,9 @@ fun StatsTrendChart(
                             pts.forEachIndexed { index, pt ->
                                 val isToday = days[index].isToday
                                 if (isToday) {
-                                    drawCircle(color = YanjiPrimarySoft, radius = 9.dp.toPx(), center = pt)
+                                    drawCircle(color = chartTodayFill, radius = 9.dp.toPx(), center = pt)
                                 }
-                                drawCircle(color = YanjiPrimary, radius = 4.5f.dp.toPx(), center = pt)
+                                drawCircle(color = chartLineColor, radius = 4.5f.dp.toPx(), center = pt)
                                 drawCircle(color = Color.White, radius = 2.dp.toPx(), center = pt)
                             }
                         }
@@ -180,7 +183,7 @@ fun StatsTrendChart(
                                 text = day.dayLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (day.isToday) YanjiPrimary else YanjiTextSecondary,
+                                color = if (day.isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.weight(1f)
@@ -214,7 +217,7 @@ private fun TrendModeChip(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (selected) YanjiPrimarySoft else YanjiSurfaceSoft)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
@@ -222,7 +225,7 @@ private fun TrendModeChip(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) YanjiPrimaryStrong else YanjiTextSecondary
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

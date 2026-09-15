@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import java.util.Locale
 import kotlin.math.abs
@@ -41,7 +43,7 @@ fun StatsHeroCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -58,19 +60,19 @@ fun StatsHeroCard(
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(YanjiPrimary, CircleShape)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                     Text(
                         text = when (selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "有效学习 ${activeDays} 天",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
-                        color = YanjiSuccess
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
 
@@ -81,14 +83,14 @@ fun StatsHeroCard(
                         val isUp = delta > 0
                         val isFlat = delta == 0L
                         val pillBg = when {
-                            isFlat -> YanjiSurfaceSoft
-                            isUp -> YanjiSuccessSoft
-                            else -> YanjiWarningSoft
+                            isFlat -> MaterialTheme.colorScheme.surfaceVariant
+                            isUp -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> YanjiColors.warningSoft
                         }
                         val pillFg = when {
-                            isFlat -> YanjiTextSecondary
-                            isUp -> YanjiSuccess
-                            else -> YanjiWarning
+                            isFlat -> MaterialTheme.colorScheme.onSurfaceVariant
+                            isUp -> MaterialTheme.colorScheme.tertiary
+                            else -> YanjiColors.warning
                         }
                         Row(
                             modifier = Modifier
@@ -130,14 +132,14 @@ fun StatsHeroCard(
                         text = "$hoursValue",
                         fontSize = 46.sp,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiTextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         letterSpacing = (-1).sp
                     )
                     Text(
                         text = "h",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = YanjiTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 2.dp, bottom = 5.dp)
                     )
                     if (minutesValue > 0) {
@@ -146,14 +148,14 @@ fun StatsHeroCard(
                             text = "$minutesValue",
                             fontSize = 46.sp,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             letterSpacing = (-1).sp
                         )
                         Text(
                             text = "m",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = YanjiTextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 2.dp, bottom = 5.dp)
                         )
                     }
@@ -163,14 +165,14 @@ fun StatsHeroCard(
                     Text(
                         text = "日均投入",
                         style = MaterialTheme.typography.labelSmall,
-                        color = YanjiTextTertiary
+                        color = YanjiColors.textTertiary
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = DurationFormatter.formatHoursMinutes(dailyAverageSeconds),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -187,13 +189,13 @@ fun StatsHeroCard(
                     Text(
                         text = "$goalLabel (${formatGoalHours(periodDurationSecs)} / ${formatGoalHours(goalSeconds)})",
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "${(goalProgress * 100).toInt()}%",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiPrimaryStrong
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -202,14 +204,14 @@ fun StatsHeroCard(
                         .fillMaxWidth()
                         .height(8.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(YanjiSurfaceSoft)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(goalProgress.coerceAtLeast(0.002f))
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(50))
-                            .background(YanjiPrimary)
+                            .background(MaterialTheme.colorScheme.primary)
                     )
                 }
             }

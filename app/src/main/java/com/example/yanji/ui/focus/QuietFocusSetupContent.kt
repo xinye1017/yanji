@@ -33,8 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Terminal
@@ -51,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,16 +79,8 @@ import com.example.yanji.theme.SubjectMajorSoft
 import com.example.yanji.theme.SubjectMath
 import com.example.yanji.theme.SubjectPolitics
 import com.example.yanji.theme.SubjectPoliticsSoft
-import com.example.yanji.theme.YanjiBackground
-import com.example.yanji.theme.YanjiBorder
-import com.example.yanji.theme.YanjiPrimary
-import com.example.yanji.theme.YanjiPrimarySoft
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
-import com.example.yanji.theme.YanjiSurface
-import com.example.yanji.theme.YanjiSurfaceSoft
-import com.example.yanji.theme.YanjiTextPrimary
-import com.example.yanji.theme.YanjiTextSecondary
-import com.example.yanji.theme.YanjiTextTertiary
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.data.YanjiTime
 
@@ -118,7 +109,8 @@ private val QuietControlShape = RoundedCornerShape(14.dp)
  * 选中态容器 —— 复用 theme 的淡蓝强调色，不再在 Screen 内联。
  * 与 DESIGN.md「chip-blue / nav-active」的 `primary-soft` 同一语义。
  */
-private val QuietSelectedSurface = YanjiPrimarySoft
+private val QuietSelectedSurface: Color
+    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.primaryContainer
 
 /**
  * The restrained focus-preparation flow. It deliberately keeps one visual focus per step:
@@ -162,7 +154,6 @@ fun QuietFocusSetupContent(
                 !it.name.contains("其他")
         }.sortedBy { it.sortOrder }
     }
-    val selectedCategory = topCategories.firstOrNull { it.id == selectedCategoryId }
     val subcategories = remember(subjects, selectedCategoryId) {
         subjects.filter { it.parentId == selectedCategoryId && it.enabled }
             .sortedBy { it.sortOrder }
@@ -194,7 +185,7 @@ fun QuietFocusSetupContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(YanjiBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp)
             .padding(top = 12.dp)
     ) {
@@ -228,7 +219,6 @@ fun QuietFocusSetupContent(
                 QuietFocusStep.CATEGORY -> {
                     QuietCategoryStep(
                         categories = topCategories,
-                        selectedCategoryId = selectedCategoryId,
                         onCategoryClick = { category ->
                             selectedCategoryId = category.id
                             val children = subjects.filter { it.parentId == category.id && it.enabled }
@@ -246,7 +236,6 @@ fun QuietFocusSetupContent(
                 QuietFocusStep.MODULE -> {
                     QuietModuleStep(
                         modules = subcategories,
-                        selectedSubjectId = selectedSubject.id,
                         onModuleClick = { subject ->
                             onSelectSubject(subject)
                             currentStep = QuietFocusStep.RHYTHM
@@ -319,7 +308,7 @@ private fun QuietFocusHeader(
                     Icon(
                         imageVector = Icons.Default.Timer,
                         contentDescription = null,
-                        tint = YanjiPrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(21.dp)
                     )
                 } else {
@@ -327,7 +316,7 @@ private fun QuietFocusHeader(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回上一步",
-                            tint = YanjiTextPrimary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(21.dp)
                         )
                     }
@@ -337,7 +326,7 @@ private fun QuietFocusHeader(
             Text(
                 text = "专注准备",
                 style = MaterialTheme.typography.headlineMedium,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
             Row(
@@ -351,13 +340,13 @@ private fun QuietFocusHeader(
                 Icon(
                     imageVector = Icons.Default.Schedule,
                     contentDescription = null,
-                    tint = YanjiTextTertiary,
+                    tint = YanjiColors.textTertiary,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
                     text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -368,12 +357,12 @@ private fun QuietFocusHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineLarge,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = YanjiTextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -397,14 +386,14 @@ private fun QuietProgressIndicator(stepIndex: Int) {
                         .weight(1f)
                         .height(3.dp)
                         .clip(CircleShape)
-                        .background(if (completed) YanjiPrimary else YanjiBorder)
+                        .background(if (completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
                 )
             }
         }
         Text(
             text = "$stepIndex / 3",
             style = MaterialTheme.typography.labelMedium,
-            color = YanjiTextTertiary
+            color = YanjiColors.textTertiary
         )
     }
 }
@@ -412,7 +401,6 @@ private fun QuietProgressIndicator(stepIndex: Int) {
 @Composable
 private fun QuietCategoryStep(
     categories: List<Subject>,
-    selectedCategoryId: String,
     onCategoryClick: (Subject) -> Unit,
     onNavigateToExam: () -> Unit
 ) {
@@ -429,7 +417,6 @@ private fun QuietCategoryStep(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 categoryRow.forEach { category ->
-                    val selected = selectedCategoryId == category.id
                     val accent = quietCategoryAccent(category.id)
                     val iconBackground = quietCategoryIconBackground(category.id)
                     Surface(
@@ -438,7 +425,7 @@ private fun QuietCategoryStep(
                             .weight(1f)
                             .height(108.dp),
                         shape = QuietCardShape,
-                        color = if (selected) QuietSelectedSurface else YanjiSurface
+                        color = MaterialTheme.colorScheme.surface
                     ) {
                         Column(
                             modifier = Modifier
@@ -454,23 +441,14 @@ private fun QuietCategoryStep(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(YanjiRadius.Small))
-                                        .background(if (selected) YanjiSurface else iconBackground),
+                                        .background(iconBackground),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = quietSubjectIcon(category.id, category.name),
                                         contentDescription = null,
-                                        tint = if (selected) YanjiPrimary else accent,
+                                        tint = accent,
                                         modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.weight(1f))
-                                if (selected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "已选择",
-                                        tint = YanjiPrimary,
-                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
@@ -478,14 +456,14 @@ private fun QuietCategoryStep(
                                 Text(
                                     text = category.name,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = if (selected) YanjiPrimary else YanjiTextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = quietCategoryTagline(category.id),
                                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
-                                    color = if (selected) YanjiPrimary.copy(alpha = 0.76f) else YanjiTextSecondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -505,7 +483,7 @@ private fun QuietCategoryStep(
                 Text(
                     text = "进入模拟考试",
                     style = MaterialTheme.typography.labelLarge,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -515,7 +493,6 @@ private fun QuietCategoryStep(
 @Composable
 private fun QuietModuleStep(
     modules: List<Subject>,
-    selectedSubjectId: String,
     onModuleClick: (Subject) -> Unit
 ) {
     Column(
@@ -526,44 +503,29 @@ private fun QuietModuleStep(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         modules.forEach { subject ->
-            val selected = subject.id == selectedSubjectId
             Surface(
                 onClick = { onModuleClick(subject) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(76.dp),
                 shape = QuietCardShape,
-                color = if (selected) QuietSelectedSurface else YanjiSurface
+                color = MaterialTheme.colorScheme.surface
             ) {
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = subject.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (selected) YanjiPrimary else YanjiTextPrimary
-                        )
-                        Text(
-                            text = quietModuleTagline(subject.id),
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
-                            color = if (selected) YanjiPrimary.copy(alpha = 0.76f) else YanjiTextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Icon(
-                        imageVector = if (selected) Icons.Default.Check else Icons.Default.ChevronRight,
-                        contentDescription = if (selected) "已选择" else null,
-                        tint = if (selected) YanjiPrimary else YanjiTextTertiary,
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = subject.name,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -609,12 +571,12 @@ private fun QuietRhythmStep(
                         lineHeight = 64.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "分钟",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -630,26 +592,16 @@ private fun QuietRhythmStep(
                             .weight(1f)
                             .height(48.dp),
                         shape = QuietControlShape,
-                        color = if (selected) QuietSelectedSurface else YanjiSurface
+                        color = if (selected) QuietSelectedSurface else MaterialTheme.colorScheme.surface
                     ) {
-                        Row(
+                        Box(
                             modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                            contentAlignment = Alignment.Center
                         ) {
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = YanjiPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                            }
                             Text(
                                 text = "${option.minutes}",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = if (selected) YanjiPrimary else YanjiTextPrimary
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -663,14 +615,14 @@ private fun QuietRhythmStep(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = null,
-                    tint = YanjiTextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "自定义时长",
                     style = MaterialTheme.typography.labelLarge,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         } else {
@@ -687,12 +639,12 @@ private fun QuietRhythmStep(
                         fontSize = 52.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = YanjiTextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "从零开始累计，不预设结束时间。",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
@@ -710,7 +662,7 @@ private fun QuietRhythmStep(
                     "$subjectName · 正向计时"
                 },
                 style = MaterialTheme.typography.labelMedium,
-                color = YanjiTextTertiary
+                color = YanjiColors.textTertiary
             )
             Button(
                 onClick = onStart,
@@ -718,7 +670,7 @@ private fun QuietRhythmStep(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(
                     text = "开始专注",
@@ -734,7 +686,7 @@ private fun QuietRhythmStep(
                     Text(
                         text = "模拟考试",
                         style = MaterialTheme.typography.labelMedium,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -753,7 +705,7 @@ private fun QuietTimerSegmentedControl(
             .fillMaxWidth()
             .height(44.dp),
         shape = QuietControlShape,
-        color = YanjiSurfaceSoft
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier.padding(4.dp),
@@ -795,25 +747,11 @@ private fun QuietTimerSegment(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = YanjiPrimary,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-            }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (selected) YanjiPrimary else YanjiTextSecondary
-            )
-        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -832,7 +770,7 @@ private fun QuietCustomDurationDialog(
             Text(
                 text = "自定义时长",
                 style = MaterialTheme.typography.headlineMedium,
-                color = YanjiTextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
         },
         text = {
@@ -840,7 +778,7 @@ private fun QuietCustomDurationDialog(
                 Text(
                     text = "输入 1–360 分钟，或选择常用时长。",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = input,
@@ -860,13 +798,13 @@ private fun QuietCustomDurationDialog(
                         Surface(
                             onClick = { input = "$minutes" },
                             shape = RoundedCornerShape(10.dp),
-                            color = if (selected) QuietSelectedSurface else YanjiSurfaceSoft
+                            color = if (selected) QuietSelectedSurface else MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             Text(
                                 text = "$minutes 分钟",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) YanjiPrimary else YanjiTextSecondary
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -879,17 +817,17 @@ private fun QuietCustomDurationDialog(
                     val minutes = (input.toIntOrNull() ?: initialMinutes).coerceIn(1, 360)
                     onConfirm(minutes)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("确定")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = YanjiTextSecondary) }
+            TextButton(onClick = onDismiss) { Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         },
         shape = RoundedCornerShape(20.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -899,17 +837,6 @@ private fun quietCategoryTagline(id: String): String = when (id) {
     "english" -> "词汇 · 阅读 · 写作"
     "politics" -> "马原 · 毛中特 · 史纲 · 思修"
     else -> "考点梳理 · 专项突破"
-}
-
-private fun quietModuleTagline(id: String): String = when (id) {
-    "math_advanced" -> "极限微积分 · 多元积分 · 微分方程"
-    "math_linear" -> "行列式 · 矩阵 · 特征值与二次型"
-    "math_probability" -> "随机变量 · 期望方差 · 大数定律"
-    "major_data_structure" -> "线性表 · 树与图 · 查找与排序"
-    "major_organization" -> "运算存储 · 指令系统 · CPU 与总线"
-    "major_os" -> "进程 · 内存 · 文件与 I/O"
-    "major_network" -> "体系结构 · TCP/IP · 路由"
-    else -> "重点模块专题突破"
 }
 
 private fun quietSubjectIcon(subjectId: String, name: String): ImageVector {
@@ -923,12 +850,14 @@ private fun quietSubjectIcon(subjectId: String, name: String): ImageVector {
     }
 }
 
+@Composable
+@ReadOnlyComposable
 private fun quietCategoryAccent(id: String): Color = when (id) {
     "math" -> SubjectMath
     "major" -> SubjectMajor
     "english" -> SubjectEnglish
     "politics" -> SubjectPolitics
-    else -> YanjiPrimary
+    else -> MaterialTheme.colorScheme.primary
 }
 
 /**
@@ -936,10 +865,12 @@ private fun quietCategoryAccent(id: String): Color = when (id) {
  *
  * 使用 theme 中与分类色对应的 soft 阶，避免 Screen 内联 hex。
  */
+@Composable
+@ReadOnlyComposable
 private fun quietCategoryIconBackground(id: String): Color = when (id) {
-    "math" -> YanjiPrimarySoft
+    "math" -> MaterialTheme.colorScheme.primaryContainer
     "major" -> SubjectMajorSoft
     "english" -> SubjectEnglishSoft
     "politics" -> SubjectPoliticsSoft
-    else -> YanjiSurfaceSoft
+    else -> MaterialTheme.colorScheme.surfaceVariant
 }

@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +41,7 @@ fun CheckInCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -54,13 +56,13 @@ fun CheckInCard(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(YanjiPrimarySoft),
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Fill.Fire,
                             contentDescription = null,
-                            tint = YanjiPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -70,12 +72,12 @@ fun CheckInCard(
                             text = "每日打卡",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (state.currentStreak > 0) "已连续打卡 ${state.currentStreak} 天" else "开启坚持第一步",
                             fontSize = 12.sp,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -83,7 +85,7 @@ fun CheckInCard(
                 // Status Tag
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = if (state.isCheckedInToday) YanjiSuccess.copy(alpha = 0.12f) else YanjiPrimarySoft
+                    color = if (state.isCheckedInToday) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -93,7 +95,7 @@ fun CheckInCard(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = YanjiSuccess,
+                                tint = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -101,21 +103,21 @@ fun CheckInCard(
                                 text = "今日已签",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = YanjiSuccess
+                                color = MaterialTheme.colorScheme.tertiary
                             )
                         } else {
                             Box(
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(YanjiPrimary)
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "今日待打卡",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = YanjiPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -138,20 +140,20 @@ fun CheckInCard(
                             text = dayStatus.dayLabel,
                             fontSize = 11.sp,
                             fontWeight = if (dayStatus.isToday) FontWeight.Bold else FontWeight.Normal,
-                            color = if (dayStatus.isToday) YanjiPrimary else YanjiTextTertiary
+                            color = if (dayStatus.isToday) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         val dotModifier = if (dayStatus.isToday && !dayStatus.isCheckedIn) {
                             Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .background(YanjiPrimarySoft)
-                                .border(1.5.dp, YanjiPrimary, CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
                         } else {
                             Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .background(if (dayStatus.isCheckedIn) YanjiPrimary else YanjiSurfaceSoft)
+                                .background(if (dayStatus.isCheckedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         }
                         Box(
                             modifier = dotModifier,
@@ -169,7 +171,7 @@ fun CheckInCard(
                                     modifier = Modifier
                                         .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(YanjiPrimary)
+                                        .background(MaterialTheme.colorScheme.primary)
                                 )
                             }
                         }
@@ -188,7 +190,7 @@ fun CheckInCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(YanjiBackground)
+                        .background(MaterialTheme.colorScheme.background)
                         .clickable { onCheckInSuccess(todayCheckIn) }
                         .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
@@ -202,19 +204,19 @@ fun CheckInCard(
                                 text = "已连续打卡 ${todayCheckIn.streak} 天",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = YanjiTextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = todayCheckIn.note.ifBlank { "稳扎稳打，静待花开。" },
                                 fontSize = 11.sp,
-                                color = YanjiTextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Text(
                             text = "查看 >",
                             fontSize = 12.sp,
-                            color = YanjiPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -233,7 +235,7 @@ fun CheckInCard(
                         .height(44.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = YanjiPrimary,
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White
                     )
                 ) {

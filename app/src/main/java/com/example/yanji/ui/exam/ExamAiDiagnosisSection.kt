@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.YanjiCard as Card
 
@@ -32,7 +34,7 @@ fun ExamAiDiagnosisSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-            colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -44,7 +46,7 @@ fun ExamAiDiagnosisSection(
                             text = "AI 模考深度诊断报告",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = YanjiTextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (analysis != null) {
@@ -53,13 +55,13 @@ fun ExamAiDiagnosisSection(
                                 "基于你真实的专注、模考与日记记录生成"
                             },
                             fontSize = 12.sp,
-                            color = YanjiTextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Button(
                         onClick = onGenerate,
                         enabled = !isAnalyzing,
-                        colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -88,7 +90,7 @@ fun ExamAiDiagnosisSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiSurfaceSoft)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(vertical = 24.dp, horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -99,7 +101,7 @@ fun ExamAiDiagnosisSection(
                                 "尚未生成诊断报告。\n点击右上角「生成诊断」，卷卷会只依据你已有的真实记录给出结论；记录不足时会直接说明数据缺口，不会编造分数或趋势。"
                             },
                             fontSize = 12.sp,
-                            color = YanjiTextTertiary,
+                            color = YanjiColors.textTertiary,
                             lineHeight = 18.sp
                         )
                     }
@@ -111,13 +113,13 @@ fun ExamAiDiagnosisSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiSurfaceBlue)
+                            .background(YanjiColors.surfaceBlue)
                             .padding(14.dp)
                     ) {
                         Text(
                             text = "【综合概览】${analysis.overview}",
                             fontSize = 13.sp,
-                            color = YanjiTextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp
                         )
                     }
@@ -125,36 +127,36 @@ fun ExamAiDiagnosisSection(
 
                 if (analysis.strengths.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("已确认的优势", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YanjiTextPrimary)
+                    Text("已确认的优势", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     analysis.strengths.forEach { item ->
-                        BulletLine(text = item, color = YanjiSuccess)
+                        BulletLine(text = item, color = MaterialTheme.colorScheme.tertiary)
                     }
                 }
 
                 if (analysis.weaknesses.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(14.dp))
-                    Text("待改进 / 数据缺口", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YanjiTextPrimary)
+                    Text("待改进 / 数据缺口", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     analysis.weaknesses.forEach { item ->
-                        BulletLine(text = item, color = YanjiWarning)
+                        BulletLine(text = item, color = YanjiColors.warning)
                     }
                 }
 
                 if (analysis.trendAnalysis.isNotBlank()) {
                     Spacer(modifier = Modifier.height(14.dp))
-                    Text("趋势判断", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YanjiTextPrimary)
+                    Text("趋势判断", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(analysis.trendAnalysis, fontSize = 12.sp, color = YanjiTextSecondary, lineHeight = 18.sp)
+                    Text(analysis.trendAnalysis, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
                 }
 
                 if (analysis.suggestions.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(14.dp))
-                    Text("未来 3 天计划", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = YanjiTextPrimary)
+                    Text("未来 3 天计划", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     analysis.suggestions.forEachIndexed { index, item ->
                         DiagnosisItem(
                             tag = "第 ${index + 1} 天",
                             title = "行动建议",
                             desc = item,
-                            color = YanjiPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -179,7 +181,7 @@ private fun BulletLine(text: String, color: Color) {
                 .background(color)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(text = text, fontSize = 12.sp, color = YanjiTextSecondary, lineHeight = 18.sp)
+        Text(text = text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
     }
 }
 
@@ -205,8 +207,8 @@ fun DiagnosisItem(
         }
         Spacer(modifier = Modifier.width(10.dp))
         Column {
-            Text(text = title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = YanjiTextPrimary)
-            Text(text = desc, fontSize = 12.sp, color = YanjiTextSecondary, lineHeight = 18.sp)
+            Text(text = title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
         }
     }
 }

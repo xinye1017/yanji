@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 
 @Composable
@@ -62,7 +64,7 @@ fun ExamPresetsList(
             durationMins = 60,
             fullScore = 50,
             recommendedTime = "限时小题突破",
-            accentColor = YanjiLavender,
+            accentColor = MaterialTheme.colorScheme.secondary,
             onStart = { onStartExam("other", "小题限时训练", 3600L) }
         )
     }
@@ -80,7 +82,7 @@ fun ExamCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = YanjiSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -103,7 +105,7 @@ fun ExamCard(
                         text = title,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = YanjiTextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -113,13 +115,13 @@ fun ExamCard(
                     Text(
                         text = "$durationMins 分钟 · 满分 $fullScore",
                         fontSize = 12.sp,
-                        color = YanjiTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = recommendedTime,
                         fontSize = 12.sp,
-                        color = YanjiTextTertiary
+                        color = YanjiColors.textTertiary
                     )
                 }
             }

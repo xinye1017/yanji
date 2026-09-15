@@ -3,6 +3,7 @@ package com.example.yanji.ui.exam
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -11,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.ExamSession
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 
 @Composable
 fun ExamScoreDialog(
@@ -29,7 +31,7 @@ fun ExamScoreDialog(
                     val scoreVal = scoreInput.toDoubleOrNull()
                     onConfirm(scoreVal, noteInput)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = YanjiPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
                 Text("保存成绩与复盘", fontWeight = FontWeight.Bold)
@@ -37,7 +39,7 @@ fun ExamScoreDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("暂不录入分数", color = YanjiTextSecondary)
+                Text("暂不录入分数", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         title = {
@@ -48,13 +50,13 @@ fun ExamScoreDialog(
                 Text(
                     text = "考试科目：${session.subjectName}",
                     fontSize = 14.sp,
-                    color = YanjiTextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "实际用时：${session.actualDurationSeconds / 60} 分钟",
                     fontSize = 13.sp,
-                    color = YanjiTextTertiary
+                    color = YanjiColors.textTertiary
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -82,6 +84,6 @@ fun ExamScoreDialog(
             }
         },
         shape = RoundedCornerShape(24.dp),
-        containerColor = YanjiSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }

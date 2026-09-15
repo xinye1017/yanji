@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.*
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.yanjiSeriesColor
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
@@ -209,13 +211,12 @@ fun DailySessionRowCard(
     item: DailySessionItem,
     onClick: () -> Unit
 ) {
-    val tagColor = remember(item.subjectColor) {
-        try {
-            Color(item.subjectColor.toColorInt())
-        } catch (e: Exception) {
-            YanjiPrimary
-        }
+    val seriesFallback = MaterialTheme.colorScheme.primary
+    val rawSeriesColor = remember(item.subjectColor, seriesFallback) {
+        runCatching { Color(item.subjectColor.toColorInt()) }.getOrDefault(seriesFallback)
     }
+    // 学科色的事实来源在数据层（hex 字符串），这里按当前主题做一次翻译：暗色下换成升调序列色。
+    val tagColor = yanjiSeriesColor(item.subjectColor, rawSeriesColor)
 
     YanjiCard(
         onClick = onClick,
