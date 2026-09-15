@@ -120,6 +120,47 @@ class UiDesignSystemContractTest {
         assertTrue("HomeScreen must not hardcode RoundedCornerShape(20.dp) for standard cards", !content.contains("shape = RoundedCornerShape(20.dp)"))
     }
 
+    @Test
+    fun verifyLiquidGlassPrimitivesAndComponentsContract() {
+        val projectRoot = findProjectRoot()
+        val glassSurfaceFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/GlassSurface.kt")
+        assertTrue("GlassSurface.kt must exist", glassSurfaceFile.exists())
+        val glassSurfaceContent = glassSurfaceFile.readText()
+        assertTrue("GlassSurface must support HazeState", glassSurfaceContent.contains("hazeState: HazeState?"))
+        assertTrue("GlassSurface must support fallback without blur", glassSurfaceContent.contains("fallbackColor"))
+
+        val segmentedFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/GlassSegmentedControl.kt")
+        assertTrue("GlassSegmentedControl.kt must exist", segmentedFile.exists())
+        val segmentedContent = segmentedFile.readText()
+        assertTrue("GlassSegmentedControl must use Role.Tab for a11y", segmentedContent.contains("Role.Tab"))
+
+        val rollingFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/RollingNumber.kt")
+        assertTrue("RollingNumber.kt must exist", rollingFile.exists())
+
+        val sectionFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/YanjiSection.kt")
+        assertTrue("YanjiSection.kt must exist", sectionFile.exists())
+    }
+
+    @Test
+    fun verify80_20RuleContentCardsDoNotAbuseHazeEffect() {
+        val projectRoot = findProjectRoot()
+        val contentFiles = listOf(
+            "app/src/main/java/com/example/yanji/ui/home/HomeScreen.kt",
+            "app/src/main/java/com/example/yanji/ui/components/CheckInCard.kt",
+            "app/src/main/java/com/example/yanji/ui/stats/SubjectDistributionCard.kt",
+            "app/src/main/java/com/example/yanji/ui/stats/StatsTrendChart.kt"
+        )
+        for (relPath in contentFiles) {
+            val file = File(projectRoot, relPath)
+            assertTrue("File must exist: $relPath", file.exists())
+            val content = file.readText()
+            assertTrue(
+                "$relPath must NOT directly invoke hazeEffect; 80% content layer must remain quiet per 80/20 rule",
+                !content.contains(".hazeEffect(")
+            )
+        }
+    }
+
     private fun findProjectRoot(): File {
         var current: File? = File(System.getProperty("user.dir") ?: ".")
         while (current != null) {

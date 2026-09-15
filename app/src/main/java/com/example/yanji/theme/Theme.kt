@@ -134,13 +134,19 @@ fun YanjiThemeMode.resolveDarkTheme(): Boolean = when (this) {
 @Composable
 fun YanjiTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    reduceTransparency: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val glassTokens = when {
+        reduceTransparency -> ReducedGlassTokens
+        darkTheme -> DarkGlassTokens
+        else -> LightGlassTokens
+    }
     CompositionLocalProvider(
         LocalYanjiDarkTheme provides darkTheme,
         LocalYanjiExtraColors provides if (darkTheme) DarkExtraColors else LightExtraColors,
-        LocalLiquidGlassTokens provides if (darkTheme) DarkGlassTokens else LightGlassTokens
+        LocalLiquidGlassTokens provides glassTokens
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
