@@ -3,6 +3,9 @@ package com.example.yanji.ui.focus
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,9 +13,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -21,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -81,6 +89,7 @@ import com.example.yanji.theme.SubjectPolitics
 import com.example.yanji.theme.SubjectPoliticsSoft
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.data.YanjiTime
 
@@ -700,16 +709,59 @@ private fun QuietTimerSegmentedControl(
     onCountdownSelected: () -> Unit,
     onCountUpSelected: () -> Unit
 ) {
-    Surface(
+    val isDark = yanjiIsDarkTheme()
+    val trackColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    }
+    val trackBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.70f)
+
+    val trackPadding = 4.dp
+    val segmentSpacing = 4.dp
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp),
-        shape = QuietControlShape,
-        color = MaterialTheme.colorScheme.surfaceVariant
+            .height(48.dp)
+            .clip(CircleShape)
+            .background(trackColor)
+            .border(1.dp, trackBorderColor, CircleShape)
+            .padding(trackPadding)
     ) {
+        val totalInnerWidth = maxWidth
+        val segmentWidth = (totalInnerWidth - segmentSpacing) / 2f
+
+        val targetOffset = if (isCountdownMode) 0.dp else (segmentWidth + segmentSpacing)
+        val animatedOffset by animateDpAsState(
+            targetValue = targetOffset,
+            animationSpec = spring(
+                dampingRatio = 0.82f,
+                stiffness = 500f
+            ),
+            label = "timerSegmentSlider"
+        )
+
+        // 选中的圆角胶囊滑动指示器（显眼饱满的主色背景与柔和微光投影）
+        Box(
+            modifier = Modifier
+                .offset(x = animatedOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .shadow(
+                    elevation = if (isDark) 4.dp else 2.dp,
+                    shape = CircleShape,
+                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.30f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                    spotColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.40f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+                )
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary)
+        )
+
+        // 倒计时与正向计时的文本选项
         Row(
-            modifier = Modifier.padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(segmentSpacing)
         ) {
             QuietTimerSegment(
                 text = "倒计时",
@@ -734,14 +786,24 @@ private fun QuietTimerSegment(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val textColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+        label = "segmentTextColor"
+    )
+
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) QuietSelectedSurface else Color.Transparent)
+            .clip(CircleShape)
             .semantics { this.selected = selected }
-            .selectable(
-                selected = selected,
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
                 role = Role.Tab,
                 onClick = onClick
             ),
@@ -749,8 +811,10 @@ private fun QuietTimerSegment(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+            ),
+            color = textColor
         )
     }
 }
