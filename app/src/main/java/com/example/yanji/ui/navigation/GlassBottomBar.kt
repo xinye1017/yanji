@@ -3,6 +3,7 @@ package com.example.yanji.ui.navigation
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiDarkDockPanel
 import com.example.yanji.theme.yanjiIsDarkTheme
+import com.example.yanji.ui.components.GlassSurface
+import dev.chrisbanes.haze.HazeState
 import kotlin.math.abs
 
 private val DockHeight = 60.dp
@@ -56,7 +59,7 @@ private val HorizontalMargin = 44.dp
  * 响应式浮动液态玻璃导航栏（GlassBottomBar）：
  * 1. 同心圆几何美学：两端 Tab 的中心点严格对齐胶囊半圆端盖曲率中心（x = DockHeight / 2），使得滑块在最边缘选中时与导航栏端盖呈现完美的 8.dp 等宽同心圆环，杜绝边框挤压失调；
  * 2. 黄金宽度比例：左右边距优化为 44.dp，使得在常见手机屏幕上导航栏宽度达到舒适的 ~300dp..320dp，居中悬浮呼吸感更强；
- * 3. 纯净半透玻璃质感：亮色通透晶莹、暗色深邃通透，杜绝多余发白色块与毛刺边缘；
+ * 3. 真实液态玻璃模糊：通过 [GlassSurface] 与 [HazeState] 挂接底层实时内容，营造通透生动的亚克力/液态玻璃模糊感；
  * 4. 暗色模式高对比度：暗色下滑块底色采用轻量柔和的微光蓝容器（18%~10%），选中图标采用高亮天蓝，层级分明通透清晰；
  * 5. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
  * 6. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
@@ -65,7 +68,8 @@ private val HorizontalMargin = 44.dp
 fun GlassBottomBar(
     currentTab: YanjiTab,
     onTabSelected: (YanjiTab) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hazeState: HazeState? = null
 ) {
     val tabs = YanjiTab.entries
     val selectedIndex = tabs.indexOf(currentTab)
@@ -182,7 +186,7 @@ fun GlassBottomBar(
             )
         }
 
-        Box(
+        GlassSurface(
             modifier = Modifier
                 .shadow(
                     elevation = if (isDark) 8.dp else 6.dp,
@@ -191,10 +195,11 @@ fun GlassBottomBar(
                     spotColor = if (isDark) primaryColor.copy(alpha = 0.16f) else onSurfaceColor.copy(alpha = 0.10f)
                 )
                 .width(dockWidth)
-                .height(DockHeight)
-                .clip(CircleShape)
-                .background(glassBodyBrush)
-                .border(1.dp, glassBorderBrush, CircleShape)
+                .height(DockHeight),
+            hazeState = hazeState,
+            shape = CircleShape,
+            fallbackColor = if (isDark) YanjiDarkDockPanel else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+            border = BorderStroke(1.dp, glassBorderBrush)
         ) {
             // 滑动指示器（按同心圆几何中心与动态拉伸渲染）
             Box(

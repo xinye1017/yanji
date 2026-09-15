@@ -39,6 +39,8 @@ import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 enum class YanjiTab(
     val title: String,
@@ -106,6 +108,7 @@ fun MainNavigation() {
     val todayStr = remember {
         YanjiTime.todayIso()
     }
+    val hazeState = remember { HazeState() }
 
     // System back button handling for full screen sub-pages
     BackHandler(enabled = screenStack.isNotEmpty()) {
@@ -120,6 +123,7 @@ fun MainNavigation() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .hazeSource(state = hazeState)
                 .statusBarsPadding()
         ) {
             if (screenStack.isNotEmpty()) {
@@ -264,7 +268,8 @@ fun MainNavigation() {
             GlassBottomBar(
                 currentTab = currentTab,
                 onTabSelected = { currentTab = it },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                hazeState = hazeState
             )
         }
     }
