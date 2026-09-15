@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiDarkDockPanel
-import com.example.yanji.theme.YanjiDarkDockPill
 import com.example.yanji.theme.yanjiIsDarkTheme
 import kotlin.math.abs
 
@@ -59,8 +58,9 @@ private val HorizontalMargin = 64.dp
  * 响应式浮动液态玻璃导航栏（GlassBottomBar）：
  * 1. 紧凑胶囊尺寸：横向更加聚合灵动（[MinDockWidth]..[MaxDockWidth]），纵向增高至 60.dp，比例更加饱满舒适；
  * 2. 纯净半透玻璃质感：亮色通透晶莹、暗色深邃通透，杜绝多余发白色块与毛刺边缘；
- * 3. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
- * 4. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
+ * 3. 暗色模式高对比度优化：暗色下滑块底色采用轻量柔和的微光蓝容器（避免过深色块与图标混淆），选中图标采用高亮天蓝，层级分明通透清晰；
+ * 4. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
+ * 5. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
  */
 @Composable
 fun GlassBottomBar(
@@ -104,6 +104,13 @@ fun GlassBottomBar(
         val onSurfaceColor = MaterialTheme.colorScheme.onSurface
         val outlineVariant = MaterialTheme.colorScheme.outlineVariant
 
+        // 暗色模式下图标采用高亮天蓝（onPrimaryContainer），亮色模式采用标准主色（primary）
+        val selectedColor = if (isDark) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
         // 1. 玻璃面板底色：通透微渐变，纯净自然
         val glassBodyBrush = if (isDark) {
             Brush.verticalGradient(
@@ -138,12 +145,14 @@ fun GlassBottomBar(
             )
         }
 
-        // 3. 滑块底色与描边：保持纯净流体色调，去除多余白斑叠加
+        // 3. 滑块指示圆框底色：
+        // 暗色模式：采用轻盈通透的微光蓝容器（18%~10%），对齐亮色 primaryContainer 的通透层级，
+        // 彻底解决此前因色块过深过浓导致与选中图标颜色重合混淆的问题。
         val dropletBrush = if (isDark) {
             Brush.verticalGradient(
                 listOf(
-                    YanjiDarkDockPill.copy(alpha = 0.85f),
-                    YanjiDarkDockPill.copy(alpha = 0.55f)
+                    primaryColor.copy(alpha = 0.18f),
+                    primaryColor.copy(alpha = 0.10f)
                 )
             )
         } else {
@@ -156,7 +165,7 @@ fun GlassBottomBar(
         }
 
         val dropletBorderBrush = if (isDark) {
-            SolidColor(primaryColor.copy(alpha = 0.30f))
+            SolidColor(primaryColor.copy(alpha = 0.32f))
         } else {
             Brush.verticalGradient(
                 listOf(
@@ -203,6 +212,7 @@ fun GlassBottomBar(
                         tab = tab,
                         isSelected = tab == currentTab,
                         selectionProgress = selectionProgress,
+                        selectedColor = selectedColor,
                         onTabSelected = onTabSelected,
                         modifier = Modifier.weight(1f)
                     )
@@ -217,6 +227,7 @@ private fun DockBarItem(
     tab: YanjiTab,
     isSelected: Boolean,
     selectionProgress: Float,
+    selectedColor: Color,
     onTabSelected: (YanjiTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -224,7 +235,6 @@ private fun DockBarItem(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val selectedColor = MaterialTheme.colorScheme.primary
     val tint = lerp(unselectedColor, selectedColor, selectionProgress)
 
     val iconSize by animateDpAsState(
