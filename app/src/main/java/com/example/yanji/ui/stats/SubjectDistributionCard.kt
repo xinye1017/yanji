@@ -6,11 +6,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,6 +19,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -28,6 +30,7 @@ import com.example.yanji.data.SubjectDistributionItem
 import com.example.yanji.data.SubjectStatsLevel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
+import com.example.yanji.ui.components.GlassSegmentedControl
 import com.example.yanji.ui.components.YanjiCard as Card
 import kotlin.math.min
 
@@ -59,9 +62,15 @@ fun SubjectDistributionCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                SubjectLevelSegmented(
-                    selected = subjectStatsLevel,
-                    onSelect = onSelectSubjectLevel
+                GlassSegmentedControl(
+                    items = listOf(SubjectStatsLevel.CATEGORY, SubjectStatsLevel.SUBCATEGORY),
+                    selectedIndex = if (subjectStatsLevel == SubjectStatsLevel.CATEGORY) 0 else 1,
+                    onItemSelected = {
+                        onSelectSubjectLevel(if (it == 0) SubjectStatsLevel.CATEGORY else SubjectStatsLevel.SUBCATEGORY)
+                    },
+                    itemLabel = { it.title },
+                    height = 32.dp,
+                    modifier = Modifier.width(150.dp)
                 )
             }
             Text(
@@ -74,15 +83,115 @@ fun SubjectDistributionCard(
                 color = YanjiColors.textTertiary
             )
 
-            Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+            if (subjectDistribution.isEmpty()) {
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                Text(
+                    text = "本周期暂无科目学时记录，完成一次专注后自动生成",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = YanjiColors.textTertiary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp)
+                )
+            } else if (subjectDistribution.size == 1) {
+                // 单学科多态：显示 100% 紧凑信息条，不绘制巨大单色圆环
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                val singleSub = subjectDistribution.first()
+                val color = subjectDisplayColor(singleSub)
+                val durationText = DurationFormatter.formatHoursMinutes(singleSub.durationSeconds)
 
-            // 学科构成环形图
-            SubjectDonutChart(
-                subjectDist = subjectDist,
-                totalLabel = timeRangeTitle
-            )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
+                        .clickable { onNavigateToSubjectDetail(singleSub.subjectId) }
+                        .padding(vertical = 8.dp)
+                        .semantics {
+                            contentDescription = "${singleSub.subjectName}，学习时长 $durationText，占比 100%"
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = singleSub.subjectName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = "$durationText (100%)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { 1f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape),
+                        color = color,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "全部专注时间集中在该学科 · 点击查看科目详情",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = YanjiColors.textTertiary
+                    )
+                }
+            } else if (subjectDistribution.size in 2..5) {
+                // 2~5 个科目：甜甜圈构成环 + 进度列表
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+                SubjectDonutChart(
+                    subjectDist = subjectDist,
+                    totalLabel = timeRangeTitle
+                )
 
-            if (subjectDistribution.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
+
+                subjectDistribution.forEachIndexed { index, sub ->
+                    val color = subjectDisplayColor(sub)
+                    val subSecs = sub.durationSeconds
+                    val totalSecs = maxOf(1L, subjectDist.values.sum())
+                    val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
+                            .clickable { onNavigateToSubjectDetail(sub.subjectId) }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        SubjectProgressBar(
+                            name = sub.subjectName,
+                            time = DurationFormatter.formatHoursMinutes(subSecs),
+                            percent = percent,
+                            color = color
+                        )
+                    }
+
+                    if (index < subjectDistribution.size - 1) {
+                        Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
+                    }
+                }
+            } else {
+                // >5 个科目：横向堆叠百分比条 + 列表
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 SubjectDistributionBar(
@@ -118,17 +227,6 @@ fun SubjectDistributionCard(
                         Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
                     }
                 }
-            } else {
-                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
-                Text(
-                    text = "本周期暂无科目学时记录，完成一次专注后自动生成",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = YanjiColors.textTertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                )
             }
         }
     }
@@ -141,7 +239,12 @@ fun SubjectProgressBar(
     percent: Float,
     color: Color
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val a11yDesc = "$name，学习时长 $time，占比 ${(percent * 100).toInt()}%"
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = a11yDesc }
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -155,43 +258,10 @@ fun SubjectProgressBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(12.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
+                .clip(CircleShape),
             color = color,
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
-    }
-}
-
-@Composable
-private fun SubjectLevelSegmented(
-    selected: SubjectStatsLevel,
-    onSelect: (SubjectStatsLevel) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(2.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        listOf(SubjectStatsLevel.CATEGORY, SubjectStatsLevel.SUBCATEGORY).forEach { level ->
-            val isSelected = level == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                    .clickable { onSelect(level) }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = level.title,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 
@@ -204,7 +274,7 @@ private fun SubjectDistributionBar(segments: List<Pair<Color, Float>>) {
         modifier = Modifier
             .fillMaxWidth()
             .height(8.dp)
-            .clip(RoundedCornerShape(50)),
+            .clip(CircleShape),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         segments.forEach { (color, value) ->
@@ -221,9 +291,6 @@ private fun SubjectDistributionBar(segments: List<Pair<Color, Float>>) {
 
 /**
  * 单条学科分布的显示色：优先用数据层给的 hex，解析失败再回落到学科序列色。
- *
- * 做成文件级 `@Composable` 组合子而不是 `SubjectDistributionCard` 里的局部函数：
- * 暗色下序列色要升调（design_dark.md §3.4），局部非 Composable 函数读不到主题。
  */
 @Composable
 @ReadOnlyComposable
@@ -238,10 +305,6 @@ private fun subjectDisplayColor(sub: SubjectDistributionItem): Color {
 
 /**
  * 学科序列色。
- *
- * `@Composable` 是必需的：暗色下要按 design_dark.md §3.4 升调
- *（数学一 #4F7DF3 / 408 #818CF8 / 英语一 #A78BFA / 政治 #38BDF8），
- * 而亮色下返回的仍是原来的 `Subject*` token（逐值不变）。
  */
 @Composable
 @ReadOnlyComposable
@@ -274,8 +337,6 @@ private fun SubjectDonutChart(
         contentAlignment = Alignment.Center
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant
-        // Canvas 的绘制 lambda 不是 @Composable，读不到 MaterialTheme，
-        // 因此序列色必须在 Canvas 之外先解析好。
         val seriesColors = mutableMapOf<String, Color>()
         subjectDist.keys.forEach { name -> seriesColors[name] = subjectChartColor(name) }
         Canvas(modifier = Modifier.size(150.dp)) {

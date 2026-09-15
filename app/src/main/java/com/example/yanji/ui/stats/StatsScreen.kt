@@ -25,6 +25,7 @@ import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
+import com.example.yanji.ui.components.GlassSegmentedControl
 import com.example.yanji.ui.components.YanjiPageHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,36 +63,12 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
         // Time Range Filter
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            listOf("本周", "本月", "全部累计").forEachIndexed { index, title ->
-                val isSelected = state.selectedTimeTab == index
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(50),
-                    color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    shadowElevation = if (isSelected) 2.dp else 0.dp,
-                    onClick = { viewModel.selectTimeTab(index) }
-                ) {
-                    Text(
-                        text = title,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
+        GlassSegmentedControl(
+            items = listOf("本周", "本月", "全部累计"),
+            selectedIndex = state.selectedTimeTab,
+            onItemSelected = { viewModel.selectTimeTab(it) },
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 

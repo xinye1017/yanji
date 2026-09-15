@@ -17,11 +17,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.DayBarData
+import com.example.yanji.data.DurationFormatter
 import com.example.yanji.theme.*
+import com.example.yanji.ui.components.GlassSegmentedControl
 import com.example.yanji.ui.components.YanjiCard as Card
 
 enum class TrendMode(val label: String) {
@@ -56,20 +60,20 @@ fun StatsTrendChart(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TrendMode.entries.forEach { mode ->
-                        TrendModeChip(
-                            label = mode.label,
-                            selected = trendChartMode == mode,
-                            onClick = { onSelectTrendMode(mode) }
-                        )
-                    }
-                }
+                GlassSegmentedControl(
+                    items = TrendMode.entries,
+                    selectedIndex = TrendMode.entries.indexOf(trendChartMode),
+                    onItemSelected = { onSelectTrendMode(TrendMode.entries[it]) },
+                    itemLabel = { it.label },
+                    height = 32.dp,
+                    modifier = Modifier.width(130.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
 
-            val maxBarDuration = maxOf(36000L, days.maxOfOrNull { it.durationSeconds } ?: 36000L)
+            val actualMax = days.maxOfOrNull { it.durationSeconds } ?: 0L
+            val maxBarDuration = if (actualMax > 0L) actualMax else 3600L
 
             if (trendChartMode == TrendMode.BAR) {
                 Row(
@@ -80,8 +84,14 @@ fun StatsTrendChart(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     days.forEach { day ->
-                        val ratio = (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.06f, 1f)
+                        val ratio = if (day.durationSeconds > 0L) {
+                            (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.04f, 1f)
+                        } else {
+                            0f
+                        }
                         val isToday = day.isToday
+                        val dayDurationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
+                        val a11yText = "${day.dayLabel}，学习时长 $dayDurationText" + if (isToday) "，今日" else ""
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -91,6 +101,7 @@ fun StatsTrendChart(
                                 .clip(RoundedCornerShape(YanjiRadius.Small))
                                 .clickable { onSelectDay(day) }
                                 .padding(horizontal = 4.dp)
+                                .semantics { contentDescription = a11yText }
                         ) {
                             Box(
                                 modifier = Modifier
@@ -98,13 +109,27 @@ fun StatsTrendChart(
                                     .fillMaxWidth(),
                                 contentAlignment = Alignment.BottomCenter
                             ) {
+                                // 底轨槽位（全高弱背景槽）
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .fillMaxHeight(ratio)
-                                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
-                                        .background(if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.40f))
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
                                 )
+
+                                // 真实时长柱（0时长严格为0，不突起）
+                                if (ratio > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(ratio)
+                                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
+                                            .background(
+                                                if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.50f)
+                                            )
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -127,6 +152,8 @@ fun StatsTrendChart(
                 ) {
                     val chartLineColor = MaterialTheme.colorScheme.primary
                     val chartTodayFill = MaterialTheme.colorScheme.primaryContainer
+                    val dotCenterColor = MaterialTheme.colorScheme.surface
+
                     Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
                         val n = days.size
                         if (n > 0) {
@@ -167,7 +194,7 @@ fun StatsTrendChart(
                                     drawCircle(color = chartTodayFill, radius = 9.dp.toPx(), center = pt)
                                 }
                                 drawCircle(color = chartLineColor, radius = 4.5f.dp.toPx(), center = pt)
-                                drawCircle(color = Color.White, radius = 2.dp.toPx(), center = pt)
+                                drawCircle(color = dotCenterColor, radius = 2.dp.toPx(), center = pt)
                             }
                         }
                     }
@@ -193,39 +220,20 @@ fun StatsTrendChart(
 
                     Row(modifier = Modifier.fillMaxSize()) {
                         days.forEach { day ->
+                            val dayDurationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
+                            val a11yText = "${day.dayLabel}，学习时长 $dayDurationText" + if (day.isToday) "，今日" else ""
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(YanjiRadius.Small))
                                     .clickable { onSelectDay(day) }
+                                    .semantics { contentDescription = a11yText }
                             )
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TrendModeChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
