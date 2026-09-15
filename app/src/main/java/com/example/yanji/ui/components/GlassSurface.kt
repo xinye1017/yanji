@@ -1,0 +1,68 @@
+package com.example.yanji.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
+import com.example.yanji.theme.YanjiLiquidGlass
+import com.example.yanji.theme.yanjiIsDarkTheme
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+
+/**
+ * 通用液态玻璃表面容器 (GlassSurface)
+ *
+ * 核心设计原则：
+ * 1. 真实背景虚化：挂接 [HazeState] 获取底层滚动内容的真实像素并应用高斯模糊与噪点质感；
+ * 2. 动态光感边框：顶部聚光高亮、侧面微透、底侧柔和反光；
+ * 3. 优雅降级能力：当 hazeState 为空或处于减少透明度模式（blurRadius == 0.dp）时，自动回退为纯净的半透明/纯色面板。
+ */
+@Composable
+fun GlassSurface(
+    modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
+    shape: Shape = CircleShape,
+    fallbackColor: Color? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val isDark = yanjiIsDarkTheme()
+    val tokens = YanjiLiquidGlass
+    val defaultSurface = MaterialTheme.colorScheme.surface
+    val baseTint = fallbackColor ?: defaultSurface.copy(alpha = tokens.tintAlpha)
+
+    val borderBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = tokens.highlightAlpha),
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = tokens.borderAlpha),
+            Color.White.copy(alpha = tokens.borderAlpha * 0.5f)
+        )
+    )
+
+    val hazeModifier = if (hazeState != null && tokens.blurRadius > 0.dp) {
+        Modifier.hazeEffect(state = hazeState) {
+            blurRadius = tokens.blurRadius
+            tints = listOf(HazeTint(baseTint))
+            noiseFactor = tokens.noiseFactor
+        }
+    } else {
+        Modifier.background(baseTint)
+    }
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .then(hazeModifier)
+            .border(1.dp, borderBrush, shape),
+        content = content
+    )
+}

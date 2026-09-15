@@ -139,7 +139,8 @@ fun YanjiTheme(
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     CompositionLocalProvider(
         LocalYanjiDarkTheme provides darkTheme,
-        LocalYanjiExtraColors provides if (darkTheme) DarkExtraColors else LightExtraColors
+        LocalYanjiExtraColors provides if (darkTheme) DarkExtraColors else LightExtraColors,
+        LocalLiquidGlassTokens provides if (darkTheme) DarkGlassTokens else LightGlassTokens
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
