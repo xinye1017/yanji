@@ -10,9 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -52,15 +50,16 @@ private val DockIndicatorSize = 44.dp
 private val DockIndicatorMaxStretch = 4.dp
 private val MinDockWidth = 260.dp
 private val MaxDockWidth = 360.dp
-private val HorizontalMargin = 64.dp
+private val HorizontalMargin = 44.dp
 
 /**
  * 响应式浮动液态玻璃导航栏（GlassBottomBar）：
- * 1. 紧凑胶囊尺寸：横向更加聚合灵动（[MinDockWidth]..[MaxDockWidth]），纵向增高至 60.dp，比例更加饱满舒适；
- * 2. 纯净半透玻璃质感：亮色通透晶莹、暗色深邃通透，杜绝多余发白色块与毛刺边缘；
- * 3. 暗色模式高对比度优化：暗色下滑块底色采用轻量柔和的微光蓝容器（避免过深色块与图标混淆），选中图标采用高亮天蓝，层级分明通透清晰；
- * 4. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
- * 5. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
+ * 1. 同心圆几何美学：两端 Tab 的中心点严格对齐胶囊半圆端盖曲率中心（x = DockHeight / 2），使得滑块在最边缘选中时与导航栏端盖呈现完美的 8.dp 等宽同心圆环，杜绝边框挤压失调；
+ * 2. 黄金宽度比例：左右边距优化为 44.dp，使得在常见手机屏幕上导航栏宽度达到舒适的 ~300dp..320dp，居中悬浮呼吸感更强；
+ * 3. 纯净半透玻璃质感：亮色通透晶莹、暗色深邃通透，杜绝多余发白色块与毛刺边缘；
+ * 4. 暗色模式高对比度：暗色下滑块底色采用轻量柔和的微光蓝容器（18%~10%），选中图标采用高亮天蓝，层级分明通透清晰；
+ * 5. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
+ * 6. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
  */
 @Composable
 fun GlassBottomBar(
@@ -94,10 +93,20 @@ fun GlassBottomBar(
     ) {
         val availableWidth = maxWidth - HorizontalMargin * 2
         val dockWidth = availableWidth.coerceIn(MinDockWidth, MaxDockWidth)
-        val slotWidth = dockWidth / tabs.size.toFloat()
+
+        // 几何同心圆计算：
+        // 胶囊外壳两端为半径 DockHeight / 2 (30.dp) 的半圆，指示器圆半径为 DockIndicatorSize / 2 (22.dp)；
+        // 首尾 Tab 中心点分别置于 30.dp 和 dockWidth - 30.dp，确保指示器选至两端时，
+        // 顶部、底部、外侧间距均为严格一致的 8.dp，形成数学级完美的同心圆环。
+        val endcapCenter = DockHeight / 2f
+        val firstTabCenter = endcapCenter
+        val lastTabCenter = dockWidth - endcapCenter
+        val totalSpan = lastTabCenter - firstTabCenter
+        val step = totalSpan / (tabs.size - 1).toFloat()
+
         val remainingDistance = abs(selectedIndex - indicatorPosition.value).coerceIn(0f, 1f)
         val indicatorWidth = DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
-        val indicatorCenter = slotWidth * (indicatorPosition.value + 0.5f)
+        val indicatorCenter = firstTabCenter + step * indicatorPosition.value
 
         val isDark = yanjiIsDarkTheme()
         val primaryColor = MaterialTheme.colorScheme.primary
@@ -145,9 +154,7 @@ fun GlassBottomBar(
             )
         }
 
-        // 3. 滑块指示圆框底色：
-        // 暗色模式：采用轻盈通透的微光蓝容器（18%~10%），对齐亮色 primaryContainer 的通透层级，
-        // 彻底解决此前因色块过深过浓导致与选中图标颜色重合混淆的问题。
+        // 3. 滑块指示圆框底色：轻盈通透的柔和微光蓝容器
         val dropletBrush = if (isDark) {
             Brush.verticalGradient(
                 listOf(
@@ -189,6 +196,7 @@ fun GlassBottomBar(
                 .background(glassBodyBrush)
                 .border(1.dp, glassBorderBrush, CircleShape)
         ) {
+            // 滑动指示器（按同心圆几何中心与动态拉伸渲染）
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -200,23 +208,24 @@ fun GlassBottomBar(
                     .border(1.dp, dropletBorderBrush, CircleShape)
             )
 
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val selectionProgress =
-                        (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f)
+            // Tab 触控交互项：各 Tab 的中心点与同心圆中心严格重合，触控区域无缝衔接
+            tabs.forEachIndexed { index, tab ->
+                val selectionProgress =
+                    (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f)
+                val tabCenter = firstTabCenter + step * index
 
-                    DockBarItem(
-                        tab = tab,
-                        isSelected = tab == currentTab,
-                        selectionProgress = selectionProgress,
-                        selectedColor = selectedColor,
-                        onTabSelected = onTabSelected,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                DockBarItem(
+                    tab = tab,
+                    isSelected = tab == currentTab,
+                    selectionProgress = selectionProgress,
+                    selectedColor = selectedColor,
+                    onTabSelected = onTabSelected,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = tabCenter - step / 2f)
+                        .width(step)
+                        .fillMaxHeight()
+                )
             }
         }
     }
