@@ -13,13 +13,20 @@ import java.net.URI
  */
 object CleartextPolicy {
 
-    /** 与 network_security_config.xml 的 domain-config 一一对应。 */
+    /**
+     * 与 network_security_config.xml 的 domain-config 一一对应。
+     *
+     * 刻意**不包含** IPv6 回环（`::1` / `0:0:0:0:0:0:0:1`）：
+     * 1. `network_security_config.xml` 的 `<domain>` 只按主机名匹配，无法放行 IPv6 字面量，
+     *    平台网络层对 `http://[::1]` 一律拒绝——代码侧若宣称放行，UI 不提示、运行时却被拦，行为分裂；
+     * 2. `java.net.URI("http://[::1]").host` 返回带方括号的 `"[::1]"`，本来就匹配不进这里的集合，
+     *    旧条目是永远不会命中的死数据。
+     * 单一事实来源是 network_security_config.xml；这里只镜像它。
+     */
     val ALLOWED_CLEARTEXT_HOSTS: Set<String> = setOf(
         "127.0.0.1",
         "localhost",
-        "10.0.2.2",
-        "::1",
-        "0:0:0:0:0:0:0:1"
+        "10.0.2.2"
     )
 
     fun isCleartextPermitted(rawUrl: String): Boolean {

@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin Version" />
   <img src="https://img.shields.io/badge/Jetpack_Compose-Material_3-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
-  <img src="https://img.shields.io/badge/Room-v11_(2.8.4)-3DDC84?logo=sqlite&logoColor=white" alt="Room Database" />
+  <img src="https://img.shields.io/badge/Room-v12_(2.8.4)-3DDC84?logo=sqlite&logoColor=white" alt="Room Database" />
   <img src="https://img.shields.io/badge/Android-minSdk_24_|_targetSdk_36-3DDC84?logo=android&logoColor=white" alt="Android SDK" />
   <img src="https://img.shields.io/badge/Architecture-UDF_+_Pure_Kotlin_DI-FF6F00" alt="Architecture" />
   <img src="https://img.shields.io/badge/Restore-Room_Transaction-brightgreen" alt="Transactional Restore" />
@@ -116,7 +116,7 @@
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                         Infrastructure & Data Layer                    │
 │   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Room Database (v11)  │  SecretStore (Keystore) │ FilePersistence  │   │
+│   │  Room Database (v12)  │  SecretStore (Keystore) │ FilePersistence  │   │
 │   │  (yanji_study.db)     │  (Fail-Closed Security) │ (noBackupDir)    │   │
 │   └────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────────────────────────────────────┘
@@ -150,7 +150,7 @@
        │
        │  (4) completeSession()
        ▼
-[Room Database (v11)] ──── 写入成功 ────▶ 清除 Active 快照
+[Room Database (v12)] ──── 写入成功 ────▶ 清除 Active 快照
        │
        └────────────────── 写入失败 ────▶ 保留 Active 快照 (严防学习成果丢失)
 ```
@@ -195,7 +195,7 @@ com.example.yanji
 ├── data/                              # 数据模型与仓储实现
 │   ├── ai/                            # AI 通信协议与类型化 AiFailure
 │   ├── chat/                          # 卷卷伴学 Store 与分页加载
-│   ├── db/                            # Room 数据库 v11 (Entities, Daos, YanjiDatabase)
+│   ├── db/                            # Room 数据库 v12 (Entities, Daos, YanjiDatabase)
 │   ├── security/                      # SecretStore 零信任安全存储与 Keystore 加密
 │   ├── timer/                         # 计时引擎 (Coordinator, MonotonicClock, FilePersistence)
 │   └── StudyStatisticsRepository.kt   # 统计聚合下推仓储
@@ -220,7 +220,7 @@ com.example.yanji
 项目通过 GitHub Actions 执行以下自动化验证；仓库管理员仍需在分支保护中把 `Required production baseline` 设为 required check：
 
 ### 1. JVM 单元测试与迁移基准
-* `YanjiMigrationTest`：全覆盖验证 Room 1→11 渐进迁移，验证日记确定性排重与字段无损升级。
+* `YanjiMigrationTest`：全覆盖验证 Room 1→12 渐进迁移，验证日记确定性排重与字段无损升级。
 * `ActiveSessionPersistenceTest`：针对进程崩溃恢复、时钟倒流保护、原子写入及会话互斥进行极端场景测试。
 * `StatsPerformanceTest`：注入 25,000 条真实记录进行基准压测，保障复杂聚合在 10ms 内完成。
 * `SecretStoreTest`：验证 Fail-Closed 机制、AES-GCM 加密强度与一次性迁移逻辑。

@@ -201,6 +201,16 @@ class BackupCodecTest {
     }
 
     @Test
+    fun `decode rejects oversized input before parsing`() {
+        // 远超 64 MB 上限：即便内容看起来像一个合法前缀，也必须在解析前被拒绝。
+        val huge = "{\"schemaVersion\":1,\"focusSessions\":[" + "0,".repeat(40_000_000) + "0]}"
+        assertTrue(huge.length > 64L * 1024 * 1024)
+        val result = BackupCodec.decode(huge)
+        assertTrue(result is BackupDecodeResult.Failure)
+        assertTrue((result as BackupDecodeResult.Failure).message.contains("过大"))
+    }
+
+    @Test
     fun `decode warns when the backup carries no data`() {
         val json = BackupCodec.encode(YanjiBackup(exportedAt = 1L))
 
