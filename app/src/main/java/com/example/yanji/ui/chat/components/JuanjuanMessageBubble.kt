@@ -179,17 +179,17 @@ fun JuanjuanMessageBubble(
                 }
             }
 
-            // Main Answer Bubble (pure white card with soft shadow)
+            // Main Answer Bubble (clean elevated surface with separator border)
             Surface(
                 shape = RoundedCornerShape(
-                    topStart = 4.dp,
-                    topEnd = 16.dp,
-                    bottomStart = 16.dp,
-                    bottomEnd = 16.dp
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = 4.dp,
+                    bottomEnd = 18.dp
                 ),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 1.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+                color = YanjiColors.elevatedSurface,
+                shadowElevation = 0.dp,
+                border = BorderStroke(0.8.dp, YanjiColors.separator),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(

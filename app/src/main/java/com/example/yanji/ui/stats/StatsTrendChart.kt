@@ -1,5 +1,6 @@
 package com.example.yanji.ui.stats
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,8 +44,9 @@ fun StatsTrendChart(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
+        border = BorderStroke(0.8.dp, YanjiColors.separator),
+        colors = CardDefaults.cardColors(containerColor = YanjiColors.elevatedSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {

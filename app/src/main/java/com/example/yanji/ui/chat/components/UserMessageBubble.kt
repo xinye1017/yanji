@@ -50,13 +50,13 @@ fun UserMessageBubble(
             )
             Surface(
                 shape = RoundedCornerShape(
-                    topStart = 16.dp,
-                    topEnd = 4.dp,
-                    bottomStart = 16.dp,
-                    bottomEnd = 16.dp
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = 18.dp,
+                    bottomEnd = 4.dp
                 ),
                 color = MaterialTheme.colorScheme.primary,
-                shadowElevation = 1.dp,
+                shadowElevation = 0.dp,
                 modifier = Modifier.widthIn(max = 280.dp)
             ) {
                 Text(

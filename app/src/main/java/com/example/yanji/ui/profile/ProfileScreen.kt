@@ -129,7 +129,7 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(YanjiColors.groupedBackground)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
@@ -205,7 +205,7 @@ fun ProfileScreen(
                 onClick = { startExport() }
             )
             HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = YanjiColors.separator,
                 thickness = 0.8.dp,
                 modifier = Modifier.padding(start = 52.dp, end = 16.dp)
             )

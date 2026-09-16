@@ -85,6 +85,7 @@ import com.example.yanji.theme.SubjectEnglishSoft
 import com.example.yanji.theme.SubjectMajor
 import com.example.yanji.theme.SubjectMajorSoft
 import com.example.yanji.theme.SubjectMath
+import com.example.yanji.theme.SubjectMathSoft
 import com.example.yanji.theme.SubjectPolitics
 import com.example.yanji.theme.SubjectPoliticsSoft
 import com.example.yanji.theme.YanjiColors
@@ -111,8 +112,8 @@ private val QuietDurationOptions = listOf(
     QuietDurationOption(90, FocusModes.BIG_90)
 )
 
-private val QuietCardShape = RoundedCornerShape(18.dp)
-private val QuietControlShape = RoundedCornerShape(14.dp)
+private val QuietCardShape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
+private val QuietControlShape = RoundedCornerShape(YanjiRadius.RowRadius)
 
 /**
  * 选中态容器 —— 复用 theme 的淡蓝强调色，不再在 Screen 内联。
@@ -434,7 +435,8 @@ private fun QuietCategoryStep(
                             .weight(1f)
                             .height(108.dp),
                         shape = QuietCardShape,
-                        color = MaterialTheme.colorScheme.surface
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
+                        color = com.example.yanji.theme.YanjiColors.elevatedSurface
                     ) {
                         Column(
                             modifier = Modifier
@@ -518,7 +520,8 @@ private fun QuietModuleStep(
                     .fillMaxWidth()
                     .height(76.dp),
                 shape = QuietCardShape,
-                color = MaterialTheme.colorScheme.surface
+                border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
+                color = com.example.yanji.theme.YanjiColors.elevatedSurface
             ) {
                 Box(
                     modifier = Modifier
@@ -745,7 +748,7 @@ private fun QuietTimerSegmentedControl(
         // 选中的圆角胶囊滑动指示器（显眼饱满的主色背景与柔和微光投影）
         Box(
             modifier = Modifier
-                .offset(x = animatedOffset)
+                .offset { androidx.compose.ui.unit.IntOffset(animatedOffset.roundToPx(), 0) }
                 .width(segmentWidth)
                 .fillMaxHeight()
                 .shadow(
@@ -932,7 +935,7 @@ private fun quietCategoryAccent(id: String): Color = when (id) {
 @Composable
 @ReadOnlyComposable
 private fun quietCategoryIconBackground(id: String): Color = when (id) {
-    "math" -> MaterialTheme.colorScheme.primaryContainer
+    "math" -> SubjectMathSoft
     "major" -> SubjectMajorSoft
     "english" -> SubjectEnglishSoft
     "politics" -> SubjectPoliticsSoft

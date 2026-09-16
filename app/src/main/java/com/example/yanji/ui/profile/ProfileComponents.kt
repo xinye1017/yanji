@@ -1,5 +1,6 @@
 package com.example.yanji.ui.profile
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,8 +42,9 @@ fun ProfileIdentityCard(settings: UserSettings) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 128.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
+        border = BorderStroke(0.8.dp, YanjiColors.separator),
+        color = YanjiColors.elevatedSurface
     ) {
         Row(
             modifier = Modifier
@@ -91,8 +94,9 @@ fun PreparationOverviewCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
+        border = BorderStroke(0.8.dp, YanjiColors.separator),
+        color = YanjiColors.elevatedSurface
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -250,8 +254,9 @@ fun ProfileSettingsGroup(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
+        border = BorderStroke(0.8.dp, YanjiColors.separator),
+        color = YanjiColors.elevatedSurface,
         content = { Column(content = content) }
     )
 }
@@ -267,37 +272,50 @@ fun ProfileSettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics(mergeDescendants = true) {}
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else YanjiColors.textTertiary,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
+                .background(YanjiColors.fill),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
+                style = YanjiTypography.body,
+                fontWeight = FontWeight.Medium,
+                color = if (enabled) YanjiColors.primaryLabel else YanjiColors.textTertiary
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = YanjiTypography.footnote,
+                    color = YanjiColors.secondaryLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = YanjiColors.textTertiary,
+            tint = YanjiColors.tertiaryLabel,
             modifier = Modifier.size(18.dp)
         )
     }
