@@ -137,6 +137,21 @@
 - 新增 checksum 必须**独立复核**（从 Maven Central 重新下载重算 sha256），不能因为 Gradle 生成了就当可信事实。
 - 给 `gradlew.bat` 传 `-I` **禁用 POSIX 绝对路径**（`/d/AI项目/...` 会拼成 `D:\AI项目\yanji\d\AI项目\...`）；用相对路径 `scripts/lib/...`。
 
+## 依赖图 / Dependency review（Gradle 特有）
+
+- **仓库是 public** → dependency review 不需要 GitHub Advanced Security 授权。settings 页：
+  `https://github.com/xinye1017/yanji/settings/security_analysis`。
+- ❗**GitHub 不做 Gradle 静态解析**（插件/BOM/冲突解决/分桶都会改变结果）→ Gradle-only 仓库
+  即使开了 Dependency graph 也**没有快照**，必须用 Dependency Submission API 提交解析后的图。
+  官方动作 `gradle/actions/dependency-submission`（与 setup-gradle 同 commit `67621b12...` 可复用）。
+- 判定「图是否真的启用」的探针组合（**别信设置页面，用 API 交叉验证**）：
+  - `dependency-graph/sbom` → 404 且 `dependency-graph/compare/A...B` → 403 ⇒ **未启用**
+  - 最权威：真跑一次提交，报 `The Dependency graph is disabled for this repository.` 即未启用
+- `dependency-submission.yml` 是**喂数据、不是门禁** → 提交步骤 `continue-on-error: true`，
+  图未开时只出 warning + job summary 写 settings 链接，**绝不能让每个 PR 变红**；
+  fork PR 只有只读 token，用 job 级 `if` 跳过。真正的门禁是 `dependency-review.yml`（自带 preflight）。
+- 用户说「已开启」不等于生效，必须探针复核（2026-09-16 实际踩到）。
+
 ## 判定测试真伪（易自欺）
 
 - ⚠️ **`> Task :app:testDebugUnitTest FROM-CACHE` = 测试根本没跑**，那次「10 秒通过」不是证据。
