@@ -61,5 +61,30 @@ jobs:
           sed -i 's/-Dfile.encoding=GBK/-Dfile.encoding=UTF-8/' gradle.properties
           rm -f local.properties
 
+      # The submission API rejects every snapshot with "The Dependency graph is disabled for this
+      # repository" until the repository setting is on. This workflow feeds the graph; it is not a
+      # gate, so a disabled graph must not turn every pull request red. The real gate is
+      # dependency-review.yml, which keeps its own availability preflight.
       - name: Generate and submit the dependency graph
+        id: submit
+        continue-on-error: true
         uses: gradle/actions/dependency-submission@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+
+      - name: Explain a skipped submission
+        if: steps.submit.outcome == 'failure'
+        shell: bash
+        run: |
+          {
+            echo "### Gradle dependency submission did not complete"
+            echo
+            echo "The repository dependency graph is not accepting snapshots. Enable it here, then"
+            echo "re-run this workflow:"
+            echo
+            echo "https://github.com/${GITHUB_REPOSITORY}/settings/security_analysis"
+            echo
+            echo "Also consider enabling Dependabot alerts on the same page. Until the dependency"
+            echo "graph is on, \`dependency-review.yml\` cannot compare base against head and will"
+            echo "keep skipping the review step, and Dependabot cannot see the Gradle dependency"
+            echo "set at all."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Dependency submission skipped: the repository dependency graph is disabled. See the job summary for the settings link."
