@@ -37,6 +37,16 @@ object YanjiRadius {
      */
     val CompactCardRadius = 16.dp
 
+    /**
+     * iOS-inspired Grouped List Card radius (20dp).
+     */
+    val GroupedCardRadius = 20.dp
+
+    /**
+     * Row item container / accessory radius (12dp).
+     */
+    val RowRadius = 12.dp
+
     val MessageRadius = 20.dp
     val ContentBlockRadius = 16.dp
 

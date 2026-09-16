@@ -28,7 +28,19 @@ data class YanjiExtraColors(
     val warning: Color,
     val warningSoft: Color,
     val lavenderDeep: Color,
-    val surfaceBlue: Color
+    val surfaceBlue: Color,
+    // --- iOS-inspired Semantic Roles ---
+    val groupedBackground: Color = YanjiGroupedBackground,
+    val elevatedSurface: Color = YanjiElevatedSurface,
+    val primaryLabel: Color = YanjiTextPrimary,
+    val secondaryLabel: Color = YanjiTextSecondary,
+    val tertiaryLabel: Color = YanjiTextTertiary,
+    val quaternaryLabel: Color = YanjiQuaternaryLabel,
+    val separator: Color = YanjiDivider,
+    val opaqueSeparator: Color = YanjiBorder,
+    val fill: Color = YanjiSurfaceSoft,
+    val secondaryFill: Color = YanjiPrimarySoft,
+    val accent: Color = YanjiPrimary
 )
 
 /** 亮色实例：与既有 `YanjiTextTertiary` / `YanjiWarning` 等**逐值相同**。 */
@@ -37,7 +49,18 @@ internal val LightExtraColors = YanjiExtraColors(
     warning = YanjiWarning,
     warningSoft = YanjiWarningSoft,
     lavenderDeep = YanjiLavenderDeep,
-    surfaceBlue = YanjiSurfaceBlue
+    surfaceBlue = YanjiSurfaceBlue,
+    groupedBackground = YanjiGroupedBackground,
+    elevatedSurface = YanjiElevatedSurface,
+    primaryLabel = YanjiTextPrimary,
+    secondaryLabel = YanjiTextSecondary,
+    tertiaryLabel = YanjiTextTertiary,
+    quaternaryLabel = YanjiQuaternaryLabel,
+    separator = YanjiDivider,
+    opaqueSeparator = YanjiBorder,
+    fill = YanjiSurfaceSoft,
+    secondaryFill = YanjiPrimarySoft,
+    accent = YanjiPrimary
 )
 
 /** 暗色实例：design_dark.md §colors 的对应值。 */
@@ -46,13 +69,24 @@ internal val DarkExtraColors = YanjiExtraColors(
     warning = YanjiDarkWarning,
     warningSoft = YanjiDarkWarningSoft,
     lavenderDeep = YanjiDarkLavenderDeep,
-    surfaceBlue = YanjiDarkSurfaceBlue
+    surfaceBlue = YanjiDarkSurfaceBlue,
+    groupedBackground = YanjiDarkGroupedBackground,
+    elevatedSurface = YanjiDarkSurfaceFloating,
+    primaryLabel = YanjiDarkTextPrimary,
+    secondaryLabel = YanjiDarkTextSecondary,
+    tertiaryLabel = YanjiDarkTextTertiary,
+    quaternaryLabel = YanjiDarkQuaternaryLabel,
+    separator = YanjiDarkDivider,
+    opaqueSeparator = YanjiDarkBorder,
+    fill = YanjiDarkSurfaceSoft,
+    secondaryFill = YanjiDarkPrimarySoft,
+    accent = YanjiDarkPrimary
 )
 
 internal val LocalYanjiExtraColors = staticCompositionLocalOf { LightExtraColors }
 
 /**
- * 取用扩展调色板。用法：`YanjiColors.warning`。
+ * 取用扩展调色板。用法：`YanjiColors.warning`、`YanjiColors.groupedBackground`。
  *
  * 刻意做成 `object` + `@Composable get()` 而不是 `CompositionLocal.current.xxx`，
  * 是为了让调用点保持 `YanjiColors.xxx` 这样短且可读的形态。
@@ -72,6 +106,40 @@ object YanjiColors {
 
     val surfaceBlue: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.surfaceBlue
+
+    // --- iOS-inspired Semantic Roles ---
+    val groupedBackground: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.groupedBackground
+
+    val elevatedSurface: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.elevatedSurface
+
+    val primaryLabel: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.primaryLabel
+
+    val secondaryLabel: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.secondaryLabel
+
+    val tertiaryLabel: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.tertiaryLabel
+
+    val quaternaryLabel: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.quaternaryLabel
+
+    val separator: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.separator
+
+    val opaqueSeparator: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.opaqueSeparator
+
+    val fill: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.fill
+
+    val secondaryFill: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.secondaryFill
+
+    val accent: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.accent
 }
 
 // ---------------------------------------------------------------------------

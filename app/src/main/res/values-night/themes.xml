@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       系统深色模式下的启动窗口主题：深色底 + 浅色系统栏图标。
@@ -9,6 +9,6 @@
     <style name="Theme.Yanji" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/yanji_window_background</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
     </style>
 </resources>

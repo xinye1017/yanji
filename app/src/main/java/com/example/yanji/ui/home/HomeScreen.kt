@@ -63,7 +63,10 @@ import com.example.yanji.ui.components.CheckInCelebrationDialog
 import com.example.yanji.ui.components.JuanjuanAvatar
 import com.example.yanji.ui.components.JuanjuanEncouragementBanner
 import com.example.yanji.ui.components.RollingNumber
+import com.example.yanji.ui.components.YanjiGroupedCard
+import com.example.yanji.ui.components.YanjiLargeTitleHeader
 import com.example.yanji.ui.components.YanjiSection
+import com.example.yanji.ui.components.YanjiSettingsRow
 import java.util.*
 
 @Composable
@@ -120,12 +123,26 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(YanjiSpacing.PageTopGap))
 
-            // 1. Countdown Card
+            // iOS-inspired Large Title Page Header
+            YanjiLargeTitleHeader(
+                title = "今天",
+                subtitle = if (daysRemaining != null) {
+                    val year = settings.targetExamDate.take(4).ifBlank { "2026" }
+                    "距离 $year 考研还剩 $daysRemaining 天 · 每一步都算数"
+                } else {
+                    "安静记录，专注备考"
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = YanjiSpacing.SectionGap)
+            )
+
+            // 1. Countdown Hero Card
             YanjiCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("home_countdown_card"),
-                variant = YanjiCardVariant.Standard
+                variant = YanjiCardVariant.Hero
             ) {
                 Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                     Row(
@@ -168,10 +185,7 @@ fun HomeScreen(
                         if (daysRemaining != null) {
                             RollingNumber(
                                 text = "$daysRemaining",
-                                style = MaterialTheme.typography.displayMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    lineHeight = 44.sp
-                                ),
+                                style = com.example.yanji.theme.YanjiTypography.metricL,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -224,13 +238,14 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 2. Today's Study Card (Clickable to DailyStudyDetail)
-            YanjiCard(
+            // 2. Today's Study Grouped Card (Clickable to DailyStudyDetail)
+            YanjiGroupedCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("home_today_study_card")
                     .clickable { onNavigateToDailyDetail(todayIso) },
-                variant = YanjiCardVariant.Standard
+                headerTitle = "今日专注",
+                footerText = "点击卡片查看今日详细时间轴与学科占比"
             ) {
                 Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                     Row(
@@ -265,9 +280,7 @@ fun HomeScreen(
                     Row(verticalAlignment = Alignment.Bottom) {
                         RollingNumber(
                             text = "${todayHours}h ${todayMins}m",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
+                            style = com.example.yanji.theme.YanjiTypography.title1,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -297,7 +310,7 @@ fun HomeScreen(
 
                     // Subject breakdown (Dynamic Single Source of Truth, Clickable, FlowRow responsive)
                     Text(
-                        text = "今日科目时长分布 (点击查看科目明细)",
+                        text = "今日科目时长分布",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -307,7 +320,7 @@ fun HomeScreen(
 
                     if (state.todaySummary.subjectDistribution.isEmpty()) {
                         Text(
-                            text = "今日尚未记录学习时长，点击下方按钮开始专注",
+                            text = "今日尚未记录学习时长，前往「专注」Tab 开始第一段备战吧",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 4.dp)
@@ -331,7 +344,7 @@ fun HomeScreen(
                                 SubjectTimeChip(
                                     name = subName,
                                     time = DurationFormatter.formatHoursMinutes(secs),
-                                    color = color,
+                                    color = com.example.yanji.theme.yanjiSeriesToken(color),
                                     modifier = Modifier.clickable { onNavigateToSubjectDetail(subName) }
                                 )
                             }
@@ -342,80 +355,31 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 5. Exam Panorama & Linked Card (Clickable to ExamHistory)
-            YanjiCard(
+            // 3. Exam Panorama & Linked Card (iOS SettingsRow pattern)
+            YanjiGroupedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("home_exam_card")
-                    .clickable { onNavigateToExamHistory() },
-                variant = YanjiCardVariant.Compact
+                    .testTag("home_exam_card"),
+                headerTitle = "模拟考试"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(YanjiSpacing.CardPaddingCompact),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(YanjiRadius.ButtonRadius))
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Regular.ChartLineUp,
-                            contentDescription = "模考看板",
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(YanjiSpacing.ItemGap))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "模考看板 · 近期成绩",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            if (avgScore > 0) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "均分 ${String.format(Locale.US, "%.1f", avgScore)}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.tertiary
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (examSessions.isNotEmpty()) {
-                                val recentStr = examSessions.take(2).joinToString("，") { "${it.subjectName.take(4)} ${it.score?.toInt() ?: 0}分" }
-                                "已完成 ${examSessions.size} 次模拟 · $recentStr"
-                            } else {
-                                "尚未进行模拟考试，点击发起模考"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.CaretRight,
-                        contentDescription = "查看详情",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                YanjiSettingsRow(
+                    title = "模考看板 · 近期成绩",
+                    subtitle = if (examSessions.isNotEmpty()) {
+                        val recentStr = examSessions.take(2).joinToString("，") { "${it.subjectName.take(4)} ${it.score?.toInt() ?: 0}分" }
+                        "已完成 ${examSessions.size} 次模拟 · $recentStr"
+                    } else {
+                        "尚未进行模拟考试，点击发起模考"
+                    },
+                    icon = PhosphorIcons.Regular.ChartLineUp,
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    value = if (avgScore > 0) "均分 ${String.format(Locale.US, "%.1f", avgScore)}" else null,
+                    showChevron = true,
+                    onClick = onNavigateToExamHistory
+                )
             }
 
-        Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // 6. Juanjuan Encouragement
         // 注意：这里不能对连续天数做 `maxOf(1, ...)` —— 没有任何连续学习记录时
@@ -471,9 +435,10 @@ fun SubjectTimeChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = modifier
+            .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(YanjiRadius.Small))
-            .background(color.copy(alpha = 0.08f))
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Box(
             modifier = Modifier

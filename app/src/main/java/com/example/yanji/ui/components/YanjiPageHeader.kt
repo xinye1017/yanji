@@ -32,11 +32,21 @@ import com.example.yanji.theme.YanjiSpacing
  *
  * 品牌化独立 TopBar（如 Chat 的 `ChatTopBar`）**不**使用本组件。
  */
+/**
+ * 标准页面页眉 —— 支持标准中标题与 iOS-inspired Large Title 两种层级。
+ *
+ * 1. 一级页面（Home、Focus、Journal、Stats、Profile）：
+ *    采用 Large Title (34sp / Bold)，呈现舒展安静的沉浸大标题与上下文副标；
+ * 2. 次级页面与模块内：
+ *    采用标准 headlineMedium (20sp / SemiBold)；
+ * 3. 完整的语义树：自带 semantics { heading() }，确保 TalkBack 用户快速在标题间跳转。
+ */
 @Composable
 fun YanjiPageHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    largeTitle: Boolean = false,
     trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -49,19 +59,19 @@ fun YanjiPageHeader(
             verticalArrangement = if (subtitle.isNullOrBlank()) {
                 Arrangement.Top
             } else {
-                Arrangement.spacedBy(YanjiSpacing.TightGap)
+                Arrangement.spacedBy(if (largeTitle) 4.dp else YanjiSpacing.TightGap)
             }
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = if (largeTitle) com.example.yanji.theme.YanjiTypography.largeTitle else MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() }
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = if (largeTitle) com.example.yanji.theme.YanjiTypography.subheadline else MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -78,4 +88,23 @@ fun YanjiPageHeader(
             }
         }
     }
+}
+
+/**
+ * 专供一级 Tab 页面使用的 iOS Large Title 标题栏
+ */
+@Composable
+fun YanjiLargeTitleHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    YanjiPageHeader(
+        title = title,
+        modifier = modifier,
+        subtitle = subtitle,
+        largeTitle = true,
+        trailing = trailing
+    )
 }

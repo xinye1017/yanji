@@ -3,6 +3,7 @@ package com.example.yanji.ui.navigation
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,8 +38,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
@@ -76,16 +79,21 @@ fun GlassBottomBar(
     val indicatorPosition = remember {
         Animatable(selectedIndex.toFloat())
     }
+    val reduceMotion = com.example.yanji.theme.YanjiMotion.isReduceMotionEnabled()
 
-    LaunchedEffect(selectedIndex) {
-        indicatorPosition.animateTo(
-            targetValue = selectedIndex.toFloat(),
-            animationSpec = spring(
-                dampingRatio = 0.86f,
-                stiffness = 420f,
-                visibilityThreshold = 0.001f
+    LaunchedEffect(selectedIndex, reduceMotion) {
+        if (reduceMotion) {
+            indicatorPosition.snapTo(selectedIndex.toFloat())
+        } else {
+            indicatorPosition.animateTo(
+                targetValue = selectedIndex.toFloat(),
+                animationSpec = spring(
+                    dampingRatio = 0.88f,
+                    stiffness = 450f,
+                    visibilityThreshold = 0.001f
+                )
             )
-        )
+        }
     }
 
     BoxWithConstraints(
@@ -98,10 +106,6 @@ fun GlassBottomBar(
         val availableWidth = maxWidth - HorizontalMargin * 2
         val dockWidth = availableWidth.coerceIn(MinDockWidth, MaxDockWidth)
 
-        // 几何同心圆计算：
-        // 胶囊外壳两端为半径 DockHeight / 2 (30.dp) 的半圆，指示器圆半径为 DockIndicatorSize / 2 (22.dp)；
-        // 首尾 Tab 中心点分别置于 30.dp 和 dockWidth - 30.dp，确保指示器选至两端时，
-        // 顶部、底部、外侧间距均为严格一致的 8.dp，形成数学级完美的同心圆环。
         val endcapCenter = DockHeight / 2f
         val firstTabCenter = endcapCenter
         val lastTabCenter = dockWidth - endcapCenter
@@ -109,7 +113,7 @@ fun GlassBottomBar(
         val step = totalSpan / (tabs.size - 1).toFloat()
 
         val remainingDistance = abs(selectedIndex - indicatorPosition.value).coerceIn(0f, 1f)
-        val indicatorWidth = DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
+        val indicatorWidth = if (reduceMotion) DockIndicatorSize else DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
         val indicatorCenter = firstTabCenter + step * indicatorPosition.value
 
         val isDark = yanjiIsDarkTheme()
@@ -247,18 +251,32 @@ private fun DockBarItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val reduceMotion = com.example.yanji.theme.YanjiMotion.isReduceMotionEnabled()
 
-    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // 未选中态更克制单色，选中态使用清晰 Accent
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val tint = lerp(unselectedColor, selectedColor, selectionProgress)
 
     val iconSize by animateDpAsState(
-        targetValue = if (isPressed) 22.dp else (23f + selectionProgress).dp,
-        animationSpec = spring(dampingRatio = 0.66f, stiffness = 650f),
+        targetValue = when {
+            reduceMotion -> 24.dp
+            isPressed -> 22.dp
+            else -> (23.5f + selectionProgress * 0.5f).dp
+        },
+        animationSpec = if (reduceMotion) {
+            tween(100)
+        } else {
+            spring(dampingRatio = 0.82f, stiffness = 550f)
+        },
         label = "dockBarItemIconSize"
     )
     val iconOffset by animateDpAsState(
-        targetValue = if (isPressed) 0.dp else (-selectionProgress).dp,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 600f),
+        targetValue = if (isPressed || reduceMotion) 0.dp else (-0.5f * selectionProgress).dp,
+        animationSpec = if (reduceMotion) {
+            tween(100)
+        } else {
+            spring(dampingRatio = 0.85f, stiffness = 500f)
+        },
         label = "dockBarItemIconOffset"
     )
 
@@ -269,6 +287,8 @@ private fun DockBarItem(
             .testTag("nav_tab_${tab.name.lowercase()}")
             .semantics {
                 this.selected = isSelected
+                this.role = Role.Tab
+                this.stateDescription = if (isSelected) "已选中" else "未选中"
             }
             .clickable(
                 interactionSource = interactionSource,
@@ -283,7 +303,7 @@ private fun DockBarItem(
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = tab.unselectedIcon,
-                contentDescription = if (isSelected) "${tab.title}，已选中" else tab.title,
+                contentDescription = tab.title,
                 tint = tint.copy(alpha = 1f - selectionProgress),
                 modifier = Modifier
                     .offset { IntOffset(0, iconOffset.roundToPx()) }

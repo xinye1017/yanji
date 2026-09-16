@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       启动窗口（Starting Window / Splash）主题：只在 App 进程起来、Compose 首帧绘制之前生效。
@@ -10,6 +10,6 @@
     <style name="Theme.Yanji" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/yanji_window_background</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
     </style>
 </resources>
