@@ -16,7 +16,12 @@ import java.util.Calendar
 class StudyStatsTest {
 
     private fun noonToday(): Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 12); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+        set(Calendar.HOUR_OF_DAY, 12)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        // 必须归零毫秒：否则每次调用返回的瞬间都略有差异，两个"同一个时刻"之间用 >= 比较
+        // 就成了随机结果。见 durationSince 测试的注释。
+        set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
     private fun noonDaysAgo(days: Int): Long = Calendar.getInstance().apply {
@@ -74,10 +79,14 @@ class StudyStatsTest {
 
     @Test
     fun `durationSince only counts sessions starting at or after cutoff`() {
+        // cutoff 只计算一次并复用，保证"起始时间恰好等于 cutoff"这条边界被确定性地覆盖：
+        // 若分别调用两次 noonDaysAgo(1)，两次得到的瞬间可能落在不同毫秒上，
+        // 断言就会依赖运行速度而随机失败（CI 上出现过 expected:<4200> but was:<3600>）。
+        val cutoff = noonDaysAgo(1)
         val total = StudyStats.durationSince(
-            focus = listOf(focus(3600, noonToday()), focus(600, noonDaysAgo(1))),
+            focus = listOf(focus(3600, noonToday()), focus(600, cutoff)),
             exams = emptyList(),
-            cutoffEpochMs = noonDaysAgo(1)
+            cutoffEpochMs = cutoff
         )
         assertEquals(4200L, total)
     }
