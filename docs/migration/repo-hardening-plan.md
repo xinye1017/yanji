@@ -25,6 +25,7 @@ flowchart LR
 
 - No `fallbackToDestructiveMigration()`.
 - No generated checksum is trusted merely because Gradle emitted it; changes to verification metadata require dependency-diff review.
+- Dependency verification metadata must be regenerated with `scripts/regen-verification-metadata.sh`, never by hand-patching one artifact per failing CI run. The script resolves every configuration (including AGP's internal instrumented-test ones) and uses `--refresh-dependencies`, because descriptors already in the local Gradle cache are otherwise never re-verified and so never recorded. It is additive-only: it aborts and restores the previous file if regeneration would drop or alter an existing checksum. Confirm each newly added checksum against Maven Central or Google Maven before committing.
 - OSV full scans are scheduled/manual so an external service outage cannot block ordinary source-only PRs.
 - Automatic refactors are limited to dead imports/constants, proven unused dependencies, machine-specific paths, documentation facts, and test utilities.
 - A failed test remains failed; no `@Ignore`, disabled tests, `continue-on-error`, or `|| true` is accepted as a gate fix.
