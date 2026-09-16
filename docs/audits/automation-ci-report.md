@@ -29,6 +29,13 @@ Verifying the branch surfaced two defects that were **blocking CI**, and both ar
    outside Gradle, the original helper was non-deterministic in **0.0398%** of runs, which is
    why the suite passed repeatedly before failing.
 
+One further gap is disclosed rather than fixed, because it needs a repository setting that cannot
+be changed from the codebase: **the dependency review gate cannot run yet.** The repository
+dependency graph is not actually enabled (verified four independent ways, including GitHub's own
+rejection of a real submission), and Gradle additionally requires its resolved graph to be
+submitted before any snapshot exists. The submission workflow is now in place and green, so the
+gate activates as soon as the setting is switched on.
+
 Local unit, lint and build verification is complete and real (build cache disabled).
 Connected instrumentation is **BLOCKED** on this machine, with a reproducible cause.
 
@@ -58,8 +65,11 @@ flowchart TD
   B --> I
   PR --> DR[Dependency review on package/workflow changes]
   PR --> GL[Gitleaks]
-
+  PR --> DS[Gradle dependency submission]
   MAIN[Push main] --> CI
+  MAIN --> DS
+  DS -.->|populates the dependency graph| DR
+
   WEEKLY[Weekly / manual] --> MATRIX[API 24 + API 36 reusable quality]
   WEEKLY --> OSV[OSV full dependency scan]
   WEEKLY --> GLFULL[Gitleaks full history]
@@ -128,7 +138,8 @@ A guard that cannot fail is worthless, so each was tested by injecting a violati
 | Gate | Trigger | Policy | Verified result |
 |---|---|---|---|
 | Gradle dependency verification | Every Gradle resolution | SHA-256 over 590 components / 981 artifacts | **PASS**: full-graph resolution succeeds in strict mode after `--refresh-dependencies` |
-| Dependency review v5.0.0 | PR package/workflow changes | Fail new runtime high/critical advisories, after an explicit availability preflight | **PASS (skipped with notice)**: repository Dependency graph is disabled, so the step skips with a `::notice::` instead of failing every PR |
+| Dependency review v5.0.0 | PR package/workflow changes | Fail new runtime high/critical advisories, after an explicit availability preflight | **PASS (skipped with notice)**: the repository dependency graph is not actually enabled, so the review step skips with a `::notice::` instead of failing every PR. See the dedicated section below. |
+| Gradle dependency submission | Push to default branch, same-repo PRs, manual | Submit the resolved graph after an availability check | **PASS (degraded)**: workflow is in place and green; the submission itself is rejected by GitHub until the dependency graph setting is switched on |
 | Gitleaks v3.0.0 / CLI 8.30.1 | Every PR; weekly/manual full history | Default rules + Yanji signing/password rules, redacted output | **PASS**: full-history scan completed in 11s, no leaks |
 | OSV Scanner 2.6.0 | Weekly/manual only, never on source-only PRs | Recursive scan, findings uploaded to code scanning | **FAIL (findings)**: 90 known vulnerabilities across 22 Maven packages — 3 critical, 37 high, 46 medium, 2 low, 2 unknown; all reported as fixable |
 | Ignore policy | Local and CI | Ignore keystores, private-key containers, local props, DBs, device backups | **PASS**: no prohibited tracked file found |
@@ -142,6 +153,46 @@ Two clarifications that matter for triage:
   build and test tooling graph (protobuf, Netty, Bouncy Castle and similar). Reachability from
   the shipped APK has **not** been analysed, so this report does not claim the shipped APK is
   affected or unaffected.
+
+## Dependency graph and dependency review
+
+Enabling “Dependency graph” in repository settings was reported as done, but it does **not**
+currently make the review gate run. This was verified with four independent probes rather than
+inferred from the setting:
+
+| Probe | Result |
+|---|---|
+| `GET /repos/{repo}/dependency-graph/sbom` | `404 Not Found` |
+| `GET /repos/{repo}/dependency-graph/compare/main~1...main` | `403 Forbidden` |
+| `GET /repos/{repo}/vulnerability-alerts` | `Vulnerability alerts are disabled.` |
+| Dependency submission API (real submission attempt) | `The Dependency graph is disabled for this repository.` |
+
+The submission API message is authoritative: it is GitHub's own rejection of a snapshot, not a
+heuristic. The preflight in `dependency-review.yml` therefore keeps reporting
+`gh: Forbidden (HTTP 403)` and correctly skipping the review step.
+
+There is a second, independent gap that would remain even after the setting is switched on:
+**GitHub cannot statically parse Gradle build scripts.** Resolution is affected by plugins, BOMs,
+conflict resolution and per-project dependency buckets, so a Gradle-only repository has no
+dependency-graph data until the *resolved* graph is submitted through the Dependency Submission
+API. Gradle publishes an official submission action for exactly this reason.
+
+Both gaps are addressed in this branch:
+
+- `.github/workflows/dependency-submission.yml` submits the resolved graph using the official
+  `gradle/actions/dependency-submission`, pinned to the same v6.3.0 commit already used for
+  `setup-gradle`.
+- The submission step is non-fatal. It is a feeder, not a gate: while the repository setting is
+  off, the job skips with a warning annotation and writes the exact settings URL to the job
+  summary, so pull requests stay green instead of failing for a repository-configuration reason.
+- Fork pull requests receive a read-only token and cannot submit, so the job is skipped for them
+  rather than failing.
+
+**Action required to activate the gate:** enable the dependency graph (and, for usefulness, the
+Dependabot alerts that read it) at
+`https://github.com/xinye1017/yanji/settings/security_analysis`. Once it is on, the submission
+workflow populates the graph and `dependency-review.yml` will compare base against head instead
+of skipping. The repository is now public, so this requires no GitHub Advanced Security licence.
 
 ## Test matrix
 
@@ -257,9 +308,12 @@ cache. Two earlier runs on this branch are recorded for the audit trail: run
 2. Dependency verification uses SHA-256, not PGP (`verify-signatures=false`). Newly generated
    checksums are proven sound by independent re-download and by a strict full-graph resolution,
    but future metadata diffs still require human review.
-3. GitHub Dependency review is inactive because Dependency graph is disabled on the repository.
-   The workflow detects that state and skips with an explicit notice. Enable Dependency graph to
-   activate the high/critical PR gate.
+3. The dependency review gate is prepared but not yet live. The repository dependency graph is not
+   actually enabled (verified four ways above), and Gradle additionally needs its resolved graph
+   submitted. Both are addressed — the submission workflow is in place — but the gate only starts
+   comparing base against head once the repository setting is switched on. Until then, new
+   high/critical advisories are caught by weekly OSV rather than at PR time. The repository is
+   public, so no GitHub Advanced Security licence is required.
 4. Connected instrumentation remains BLOCKED locally: no hypervisor, and the only physical
    device is intermittently reachable. This is the weakest link in local evidence, and CI is the
    authoritative signal for that layer.
