@@ -1,0 +1,70 @@
+// Force resolution of EVERY resolvable configuration so that Gradle's
+// `--write-verification-metadata` captures the complete dependency graph.
+//
+// Used only by scripts/regen-verification-metadata.sh.
+//
+// Why this is needed
+// ------------------
+// A normal build resolves the configurations for the tasks it is given (compile, runtime,
+// lint, unit test). AGP additionally creates *internal* configurations that are only
+// resolved when a connected-device task runs, for example:
+//
+//   :app:_internal-unified-test-platform-android-device-provider-ddmlib
+//
+// Artifacts reachable only through those configurations are absent from a metadata file
+// generated from an ordinary build. CI then fails on a cold cache with:
+//
+//   Dependency verification failed ... One artifact failed verification
+//
+// Resolving every resolvable configuration closes that generation gap in one pass, so the
+// metadata does not have to be patched one artifact per CI cycle.
+//
+// Consequence: this script resolves and therefore downloads a large part of the graph.
+// Expect several minutes and network access; that is the point.
+//
+// Expected output is `failed=2`. Those two are the *compile* classpaths:
+//
+//   :app:debugUnitTestCompileClasspath
+//   :app:debugAndroidTestCompileClasspath
+//
+// Gradle 9 refuses to resolve them during the configuration phase on purpose:
+//
+//   IllegalResolutionException: Resolution of the configuration '...' was attempted
+//   without an exclusive lock. This is unsafe and not allowed.
+//
+// That is a Gradle safety guard, not a dependency problem, and it does not leave a gap:
+// the regular build already resolves those classpaths on a cold CI cache (the "Unit, lint
+// & build" job passes), so their artifacts are recorded. Leave them skipped.
+
+gradle.projectsEvaluated {
+    def attempted = 0
+    def resolvedCount = 0
+    def failures = []
+
+    rootProject.allprojects { project ->
+        // Snapshot the names first. Resolving a configuration can cause AGP to register
+        // additional configurations, and iterating a live container throws
+        // ConcurrentModificationException. Resolve by name off the snapshot instead.
+        def names = project.configurations.names.toList()
+        names.each { name ->
+            def configuration = project.configurations.findByName(name)
+            if (configuration == null) {
+                return
+            }
+            try {
+                if (!configuration.canBeResolved) {
+                    return
+                }
+                attempted++
+                configuration.resolve()
+                resolvedCount++
+            } catch (Throwable throwable) {
+                def message = (throwable.message ?: '').replaceAll(/\s+/, ' ').take(240)
+                failures << "${project.path}:${name} :: ${throwable.class.name}: ${message}"
+            }
+        }
+    }
+
+    println "FORCE-RESOLVE: attempted=${attempted} resolved=${resolvedCount} failed=${failures.size()}"
+    failures.each { println "FORCE-RESOLVE-SKIPPED: ${it}" }
+}
