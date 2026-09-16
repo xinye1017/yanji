@@ -8,7 +8,7 @@ Baseline: Agent B design-system branch plus merged Agent A backend/data/security
 
 The existing reusable Android quality workflow was extended rather than duplicated. Three low-cost repository invariants now run in an independent `guards` job: runtime fixture detection, README/source fact consistency, and the existing design-token ratchet. `AppInitializerInstrumentedTest` now covers every business table, including the retained QuickStart compatibility tombstone.
 
-Dependency verification is active in strict SHA-256 mode for the resolved build graph (583 components / 971 artifacts, including separately reviewed Windows and Linux AAPT2 binaries). PR dependency changes receive a high/critical vulnerability review. Gitleaks runs on PRs and weekly/manual full-history scans with a narrow allowlist mechanism. OSV runs weekly/manual, not on ordinary PRs, so service availability cannot block source-only changes.
+Dependency verification is active in strict SHA-256 mode for the resolved build graph (583 components / 972 artifacts, including separately reviewed Windows/Linux AAPT2 binaries and Linux UTP module metadata). PR dependency changes receive a high/critical vulnerability review. Gitleaks runs on PRs and weekly/manual full-history scans with a narrow allowlist mechanism. OSV runs weekly/manual, not on ordinary PRs, so service availability cannot block source-only changes.
 
 Local JVM/lint/debug/release verification passed. Instrumented sources compile. Connected tests were **BLOCKED**, because the only physical device had an active foreground focus session and the available AVD cannot start without a Windows hypervisor driver. The session was not interrupted. OSV itself ran successfully but returned **FAIL** because the current resolved build graph contains known advisories; these findings were not suppressed.
 
@@ -87,7 +87,7 @@ No `fallbackToDestructiveMigration()` exists or was added. The full decision is 
 
 | Gate | Trigger | Policy | Local result |
 |---|---|---|---|
-| Gradle dependency verification | Every Gradle resolution | SHA-256 for 583 components / 971 artifacts | PASS locally in strict mode; Linux AAPT2 checksum added from reviewed Google Maven artifact |
+| Gradle dependency verification | Every Gradle resolution | SHA-256 for 583 components / 972 artifacts | PASS locally in strict mode; Linux-only artifacts added from reviewed Google Maven/Maven Central sources |
 | Dependency review v5.0.0 | PR package/workflow changes | Fail new runtime high/critical advisories; explicit availability preflight | BLOCKED: repository Dependency graph is disabled; review step skips with a notice |
 | Gitleaks action v3.0.0 / CLI 8.30.1 | Every PR; weekly/manual full history | Default rules + Yanji signing/password rules; redact output | PASS: 50 commits, ~2.60 MB, no leaks |
 | OSV Scanner 2.6.0 | Weekly/manual | Full recursive scan; scheduled failure alerts maintainers | FAIL: 90 advisory/package tuples, 49 unique advisories across 22 package versions |
