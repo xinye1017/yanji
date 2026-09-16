@@ -88,7 +88,7 @@ No `fallbackToDestructiveMigration()` exists or was added. The full decision is 
 | Gate | Trigger | Policy | Local result |
 |---|---|---|---|
 | Gradle dependency verification | Every Gradle resolution | SHA-256 for 583 components / 970 artifacts | PASS in strict-mode full build |
-| Dependency review v5.0.0 | PR package/workflow changes | Fail new runtime high/critical advisories | NOT RUN on GitHub yet |
+| Dependency review v5.0.0 | PR package/workflow changes | Fail new runtime high/critical advisories; explicit availability preflight | BLOCKED: repository Dependency graph is disabled; review step skips with a notice |
 | Gitleaks action v3.0.0 / CLI 8.30.1 | Every PR; weekly/manual full history | Default rules + Yanji signing/password rules; redact output | PASS: 50 commits, ~2.60 MB, no leaks |
 | OSV Scanner 2.6.0 | Weekly/manual | Full recursive scan; scheduled failure alerts maintainers | FAIL: 90 advisory/package tuples, 49 unique advisories across 22 package versions |
 | Ignore policy | Local and CI | Ignore keystores, private-key containers, local props, DBs, device/user backups | PASS: no prohibited tracked file found |
@@ -128,7 +128,7 @@ No cache setting was changed. Existing Gradle build and configuration cache sett
 
 1. OSV currently fails on existing advisories. Remediation needs scope/reachability analysis and controlled Gradle/Kotlin/AGP upgrades; no broad upgrade was hidden in this guardrail PR.
 2. Dependency verification uses SHA-256, not PGP. The generated candidate was checked for expected coordinates/checksum structure and then proven by a strict full build, but future metadata diffs still require human review.
-3. GitHub dependency review, scheduled OSV, and remote API emulator jobs are not locally reproducible as GitHub checks and remain NOT RUN until the branch is pushed.
+3. GitHub Dependency Review reported that Dependency graph is disabled. The workflow now detects that state and skips with an explicit notice; enable Dependency graph in repository security settings to activate the high/critical PR gate. Scheduled OSV and remote API emulator results remain separate GitHub evidence.
 4. The complete connected suite is BLOCKED locally. The user’s physical focus session was deliberately preserved; the API 35 AVD reported “Android Emulator hypervisor driver is not installed.”
 5. QuickStartPreset remains as a documented compatibility tombstone. Removing it requires a separately approved v13 migration and backup-major-version policy.
 6. The project-facts guard is intentionally small and tied to the current Kotlin DSL formatting. If build declarations move into convention plugins, update the extractor and its README marker together.
