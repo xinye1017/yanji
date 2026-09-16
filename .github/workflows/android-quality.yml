@@ -13,6 +13,23 @@ permissions:
   contents: read
 
 jobs:
+  guards:
+    name: Repository invariants
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Project facts guard
+        run: ./scripts/check-project-facts.sh
+
+      - name: Runtime fixture guard
+        run: ./scripts/check-runtime-fixtures.sh
+
+      - name: Design token guard
+        run: ./scripts/check-design-tokens.sh
+
   build:
     name: Unit, lint & build
     runs-on: ubuntu-latest
@@ -38,12 +55,6 @@ jobs:
         run: |
           sed -i 's/-Dfile.encoding=GBK/-Dfile.encoding=UTF-8/' gradle.properties
           rm -f local.properties
-
-      # 极低成本的 Design Token 防回归门禁（grep + awk，无自定义 lint 插件）：
-      # 1) ui/ 层禁止 Color(0x...) 颜色字面量；
-      # 2) ui/ 层裸 RoundedCornerShape(<N>.dp) 数量不得超过棘轮上限。
-      - name: Design token guard
-        run: ./scripts/check-design-tokens.sh
 
       - name: Unit tests (including migrations and deterministic reliability tests)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
@@ -80,7 +91,7 @@ jobs:
   instrumented:
     name: Instrumented tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
-    needs: build
+    needs: [guards, build]
     timeout-minutes: 35
     strategy:
       fail-fast: false
