@@ -36,6 +36,11 @@ android {
     }
 
     testOptions {
+        // YANJI-A 审计实验（2026-09-16）：把该开关置为 false 后，SecretStoreTest 有 5 个
+        // 用例在 main 代码的 android.util.Log.* 调用点抛 "not mocked" RuntimeException
+        // （fail-closed 路径都会打日志）。即该开关当前是**承重**的，不是冗余配置；
+        // 代价是 JVM 单测会静默跳过这些 Android API 调用。
+        // 后续若给数据层引入日志 seam（内部 Logger 接口），可再评估关闭。
         unitTests.isReturnDefaultValues = true
     }
 
