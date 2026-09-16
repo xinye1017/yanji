@@ -167,10 +167,8 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 
-  // Navigation
-  implementation(libs.androidx.navigation3.ui)
-  implementation(libs.androidx.navigation3.runtime)
-  implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+  // Navigation：当前为 Navigation.kt 内的手写路由（YanjiTab + YanjiSubScreen），
+  // 不依赖 androidx.navigation3。YANJI-A 审计已移除未使用的 navigation3 依赖。
 
   // Room Database
   implementation(libs.androidx.room.runtime)
