@@ -1,0 +1,65 @@
+name: Gradle dependency submission
+
+# GitHub cannot statically parse Gradle build scripts: dependency resolution can be changed by
+# plugins, BOMs, conflict resolution and per-project buckets, so GitHub's dependency graph has no
+# data for this repository unless the *resolved* graph is submitted.
+#
+# Consequence of not having this workflow: enabling "Dependency graph" in repository settings is
+# not enough here. `dependency-graph/compare` returns 403, the SBOM endpoint 404s, and the
+# Dependency review preflight correctly skips the review step on every pull request.
+#
+# This submits the resolved graph so that:
+#   1. the dependency graph and Dependabot alerts cover the real Gradle dependency set, and
+#   2. `dependency-review.yml` can actually compare base against head instead of skipping.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: Submit resolved dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Submitting needs a write token. Fork pull requests only ever receive a read-only token,
+    # so skip those instead of failing the check and blocking an otherwise healthy PR.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+
+      # The checked-in -Dfile.encoding=GBK is a Chinese-Windows workaround for the daemon's
+      # test-worker argfile; on Linux it must be UTF-8. Same normalization as the other jobs.
+      - name: Normalize CI-only project settings
+        shell: bash
+        run: |
+          sed -i 's/-Dfile.encoding=GBK/-Dfile.encoding=UTF-8/' gradle.properties
+          rm -f local.properties
+
+      - name: Generate and submit the dependency graph
+        uses: gradle/actions/dependency-submission@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
