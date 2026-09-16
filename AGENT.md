@@ -34,6 +34,17 @@
 
 ## 二、项目运行环境与元信息
 
+### Portable workflow（所有开发者 / CI）
+
+* 所有脚本必须从 `scripts/` 自身位置推导仓库根目录，不得依赖固定盘符或用户名。
+* Android SDK 通过 `ANDROID_HOME` / `ANDROID_SDK_ROOT` 或 `local.properties` 发现；ADB 默认从 `PATH` 查找，也可用 `ADB=/path/to/adb` 覆盖。
+* `scripts/adb-push.sh` 支持 `YANJI_APK`、`YANJI_DEVICE_BACKUP_DIR`、`YANJI_PACKAGE` 覆盖默认值。
+* 默认 APK 与设备备份路径分别是 `<repo>/app/build/outputs/apk/debug/app-debug.apk` 与 `<repo>/build/device-backup`。
+
+### Owner-specific workflow（仓库作者当前设备，仅供参考）
+
+以下路径、设备型号和无线调试提示只描述作者机器，不得复制进可执行脚本或 CI：
+
 * **代码仓库**：`github.com/xinye1017/yanji`，分支 `main`，远端 `origin`
 * **提交纪律**：`app/schemas/**` 必须随代码一起提交（迁移测试的校验依据）；**绝不提交** `local.properties`、`*.db*`、`build/` 下的真机备份。
 * **操作系统**：Windows (PowerShell / pwsh)
