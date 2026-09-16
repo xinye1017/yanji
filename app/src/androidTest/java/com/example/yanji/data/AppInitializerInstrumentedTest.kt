@@ -5,8 +5,13 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.yanji.data.db.CheckInEntity
+import com.example.yanji.data.db.ChatMessageEntity
+import com.example.yanji.data.db.ChatSessionEntity
+import com.example.yanji.data.db.ExamSessionEntity
 import com.example.yanji.data.db.FocusSessionEntity
 import com.example.yanji.data.db.JournalEntryEntity
+import com.example.yanji.data.db.QuickStartPresetEntity
+import com.example.yanji.data.db.UnlockedAchievementEntity
 import com.example.yanji.data.db.UserSettingsEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.flow.first
@@ -84,7 +89,7 @@ class AppInitializerInstrumentedTest {
 
     @Test
     fun clearingAllLearningDataThenRestartingKeepsItEmpty() = runBlocking {
-        // 1) 用户先有一些记录
+        // 1) 用户先在每一张业务表中都有记录。
         db.focusSessionDao().insert(
             FocusSessionEntity.fromDomainModel(
                 FocusSession(
@@ -100,22 +105,48 @@ class AppInitializerInstrumentedTest {
         db.journalEntryDao().insert(
             JournalEntryEntity.fromDomainModel(JournalEntry(id = "j-1", date = "2026-09-05"))
         )
+        db.examSessionDao().insert(
+            ExamSessionEntity.fromDomainModel(
+                ExamSession(
+                    id = "exam-1",
+                    subjectId = "math_advanced",
+                    subjectName = "高等数学",
+                    startTime = epoch,
+                    endTime = epoch + 1000
+                )
+            )
+        )
+        db.chatSessionDao().insert(
+            ChatSessionEntity(id = "chat-1", title = "测试", createdAt = epoch, updatedAt = epoch, model = "test")
+        )
+        db.chatMessageDao().insert(
+            ChatMessageEntity(id = "message-1", sessionId = "chat-1", sender = "USER", content = "测试", timestamp = epoch)
+        )
         db.checkInDao().insert(CheckInEntity.fromDomainModel(CheckIn(date = "2026-09-11", checkInTime = epoch)))
+        db.achievementDao().unlock(UnlockedAchievementEntity(id = "achievement-1", unlockedAt = epoch))
+        db.quickStartPresetDao().insert(
+            QuickStartPresetEntity(id = "quick-start-1", label = "兼容墓碑测试", createdAt = epoch)
+        )
         init()
 
-        // 2) 用户主动清空全部记录
+        assertEquals("测试前置必须覆盖全部业务表", 8, businessRowCount())
+
+        // 2) 用户主动清空全部业务记录（设置保留）。
         db.focusSessionDao().deleteAll()
+        db.examSessionDao().deleteAll()
         db.journalEntryDao().deleteAll()
+        db.chatMessageDao().clearAll()
+        db.chatSessionDao().clearAll()
         db.checkInDao().deleteAll()
+        db.achievementDao().deleteAll()
+        db.quickStartPresetDao().deleteAll()
 
         // 3) 重启（再跑一次初始化）
         init()
 
-        // 4) 必须保持为空 —— 这是本测试存在的唯一理由
-        assertEquals("专注记录不应在重启后复活", 0, db.focusSessionDao().count())
-        assertEquals("日记不应在重启后复活", 0, db.journalEntryDao().count())
-        assertEquals("打卡不应在重启后复活", 0, db.checkInDao().count())
-        assertEquals(0, businessRowCount())
+        // 4) 每一张业务表都必须保持为空 —— 这是本测试存在的唯一理由。
+        assertEquals("清空后重启不得复活任何业务记录", 0, businessRowCount())
+        assertEquals("默认设置仍应保留", 1, db.userSettingsDao().count())
     }
 
     @Test

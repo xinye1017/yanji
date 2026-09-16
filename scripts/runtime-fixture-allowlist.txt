@@ -1,0 +1,5 @@
+# One reviewed exception per line:
+# path|rule|normalized source line
+#
+# Keep this file empty unless production runtime data is intentional. Add a nearby
+# comment explaining ownership and removal criteria when granting an exception.
