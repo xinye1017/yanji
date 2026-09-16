@@ -1,5 +1,7 @@
 # 研迹 (Yanji) · 考研学习管理与心流伴侣
 
+<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=1 versionName=1.0.0 roomSchema=12 roomLibrary=2.8.4 -->
+
 <p align="center">
   <img src="app/src/main/res/drawable/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />
 </p>
@@ -63,7 +65,7 @@
 * **学情多维复盘**：考后联动 AI 诊断引擎生成针对性备考错因复盘与突破建议。
 
 ### 3. 研迹考研日记 (Study Journal)
-* **每日专属篇章**：通过 Room v11 `journal_entries.date` 唯一约束强保证一天一篇，杜绝碎片冗余。
+* **每日专属篇章**：通过 Room v12 `journal_entries.date` 唯一约束强保证一天一篇，杜绝碎片冗余。
 * **数据无缝联动**：自动关联当日真实专注时长、专注科目分布与打卡状态。
 * **结构化反思**：提供心境情绪选择、今日卡点剖析、明日重点攻克规划。
 
