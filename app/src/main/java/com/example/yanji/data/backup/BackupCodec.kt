@@ -14,6 +14,16 @@ import kotlinx.serialization.json.Json
  */
 object BackupCodec {
 
+    /**
+     * 导入文件的字符数上限（防御性上限，正常备份远达不到）。
+     *
+     * UTF-8 编码下字节数 ≥ 字符数恒成立，因此用字符数做保守代理即可，避免为量尺寸
+     * 先复制整份字符串。用途：在 JSON 解析**之前**拒绝超大输入，防止恶意或损坏文件
+     * 在 decode / 整表替换事务里造成内存峰值。深度防御依赖 kotlinx.serialization
+     * 对未知键的结构性跳过 + Room 事务，见审计报告"备份导入防御"一节。
+     */
+    private const val MAX_IMPORT_CHARS = 64L * 1024 * 1024
+
     private val json = Json {
         prettyPrint = true
         encodeDefaults = true
@@ -30,6 +40,12 @@ object BackupCodec {
     ): BackupDecodeResult {
         if (raw.isBlank()) {
             return BackupDecodeResult.Failure("文件内容为空，请确认选择的是研迹导出的 JSON 备份")
+        }
+
+        if (raw.length > MAX_IMPORT_CHARS) {
+            return BackupDecodeResult.Failure(
+                "备份文件过大（超过 64 MB），请确认选择的是研迹导出的 JSON 备份"
+            )
         }
 
         val backup = runCatching { json.decodeFromString<YanjiBackup>(raw) }.getOrElse {
