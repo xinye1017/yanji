@@ -124,3 +124,23 @@
 - 日常推送：`adb -s <id> install -r app/build/outputs/apk/debug/app-debug.apk`（`-r` 保留数据）。
   **真机固定 debug 签名**（`~/.android/debug.keystore`，至 2056），换 release 签名必须卸载重装 → 数据全丢；**不要**给 debug 加 `applicationIdSuffix`。
 - 覆盖安装安全取决于 `@Database(version)`：装前读真机库 `PRAGMA user_version` 与代码比对；相同无迁移、不同务必先在模拟器上用真实旧库验证。
+
+## 依赖校验（Gradle dependency verification）
+
+- 已启用：`gradle/verification-metadata.xml`，`verify-metadata=true` / `verify-signatures=false`，当前 **590 components / 981 artifacts**。
+- ❗**元数据必须用 `scripts/regen-verification-metadata.sh` 重建，绝不要按 CI 报错一次手补一个 checksum**（每轮 CI ~11 分钟）。
+- 覆盖不全的两个叠加原因（都踩过）：
+  1. 普通 build 从不解析 AGP 内部配置 `_internal-unified-test-platform-*` → 只有 **instrumented job** 会红，build job 一直绿。
+  2. **`--write-verification-metadata` 不记录已在本地 Gradle 缓存里的 descriptor**；不加 `--refresh-dependencies` 会「构建成功但文件依旧不全」，CI 冷缓存才炸。
+- 脚本行为：init script 强制解析**所有**可解析配置 + `--refresh-dependencies`；**只允许新增**，会删改既有 checksum 就报错并还原。
+- 正常跳过项：`debugUnitTestCompileClasspath` / `debugAndroidTestCompileClasspath`（Gradle 9 拒绝在 configuration 阶段解析 compile classpath，`IllegalResolutionException: ... without an exclusive lock`），无缺口。
+- 新增 checksum 必须**独立复核**（从 Maven Central 重新下载重算 sha256），不能因为 Gradle 生成了就当可信事实。
+- 给 `gradlew.bat` 传 `-I` **禁用 POSIX 绝对路径**（`/d/AI项目/...` 会拼成 `D:\AI项目\yanji\d\AI项目\...`）；用相对路径 `scripts/lib/...`。
+
+## 判定测试真伪（易自欺）
+
+- ⚠️ **`> Task :app:testDebugUnitTest FROM-CACHE` = 测试根本没跑**，那次「10 秒通过」不是证据。
+  要真跑：`--rerun-tasks --no-build-cache`；验收看 `N actionable tasks: N executed, 0 from cache`。
+- **禁止时间依赖的测试写法**：`Calendar.getInstance()` 派生「同一时刻」时**必须 `set(Calendar.MILLISECOND, 0)`**，
+  且边界值只计算一次并复用。曾因此出过 0.0398% 的 flaky（`StudyStatsTest.durationSince`，100 万次里 398 次不匹配）。
+- 验证守卫有效性要**注入违规**再确认失败，不能只看「当前 PASS」——恒真门禁等于没有。
