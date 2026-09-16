@@ -42,7 +42,6 @@ class YanjiRepository private constructor() {
     companion object {
         @Volatile
         private var instance: YanjiRepository? = null
-        private const val KEY_QUICK_ACTIONS_SEEDED = "quick_actions_seeded_v1"
 
         fun getInstance(): YanjiRepository {
             return instance ?: synchronized(this) {
