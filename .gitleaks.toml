@@ -1,0 +1,26 @@
+title = "Yanji secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "yanji-signing-literal"
+description = "Literal Yanji signing secret"
+regex = '''(?i)YANJI_(?:SIGNING_(?:STORE_PASSWORD|KEY_PASSWORD)|RELEASE_KEYSTORE_BASE64)\s*[:=]\s*["']?([A-Za-z0-9+/=_!@#%.-]{8,})'''
+secretGroup = 1
+keywords = ["YANJI_SIGNING_", "YANJI_RELEASE_KEYSTORE_BASE64"]
+
+[[rules]]
+id = "hardcoded-keystore-password"
+description = "Quoted keystore password literal"
+regex = '''(?i)(?:storePassword|keyPassword)\s*[:=]\s*["']([^"'$]{8,})["']'''
+secretGroup = 1
+keywords = ["storePassword", "keyPassword"]
+
+# False positives must be narrow, reviewed, and path/regex-specific. Never allowlist
+# a real credential, an entire source tree, or a broad key/token pattern.
+[allowlist]
+description = "Reviewed false-positive fixtures only"
+paths = [
+  '''app/src/test/resources/fixtures/known-false-positive/.*''',
+]

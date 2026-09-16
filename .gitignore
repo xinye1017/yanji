@@ -13,6 +13,14 @@
 .externalNativeBuild
 .cxx
 local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+secrets.properties
+*.yanji-backup
+*.backup.json
 
 # --- 构建与工具链产物 ---
 .kotlin/
