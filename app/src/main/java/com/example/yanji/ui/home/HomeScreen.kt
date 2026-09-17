@@ -240,10 +240,9 @@ fun HomeScreen(
 
             // 2. Today's Study Grouped Card (Clickable to DailyStudyDetail)
             YanjiGroupedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("home_today_study_card")
-                    .clickable { onNavigateToDailyDetail(todayIso) },
+                modifier = Modifier.fillMaxWidth(),
+                cardModifier = Modifier.testTag("home_today_study_card"),
+                onClick = { onNavigateToDailyDetail(todayIso) },
                 headerTitle = "今日专注",
                 footerText = "点击卡片查看今日详细时间轴与学科占比"
             ) {

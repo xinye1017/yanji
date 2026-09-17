@@ -76,19 +76,25 @@ fun StatsScreen(
         StatsHeroCard(
             selectedTimeTab = state.selectedTimeTab,
             periodDurationSecs = state.periodDurationSeconds,
-            activeDays = state.weeklySummary.activeDays,
+            activeDays = if (state.selectedTimeTab == 1) state.monthlySummary.activeDays else state.weeklySummary.activeDays,
             previousWeekSeconds = state.previousWeekSeconds,
             weeklyTotalSeconds = state.weeklySummary.totalDurationSeconds,
-            dailyAverageSeconds = state.weeklySummary.dailyAverageSeconds,
+            dailyAverageSeconds = if (state.selectedTimeTab == 1) state.monthlySummary.dailyAverageSeconds else state.weeklySummary.dailyAverageSeconds,
             settings = settings
         )
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        // Trend Chart (Bar & Line)
+        // Trend Chart (Bar, Line & Heatmap)
+        val trendDays = if (state.selectedTimeTab == 1) {
+            state.monthlySummary.days
+        } else {
+            state.weeklySummary.days
+        }
+
         StatsTrendChart(
             selectedTimeTab = state.selectedTimeTab,
-            days = state.weeklySummary.days,
+            days = trendDays,
             trendChartMode = state.trendChartMode,
             onSelectTrendMode = { viewModel.selectTrendMode(it) },
             onSelectDay = { selectedDayForSheet = it }
@@ -117,12 +123,12 @@ fun StatsScreen(
                 iconTint = YanjiColors.warning,
                 iconBg = YanjiColors.warningSoft,
                 title = "连续研读",
-                value = "${state.weeklySummary.streakDays}",
+                value = "${if (state.selectedTimeTab == 1) state.monthlySummary.streakDays else state.weeklySummary.streakDays}",
                 unit = "天",
                 modifier = Modifier.weight(1f)
             )
 
-            val longest = state.weeklySummary.longestSession
+            val longest = if (state.selectedTimeTab == 1) state.monthlySummary.longestSession else state.weeklySummary.longestSession
             MetricMiniCard(
                 icon = Icons.Default.Timelapse,
                 iconTint = MaterialTheme.colorScheme.primary,
@@ -133,12 +139,13 @@ fun StatsScreen(
                 onClick = longest?.let { l -> { onNavigateToFocusDetail(l.id) } }
             )
 
+            val examCount = if (state.selectedTimeTab == 1) state.monthlySummary.examCount else state.weeklySummary.examCount
             MetricMiniCard(
                 icon = Icons.Default.Quiz,
                 iconTint = MaterialTheme.colorScheme.secondary,
                 iconBg = MaterialTheme.colorScheme.secondaryContainer,
                 title = "全真模拟",
-                value = "${state.weeklySummary.examCount}",
+                value = "$examCount",
                 unit = "场",
                 modifier = Modifier.weight(1f),
                 onClick = { onNavigateToExamHistory() }

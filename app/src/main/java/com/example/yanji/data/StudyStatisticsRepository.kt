@@ -83,6 +83,19 @@ data class WeeklyStudySummary(
     val days: List<DayBarData>
 )
 
+data class MonthlyStudySummary(
+    val totalDurationSeconds: Long,
+    val dailyAverageSeconds: Long,
+    val activeDays: Int,
+    val longestSession: DailySessionItem?,
+    val examCount: Int,
+    val streakDays: Int,
+    val year: Int,
+    val month: Int,
+    val firstDayOfWeek: DayOfWeek,
+    val days: List<DayBarData>
+)
+
 object DurationFormatter {
     fun formatHoursMinutes(seconds: Long): String {
         if (seconds <= 0) return "0m"
@@ -568,6 +581,97 @@ class StudyStatisticsRepository(
         DayOfWeek.FRIDAY -> "周五"
         DayOfWeek.SATURDAY -> "周六"
         DayOfWeek.SUNDAY -> "周日"
+    }
+
+    /**
+     * Get Monthly summary for statistics, heatmap, and monthly charts.
+     */
+    fun getMonthlyStudySummaryFlow(): Flow<MonthlyStudySummary> {
+        val range = YanjiTime.currentMonthRange()
+        return combine(
+            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
+            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
+        ) { focusList, examList ->
+            buildMonthlyStudySummary(focusList, examList)
+        }
+    }
+
+    fun getMonthlyStudySummary(): MonthlyStudySummary {
+        val range = YanjiTime.currentMonthRange()
+        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
+        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
+        return buildMonthlyStudySummary(focusList, examList)
+    }
+
+    private fun buildMonthlyStudySummary(
+        focusList: List<FocusSession>,
+        examList: List<ExamSession>
+    ): MonthlyStudySummary {
+        val today = YanjiTime.today()
+        val firstDay = today.withDayOfMonth(1)
+        val daysInMonth = today.lengthOfMonth()
+        val days = mutableListOf<DayBarData>()
+
+        for (dayNum in 1..daysInMonth) {
+            val date = firstDay.withDayOfMonth(dayNum)
+            val dateStr = date.format(YanjiTime.isoDateFormatter)
+            val label = "${dayNum}日"
+
+            val dFocus = focusList.filter {
+                it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == date
+            }
+            val dExams = examList.filter {
+                it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == date
+            }
+            val total = dFocus.sumOf { it.durationSeconds } + dExams.sumOf { it.actualDurationSeconds }
+
+            val subjectMap = buildNamedDistribution(
+                dFocus.map(::focusToSessionItem) + dExams.map(::examToSessionItem),
+                SubjectStatsLevel.SUBCATEGORY
+            )
+
+            days.add(
+                DayBarData(
+                    date = dateStr,
+                    dayLabel = label,
+                    durationSeconds = total,
+                    isToday = date == today,
+                    subjectDistribution = subjectMap
+                )
+            )
+        }
+
+        val totalDuration = days.sumOf { it.durationSeconds }
+        val activeDays = days.count { it.durationSeconds >= 1800L } // >= 30m
+        val dailyAvg = if (days.isNotEmpty()) totalDuration / days.size else 0L
+
+        val recentFocus = focusList.filter { it.status == SessionStatus.COMPLETED }.map(::focusToSessionItem)
+        val recentExams = examList.filter { it.status == SessionStatus.COMPLETED }.map(::examToSessionItem)
+        val allRecent = recentFocus + recentExams
+        val longest = allRecent.maxByOrNull { it.durationSeconds }
+        val recentExamCount = recentExams.size
+
+        var streak = 0
+        for (i in days.indices.reversed()) {
+            if (days[i].durationSeconds >= 1800L) {
+                streak++
+            } else if (!days[i].isToday) {
+                break
+            }
+        }
+
+        return MonthlyStudySummary(
+            totalDurationSeconds = totalDuration,
+            dailyAverageSeconds = dailyAvg,
+            activeDays = activeDays,
+            longestSession = longest,
+            examCount = recentExamCount,
+            streakDays = streak,
+            year = today.year,
+            month = today.monthValue,
+            firstDayOfWeek = firstDay.dayOfWeek,
+            days = days
+        )
     }
 
     /**

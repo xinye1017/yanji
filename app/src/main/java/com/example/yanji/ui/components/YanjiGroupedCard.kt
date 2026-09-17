@@ -37,6 +37,7 @@ import com.example.yanji.theme.yanjiIsDarkTheme
 @Composable
 fun YanjiGroupedCard(
     modifier: Modifier = Modifier,
+    cardModifier: Modifier = Modifier,
     headerTitle: String? = null,
     footerText: String? = null,
     containerColor: Color = MaterialTheme.colorScheme.surface,
@@ -44,9 +45,11 @@ fun YanjiGroupedCard(
         0.8.dp,
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (yanjiIsDarkTheme()) 0.12f else 0.45f)
     ),
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = yanjiIsDarkTheme()
+    val cardShape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (!headerTitle.isNullOrBlank()) {
@@ -61,23 +64,47 @@ fun YanjiGroupedCard(
             )
         }
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(
-                    elevation = if (isDark) 0.dp else 1.5.dp,
-                    shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-                    ambientColor = Color.Black.copy(alpha = 0.04f),
-                    spotColor = Color.Black.copy(alpha = 0.04f)
+        if (onClick != null) {
+            Card(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(cardModifier)
+                    .shadow(
+                        elevation = if (isDark) 0.dp else 1.5.dp,
+                        shape = cardShape,
+                        ambientColor = Color.Black.copy(alpha = 0.04f),
+                        spotColor = Color.Black.copy(alpha = 0.04f)
+                    ),
+                shape = cardShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = containerColor,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ),
-            shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-            colors = CardDefaults.cardColors(
-                containerColor = containerColor,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ),
-            border = border,
-            content = content
-        )
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = border,
+                content = content
+            )
+        } else {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(cardModifier)
+                    .shadow(
+                        elevation = if (isDark) 0.dp else 1.5.dp,
+                        shape = cardShape,
+                        ambientColor = Color.Black.copy(alpha = 0.04f),
+                        spotColor = Color.Black.copy(alpha = 0.04f)
+                    ),
+                shape = cardShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = containerColor,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                border = border,
+                content = content
+            )
+        }
 
         if (!footerText.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(4.dp))

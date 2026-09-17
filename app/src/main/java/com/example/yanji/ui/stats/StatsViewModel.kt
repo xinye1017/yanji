@@ -3,6 +3,7 @@ package com.example.yanji.ui.stats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.AiAnalysis
+import com.example.yanji.data.MonthlyStudySummary
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.StudyTimeRange
 import com.example.yanji.data.SubjectDistributionItem
@@ -30,6 +31,7 @@ data class StatsUiState(
     val trendChartMode: TrendMode,
     val timeRange: StudyTimeRange,
     val weeklySummary: WeeklyStudySummary,
+    val monthlySummary: MonthlyStudySummary,
     val subjectDistribution: List<SubjectDistributionItem>,
     /** 主指标卡的大数字：本周=周汇总；本月=近 30 天；全部=累计总学时。 */
     val periodDurationSeconds: Long,
@@ -93,6 +95,7 @@ class StatsViewModel(
         trendChartMode = TrendMode.BAR,
         timeRange = StudyTimeRange.WEEK,
         weeklySummary = WeeklyStudySummary(0L, 0L, 0, null, 0, 0, emptyList()),
+        monthlySummary = MonthlyStudySummary(0L, 0L, 0, null, 0, 0, 2026, 9, java.time.DayOfWeek.MONDAY, emptyList()),
         subjectDistribution = emptyList(),
         periodDurationSeconds = 0L,
         previousWeekSeconds = 0L,
@@ -103,10 +106,11 @@ class StatsViewModel(
 
     val uiState: StateFlow<StatsUiState> = combine(
         statsRepo.getWeeklyStudySummaryFlow(),
+        statsRepo.getMonthlyStudySummaryFlow(),
         subjectDistributionFlow,
         selectionMetrics,
         reportState
-    ) { weekly, distribution, metrics, reportTuple ->
+    ) { weekly, monthly, distribution, metrics, reportTuple ->
         val tab = metrics.tab
         val level = metrics.level
         val (report, analyzing, allAnalyses, error) = reportTuple
@@ -116,6 +120,7 @@ class StatsViewModel(
             trendChartMode = metrics.chartMode,
             timeRange = tab.toTimeRange(),
             weeklySummary = weekly,
+            monthlySummary = monthly,
             subjectDistribution = distribution,
             periodDurationSeconds = metrics.periodSeconds,
             // Previous calendar week: Monday 00:00 through this Monday 00:00.
@@ -134,6 +139,11 @@ class StatsViewModel(
 
     fun selectTimeTab(tab: Int) {
         selectedTimeTab.value = tab
+        if (tab == 1 && trendChartMode.value == TrendMode.BAR) {
+            trendChartMode.value = TrendMode.HEATMAP
+        } else if (tab != 1 && trendChartMode.value == TrendMode.HEATMAP) {
+            trendChartMode.value = TrendMode.BAR
+        }
     }
 
     /** 用户设置（同步读缓存）：统计页用于计算周目标进度。 */
