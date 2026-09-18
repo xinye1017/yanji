@@ -128,26 +128,16 @@ class TimerMachine(private val clock: MonotonicClock) {
     }
 
     /** 已累计的有效计时（毫秒）。暂停区间不计入。 */
-    fun elapsedMs(): Long {
-        val current = snapshot
-        val runningPart = current.resumedAtMonotonicMs?.let { clock.nowMs() - it } ?: 0L
-        return current.accumulatedActiveMs + runningPart
-    }
+    fun elapsedMs(): Long = TimerCalculator.calculateElapsedMs(snapshot, clock.nowMs())
 
-    fun elapsedSeconds(): Long = elapsedMs() / 1000L
+    fun elapsedSeconds(): Long = TimerCalculator.calculateElapsedSeconds(snapshot, clock.nowMs())
 
     /** 倒计时剩余秒数；正向计时返回 0。 */
-    fun remainingSeconds(): Long {
-        val current = snapshot
-        if (!current.isCountdown) return 0L
-        return (current.targetDurationSeconds - elapsedSeconds()).coerceAtLeast(0L)
-    }
+    fun remainingSeconds(): Long = TimerCalculator.calculateRemainingSeconds(snapshot, clock.nowMs())
 
     /** 倒计时是否已走完。 */
-    fun hasReachedTarget(): Boolean =
-        snapshot.isCountdown && elapsedSeconds() >= snapshot.targetDurationSeconds
+    fun hasReachedTarget(): Boolean = TimerCalculator.hasReachedTarget(snapshot, clock.nowMs())
 
     /** 暂停掉的总时长（毫秒）。用于 FocusSession.pausedDurationSeconds。 */
-    fun pausedMs(nowEpochMs: Long): Long =
-        (nowEpochMs - snapshot.startedAtEpochMs - elapsedMs()).coerceAtLeast(0L)
+    fun pausedMs(nowEpochMs: Long): Long = TimerCalculator.calculatePausedMs(snapshot, nowEpochMs, clock.nowMs())
 }
