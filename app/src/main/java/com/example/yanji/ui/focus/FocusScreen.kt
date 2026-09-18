@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.R
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
+import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.Subject
 import com.example.yanji.data.timer.ActiveFocusState
 import com.example.yanji.di.yanjiViewModel
@@ -155,9 +156,11 @@ fun FocusScreen(
     }
 
     if (activeSession != null) {
+        val isTimerPaused = if (liveState is ActiveFocusState) liveState.isPaused else (activeSession.status == SessionStatus.PAUSED)
         ActiveFocusContent(
             session = activeSession,
             elapsedSeconds = elapsedSeconds,
+            isPaused = isTimerPaused,
             onPause = {
                 FocusTimerService.pauseTimer(context)
                 viewModel.pauseFocus(elapsedSeconds.value)

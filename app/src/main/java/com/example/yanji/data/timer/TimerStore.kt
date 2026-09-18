@@ -210,6 +210,11 @@ internal class TimerStore(
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.RUNNING) {
             val newDuration = if (elapsedSeconds > 0) elapsedSeconds else current.durationSeconds
+            _activeFocus.value = current.copy(
+                status = SessionStatus.PAUSED,
+                durationSeconds = newDuration,
+                pauseCount = current.pauseCount + 1
+            )
             ActiveSessionCoordinator.update {
                 it.copy(
                     paused = true,
@@ -223,6 +228,7 @@ internal class TimerStore(
     fun resumeFocus() {
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.PAUSED) {
+            _activeFocus.value = current.copy(status = SessionStatus.RUNNING)
             ActiveSessionCoordinator.update { it.copy(paused = false) }
         }
     }
