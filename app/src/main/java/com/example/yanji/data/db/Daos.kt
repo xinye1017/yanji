@@ -59,6 +59,18 @@ interface FocusSessionDao {
     @Query("SELECT COUNT(*) FROM focus_sessions")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
+    suspend fun getAllOnce(): List<FocusSessionEntity>
+
+    @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC LIMIT :limit")
+    suspend fun getRecentSessions(limit: Int): List<FocusSessionEntity>
+
+    @Query("SELECT * FROM focus_sessions WHERE startTime >= :sinceEpochMs ORDER BY startTime DESC")
+    suspend fun getSessionsSince(sinceEpochMs: Long): List<FocusSessionEntity>
+
+    @Query("SELECT COALESCE(SUM(durationSeconds), 0) FROM focus_sessions WHERE status = 'COMPLETED'")
+    suspend fun getTotalCompletedDuration(): Long
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(session: FocusSessionEntity)
 
@@ -123,6 +135,18 @@ interface ExamSessionDao {
     @Query("SELECT COUNT(*) FROM exam_sessions")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC")
+    suspend fun getAllOnce(): List<ExamSessionEntity>
+
+    @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC LIMIT :limit")
+    suspend fun getRecentSessions(limit: Int): List<ExamSessionEntity>
+
+    @Query("SELECT * FROM exam_sessions WHERE startTime >= :sinceEpochMs ORDER BY startTime DESC")
+    suspend fun getSessionsSince(sinceEpochMs: Long): List<ExamSessionEntity>
+
+    @Query("SELECT COALESCE(SUM(actualDurationSeconds), 0) FROM exam_sessions WHERE status = 'COMPLETED'")
+    suspend fun getTotalCompletedDuration(): Long
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(session: ExamSessionEntity)
 
@@ -156,6 +180,9 @@ interface JournalEntryDao {
 
     @Query("SELECT COUNT(*) FROM journal_entries")
     suspend fun count(): Int
+
+    @Query("SELECT * FROM journal_entries ORDER BY date DESC")
+    suspend fun getAllOnce(): List<JournalEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: JournalEntryEntity)
@@ -279,6 +306,9 @@ interface CheckInDao {
 interface AchievementDao {
     @Query("SELECT * FROM unlocked_achievements")
     fun getAllFlow(): Flow<List<UnlockedAchievementEntity>>
+
+    @Query("SELECT id FROM unlocked_achievements")
+    suspend fun getUnlockedIds(): List<String>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun unlock(item: UnlockedAchievementEntity)
