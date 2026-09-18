@@ -5,12 +5,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,18 @@ enum class TrendMode(val label: String) {
     HEATMAP("热力图")
 }
 
+fun resolveAvailableTrendModes(selectedTimeTab: Int): List<TrendMode> =
+    if (selectedTimeTab == 1) {
+        listOf(TrendMode.HEATMAP, TrendMode.LINE)
+    } else {
+        listOf(TrendMode.BAR, TrendMode.LINE)
+    }
+
+fun resolveEffectiveTrendMode(selectedTimeTab: Int, trendChartMode: TrendMode): TrendMode {
+    val available = resolveAvailableTrendModes(selectedTimeTab)
+    return if (trendChartMode in available) trendChartMode else available.first()
+}
+
 @Composable
 fun StatsTrendChart(
     selectedTimeTab: Int,
@@ -49,18 +62,13 @@ fun StatsTrendChart(
     onSelectTrendMode: (TrendMode) -> Unit,
     onSelectDay: (DayBarData) -> Unit
 ) {
-    val isDark = yanjiIsDarkTheme()
-
-    val availableModes = if (selectedTimeTab == 1) {
-        listOf(TrendMode.HEATMAP, TrendMode.LINE)
-    } else {
-        listOf(TrendMode.BAR, TrendMode.LINE)
-    }
-    val currentModeIndex = availableModes.indexOf(trendChartMode).coerceAtLeast(0)
+    val availableModes = resolveAvailableTrendModes(selectedTimeTab)
+    val effectiveMode = resolveEffectiveTrendMode(selectedTimeTab, trendChartMode)
+    val currentModeIndex = availableModes.indexOf(effectiveMode).coerceAtLeast(0)
 
     val titleText = when {
         selectedTimeTab == 0 -> "本周学习时长趋势"
-        selectedTimeTab == 1 && trendChartMode == TrendMode.HEATMAP -> "本月专注热力图"
+        selectedTimeTab == 1 && effectiveMode == TrendMode.HEATMAP -> "本月专注热力图"
         selectedTimeTab == 1 -> "本月学习趋势"
         else -> "每日学时分布"
     }
@@ -99,8 +107,8 @@ fun StatsTrendChart(
             Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
 
             when {
-                // Monthly Heatmap View
-                selectedTimeTab == 1 && trendChartMode == TrendMode.HEATMAP -> {
+                // Monthly Heatmap View (Month tab defaults to heatmap unless LINE is selected)
+                selectedTimeTab == 1 && effectiveMode != TrendMode.LINE -> {
                     MonthlyHeatmapView(
                         days = days,
                         onSelectDay = onSelectDay
@@ -108,14 +116,14 @@ fun StatsTrendChart(
                 }
 
                 // Line Chart (Week, Month or All) - No hollow circular dots!
-                trendChartMode == TrendMode.LINE -> {
+                effectiveMode == TrendMode.LINE -> {
                     LineChartView(
                         days = days,
                         onSelectDay = onSelectDay
                     )
                 }
 
-                // Bar Chart View
+                // Bar Chart View (Week or All)
                 else -> {
                     BarChartView(
                         days = days,
@@ -135,10 +143,11 @@ private fun MonthlyHeatmapView(
     days: List<DayBarData>,
     onSelectDay: (DayBarData) -> Unit
 ) {
-    val isDark = yanjiIsDarkTheme()
-    val weekdayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
+    // Keep the month view as a compact horizontal calendar: seven day slots per row,
+    // flowing left-to-right. The squares carry the visual rhythm; the selected day sheet
+    // and accessibility label provide exact date details.
 
-    // Determine leading empty slots based on the first day's day of week
+    // Determine leading empty slots based on the first day's day of week.
     val firstDate = days.firstOrNull()?.let { YanjiTime.parseIsoDate(it.date) }
     val leadingOffset = if (firstDate != null) {
         firstDate.dayOfWeek.value - 1
@@ -146,114 +155,94 @@ private fun MonthlyHeatmapView(
 
     val totalSlots = leadingOffset + days.size
     val rowCount = (totalSlots + 6) / 7
+    val monthLabel = firstDate?.let { "${it.year}年${it.monthValue}月" } ?: "本月"
+    val activeCount = days.count { it.durationSeconds >= 1800L }
+    val cellTouchSize = 24.dp
+    val cellVisualSize = 18.dp
+    val cellGap = 3.dp
+    val cellShape = RoundedCornerShape(YanjiRadius.ItemRadius / 2)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // 1. Weekday Header Row
+        // The month label stays above the horizontal date grid.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            weekdayLabels.forEach { label ->
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Text(
+                text = monthLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
-        // 2. Calendar Grid Rows
-        for (rowIndex in 0 until rowCount) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.5.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                for (colIndex in 0 until 7) {
-                    val slotIndex = rowIndex * 7 + colIndex
-                    val dayIndex = slotIndex - leadingOffset
+        // Seven compact day slots run horizontally in every calendar row.
+        Column(verticalArrangement = Arrangement.spacedBy(cellGap)) {
+            for (rowIndex in 0 until rowCount) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(cellTouchSize),
+                    horizontalArrangement = Arrangement.spacedBy(cellGap)
+                ) {
+                    for (columnIndex in 0..6) {
+                        val slotIndex = rowIndex * 7 + columnIndex
+                        val dayIndex = slotIndex - leadingOffset
 
-                    if (dayIndex in days.indices) {
-                        val day = days[dayIndex]
-                        val duration = day.durationSeconds
-                        val isToday = day.isToday
-                        val dayNumber = dayIndex + 1
+                        if (dayIndex in days.indices) {
+                            val day = days[dayIndex]
+                            val dayDurationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
+                            val a11yText = "${day.date}，专注时长 $dayDurationText" +
+                                if (day.isToday) "，今日" else ""
 
-                        val cellBgColor = heatmapCellColor(duration, isDark)
-                        val cellTextColor = heatmapTextColor(duration, isDark)
-
-                        val dayDurationText = DurationFormatter.formatHoursMinutes(duration)
-                        val a11yText = "${day.date}，专注时长 $dayDurationText" + if (isToday) "，今日" else ""
-
-                        val cellShape = RoundedCornerShape(8.dp)
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .clip(cellShape)
-                                .background(cellBgColor)
-                                .then(
-                                    if (isToday) {
-                                        Modifier.border(
-                                            width = 1.8.dp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            shape = cellShape
-                                        )
-                                    } else Modifier
-                                )
-                                .clickable { onSelectDay(day) }
-                                .semantics { contentDescription = a11yText },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .semantics(mergeDescendants = true) {
+                                        contentDescription = a11yText
+                                    }
+                                    .clickable { onSelectDay(day) },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "$dayNumber",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isToday || duration >= 9000L) FontWeight.Bold else FontWeight.Medium,
-                                    color = cellTextColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellVisualSize)
+                                        .clip(cellShape)
+                                        .background(heatmapCellColor(day.durationSeconds))
+                                        .then(
+                                            if (day.isToday) {
+                                                Modifier.border(
+                                                    width = 1.5.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = cellShape
+                                                )
+                                            } else Modifier
+                                        )
                                 )
-                                if (isToday) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 1.dp)
-                                            .size(3.dp)
-                                            .clip(CircleShape)
-                                            .background(cellTextColor)
-                                    )
-                                }
                             }
+                        } else {
+                            Spacer(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
                         }
-                    } else {
-                        // Empty slot
-                        Spacer(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                        )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
 
-        // 3. Legend (图例)
+        // The summary stays textual; the color scale remains a compact GitHub-style legend.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val activeCount = days.count { it.durationSeconds >= 1800L }
             Text(
                 text = "本月有效学习 ${activeCount} 天",
                 style = MaterialTheme.typography.bodySmall,
@@ -270,13 +259,13 @@ private fun MonthlyHeatmapView(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // 5 swatches for shades of blue: 0h, <1h, 1~2.5h, 2.5~4h, 4h+
-                listOf(0L, 1800L, 5400L, 10800L, 18000L).forEach { duration ->
+                // Five contribution levels: empty, light, steady, focused, intensive.
+                listOf(0L, 900L, 1800L, 5400L, 10800L).forEach { duration ->
                     Box(
                         modifier = Modifier
-                            .size(13.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(heatmapCellColor(duration, isDark))
+                            .size(12.dp)
+                            .clip(cellShape)
+                            .background(heatmapCellColor(duration))
                     )
                 }
 
@@ -291,33 +280,18 @@ private fun MonthlyHeatmapView(
 }
 
 /**
- * 蓝色系热力图分级颜色：
- * - 0 秒：轻柔表面底色
- * - < 1 小时 (1 ~ 3599s)：清爽淡蓝 (0xFFD6E4FF / 0xFF1A365D)
- * - 1 ~ 2.5 小时 (3600 ~ 8999s)：明朗天蓝 (0xFF91B4F8 / 0xFF2B4C7E)
- * - 2.5 ~ 4 小时 (9000 ~ 14399s)：鲜明主蓝 (0xFF3B82F6 / 0xFF3B82F6)
- * - >= 4 小时 (>= 14400s)：深邃浓蓝 (0xFF1D4ED8 / 0xFF60A5FA)
+ * GitHub-style five-level blue scale. The base and alpha are theme-aware, so the
+ * same quiet progression remains legible in both light and dark mode.
  */
-private fun heatmapCellColor(durationSeconds: Long, isDark: Boolean): Color {
-    if (durationSeconds <= 0L) {
-        return if (isDark) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFF1F5FB)
-    }
+@Composable
+private fun heatmapCellColor(durationSeconds: Long): Color {
+    val primary = MaterialTheme.colorScheme.primary
     return when {
-        durationSeconds < 3600L -> if (isDark) Color(0xFF1A365D) else Color(0xFFD6E4FF)
-        durationSeconds < 9000L -> if (isDark) Color(0xFF2B4C7E) else Color(0xFF91B4F8)
-        durationSeconds < 14400L -> if (isDark) Color(0xFF3B82F6) else Color(0xFF3B82F6)
-        else -> if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8)
-    }
-}
-
-private fun heatmapTextColor(durationSeconds: Long, isDark: Boolean): Color {
-    if (durationSeconds <= 0L) {
-        return if (isDark) Color(0xFF94A3B8) else Color(0xFF667085)
-    }
-    return when {
-        durationSeconds < 3600L -> if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
-        durationSeconds < 9000L -> if (isDark) Color.White else Color(0xFF0F2E7A)
-        else -> Color.White
+        durationSeconds <= 0L -> YanjiColors.fill
+        durationSeconds < 1800L -> primary.copy(alpha = 0.22f)
+        durationSeconds < 5400L -> primary.copy(alpha = 0.42f)
+        durationSeconds < 10800L -> primary.copy(alpha = 0.68f)
+        else -> primary
     }
 }
 
@@ -499,8 +473,10 @@ private fun LineChartView(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .clickable { onSelectDay(day) }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onSelectDay(day) }
                         .semantics { contentDescription = a11yText }
                 )
             }
@@ -528,7 +504,7 @@ private fun BarChartView(
     ) {
         days.forEach { day ->
             val ratio = if (day.durationSeconds > 0L) {
-                (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.04f, 1f)
+                (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.02f, 1f)
             } else {
                 0f
             }
@@ -541,8 +517,10 @@ private fun BarChartView(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(YanjiRadius.Small))
-                    .clickable { onSelectDay(day) }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onSelectDay(day) }
                     .padding(horizontal = 4.dp)
                     .semantics { contentDescription = a11yText }
             ) {
@@ -569,7 +547,7 @@ private fun BarChartView(
                                 .fillMaxHeight(ratio)
                             .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
                             .background(
-                                if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.50f)
+                                if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                             )
                         )
                     }

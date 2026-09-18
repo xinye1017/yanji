@@ -15,9 +15,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -54,16 +56,18 @@ class StatsViewModel(
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
 
-    private val selectedTimeTab = MutableStateFlow(0)
-    private val subjectStatsLevel = MutableStateFlow(SubjectStatsLevel.SUBCATEGORY)
-    private val trendChartMode = MutableStateFlow(TrendMode.BAR)
+    private val filterState = MutableStateFlow(
+        StatsFilterState(
+            timeTab = 0,
+            subjectLevel = SubjectStatsLevel.SUBCATEGORY,
+            trendChartMode = TrendMode.BAR
+        )
+    )
     private val latestReport = MutableStateFlow<AiAnalysis?>(null)
     private val isAnalyzing = MutableStateFlow(false)
     private val analysisError = MutableStateFlow<String?>(null)
 
-    private val chartSelection = combine(selectedTimeTab, subjectStatsLevel) { tab, level ->
-        tab to level
-    }
+    private val chartSelection = filterState.map { it.timeTab to it.subjectLevel }.distinctUntilChanged()
 
     private val subjectDistributionFlow = chartSelection.flatMapLatest { (tab, level) ->
         statsRepo.getSubjectDistributionFlow(tab.toTimeRange(), level)
@@ -76,17 +80,16 @@ class StatsViewModel(
         ReportStateTuple(report, analyzing, all, error)
     }
 
-    private val periodDurationFlow = selectedTimeTab.flatMapLatest { tab ->
+    private val periodDurationFlow = filterState.map { it.timeTab }.distinctUntilChanged().flatMapLatest { tab ->
         statsRepo.getStudyDurationFlow(tab.toTimeRange())
     }
 
     private val selectionMetrics = combine(
-        chartSelection,
-        trendChartMode,
+        filterState,
         periodDurationFlow,
         statsRepo.getPreviousCalendarWeekDurationFlow()
-    ) { selection, chartMode, periodSeconds, previousWeekSeconds ->
-        SelectionMetrics(selection.first, selection.second, chartMode, periodSeconds, previousWeekSeconds)
+    ) { filter, periodSeconds, previousWeekSeconds ->
+        SelectionMetrics(filter.timeTab, filter.subjectLevel, filter.trendChartMode, periodSeconds, previousWeekSeconds)
     }
 
     private val initial = StatsUiState(
@@ -138,11 +141,13 @@ class StatsViewModel(
     // ---- 动作 ----
 
     fun selectTimeTab(tab: Int) {
-        selectedTimeTab.value = tab
-        if (tab == 1 && trendChartMode.value == TrendMode.BAR) {
-            trendChartMode.value = TrendMode.HEATMAP
-        } else if (tab != 1 && trendChartMode.value == TrendMode.HEATMAP) {
-            trendChartMode.value = TrendMode.BAR
+        filterState.update { current ->
+            val newMode = when {
+                tab == 1 && current.trendChartMode == TrendMode.BAR -> TrendMode.HEATMAP
+                tab != 1 && current.trendChartMode == TrendMode.HEATMAP -> TrendMode.BAR
+                else -> current.trendChartMode
+            }
+            current.copy(timeTab = tab, trendChartMode = newMode)
         }
     }
 
@@ -150,11 +155,11 @@ class StatsViewModel(
     val settings: StateFlow<UserSettings> get() = repo.settings
 
     fun selectSubjectLevel(level: SubjectStatsLevel) {
-        subjectStatsLevel.value = level
+        filterState.update { it.copy(subjectLevel = level) }
     }
 
     fun selectTrendMode(mode: TrendMode) {
-        trendChartMode.value = mode
+        filterState.update { it.copy(trendChartMode = mode) }
     }
 
     fun clearAnalysisError() {
@@ -182,6 +187,12 @@ class StatsViewModel(
         1 -> StudyTimeRange.MONTH
         else -> StudyTimeRange.ALL
     }
+
+    private data class StatsFilterState(
+        val timeTab: Int = 0,
+        val subjectLevel: SubjectStatsLevel = SubjectStatsLevel.SUBCATEGORY,
+        val trendChartMode: TrendMode = TrendMode.BAR
+    )
 
     private data class SelectionMetrics(
         val tab: Int,
