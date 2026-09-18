@@ -314,6 +314,14 @@ internal class TimerStore(
 
     // ------------------------------------------------------------ 记录 CRUD
 
+    suspend fun addFocusSession(session: FocusSession) {
+        _focusSessions.value = listOf(session) + _focusSessions.value
+        withContext(Dispatchers.IO) {
+            dbProvider()?.focusSessionDao()?.insert(FocusSessionEntity.fromDomainModel(session))
+            onAchievementEvent?.invoke(AchievementEvent.FocusCompleted(session))
+        }
+    }
+
     fun addExamSession(session: ExamSession) {
         _examSessions.value = listOf(session) + _examSessions.value
         scope.launch {

@@ -29,6 +29,12 @@ import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
 import com.example.yanji.ui.components.YanjiPrimaryButton
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.example.yanji.di.LocalAppContainer
+import com.example.yanji.ui.focus.ManualFocusLogDialog
+import kotlinx.coroutines.launch
+
 @Composable
 fun DailyStudyDetailScreen(
     date: String,
@@ -43,6 +49,11 @@ fun DailyStudyDetailScreen(
     ) { container -> DailyStudyDetailViewModel(container.statisticsRepository, date) }
 ) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
+    val repository = LocalAppContainer.current.repository
+    val subjects by repository.subjects.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var showManualLogDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -52,7 +63,21 @@ fun DailyStudyDetailScreen(
         // Unified Detail TopBar
         YanjiDetailTopBar(
             title = DurationFormatter.formatDateWithWeekday(date),
-            onBack = onBack
+            onBack = onBack,
+            actions = {
+                TextButton(
+                    onClick = { showManualLogDialog = true },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        text = "+ 补记",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
         )
 
         LazyColumn(
@@ -202,6 +227,37 @@ fun DailyStudyDetailScreen(
                     )
                 }
             }
+        }
+
+        if (showManualLogDialog) {
+            ManualFocusLogDialog(
+                subjects = subjects,
+                initialDateIso = date,
+                onDismissRequest = { showManualLogDialog = false },
+                onConfirm = { subId, subName, startTime, endTime, note ->
+                    coroutineScope.launch {
+                        val durationSeconds = (endTime - startTime) / 1000L
+                        val session = FocusSession(
+                            id = java.util.UUID.randomUUID().toString(),
+                            subjectId = subId,
+                            subjectName = subName,
+                            startTime = startTime,
+                            endTime = endTime,
+                            durationSeconds = durationSeconds,
+                            pausedDurationSeconds = 0L,
+                            pauseCount = 0,
+                            mode = "补记专注",
+                            note = note,
+                            status = SessionStatus.COMPLETED,
+                            createdAt = System.currentTimeMillis()
+                        )
+                        repository.addFocusSession(session)
+                        val durationText = DurationFormatter.formatHoursMinutes(durationSeconds)
+                        Toast.makeText(context, "已成功补记 ${subName} ${durationText} 专注记录", Toast.LENGTH_SHORT).show()
+                        showManualLogDialog = false
+                    }
+                }
+            )
         }
     }
 }

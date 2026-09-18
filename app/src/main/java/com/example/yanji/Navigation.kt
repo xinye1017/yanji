@@ -1,6 +1,14 @@
 package com.example.yanji
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.yanji.theme.YanjiMotion
 import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Fill
 import com.adamglin.phosphoricons.Regular
@@ -115,6 +124,8 @@ fun MainNavigation() {
         screenStack.removeLastOrNull()
     }
 
+    val reduceMotion = YanjiMotion.isReduceMotionEnabled()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -127,137 +138,165 @@ fun MainNavigation() {
                 .statusBarsPadding()
         ) {
             if (screenStack.isNotEmpty()) {
-                // Render top of sub-screen stack
-                when (val screen = screenStack.last()) {
-                    is YanjiSubScreen.DailyStudyDetail -> {
-                        DailyStudyDetailScreen(
-                            date = screen.date,
-                            onBack = { screenStack.removeLastOrNull() },
-                            onNavigateToSubjectDetail = { subId ->
-                                screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId))
-                            },
-                            onNavigateToFocusDetail = { fsId ->
-                                screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId))
-                            },
-                            onNavigateToExamDetail = { exId ->
-                                screenStack.add(YanjiSubScreen.ExamDetail(exId))
-                            },
-                            onNavigateToStartFocus = {
-                                screenStack.clear()
-                                currentTab = YanjiTab.FOCUS
-                            }
-                        )
-                    }
-                    is YanjiSubScreen.SubjectStudyDetail -> {
-                        SubjectStudyDetailScreen(
-                            subjectId = screen.subjectId,
-                            onBack = { screenStack.removeLastOrNull() },
-                            onNavigateToFocusDetail = { fsId ->
-                                screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId))
-                            },
-                            onNavigateToExamDetail = { exId ->
-                                screenStack.add(YanjiSubScreen.ExamDetail(exId))
-                            },
-                            onNavigateToStartFocus = {
-                                screenStack.clear()
-                                currentTab = YanjiTab.FOCUS
-                            }
-                        )
-                    }
-                    is YanjiSubScreen.FocusSessionDetail -> {
-                        FocusSessionDetailScreen(
-                            sessionId = screen.sessionId,
-                            onBack = { screenStack.removeLastOrNull() }
-                        )
-                    }
-                    is YanjiSubScreen.ExamHistory -> {
-                        ExamHistoryScreen(
-                            onBack = { screenStack.removeLastOrNull() },
-                            onNavigateToExamDetail = { exId ->
-                                screenStack.add(YanjiSubScreen.ExamDetail(exId))
-                            },
-                            onStartNewExam = {
-                                screenStack.add(YanjiSubScreen.ExamMode)
-                            }
-                        )
-                    }
-                    is YanjiSubScreen.ExamDetail -> {
-                        ExamDetailScreen(
-                            examId = screen.examId,
-                            onBack = { screenStack.removeLastOrNull() }
-                        )
-                    }
-                    is YanjiSubScreen.JournalEditor -> {
-                        JournalEditorScreen(
-                            journalId = screen.journalId,
-                            date = screen.date,
-                            onBack = { screenStack.removeLastOrNull() },
-                            onSaveSuccess = { screenStack.removeLastOrNull() },
-                            onNavigateToDailyDetail = { d ->
-                                screenStack.add(YanjiSubScreen.DailyStudyDetail(d))
-                            }
-                        )
-                    }
-                    is YanjiSubScreen.ExamMode -> {
-                        ExamScreen(
-                            onBack = { screenStack.removeLastOrNull() },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    is YanjiSubScreen.JuanjuanChat -> {
-                        JuanjuanChatScreen(
-                            onNavigateBack = { screenStack.removeLastOrNull() }
-                        )
-                    }
-                    is YanjiSubScreen.Achievements -> {
-                        AchievementsScreen(
-                            onBack = { screenStack.removeLastOrNull() }
-                        )
+                // Render top of sub-screen stack with smooth sliding transitions
+                AnimatedContent(
+                    targetState = screenStack.last(),
+                    transitionSpec = {
+                        if (reduceMotion) {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        } else {
+                            (slideInHorizontally(tween(220)) { it / 6 } + fadeIn(tween(220)))
+                                .togetherWith(slideOutHorizontally(tween(180)) { -it / 6 } + fadeOut(tween(180)))
+                        }
+                    },
+                    label = "subScreenTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { screen ->
+                    when (screen) {
+                        is YanjiSubScreen.DailyStudyDetail -> {
+                            DailyStudyDetailScreen(
+                                date = screen.date,
+                                onBack = { screenStack.removeLastOrNull() },
+                                onNavigateToSubjectDetail = { subId ->
+                                    screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId))
+                                },
+                                onNavigateToFocusDetail = { fsId ->
+                                    screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId))
+                                },
+                                onNavigateToExamDetail = { exId ->
+                                    screenStack.add(YanjiSubScreen.ExamDetail(exId))
+                                },
+                                onNavigateToStartFocus = {
+                                    screenStack.clear()
+                                    currentTab = YanjiTab.FOCUS
+                                }
+                            )
+                        }
+                        is YanjiSubScreen.SubjectStudyDetail -> {
+                            SubjectStudyDetailScreen(
+                                subjectId = screen.subjectId,
+                                onBack = { screenStack.removeLastOrNull() },
+                                onNavigateToFocusDetail = { fsId ->
+                                    screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId))
+                                },
+                                onNavigateToExamDetail = { exId ->
+                                    screenStack.add(YanjiSubScreen.ExamDetail(exId))
+                                },
+                                onNavigateToStartFocus = {
+                                    screenStack.clear()
+                                    currentTab = YanjiTab.FOCUS
+                                }
+                            )
+                        }
+                        is YanjiSubScreen.FocusSessionDetail -> {
+                            FocusSessionDetailScreen(
+                                sessionId = screen.sessionId,
+                                onBack = { screenStack.removeLastOrNull() }
+                            )
+                        }
+                        is YanjiSubScreen.ExamHistory -> {
+                            ExamHistoryScreen(
+                                onBack = { screenStack.removeLastOrNull() },
+                                onNavigateToExamDetail = { exId ->
+                                    screenStack.add(YanjiSubScreen.ExamDetail(exId))
+                                },
+                                onStartNewExam = {
+                                    screenStack.add(YanjiSubScreen.ExamMode)
+                                }
+                            )
+                        }
+                        is YanjiSubScreen.ExamDetail -> {
+                            ExamDetailScreen(
+                                examId = screen.examId,
+                                onBack = { screenStack.removeLastOrNull() }
+                            )
+                        }
+                        is YanjiSubScreen.JournalEditor -> {
+                            JournalEditorScreen(
+                                journalId = screen.journalId,
+                                date = screen.date,
+                                onBack = { screenStack.removeLastOrNull() },
+                                onSaveSuccess = { screenStack.removeLastOrNull() },
+                                onNavigateToDailyDetail = { d ->
+                                    screenStack.add(YanjiSubScreen.DailyStudyDetail(d))
+                                }
+                            )
+                        }
+                        is YanjiSubScreen.ExamMode -> {
+                            ExamScreen(
+                                onBack = { screenStack.removeLastOrNull() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        is YanjiSubScreen.JuanjuanChat -> {
+                            JuanjuanChatScreen(
+                                onNavigateBack = { screenStack.removeLastOrNull() }
+                            )
+                        }
+                        is YanjiSubScreen.Achievements -> {
+                            AchievementsScreen(
+                                onBack = { screenStack.removeLastOrNull() }
+                            )
+                        }
                     }
                 }
             } else {
-                // Primary Tabs
-                when (visibleTab) {
-                    YanjiTab.HOME -> {
-                        HomeScreen(
-                            onNavigateToFocus = { currentTab = YanjiTab.FOCUS },
-                            onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
-                            onNavigateToJournal = { currentTab = YanjiTab.JOURNAL },
-                            onNavigateToStats = { currentTab = YanjiTab.STATS },
-                            onNavigateToSettings = { currentTab = YanjiTab.PROFILE },
-                            onNavigateToJuanjuanChat = { screenStack.add(YanjiSubScreen.JuanjuanChat) },
-                            onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                            onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
-                            onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) },
-                            onNavigateToJournalEditor = { d -> screenStack.add(YanjiSubScreen.JournalEditor(date = d)) },
-                            onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
-                        )
-                    }
-                    YanjiTab.FOCUS -> {
-                        FocusScreen(
-                            onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
-                            onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                            onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) }
-                        )
-                    }
-                    YanjiTab.JOURNAL -> {
-                        JournalScreen(
-                            onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                            onNavigateToJournalEditor = { jId, d -> screenStack.add(YanjiSubScreen.JournalEditor(jId, d)) }
-                        )
-                    }
-                    YanjiTab.STATS -> {
-                        StatsScreen(
-                            onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                            onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
-                            onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) },
-                            onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) }
-                        )
-                    }
-                    YanjiTab.PROFILE -> {
-                        ProfileScreen(
-                            onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
-                        )
+                // Primary Tabs with crossfade + micro scale
+                AnimatedContent(
+                    targetState = visibleTab,
+                    transitionSpec = {
+                        if (reduceMotion) {
+                            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                        } else {
+                            (fadeIn(tween(200)) + scaleIn(initialScale = 0.98f, animationSpec = tween(200)))
+                                .togetherWith(fadeOut(tween(140)))
+                        }
+                    },
+                    label = "primaryTabTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { tab ->
+                    when (tab) {
+                        YanjiTab.HOME -> {
+                            HomeScreen(
+                                onNavigateToFocus = { currentTab = YanjiTab.FOCUS },
+                                onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
+                                onNavigateToJournal = { currentTab = YanjiTab.JOURNAL },
+                                onNavigateToStats = { currentTab = YanjiTab.STATS },
+                                onNavigateToSettings = { currentTab = YanjiTab.PROFILE },
+                                onNavigateToJuanjuanChat = { screenStack.add(YanjiSubScreen.JuanjuanChat) },
+                                onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
+                                onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
+                                onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) },
+                                onNavigateToJournalEditor = { d -> screenStack.add(YanjiSubScreen.JournalEditor(date = d)) },
+                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
+                            )
+                        }
+                        YanjiTab.FOCUS -> {
+                            FocusScreen(
+                                onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
+                                onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
+                                onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) }
+                            )
+                        }
+                        YanjiTab.JOURNAL -> {
+                            JournalScreen(
+                                onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
+                                onNavigateToJournalEditor = { jId, d -> screenStack.add(YanjiSubScreen.JournalEditor(jId, d)) }
+                            )
+                        }
+                        YanjiTab.STATS -> {
+                            StatsScreen(
+                                onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
+                                onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
+                                onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) },
+                                onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) }
+                            )
+                        }
+                        YanjiTab.PROFILE -> {
+                            ProfileScreen(
+                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
+                            )
+                        }
                     }
                 }
             }

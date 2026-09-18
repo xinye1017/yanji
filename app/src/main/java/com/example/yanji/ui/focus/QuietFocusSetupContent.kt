@@ -137,7 +137,8 @@ fun QuietFocusSetupContent(
     todayTotalSeconds: Long = 0L,
     onStart: () -> Unit,
     onNavigateToExam: () -> Unit,
-    onNavigateToDailyDetail: (String) -> Unit = {}
+    onNavigateToDailyDetail: (String) -> Unit = {},
+    onManualLogClick: () -> Unit = {}
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -205,7 +206,8 @@ fun QuietFocusSetupContent(
             subtitle = stepSubtitle,
             todayTotalSeconds = todayTotalSeconds,
             onBack = if (currentStep == QuietFocusStep.CATEGORY) null else ::goBack,
-            onTodayClick = { onNavigateToDailyDetail(todayIso) }
+            onTodayClick = { onNavigateToDailyDetail(todayIso) },
+            onManualLogClick = onManualLogClick
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -304,7 +306,8 @@ private fun QuietFocusHeader(
     subtitle: String,
     todayTotalSeconds: Long,
     onBack: (() -> Unit)?,
-    onTodayClick: () -> Unit
+    onTodayClick: () -> Unit,
+    onManualLogClick: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -340,24 +343,52 @@ private fun QuietFocusHeader(
             )
             Spacer(modifier = Modifier.weight(1f))
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onTodayClick)
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Schedule,
-                    contentDescription = null,
-                    tint = YanjiColors.textTertiary,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onManualLogClick)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "手动补记专注",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = "补记",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onTodayClick)
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = YanjiColors.textTertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

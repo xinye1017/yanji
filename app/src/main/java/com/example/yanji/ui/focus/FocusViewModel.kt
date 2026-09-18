@@ -83,4 +83,74 @@ class FocusViewModel(
 
     /** 新增自定义科目 */
     fun addCustomSubject(name: String): Subject = repo.addCustomSubject(name)
+
+    companion object {
+        /**
+         * 纯函数：校验手动补记起止时间与时长合法性。
+         *
+         * @return 错误提示文案，若校验通过则返回 null。
+         */
+        fun validateManualFocusSession(
+            startTime: Long,
+            endTime: Long,
+            now: Long = System.currentTimeMillis()
+        ): String? {
+            if (startTime >= endTime) {
+                return "开始时间必须早于结束时间"
+            }
+            val durationSeconds = (endTime - startTime) / 1000L
+            if (durationSeconds < 60L) {
+                return "专注时长不足 1 分钟，不予保存"
+            }
+            if (durationSeconds > 16L * 3600L) {
+                return "单次专注时长不能超过 16 小时"
+            }
+            if (endTime > now + 60_000L) {
+                return "结束时间不能在未来"
+            }
+            return null
+        }
+    }
+
+    /**
+     * 手动补记专注记录。
+     *
+     * 业务校验规则：
+     * 1. 最小时长 1 分钟（60 秒）；
+     * 2. 最大时长 16 小时；
+     * 3. 结束时间不能在未来（允许 60 秒时钟误差）；
+     * 4. 开始时间必须早于结束时间。
+     */
+    suspend fun addManualFocusSession(
+        subjectId: String,
+        subjectName: String,
+        startTime: Long,
+        endTime: Long,
+        note: String = "",
+        mode: String = "补记专注"
+    ): Result<FocusSession> {
+        val now = System.currentTimeMillis()
+        val error = validateManualFocusSession(startTime, endTime, now)
+        if (error != null) {
+            return Result.failure(IllegalArgumentException(error))
+        }
+        val durationSeconds = (endTime - startTime) / 1000L
+        val session = FocusSession(
+            id = java.util.UUID.randomUUID().toString(),
+            subjectId = subjectId,
+            subjectName = subjectName,
+            startTime = startTime,
+            endTime = endTime,
+            durationSeconds = durationSeconds,
+            pausedDurationSeconds = 0L,
+            pauseCount = 0,
+            mode = mode,
+            note = note,
+            status = com.example.yanji.data.SessionStatus.COMPLETED,
+            createdAt = now
+        )
+
+        repo.addFocusSession(session)
+        return Result.success(session)
+    }
 }

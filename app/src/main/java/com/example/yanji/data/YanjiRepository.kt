@@ -294,6 +294,8 @@ class YanjiRepository private constructor() {
 
 
 
+    suspend fun addFocusSession(session: FocusSession) = timerStore.addFocusSession(session)
+
     fun addExamSession(session: ExamSession) = timerStore.addExamSession(session)
 
     fun deleteFocusSession(id: String) = timerStore.deleteFocusSession(id)

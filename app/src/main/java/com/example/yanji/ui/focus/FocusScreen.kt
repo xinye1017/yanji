@@ -67,6 +67,7 @@ fun FocusScreen(
     var selectedMode by rememberSaveable { mutableStateOf(FocusModes.COUNT_UP) }
     var noteText by rememberSaveable { mutableStateOf("") }
     var showSummaryDialog by remember { mutableStateOf(false) }
+    var showManualLogDialog by rememberSaveable { mutableStateOf(false) }
     var lastFinishedSession by remember { mutableStateOf<FocusSession?>(null) }
     val screenScope = rememberCoroutineScope()
 
@@ -189,7 +190,8 @@ fun FocusScreen(
             todayTotalSeconds = state.todayTotalSeconds,
             onStart = { launchFocus(selectedSubject, selectedMode, "") },
             onNavigateToExam = onNavigateToExam,
-            onNavigateToDailyDetail = onNavigateToDailyDetail
+            onNavigateToDailyDetail = onNavigateToDailyDetail,
+            onManualLogClick = { showManualLogDialog = true }
         )
     }
 
@@ -251,6 +253,33 @@ fun FocusScreen(
             session = lastFinishedSession!!,
             todayFocusSeconds = state.todayFocusSeconds,
             onDismiss = { dismissSummary() }
+        )
+    }
+
+    if (showManualLogDialog) {
+        ManualFocusLogDialog(
+            subjects = subjects,
+            initialSubjectId = selectedSubjectId,
+            onDismissRequest = { showManualLogDialog = false },
+            onConfirm = { subId, subName, startTime, endTime, note ->
+                screenScope.launch {
+                    val result = viewModel.addManualFocusSession(
+                        subjectId = subId,
+                        subjectName = subName,
+                        startTime = startTime,
+                        endTime = endTime,
+                        note = note
+                    )
+                    if (result.isSuccess) {
+                        val session = result.getOrNull()
+                        val durationText = com.example.yanji.data.DurationFormatter.formatHoursMinutes(session?.durationSeconds ?: 0L)
+                        Toast.makeText(context, "已成功补记 ${subName} ${durationText} 专注记录", Toast.LENGTH_SHORT).show()
+                        showManualLogDialog = false
+                    } else {
+                        Toast.makeText(context, result.exceptionOrNull()?.message ?: "保存失败", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         )
     }
 }
