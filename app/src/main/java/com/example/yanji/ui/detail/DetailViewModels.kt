@@ -3,10 +3,12 @@ package com.example.yanji.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.DailyStudySummary
+import com.example.yanji.data.FocusSession
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.StudyTimeRange
 import com.example.yanji.data.SubjectStudySummary
 import com.example.yanji.data.YanjiRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,7 +61,10 @@ class FocusSessionDetailViewModel(
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
 
-    val focusSessions = repo.focusSessions
+    val focusSessions get() = repo.focusSessions
+
+    fun getSessionFlow(sessionId: String): Flow<FocusSession?> =
+        repo.getFocusSessionByIdFlow(sessionId)
 
     fun updateSessionNote(sessionId: String, note: String) =
         statsRepo.updateSessionNote(sessionId, isExam = false, note = note)

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.YanjiRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -57,6 +58,8 @@ class ExamViewModel(
     fun acknowledgeCompletedExam() = repo.acknowledgeCompletedExam()
 
     fun deleteExam(id: String) = repo.deleteExamSession(id)
+
+    fun getExamSessionFlow(id: String): Flow<ExamSession?> = repo.getExamSessionByIdFlow(id)
 
     suspend fun generateAnalysis(periodDays: Int = 7): AiAnalysis = repo.generateAiAnalysis(periodDays)
 }

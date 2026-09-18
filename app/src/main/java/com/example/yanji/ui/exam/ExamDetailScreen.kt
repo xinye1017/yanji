@@ -40,7 +40,10 @@ fun ExamDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val exam = state.examSessions.find { it.id == examId }
+    val examState = remember(examId) {
+        viewModel.getExamSessionFlow(examId)
+    }.collectAsStateWithLifecycle(initialValue = state.examSessions.find { it.id == examId })
+    val exam = examState.value
 
     var showDeleteConfirmDialog by rememberSaveable(examId) { mutableStateOf(false) }
 

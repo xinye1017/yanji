@@ -9,9 +9,11 @@ import com.example.yanji.data.db.FocusSessionEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.example.yanji.data.achievement.AchievementEvent
@@ -352,5 +354,23 @@ internal class TimerStore(
 
     suspend fun getExamSessionByIdFromDb(id: String): ExamSessionEntity? = withContext(Dispatchers.IO) {
         dbProvider()?.examSessionDao()?.getById(id)
+    }
+
+    fun getFocusSessionByIdFlow(id: String): Flow<FocusSession?> {
+        val db = dbProvider()
+        return if (db != null) {
+            db.focusSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
+        } else {
+            _focusSessions.map { list -> list.find { it.id == id } }
+        }
+    }
+
+    fun getExamSessionByIdFlow(id: String): Flow<ExamSession?> {
+        val db = dbProvider()
+        return if (db != null) {
+            db.examSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
+        } else {
+            _examSessions.map { list -> list.find { it.id == id } }
+        }
     }
 }

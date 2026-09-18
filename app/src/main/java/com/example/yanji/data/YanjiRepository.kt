@@ -264,6 +264,20 @@ class YanjiRepository private constructor() {
 
     fun acknowledgeCompletedExam() = timerStore.acknowledgeCompletedExam()
 
+    fun getFocusSessionByIdFlow(id: String): Flow<FocusSession?> = timerStore.getFocusSessionByIdFlow(id)
+
+    fun getExamSessionByIdFlow(id: String): Flow<ExamSession?> = timerStore.getExamSessionByIdFlow(id)
+
+    fun observeTodayStudyDurationSeconds(): Flow<Long> {
+        val db = database ?: return combine(focusSessions, examSessions) { f, e ->
+            StudyStats.durationOnDay(f, e, System.currentTimeMillis())
+        }
+        val todayRange = YanjiTime.dayRange(YanjiTime.today())
+        val focusFlow = db.focusSessionDao().observeTotalSeconds(todayRange.startInclusive, todayRange.endExclusive)
+        val examFlow = db.examSessionDao().observeTotalSeconds(todayRange.startInclusive, todayRange.endExclusive)
+        return combine(focusFlow, examFlow) { f, e -> f + e }
+    }
+
     /**
      * 由 [ActiveSessionCoordinator] 调用的落库出口：专注完成。
      *
@@ -450,11 +464,25 @@ class YanjiRepository private constructor() {
         if (!settings.isAiConfigured) {
             throw com.example.yanji.data.ai.AiException("尚未配置 AI 模型 API Key，无法生成学情诊断。请在右上角【设置】中配置你的 API 密钥。")
         }
+        val db = database
+        val safePeriodDays = periodDays.coerceIn(1, 90)
+        val (focusList, examList) = if (db != null) {
+            val now = System.currentTimeMillis()
+            val endDay = YanjiTime.localDate(now)
+            val startDay = endDay.minusDays((safePeriodDays - 1).toLong())
+            val start = YanjiTime.dayRange(startDay).startInclusive
+            val focus = db.focusSessionDao().getSessionsSince(start).map { it.toDomainModel() }
+            val exams = db.examSessionDao().getSessionsSince(start).map { it.toDomainModel() }
+            focus to exams
+        } else {
+            timerStore.focusSessions.value to timerStore.examSessions.value
+        }
+
         val snapshot = StudyDiagnosticSnapshot.from(
             periodDays = periodDays,
             settings = settings,
-            focusSessions = timerStore.focusSessions.value,
-            examSessions = timerStore.examSessions.value,
+            focusSessions = focusList,
+            examSessions = examList,
             journalEntries = journalStore.journalEntries.value
         )
         if (snapshot.sessionCount == 0) {
@@ -489,15 +517,12 @@ class YanjiRepository private constructor() {
 
     fun clearChatMessages() = chatStore.clearChatMessages()
 
-    private suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String = "deepseek-chat"): String {
-        val currentSettings = _settings.value
-        val hasKey = currentSettings.aiApiKey.isNotBlank()
-        val hasCustomUrl = currentSettings.aiBaseUrl.isNotBlank() && !currentSettings.aiBaseUrl.contains("api.deepseek.com")
+    suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String? = null): String {
+        val settings = _settings.value
+        val targetModel = model ?: settings.aiModel
 
-        if (hasKey || hasCustomUrl) {
-            val effectiveModel = model.ifBlank { currentSettings.aiModel }.ifBlank { "deepseek-chat" }
-            Log.i("YanjiAI", "Requesting real AI backend: ${currentSettings.aiBaseUrl}, model: $effectiveModel")
-            return callAiApi(userMessage, currentSettings, effectiveModel)
+        if (settings.isAiConfigured) {
+            return callAiApi(userMessage, settings, targetModel)
         }
 
         // When user has not configured API Key or custom backend
@@ -512,12 +537,23 @@ class YanjiRepository private constructor() {
         // 历史消息与运行时上下文由业务层提供；AiClient 只负责传输与协议。
         val history = chatStore.currentMessages().toMutableList()
         if (history.lastOrNull()?.id != userMessage.id) history += userMessage
+
+        val db = database
+        val (focusList, examList) = if (db != null) {
+            val sevenDaysAgo = YanjiTime.lastDaysRange(7).startInclusive
+            val focus = db.focusSessionDao().getSessionsSince(sevenDaysAgo).map { it.toDomainModel() }
+            val exams = db.examSessionDao().getSessionsSince(sevenDaysAgo).map { it.toDomainModel() }
+            focus to exams
+        } else {
+            timerStore.focusSessions.value to timerStore.examSessions.value
+        }
+
         return aiClient.completeChat(
             systemPrompt = JuanjuanPrompt.SYSTEM_PROMPT,
             runtimeContext = JuanjuanPrompt.buildRuntimeContext(
                 settings = settings,
-                focusSessions = timerStore.focusSessions.value,
-                examSessions = timerStore.examSessions.value,
+                focusSessions = focusList,
+                examSessions = examList,
                 journalEntries = journalStore.journalEntries.value,
                 activeFocus = timerStore.activeFocus.value
             ),

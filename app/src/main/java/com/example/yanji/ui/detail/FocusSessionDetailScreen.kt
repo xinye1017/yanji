@@ -46,8 +46,13 @@ fun FocusSessionDetailScreen(
     }
 ) {
     val context = LocalContext.current
-    val focusSessions by viewModel.focusSessions.collectAsStateWithLifecycle()
-    val session = focusSessions.find { it.id == sessionId }
+    val initialSession: com.example.yanji.data.FocusSession? = remember(sessionId) {
+        viewModel.focusSessions.value.find { it.id == sessionId }
+    }
+    val sessionState = remember(sessionId) {
+        viewModel.getSessionFlow(sessionId)
+    }.collectAsStateWithLifecycle(initialValue = initialSession)
+    val session = sessionState.value
 
     var isEditingNote by rememberSaveable(sessionId) { mutableStateOf(false) }
     var noteInput by rememberSaveable(sessionId, session?.note) { mutableStateOf(session?.note ?: "") }

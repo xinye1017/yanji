@@ -27,16 +27,11 @@ class ProfileViewModel(
 
     val uiState: StateFlow<ProfileUiState> = combine(
         repo.settings,
-        repo.focusSessions,
-        repo.examSessions
-    ) { settings, focusSessions, examSessions ->
+        repo.observeTodayStudyDurationSeconds()
+    ) { settings, todaySeconds ->
         ProfileUiState(
             settings = settings,
-            todayStudySeconds = StudyStats.durationOnDay(
-                focus = focusSessions,
-                exams = examSessions,
-                dayEpochMs = System.currentTimeMillis()
-            )
+            todayStudySeconds = todaySeconds
         )
     }
         .stateIn(
