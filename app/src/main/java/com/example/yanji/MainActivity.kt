@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,6 +16,7 @@ import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.theme.YanjiThemeMode
 import com.example.yanji.theme.resolveDarkTheme
 import com.example.yanji.ui.SystemBarAppearance
+import com.example.yanji.ui.achievement.AchievementCelebrationOverlay
 
 class MainActivity : ComponentActivity() {
 
@@ -42,10 +44,33 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
           ) {
-            MainNavigation()
+            Box(modifier = Modifier.fillMaxSize()) {
+              MainNavigation()
+              AchievementCelebrationOverlay()
+            }
           }
         }
       }
+    }
+    handleIntent(intent)
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleIntent(intent)
+  }
+
+  private fun handleIntent(intent: android.content.Intent?) {
+    val testId = intent?.getStringExtra("test_achievement")
+    if (!testId.isNullOrBlank()) {
+      android.util.Log.d("AchievementCelebration", "handleIntent received test_achievement: $testId")
+      val container = (application as YanjiApplication).container
+      com.example.yanji.data.achievement.AchievementCatalog.find(testId)?.let { def ->
+        android.util.Log.d("AchievementCelebration", "Emitting celebration: ${def.title}")
+        container.repository.emitCelebration(def)
+      }
+      intent.removeExtra("test_achievement")
     }
   }
 }

@@ -1182,4 +1182,8 @@ object AchievementCatalog {
     fun getSeries(seriesId: String): List<AchievementDef> {
         return definitions.filter { it.seriesId == seriesId }.sortedBy { it.seriesOrder }
     }
+
+    fun find(id: String): AchievementDef? {
+        return definitions.firstOrNull { it.id == id }
+    }
 }

@@ -6,6 +6,8 @@ import androidx.core.content.edit
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.backup.BackupImportResult
+import com.example.yanji.data.achievement.AchievementCatalog
+import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.data.achievement.AchievementEvaluator
 import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
@@ -150,6 +152,13 @@ class YanjiRepository private constructor() {
 
     private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
     val unlockedAchievements: StateFlow<Map<String, Long>> = _unlockedAchievements.asStateFlow()
+
+    private val _achievementUnlockChannel = kotlinx.coroutines.channels.Channel<AchievementDef>(capacity = kotlinx.coroutines.channels.Channel.BUFFERED)
+    val achievementUnlockEvents: Flow<AchievementDef> = _achievementUnlockChannel.receiveAsFlow()
+
+    fun emitCelebration(def: AchievementDef) {
+        _achievementUnlockChannel.trySend(def)
+    }
 
     // Current running active session if any
     val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
@@ -687,6 +696,11 @@ class YanjiRepository private constructor() {
         if (newlyUnlocked.isNotEmpty()) {
             val now = System.currentTimeMillis()
             _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
+            for (id in newlyUnlocked) {
+                AchievementCatalog.find(id)?.let { def ->
+                    _achievementUnlockChannel.trySend(def)
+                }
+            }
         }
     }
 
@@ -720,6 +734,9 @@ class YanjiRepository private constructor() {
         _unlockedAchievements.value = _unlockedAchievements.value + (id to now)
         repoScope.launch {
             database?.achievementDao()?.unlock(UnlockedAchievementEntity(id, now))
+            AchievementCatalog.find(id)?.let { def ->
+                _achievementUnlockChannel.trySend(def)
+            }
         }
     }
 

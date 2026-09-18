@@ -29,6 +29,7 @@
         android:theme="@style/Theme.Yanji">
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
             android:exported="true">
