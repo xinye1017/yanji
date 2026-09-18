@@ -282,6 +282,9 @@ interface CheckInDao {
     @Query("SELECT * FROM check_ins ORDER BY date DESC")
     fun getAllFlow(): Flow<List<CheckInEntity>>
 
+    @Query("SELECT * FROM check_ins ORDER BY date DESC")
+    suspend fun getAllOnce(): List<CheckInEntity>
+
     @Query("SELECT * FROM check_ins WHERE date = :date LIMIT 1")
     suspend fun getByDate(date: String): CheckInEntity?
 

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.yanji.data.achievement.AchievementEvent
 import java.util.UUID
 
 /**
@@ -30,6 +31,8 @@ internal class TimerStore(
     private val dbProvider: () -> YanjiDatabase?,
     private var diskPersistence: TimerSessionPersistence? = null
 ) {
+
+    var onAchievementEvent: (suspend (AchievementEvent) -> Unit)? = null
 
     fun setDiskPersistence(persistence: TimerSessionPersistence) {
         this.diskPersistence = persistence
@@ -288,6 +291,7 @@ internal class TimerStore(
         db.focusSessionDao().insert(FocusSessionEntity.fromDomainModel(recorded))
         _activeFocus.value = null
         _lastCompletedFocus.value = recorded
+        onAchievementEvent?.invoke(AchievementEvent.FocusCompleted(recorded))
     }
 
     /** 模考完成。 */
@@ -308,6 +312,7 @@ internal class TimerStore(
         val db = dbProvider() ?: throw IllegalStateException("Database not available")
         db.examSessionDao().insert(ExamSessionEntity.fromDomainModel(recorded))
         _lastCompletedExam.value = recorded
+        onAchievementEvent?.invoke(AchievementEvent.ExamCompleted(recorded))
     }
 
     // ------------------------------------------------------------ 记录 CRUD
@@ -316,6 +321,7 @@ internal class TimerStore(
         _examSessions.value = listOf(session) + _examSessions.value
         scope.launch {
             dbProvider()?.examSessionDao()?.insert(ExamSessionEntity.fromDomainModel(session))
+            onAchievementEvent?.invoke(AchievementEvent.ExamCompleted(session))
         }
     }
 

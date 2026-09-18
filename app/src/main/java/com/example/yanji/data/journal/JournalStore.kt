@@ -3,6 +3,7 @@ package com.example.yanji.data.journal
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.db.JournalEntryEntity
 import com.example.yanji.data.db.YanjiDatabase
+import com.example.yanji.data.achievement.AchievementEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,8 @@ internal class JournalStore(
     private val scope: CoroutineScope,
     private val dbProvider: () -> YanjiDatabase?
 ) {
+
+    var onAchievementEvent: (suspend (AchievementEvent) -> Unit)? = null
 
     private val _journalEntries = MutableStateFlow<List<JournalEntry>>(emptyList())
     val journalEntries: StateFlow<List<JournalEntry>> = _journalEntries.asStateFlow()
@@ -50,6 +53,7 @@ internal class JournalStore(
                 updatedAt = System.currentTimeMillis()
             )
             dao.insert(JournalEntryEntity.fromDomainModel(normalized))
+            onAchievementEvent?.invoke(AchievementEvent.JournalCreated(normalized))
         }
     }
 

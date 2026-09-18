@@ -3,6 +3,7 @@ package com.example.yanji.data.checkin
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.db.CheckInEntity
 import com.example.yanji.data.db.YanjiDatabase
+import com.example.yanji.data.achievement.AchievementEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,8 @@ internal class CheckInStore(
     private val scope: CoroutineScope,
     private val dbProvider: () -> YanjiDatabase?
 ) {
+
+    var onAchievementEvent: (suspend (AchievementEvent) -> Unit)? = null
 
     private val _checkIns = MutableStateFlow<List<CheckIn>>(emptyList())
     val checkIns: StateFlow<List<CheckIn>> = _checkIns.asStateFlow()
@@ -63,6 +66,7 @@ internal class CheckInStore(
         _checkIns.value = listOf(checkIn) + _checkIns.value.filter { it.date != todayStr }
         scope.launch {
             dbProvider()?.checkInDao()?.insert(CheckInEntity.fromDomainModel(checkIn))
+            onAchievementEvent?.invoke(AchievementEvent.CheckInRecorded(checkIn))
         }
         return checkIn
     }

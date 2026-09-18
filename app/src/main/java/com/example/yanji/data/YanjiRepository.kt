@@ -6,6 +6,8 @@ import androidx.core.content.edit
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.backup.BackupImportResult
+import com.example.yanji.data.achievement.AchievementEvaluator
+import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
 import com.example.yanji.data.ai.ChatReplyState
 import com.example.yanji.data.backup.BackupTransfer
@@ -91,6 +93,19 @@ class YanjiRepository private constructor() {
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
     private val journalStore = JournalStore(scope = repoScope, dbProvider = { database })
     private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
+    val achievementEvaluator = AchievementEvaluator()
+
+    init {
+        timerStore.onAchievementEvent = { event ->
+            triggerAchievementEvaluation(event)
+        }
+        journalStore.onAchievementEvent = { event ->
+            triggerAchievementEvaluation(event)
+        }
+        checkInStore.onAchievementEvent = { event ->
+            triggerAchievementEvaluation(event)
+        }
+    }
 
     val focusSessions: StateFlow<List<FocusSession>> get() = timerStore.focusSessions
     val examSessions: StateFlow<List<ExamSession>> get() = timerStore.examSessions
@@ -196,6 +211,9 @@ class YanjiRepository private constructor() {
                 db.achievementDao().getAllFlow().collect { entities ->
                     _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
                 }
+            }
+            launch {
+                reconcileAchievements()
             }
         }
     }
@@ -585,6 +603,77 @@ class YanjiRepository private constructor() {
         checkInStore.checkInToday(note, mood)
 
     fun getPast7DaysCheckInStatus(): List<DayCheckInStatus> = checkInStore.getPast7DaysCheckInStatus()
+
+    suspend fun triggerAchievementEvaluation(event: AchievementEvent) = withContext(Dispatchers.IO) {
+        val db = database ?: return@withContext
+        val focus = focusSessions.value
+        val exam = examSessions.value
+        val journal = journalEntries.value
+        val checkInList = checkIns.value
+        val unlockedIds = _unlockedAchievements.value.keys
+
+        val currentFocus = when (event) {
+            is AchievementEvent.FocusCompleted -> {
+                if (focus.any { it.id == event.session.id }) focus else listOf(event.session) + focus
+            }
+            else -> focus
+        }
+        val currentExam = when (event) {
+            is AchievementEvent.ExamCompleted -> {
+                if (exam.any { it.id == event.session.id }) exam else listOf(event.session) + exam
+            }
+            else -> exam
+        }
+        val currentJournal = when (event) {
+            is AchievementEvent.JournalCreated -> {
+                if (journal.any { it.id == event.entry.id }) journal else listOf(event.entry) + journal
+            }
+            else -> journal
+        }
+        val currentCheckIns = when (event) {
+            is AchievementEvent.CheckInRecorded -> {
+                if (checkInList.any { it.date == event.checkIn.date }) checkInList else listOf(event.checkIn) + checkInList
+            }
+            else -> checkInList
+        }
+
+        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(
+            event = event,
+            db = db,
+            focusSessions = currentFocus,
+            examSessions = currentExam,
+            journalEntries = currentJournal,
+            checkIns = currentCheckIns,
+            unlockedIds = unlockedIds
+        )
+        if (newlyUnlocked.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
+        }
+    }
+
+    suspend fun reconcileAchievements() = withContext(Dispatchers.IO) {
+        val db = database ?: return@withContext
+        val focus = db.focusSessionDao().getAllOnce().map { it.toDomainModel() }
+        val exam = db.examSessionDao().getAllOnce().map { it.toDomainModel() }
+        val journal = db.journalEntryDao().getAllOnce().map { it.toDomainModel() }
+        val checkInList = db.checkInDao().getAllOnce().map { it.toDomainModel() }
+        val unlockedIds = db.achievementDao().getUnlockedIds().toSet()
+
+        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(
+            event = AchievementEvent.ReconcileAll,
+            db = db,
+            focusSessions = focus,
+            examSessions = exam,
+            journalEntries = journal,
+            checkIns = checkInList,
+            unlockedIds = unlockedIds
+        )
+        if (newlyUnlocked.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
+        }
+    }
 
     /** 解锁成就。幂等：已解锁的直接忽略。 */
     fun unlockAchievement(id: String) {

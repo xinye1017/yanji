@@ -54,10 +54,7 @@ class AchievementRepository internal constructor(
         definitions.map { def ->
             val progress = def.calculateProgress(focus, exam, journal, checkIns)
             val isUnlocked = unlockedMap.containsKey(def.id) || progress >= def.target
-            val unlockedAt = unlockedMap[def.id] ?: if (progress >= def.target) {
-                repo.unlockAchievement(def.id)
-                System.currentTimeMillis()
-            } else null
+            val unlockedAt = unlockedMap[def.id] ?: if (isUnlocked) System.currentTimeMillis() else null
 
             Achievement(
                 id = def.id,
@@ -77,11 +74,11 @@ class AchievementRepository internal constructor(
                 seriesOrder = def.seriesOrder
             )
         }
-    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val unlockedCount: StateFlow<Int> = achievements.map { list ->
         list.count { it.isUnlocked }
-    }.stateIn(scope, SharingStarted.Eagerly, 0)
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), 0)
 
     val totalCount: Int = definitions.size
 
