@@ -5,6 +5,12 @@
 import re
 import sys
 
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 path = sys.argv[1]
 raw = open(path, encoding="utf-8").read()
 

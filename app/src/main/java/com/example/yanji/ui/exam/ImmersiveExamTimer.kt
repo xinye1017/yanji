@@ -23,10 +23,19 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
 import java.util.Locale
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.rememberUpdatedState
+
+/**
+ * 考研全真模拟沉浸式倒计时页面。
+ *
+ * 性能约定（规范 §37）：每秒推进的秒数通过 [State] 传入，并在子组件 [ExamCountdownCenter]
+ * 叶子节点内读取，避免长达 3 小时的模考过程中每秒引起外层 Header、Card 容器及底部按钮的整页重组。
+ */
 @Composable
 fun ImmersiveExamTimer(
     examName: String,
-    remainingSeconds: Long,
+    remainingSeconds: State<Long>,
     totalSeconds: Long,
     startTime: Long,
     isPaused: Boolean,
@@ -34,20 +43,10 @@ fun ImmersiveExamTimer(
     onEarlyFinish: () -> Unit,
     onQuit: () -> Unit
 ) {
-    val hours = remainingSeconds / 3600
-    val mins = (remainingSeconds % 3600) / 60
-    val secs = remainingSeconds % 60
-    val timeFormatted = String.format(Locale.US, "%02d:%02d:%02d", hours, mins, secs)
-
     val startStr = remember(startTime) { YanjiTime.formatTime(startTime) }
     val endStr = remember(startTime, totalSeconds) {
         YanjiTime.formatTime(startTime + totalSeconds * 1000L)
     }
-
-    val progress = (remainingSeconds.toFloat() / totalSeconds.coerceAtLeast(1L)).coerceIn(0f, 1f)
-
-    // DESIGN.md: 倒计时禁红（红仅用于破坏性操作）；临界（剩余<15分钟）最多 subtle amber，且不闪烁
-    val isCritical = remainingSeconds < 900
 
     Column(
         modifier = Modifier
@@ -57,7 +56,7 @@ fun ImmersiveExamTimer(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Info
+        // Top Info (零重组：考试期间固定不变)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 20.dp)
@@ -94,65 +93,11 @@ fun ImmersiveExamTimer(
             )
         }
 
-        // Center Countdown
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "剩余考试时间",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = timeFormatted,
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isCritical) YanjiColors.warning else MaterialTheme.colorScheme.primary,
-                    letterSpacing = (-1).sp
-                )
-
-                if (isCritical) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(YanjiColors.warningSoft)
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "剩余不足 15 分钟 · 请安排收尾检查",
-                            fontSize = 12.sp,
-                            color = YanjiColors.warning
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(12.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            }
-        }
+        // Center Countdown (仅此子节点随秒数高频局部重组)
+        ExamCountdownCenter(
+            remainingSeconds = remainingSeconds,
+            totalSeconds = totalSeconds
+        )
 
         // Bottom Operations
         Column(
@@ -201,4 +146,111 @@ fun ImmersiveExamTimer(
             }
         }
     }
+}
+
+/**
+ * 倒计时中央卡片（局部重组区域）。
+ * 只有此组件在每秒变化时重组，外部容器不受牵连。
+ */
+@Composable
+private fun ExamCountdownCenter(
+    remainingSeconds: State<Long>,
+    totalSeconds: Long
+) {
+    val remaining = remainingSeconds.value
+    val hours = remaining / 3600
+    val mins = (remaining % 3600) / 60
+    val secs = remaining % 60
+    val timeFormatted = String.format(Locale.US, "%02d:%02d:%02d", hours, mins, secs)
+
+    val progress = (remaining.toFloat() / totalSeconds.coerceAtLeast(1L)).coerceIn(0f, 1f)
+
+    // DESIGN.md: 倒计时禁红（红仅用于破坏性操作）；临界（剩余<15分钟）最多 subtle amber，且不闪烁
+    val isCritical = remaining < 900
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "剩余考试时间",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = timeFormatted,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isCritical) YanjiColors.warning else MaterialTheme.colorScheme.primary,
+                letterSpacing = (-1).sp
+            )
+
+            if (isCritical) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YanjiRadius.Small))
+                        .background(YanjiColors.warningSoft)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "剩余不足 15 分钟 · 请安排收尾检查",
+                        fontSize = 12.sp,
+                        color = YanjiColors.warning
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        }
+    }
+}
+
+/**
+ * 保持兼容的重载，供 Preview 或测试直接传 Long 使用。
+ */
+@Composable
+fun ImmersiveExamTimer(
+    examName: String,
+    remainingSeconds: Long,
+    totalSeconds: Long,
+    startTime: Long,
+    isPaused: Boolean,
+    onPauseResume: () -> Unit,
+    onEarlyFinish: () -> Unit,
+    onQuit: () -> Unit
+) {
+    val state = rememberUpdatedState(remainingSeconds)
+    ImmersiveExamTimer(
+        examName = examName,
+        remainingSeconds = state,
+        totalSeconds = totalSeconds,
+        startTime = startTime,
+        isPaused = isPaused,
+        onPauseResume = onPauseResume,
+        onEarlyFinish = onEarlyFinish,
+        onQuit = onQuit
+    )
 }

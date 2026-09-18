@@ -42,7 +42,6 @@ fun ExamScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val examSessions = state.examSessions
-    val timerServiceState by FocusTimerService.timerState.collectAsStateWithLifecycle()
     var currentSubTab by rememberSaveable { mutableIntStateOf(0) } // 0: 备考发起, 1: 走势与记录, 2: AI诊断
 
     // 模考业务状态只来自可持久化的 ActiveSessionCoordinator，页面不再维护第二套计时真相。
@@ -67,11 +66,14 @@ fun ExamScreen(
     var pendingExamSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     val pendingExamSession = pendingExamSessionId?.let { id -> examSessions.find { it.id == id } }
 
-    val effectiveRemaining = if (timerServiceState.isRunning && timerServiceState.mode == TimerServiceMode.EXAM) {
-        timerServiceState.remainingSeconds
-    } else {
-        (activeExamDurationSecs - (activeExam?.accumulatedActiveMs ?: 0L) / 1000L).coerceAtLeast(0L)
+    // 模考每秒推进只通过 State 传入叶子节点，页面外层与业务卡片不订阅高频 tick
+    val tickingRemaining = FocusTimerService.remainingSecondsForUi.collectAsStateWithLifecycle()
+    val initialRemaining = (activeExamDurationSecs - (activeExam?.accumulatedActiveMs ?: 0L) / 1000L).coerceAtLeast(0L)
+    val restoredRemaining = remember(activeExam?.sessionId, activeExamDurationSecs) {
+        mutableLongStateOf(initialRemaining)
     }
+    val remainingSecondsState: State<Long> =
+        if (activeExam != null && !isExamPaused) tickingRemaining else restoredRemaining
 
     val completedExam = state.lastCompletedExam
     LaunchedEffect(completedExam) {
@@ -87,10 +89,10 @@ fun ExamScreen(
     }
 
     if (isExamRunning && activeExamName != null) {
-        // Immersive Exam Countdown Screen
+        // Immersive Exam Countdown Screen（叶子节点局部重组，外层零重组）
         ImmersiveExamTimer(
             examName = activeExamName!!,
-            remainingSeconds = effectiveRemaining,
+            remainingSeconds = remainingSecondsState,
             totalSeconds = activeExamDurationSecs,
             startTime = activeExamStartTime,
             isPaused = isExamPaused,

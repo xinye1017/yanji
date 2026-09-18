@@ -10,10 +10,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.rememberPressScale
 
 /**
  * 卡片层级变体（语义化区分卡片圆角与层级，消除局部 magic number）：
@@ -77,15 +80,20 @@ fun YanjiCard(
     interactionSource: MutableInteractionSource? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val currentInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val scale = rememberPressScale(currentInteractionSource)
     MaterialCard(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
         enabled = enabled,
         shape = shape,
         colors = colors,
         elevation = elevation,
         border = border,
-        interactionSource = interactionSource,
+        interactionSource = currentInteractionSource,
         content = content
     )
 }

@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiPrimaryButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,7 +143,7 @@ private fun JournalEmptyState(
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
-                text = "当前还没有",
+                text = "当前还没有考研日记",
                 style = YanjiTypography.title2,
                 fontWeight = FontWeight.Bold,
                 color = YanjiColors.primaryLabel,
@@ -161,30 +162,18 @@ private fun JournalEmptyState(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
+            YanjiPrimaryButton(
+                text = "开始记录",
                 onClick = onStartRecording,
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 48.dp)
-                    .heightIn(min = 48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(YanjiRadius.Pill),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
                 contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "开始记录",
-                    style = YanjiTypography.headline,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-            }
+            )
         }
     }
 }
