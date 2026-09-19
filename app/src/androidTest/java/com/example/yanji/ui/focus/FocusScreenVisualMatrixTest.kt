@@ -76,8 +76,8 @@ class FocusScreenVisualMatrixTest {
         composeRule.onNodeWithText("持续专注中").assertIsDisplayed()
         composeRule.onNodeWithText("30:00").assertIsDisplayed()
         composeRule.onNodeWithText("暂停").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("结束并保存").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("放弃本次记录").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("放弃").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("完成").performScrollTo().assertIsDisplayed()
     }
 
     @Test

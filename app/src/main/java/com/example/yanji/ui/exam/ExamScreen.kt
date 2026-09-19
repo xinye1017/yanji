@@ -27,7 +27,6 @@ import com.example.yanji.data.timer.ActiveSessionCoordinator
 import com.example.yanji.data.timer.ActiveSessionKind
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.service.FocusTimerService
-import com.example.yanji.service.TimerServiceMode
 import com.example.yanji.theme.*
 import kotlinx.coroutines.launch
 

@@ -10,6 +10,8 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -68,18 +70,46 @@ class ActiveFocusContentInstrumentedTest {
         }
 
         capture("focus-flow.png")
+        // 暂停是可见的 primary 控件（不再藏在「点击圆环」里）。
         composeRule.onNodeWithText("暂停").performScrollTo().performClick()
-        composeRule.onNodeWithText("计时已暂停").assertExists()
+        composeRule.onNodeWithText("继续专注").assertExists()
         capture("focus-paused.png")
         composeRule.onNodeWithText("继续专注").performScrollTo().performClick()
-        composeRule.onNodeWithText("持续专注中").assertExists()
-        composeRule.onNodeWithText("结束并保存").performScrollTo().performClick()
+        composeRule.onNodeWithText("暂停").assertExists()
+        composeRule.onNodeWithText("完成").performScrollTo().performClick()
         composeRule.runOnIdle {
             assertEquals(1, pauses)
             assertEquals(1, resumes)
             assertEquals(1, finishes)
             assertEquals(0, cancels)
         }
+    }
+
+    @Test
+    fun finishIsDisabledUntilOneMinuteSoItNeverSilentlyDiscards() {
+        // 不足 1 分钟：完成必须被禁用并给出原因，绝不能点下去才静默丢弃。
+        val elapsed = mutableStateOf(30L)
+        var finishes = 0
+        composeRule.setContent {
+            YanjiTheme {
+                ActiveFocusContent(
+                    session = focusSession(),
+                    elapsedSeconds = elapsed,
+                    onPause = {},
+                    onResume = {},
+                    onFinish = { finishes++ },
+                    onCancel = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("已专注不足 1 分钟，完成后不会生成记录").assertExists()
+        composeRule.onNodeWithText("完成").performScrollTo().assertIsNotEnabled()
+        composeRule.runOnIdle { assertEquals(0, finishes) }
+
+        composeRule.runOnIdle { elapsed.value = 60L }
+        composeRule.onNodeWithText("完成").performScrollTo().assertIsEnabled().performClick()
+        composeRule.runOnIdle { assertEquals(1, finishes) }
     }
 
     @Test
@@ -99,14 +129,14 @@ class ActiveFocusContentInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("放弃本次记录").performScrollTo().performClick()
+        composeRule.onNodeWithText("放弃").performScrollTo().performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, cancels) }
         composeRule.onNodeWithText("保留记录").performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertDoesNotExist()
         composeRule.runOnIdle { assertEquals(0, cancels) }
 
-        composeRule.onNodeWithText("放弃本次记录").performScrollTo().performClick()
+        composeRule.onNodeWithText("放弃").performScrollTo().performClick()
         composeRule.onNodeWithText("确认放弃").performClick()
         composeRule.runOnIdle { assertEquals(1, cancels) }
     }
@@ -154,12 +184,11 @@ class ActiveFocusContentInstrumentedTest {
         composeRule.onNodeWithText("剩余时间").assertExists()
         composeRule.onNodeWithText("00:01").assertExists()
         capture("focus-countdown.png")
+        // 进度不再用重复的「已完成 N%」文字表达：大数字 + 环已经是同一件事。
         composeRule.runOnIdle { elapsedSeconds.value = 1_500L }
         composeRule.onNodeWithText("00:00").assertExists()
-        composeRule.onNodeWithText("已完成 100%").assertExists()
         composeRule.runOnIdle { elapsedSeconds.value = 1_507L }
         composeRule.onNodeWithText("00:00").assertExists()
-        composeRule.onNodeWithText("已完成 100%").assertExists()
     }
 
     @Test
@@ -188,9 +217,9 @@ class ActiveFocusContentInstrumentedTest {
         capture("focus-large-font.png")
         composeRule.onNodeWithText("暂停").performScrollTo().assertIsDisplayed().performClick()
         composeRule.onNodeWithText("继续专注").performScrollTo().assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("结束并保存").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("完成").performScrollTo().assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, finishes) }
-        composeRule.onNodeWithText("放弃本次记录").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("放弃").performScrollTo().assertIsDisplayed().performClick()
         composeRule.onNodeWithText("保留记录").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertDoesNotExist()
     }

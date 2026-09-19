@@ -343,7 +343,7 @@ class YanjiRepository private constructor() {
     ): ExamSession? = timerStore.startExamSession(subjectId, subjectName, plannedDurationSeconds)
 
     /** UI 侧的暂停镜像；真实计时事实由前台 Service 的 [com.example.yanji.data.timer.TimerMachine] 维护。 */
-    fun pauseFocus(elapsedSeconds: Long = 0L) = timerStore.pauseFocus(elapsedSeconds)
+    fun pauseFocus() = timerStore.pauseFocus()
 
     fun resumeFocus() = timerStore.resumeFocus()
 

@@ -14,6 +14,7 @@ import com.example.yanji.data.timer.FocusLiveState
 import com.example.yanji.data.timer.Idle
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerMachine
+import com.example.yanji.data.timer.TimerPhase
 import com.example.yanji.data.timer.focusLiveStateOf
 import com.example.yanji.liveactivity.FocusKind
 import com.example.yanji.liveactivity.FocusLiveActivityController
@@ -22,28 +23,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
-enum class TimerServiceMode {
-    FOCUS, EXAM
-}
-
-/**
- * 旧版 UI 展示镜像，**保留仅供模考页**（`ExamScreen` 仍按 isRunning / mode / remainingSeconds 读取）。
- *
- * 专注页已改用 [FocusTimerService.liveState]（语义）+ [FocusTimerService.elapsedSecondsForUi]（每秒推进），
- * 新代码不要再往这里加字段——业务事实在 [TimerMachine]，展示事实由 `FocusLiveState` 承载。
- */
-data class TimerState(
-    val isRunning: Boolean = false,
-    val isPaused: Boolean = false,
-    val mode: TimerServiceMode = TimerServiceMode.FOCUS,
-    val sessionId: String = "",
-    val subjectName: String = "",
-    val elapsedSeconds: Long = 0,
-    val remainingSeconds: Long = 0,
-    val targetDurationSeconds: Long = 0,
-    val isFinished: Boolean = false
-)
 
 /**
  * 前台计时服务。
@@ -86,10 +65,6 @@ class FocusTimerService : Service() {
 
         private const val UI_TICK_MS = 1000L
         private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
-
-        private val _timerState = MutableStateFlow(TimerState())
-        /** 旧版镜像（模考页使用）。 */
-        val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
 
         private val _liveState = MutableStateFlow<FocusLiveState>(Idle)
 
@@ -196,7 +171,7 @@ class FocusTimerService : Service() {
             ACTION_START_FOCUS -> {
                 val subjectName = intent.getStringExtra(EXTRA_SUBJECT) ?: "日常专注"
                 startTimer(
-                    TimerServiceMode.FOCUS,
+                    ActiveSessionKind.FOCUS,
                     subjectName,
                     intent.getLongExtra(EXTRA_DURATION_SECONDS, 0L),
                     intent.getStringExtra(EXTRA_SESSION_ID).orEmpty()
@@ -205,7 +180,7 @@ class FocusTimerService : Service() {
             ACTION_START_EXAM -> {
                 val subjectName = intent.getStringExtra(EXTRA_SUBJECT) ?: "全真模考"
                 startTimer(
-                    TimerServiceMode.EXAM,
+                    ActiveSessionKind.EXAM,
                     subjectName,
                     intent.getLongExtra(EXTRA_DURATION_SECONDS, 10800L),
                     intent.getStringExtra(EXTRA_SESSION_ID).orEmpty()
@@ -222,14 +197,18 @@ class FocusTimerService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startTimer(mode: TimerServiceMode, subjectName: String, targetSeconds: Long, requestedSessionId: String) {
+    private fun startTimer(
+        sessionKind: ActiveSessionKind,
+        subjectName: String,
+        targetSeconds: Long,
+        requestedSessionId: String
+    ) {
         val active = ActiveSessionCoordinator.active.value
         val snapshot = ActiveSessionCoordinator.currentTimerSnapshot
-        val expectedKind = if (mode == TimerServiceMode.EXAM) ActiveSessionKind.EXAM else ActiveSessionKind.FOCUS
         if (
             active == null ||
             snapshot == null ||
-            active.kind != expectedKind ||
+            active.kind != sessionKind ||
             requestedSessionId.isBlank() ||
             requestedSessionId != active.sessionId
         ) {
@@ -240,66 +219,52 @@ class FocusTimerService : Service() {
         }
 
         timerJob?.cancel()
-        acquireWakeLock()
-
         machine.restore(snapshot)
 
-        kind = if (mode == TimerServiceMode.EXAM) FocusKind.EXAM else FocusKind.FOCUS
+        kind = if (sessionKind == ActiveSessionKind.EXAM) FocusKind.EXAM else FocusKind.FOCUS
         subject = active.subjectName.ifBlank { subjectName }
         sessionId = active.sessionId
 
         val elapsed = machine.elapsedSeconds()
-        val remaining = machine.remainingSeconds()
         _elapsedSecondsForUi.value = elapsed
-        _remainingSecondsForUi.value = remaining
-        _timerState.value = TimerState(
-            isRunning = snapshot.isActive,
-            isPaused = snapshot.phase == com.example.yanji.data.timer.TimerPhase.PAUSED,
-            mode = mode,
-            sessionId = sessionId,
-            subjectName = subject,
-            elapsedSeconds = elapsed,
-            remainingSeconds = remaining,
-            targetDurationSeconds = snapshot.targetDurationSeconds,
-            isFinished = false
-        )
+        _remainingSecondsForUi.value = machine.remainingSeconds()
         publishSemanticState(elapsedSeconds = elapsed)
 
         promoteToForeground()
+
+        // Reboot 恢复出的会话是暂停态：不持唤醒锁、不跑 tick，等用户点「继续」再启动。
+        if (snapshot.phase == TimerPhase.PAUSED) return
+
+        acquireWakeLock()
 
         if (machine.hasReachedTarget()) {
             onCountdownFinished()
             return
         }
 
-        // 每秒只做两件事：推进 UI 展示镜像、检测倒计时归零。
-        // 计时精度不依赖这里的调度频率，通知也不在这里更新。
+        startTicking()
+    }
+
+    /**
+     * 每秒只做两件事：推进 UI 展示镜像、检测倒计时归零。
+     * 计时精度不依赖这里的调度频率，通知也不在这里更新。
+     *
+     * 暂停 / 结束时协程会被 cancel，不再空转唤醒设备（省电）。
+     */
+    private fun startTicking() {
+        if (timerJob?.isActive == true) return
         timerJob = serviceScope.launch {
             while (isActive) {
                 delay(UI_TICK_MS)
-                val current = _timerState.value
-                if (!current.isRunning) break
-                if (current.isPaused) continue
-
-                val elapsed = machine.elapsedSeconds()
-                val remaining = machine.remainingSeconds()
-
+                if (machine.snapshot.phase != TimerPhase.RUNNING) break
                 if (machine.hasReachedTarget()) {
-                    _timerState.value = current.copy(
-                        isRunning = false,
-                        elapsedSeconds = machine.snapshot.targetDurationSeconds,
-                        remainingSeconds = 0,
-                        isFinished = true
-                    )
                     _elapsedSecondsForUi.value = machine.snapshot.targetDurationSeconds
                     _remainingSecondsForUi.value = 0L
                     onCountdownFinished()
                     break
                 }
-
-                _elapsedSecondsForUi.value = elapsed
-                _remainingSecondsForUi.value = remaining
-                _timerState.value = current.copy(elapsedSeconds = elapsed, remainingSeconds = remaining)
+                _elapsedSecondsForUi.value = machine.elapsedSeconds()
+                _remainingSecondsForUi.value = machine.remainingSeconds()
             }
         }
     }
@@ -309,33 +274,33 @@ class FocusTimerService : Service() {
             stopSelf()
             return
         }
-        val mode = if (active.kind == ActiveSessionKind.EXAM) TimerServiceMode.EXAM else TimerServiceMode.FOCUS
-        startTimer(mode, active.subjectName, active.targetDurationSeconds, active.sessionId)
+        startTimer(active.kind, active.subjectName, active.targetDurationSeconds, active.sessionId)
     }
 
     private fun pause() {
-        val current = _timerState.value
-        if (current.isRunning && !current.isPaused) {
-            machine.pause()
-            _timerState.value = current.copy(isPaused = true, elapsedSeconds = machine.elapsedSeconds())
-            _elapsedSecondsForUi.value = machine.elapsedSeconds()
-            _remainingSecondsForUi.value = machine.remainingSeconds()
-            ActiveSessionCoordinator.update { it.copy(paused = true, accumulatedActiveMs = machine.elapsedMs()) }
-            // 语义变化 → 重建通知：禁用 Chronometer，改为静态冻结时间 + 「继续」动作。
-            publishSemanticState()
-        }
+        if (machine.snapshot.phase != TimerPhase.RUNNING) return
+        machine.pause()
+        // 暂停即停表：取消 tick 协程并释放唤醒锁，避免息屏后每秒空转 + 持锁耗电。
+        timerJob?.cancel()
+        releaseWakeLock()
+        val elapsed = machine.elapsedSeconds()
+        _elapsedSecondsForUi.value = elapsed
+        _remainingSecondsForUi.value = machine.remainingSeconds()
+        ActiveSessionCoordinator.update { it.copy(paused = true, accumulatedActiveMs = machine.elapsedMs()) }
+        // 语义变化 → 重建通知：禁用 Chronometer，改为静态冻结时间 + 「继续」动作。
+        publishSemanticState()
     }
 
     private fun resume() {
-        val current = _timerState.value
-        if (current.isRunning && current.isPaused) {
-            machine.resume()
-            _timerState.value = current.copy(isPaused = false)
-            _remainingSecondsForUi.value = machine.remainingSeconds()
-            ActiveSessionCoordinator.update { it.copy(paused = false) }
-            // 语义变化 → 重新计算 Chronometer 基准，从冻结时间继续走。
-            publishSemanticState()
-        }
+        if (machine.snapshot.phase != TimerPhase.PAUSED) return
+        machine.resume()
+        acquireWakeLock()
+        _elapsedSecondsForUi.value = machine.elapsedSeconds()
+        _remainingSecondsForUi.value = machine.remainingSeconds()
+        ActiveSessionCoordinator.update { it.copy(paused = false) }
+        // 语义变化 → 重新计算 Chronometer 基准，从冻结时间继续走。
+        publishSemanticState()
+        startTicking()
     }
 
     /** 倒计时自然归零：完成并落库。 */
@@ -346,7 +311,9 @@ class FocusTimerService : Service() {
             val completed = runCatching {
                 ActiveSessionCoordinator.complete(
                     actualSeconds = seconds,
-                    pausedSeconds = 0L,
+                    // 倒计时自然归零也必须记录真实暂停时长：机器里存着 pauseCount 与单调时钟，
+                    // 这里写死 0 会让「暂停过 10 分钟的番茄」在库里自相矛盾。
+                    pausedSeconds = machine.pausedMs(System.currentTimeMillis()) / 1000L,
                     pauseCount = machine.snapshot.pauseCount,
                     endEpochMs = System.currentTimeMillis()
                 )
@@ -388,13 +355,6 @@ class FocusTimerService : Service() {
     private suspend fun freezeWhileCommitting(elapsedSeconds: Long) {
         timerJob?.cancel()
         machine.freezeForCommit()
-        _timerState.value = _timerState.value.copy(
-            isRunning = true,
-            isPaused = true,
-            elapsedSeconds = elapsedSeconds,
-            remainingSeconds = machine.remainingSeconds(),
-            isFinished = false
-        )
         _elapsedSecondsForUi.value = elapsedSeconds
         _remainingSecondsForUi.value = machine.remainingSeconds()
         ActiveSessionCoordinator.update {
@@ -415,7 +375,6 @@ class FocusTimerService : Service() {
         timerJob?.cancel()
         publishSemanticState()
         _liveState.value = Idle
-        _timerState.value = TimerState()
         _elapsedSecondsForUi.value = 0L
         _remainingSecondsForUi.value = 0L
         releaseWakeLock()

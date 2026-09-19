@@ -115,7 +115,6 @@ fun ActiveFocusContent(
                     CountdownFocusBody(
                         elapsedSeconds = elapsedSeconds,
                         targetSeconds = targetSeconds,
-                        isPaused = isPaused,
                         timerColor = timerColor,
                         onTogglePauseResume = onTogglePauseResume
                     )
@@ -128,6 +127,9 @@ fun ActiveFocusContent(
                     )
                 }
                 FocusControls(
+                    isPaused = isPaused,
+                    elapsedSeconds = elapsedSeconds,
+                    onTogglePauseResume = onTogglePauseResume,
                     onFinish = onFinish,
                     onCancel = { showCancelDialog = true }
                 )
@@ -137,13 +139,15 @@ fun ActiveFocusContent(
             val (header, body, controls) = measurables.map { it.measure(childConstraints) }
             val gap = 24.dp.roundToPx()
             val height = maxOf(viewportHeight, header.height + body.height + controls.height + gap * 2)
-            val spareHeight = height - header.height - body.height - controls.height - gap * 2
-            val headerTop = minOf((height * 0.10f).toInt(), spareHeight)
             val controlsTop = height - controls.height
-            val bodyTop = ((height * 0.46f).toInt() - body.height / 2).coerceIn(
-                headerTop + header.height + gap,
-                controlsTop - gap - body.height
-            )
+            // 顶部锚点取可用高度的 9%，但不越过「内容本来就放得下」时的上限。
+            val headerTop = minOf((height * 0.09f).toInt(), (height - controls.height - body.height - header.height).coerceAtLeast(0))
+            // 主视觉居中于「header 底部」与「controls 顶部」之间的剩余空间，
+            // 而不是钉在固定的 46%——后者在大屏上会留下两条很宽的空白带。
+            val regionTop = headerTop + header.height + gap
+            val regionBottom = controlsTop - gap
+            val bodyTop = (regionTop + (regionBottom - regionTop - body.height) / 2)
+                .coerceIn(regionTop, (regionBottom - body.height).coerceAtLeast(regionTop))
             layout(constraints.maxWidth, height) {
                 header.placeRelative((constraints.maxWidth - header.width) / 2, headerTop)
                 body.placeRelative((constraints.maxWidth - body.width) / 2, bodyTop)
@@ -236,7 +240,6 @@ private fun FocusSessionHeader(session: FocusSession, targetSeconds: Long, isPau
 private fun CountdownFocusBody(
     elapsedSeconds: State<Long>,
     targetSeconds: Long,
-    isPaused: Boolean,
     timerColor: Color,
     onTogglePauseResume: () -> Unit
 ) {
@@ -251,20 +254,19 @@ private fun CountdownFocusBody(
     val interactionSource = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interactionSource, targetScale = 0.96f)
 
-    // 底轨颜色：浅色下为 8% 主蓝，深色下为 6% 白色，保证两端在各自背景上具有同等可见性
+    // 底轨颜色：浅色下为 10% 主蓝，深色下为 8% 白，保证在两种背景上都真正看得见。
     val trackRingColor = yanjiThemeColor(
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        YanjiDarkTrack
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        Color.White.copy(alpha = 0.08f)
     )
 
     Column(
-        modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 240.dp)
+                .widthIn(max = 300.dp)
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .graphicsLayer {
@@ -281,7 +283,7 @@ private fun CountdownFocusBody(
             contentAlignment = Alignment.Center
         ) {
             Canvas(Modifier.matchParentSize()) {
-                val strokeWidth = 4.dp.toPx()
+                val strokeWidth = 5.dp.toPx()
                 val inset = strokeWidth / 2
                 val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
 
@@ -293,7 +295,9 @@ private fun CountdownFocusBody(
                 )
 
                 // 统一进度弧绘制（深浅色均由 timerColor 纯净承载，暂停时均平滑过渡，无非对称渐变接缝）
-                if (displayedProgress.value > 0f) {
+                // 用 Butt 端帽而不是 Round：起始瞬间不会出现一颗停在 12 点方向的「小圆珠」。
+                // 阈值取 0.5% 而非 0：避免浮点极小值画出几乎不可见的碎片。
+                if (displayedProgress.value >= 0.005f) {
                     drawArc(
                         color = timerColor,
                         startAngle = -90f,
@@ -301,7 +305,7 @@ private fun CountdownFocusBody(
                         useCenter = false,
                         topLeft = Offset(inset, inset),
                         size = arcSize,
-                        style = Stroke(strokeWidth, cap = StrokeCap.Round)
+                        style = Stroke(strokeWidth, cap = StrokeCap.Butt)
                     )
                 }
             }
@@ -309,36 +313,19 @@ private fun CountdownFocusBody(
             Column(
                 modifier = Modifier.padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                FocusTimeText(targetSeconds - elapsed, timerColor, baseFontSize = 52)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (isPaused) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = timerColor
-                        )
-                    }
-                    Text(
-                        text = if (isPaused) "已暂停 · 点击继续" else "专注中 · 点击暂停",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                FocusTimeText(targetSeconds - elapsed, timerColor, baseFontSize = 60)
+                // 只标注「这个大数字是什么」，不再重复播报暂停状态：
+                // 暂停已由顶部 header（已暂停）+ 主按钮（继续专注）+ 环变灰三处共同表达。
+                Text(
+                    text = "剩余时间",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
-        Text(
-            text = "已完成 ${(elapsed * 100 / targetSeconds).toInt()}%",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
     }
 }
 
@@ -378,20 +365,27 @@ private fun FlowFocusBody(
         ) {
             // 第二个读取点：正向计时的时间数字。
             FocusTimeText(elapsedSeconds.value, timerColor, baseFontSize = 60)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (isPaused) {
+            if (isPaused) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = timerColor
                     )
+                    Text(
+                        text = "已暂停",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
+            } else {
                 Text(
-                    text = if (isPaused) "已暂停 · 点击继续" else "持续专注中 · 点击暂停",
+                    text = "持续专注中",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -486,30 +480,69 @@ private fun FocusTimeText(seconds: Long, color: Color, baseFontSize: Int) {
 
 @Composable
 private fun FocusControls(
+    isPaused: Boolean,
+    elapsedSeconds: State<Long>,
+    onTogglePauseResume: () -> Unit,
     onFinish: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    // 只在本叶子读秒数：不足 1 分钟的「完成」与主按钮文案都需要它，
+    // 但读取范围止于本函数，不会牵连 Header / 计时体。
+    val recordedEnough = elapsedSeconds.value >= MIN_RECORDED_SECONDS
+    Column(
         modifier = modifier
             .widthIn(max = 320.dp)
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        YanjiSecondaryButton(
-            text = "放弃",
-            onClick = onCancel,
-            modifier = Modifier.weight(1f)
-        )
+        // 暂停 / 继续是专注时的主控件，不再隐藏在「点击圆环」里。
         YanjiPrimaryButton(
-            text = "完成",
-            onClick = onFinish,
-            modifier = Modifier.weight(1f)
+            text = if (isPaused) "继续专注" else "暂停",
+            onClick = onTogglePauseResume,
+            modifier = Modifier.fillMaxWidth(),
+            icon = {
+                Icon(
+                    imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         )
+        // 不足 1 分钟时把「完成」置灰并说明原因，而不是点下去才静默丢弃：
+        // 同一个按钮的语义永远只能是「保存」，不能一念之间变成「不保存」。
+        if (!recordedEnough) {
+            Text(
+                text = "已专注不足 1 分钟，完成后不会生成记录",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            YanjiSecondaryButton(
+                text = "放弃",
+                onClick = onCancel,
+                modifier = Modifier.weight(1f)
+            )
+            YanjiSecondaryButton(
+                text = "完成",
+                onClick = onFinish,
+                enabled = recordedEnough,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
+
+/** 最短可保存时长；与 `TimerStore.MIN_RECORDED_FOCUS_SECONDS` 保持同一条业务规则。 */
+private const val MIN_RECORDED_SECONDS = 60L
 
 @Composable
 private fun FocusCancelDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {

@@ -205,23 +205,21 @@ internal class TimerStore(
         return session
     }
 
-    /** UI 侧的暂停镜像；真实计时事实由前台 Service 的 [TimerMachine] 维护。 */
-    fun pauseFocus(elapsedSeconds: Long = 0L) {
+    /**
+     * UI 侧的暂停意图；真实计时事实由前台 Service 的 [TimerMachine] 维护。
+     *
+     * 刻意**不**接收 UI 镜像算出的秒数：`ActiveSessionCoordinator.update` 在 paused 分支会用
+     * `oldAccumulated + (now - resumedAt)` 算出权威累计值，UI 传进来的值只会是低精度的重复写入。
+     * 这里只更新内存镜像以获得即时反馈，落库字段全部交给 Service。
+     */
+    fun pauseFocus() {
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.RUNNING) {
-            val newDuration = if (elapsedSeconds > 0) elapsedSeconds else current.durationSeconds
             _activeFocus.value = current.copy(
                 status = SessionStatus.PAUSED,
-                durationSeconds = newDuration,
                 pauseCount = current.pauseCount + 1
             )
-            ActiveSessionCoordinator.update {
-                it.copy(
-                    paused = true,
-                    accumulatedActiveMs = newDuration * 1000L,
-                    pauseCount = it.pauseCount + 1
-                )
-            }
+            ActiveSessionCoordinator.update { it.copy(paused = true) }
         }
     }
 

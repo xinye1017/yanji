@@ -165,23 +165,17 @@ fun FocusScreen(
             session = activeSession,
             elapsedSeconds = elapsedSeconds,
             isPaused = isTimerPaused,
+            // 只发「意图」，不再回传 UI 镜像算出的秒数：权威值由 Service 从单调时钟写入。
+            // 镜像的 paused 翻转只是即时反馈，幂等，不会与 Service 的值冲突。
             onPause = {
                 FocusTimerService.pauseTimer(context)
-                viewModel.pauseFocus(elapsedSeconds.value)
+                viewModel.pauseFocus()
             },
             onResume = {
                 FocusTimerService.resumeTimer(context)
                 viewModel.resumeFocus()
             },
-            onFinish = {
-                if (elapsedSeconds.value < 60L) {
-                    Toast.makeText(context, "专注时间不足 1 分钟，本次记录不予保存", Toast.LENGTH_SHORT).show()
-                    FocusTimerService.discardTimer(context)
-                    viewModel.cancelFocus()
-                } else {
-                    FocusTimerService.completeTimer(context)
-                }
-            },
+            onFinish = { FocusTimerService.completeTimer(context) },
             onCancel = {
                 FocusTimerService.discardTimer(context)
                 viewModel.cancelFocus()

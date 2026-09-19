@@ -72,8 +72,8 @@ class FocusViewModel(
         mode: String
     ): FocusSession? = repo.startFocus(subjectId, subjectName, note, mode)
 
-    /** UI 侧的暂停镜像；真实计时事实由前台 Service 维护。 */
-    fun pauseFocus(elapsedSeconds: Long) = repo.pauseFocus(elapsedSeconds)
+    /** UI 侧的暂停意图；真实计时事实由前台 Service 维护（落库字段也由 Service 写）。 */
+    fun pauseFocus() = repo.pauseFocus()
 
     fun resumeFocus() = repo.resumeFocus()
 
