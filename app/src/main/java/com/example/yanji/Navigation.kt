@@ -29,6 +29,7 @@ import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.fill.*
 import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.di.LocalAppContainer
+import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.ui.achievement.AchievementsScreen
 import com.example.yanji.ui.chat.JuanjuanChatScreen
 import com.example.yanji.ui.detail.DailyStudyDetailScreen
@@ -43,6 +44,8 @@ import com.example.yanji.ui.journal.JournalEditorScreen
 import com.example.yanji.ui.journal.JournalScreen
 import com.example.yanji.ui.navigation.GlassBottomBar
 import com.example.yanji.ui.profile.ProfileScreen
+import com.example.yanji.ui.profile.ProfileViewModel
+import com.example.yanji.ui.profile.SubjectManagerScreen
 import com.example.yanji.ui.stats.StatsScreen
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
@@ -83,6 +86,8 @@ sealed interface YanjiSubScreen {
     data object JuanjuanChat : YanjiSubScreen
     @Serializable
     data object Achievements : YanjiSubScreen
+    @Serializable
+    data object SubjectManager : YanjiSubScreen
 }
 
 val YanjiSubScreenStackSaver: Saver<SnapshotStateList<YanjiSubScreen>, ArrayList<String>> = Saver(
@@ -238,6 +243,14 @@ fun MainNavigation() {
                                 onBack = { screenStack.removeLastOrNull() }
                             )
                         }
+                        is YanjiSubScreen.SubjectManager -> {
+                            SubjectManagerScreen(
+                                onBack = { screenStack.removeLastOrNull() },
+                                viewModel = yanjiViewModel { container ->
+                                    ProfileViewModel(container.repository)
+                                }
+                            )
+                        }
                     }
                 }
             } else {
@@ -294,7 +307,8 @@ fun MainNavigation() {
                         }
                         YanjiTab.PROFILE -> {
                             ProfileScreen(
-                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
+                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) },
+                                onNavigateToSubjectManager = { screenStack.add(YanjiSubScreen.SubjectManager) }
                             )
                         }
                     }

@@ -66,7 +66,6 @@ fun JournalScreen(
             item {
                 YanjiPageHeader(
                     title = "考研日记",
-                    subtitle = "记录真实思考与状态 · 自动关联每日学时",
                     trailing = if (journals.isNotEmpty()) {
                         {
                             Button(

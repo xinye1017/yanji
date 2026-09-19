@@ -14,10 +14,12 @@ import com.example.yanji.data.FocusSession
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.db.CheckInEntity
 import com.example.yanji.data.db.FocusSessionEntity
 import com.example.yanji.data.db.QuickStartPresetEntity
+import com.example.yanji.data.db.SubjectEntity
 import com.example.yanji.data.db.UserSettingsEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.flow.first
@@ -126,6 +128,53 @@ class BackupTransferInstrumentedTest {
         assertEquals("重复恢复同一备份不能产生重复记录", 1, rows.size)
         assertEquals("fs-stable", rows.single().id)
         assertEquals("same", rows.single().note)
+    }
+
+    // ---------------------------------------------------------------- 学科
+
+    @Test
+    fun subjectsRoundTripThroughBackup() = runBlocking {
+        db.subjectDao().insertAll(
+            listOf(
+                SubjectEntity.fromDomainModel(Subject("math", "数学一", "#356AE6", 1)),
+                SubjectEntity.fromDomainModel(
+                    Subject("custom_x", "我的自定义", "#123456", 9, parentId = "math")
+                )
+            )
+        )
+
+        val backup = BackupTransfer.collect(db, appVersionName = "test", now = epoch)
+        assertEquals(2, backup.subjects.size)
+
+        // JSON 往返后仍是同一份学科
+        val decoded = BackupCodec.decode(BackupCodec.encode(backup))
+        val restored = (decoded as BackupDecodeResult.Success).backup
+        assertEquals(2, restored.subjects.size)
+        assertEquals("我的自定义", restored.subjects.first { it.id == "custom_x" }.name)
+        assertEquals("math", restored.subjects.first { it.id == "custom_x" }.parentId)
+
+        // 覆盖式恢复：先清空再写入
+        db.subjectDao().deleteAll()
+        assertEquals(0, db.subjectDao().count())
+        BackupTransfer.applyInTransaction(db, restored)
+        assertEquals(2, db.subjectDao().count())
+    }
+
+    @Test
+    fun legacyBackupWithoutSubjectsKeepsLocalSubjects() = runBlocking {
+        db.subjectDao().insert(
+            SubjectEntity.fromDomainModel(Subject("keep-me", "保留的学科", "#356AE6", 1))
+        )
+
+        // v1 备份没有 subjects 字段 → 反序列化后为空列表
+        val legacyJson = BackupCodec.encode(YanjiBackup(exportedAt = epoch))
+        val decoded = BackupCodec.decode(legacyJson) as BackupDecodeResult.Success
+        assertTrue(decoded.backup.subjects.isEmpty())
+
+        BackupTransfer.applyInTransaction(db, decoded.backup)
+
+        assertEquals("旧备份不应清空本机学科", 1, db.subjectDao().count())
+        assertEquals("keep-me", db.subjectDao().getAll().single().id)
     }
 
     @Test

@@ -336,6 +336,43 @@ data class UnlockedAchievementEntity(
 )
 
 @Entity(
+    tableName = "subjects",
+    indices = [Index("parentId"), Index("sortOrder")]
+)
+data class SubjectEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val colorHex: String,
+    val sortOrder: Int = 0,
+    val enabled: Boolean = true,
+    val parentId: String? = null
+) {
+    fun toDomainModel(): Subject {
+        return Subject(
+            id = id,
+            name = name,
+            colorHex = colorHex,
+            sortOrder = sortOrder,
+            enabled = enabled,
+            parentId = parentId
+        )
+    }
+
+    companion object {
+        fun fromDomainModel(model: Subject): SubjectEntity {
+            return SubjectEntity(
+                id = model.id,
+                name = model.name,
+                colorHex = model.colorHex,
+                sortOrder = model.sortOrder,
+                enabled = model.enabled,
+                parentId = model.parentId
+            )
+        }
+    }
+}
+
+@Entity(
     tableName = "quick_start_presets",
     indices = [Index("sortOrder")]
 )

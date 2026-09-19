@@ -261,6 +261,38 @@ fun ProfileSettingsGroup(
     )
 }
 
+/**
+ * 设置行统一的图标底座：32dp 圆角矩形 + 主题色底 + 主色图标。
+ *
+ * 抽成独立组件而不是在每个设置行里内联，是为了让「外观」这类自定义布局的行
+ * 无法再漂移出不同的尺寸/底色/tint —— 只要用这个底座，视觉必然一致。
+ */
+@Composable
+fun ProfileSettingsIcon(
+    icon: ImageVector,
+    enabled: Boolean = true,
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(ProfileSettingsIconSize)
+            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
+            .background(YanjiColors.fill),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
+            modifier = Modifier.size(ProfileSettingsGlyphSize)
+        )
+    }
+}
+
+private val ProfileSettingsIconSize = 32.dp
+private val ProfileSettingsGlyphSize = 18.dp
+
 @Composable
 fun ProfileSettingsItem(
     icon: ImageVector,
@@ -278,20 +310,7 @@ fun ProfileSettingsItem(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
-                .background(YanjiColors.fill),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        ProfileSettingsIcon(icon = icon, enabled = enabled)
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -356,24 +375,13 @@ fun ProfileThemeSelector(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.DarkMode,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
+            ProfileSettingsIcon(icon = Icons.Outlined.DarkMode)
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "外观",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "选择研迹的显示主题",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -381,7 +389,8 @@ fun ProfileThemeSelector(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 36.dp),
+                // 与上方标题列左对齐：16dp 行内边距 + 32dp 图标底座 + 14dp 间距
+                .padding(start = 62.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             YanjiThemeMode.entries.forEach { mode ->

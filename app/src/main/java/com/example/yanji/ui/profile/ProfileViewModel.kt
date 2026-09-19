@@ -2,6 +2,7 @@ package com.example.yanji.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.backup.BackupImportResult
@@ -10,11 +11,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** 我的页不可变 UiState。 */
 data class ProfileUiState(
     val settings: UserSettings,
-    val todayStudySeconds: Long
+    val todayStudySeconds: Long,
+    val subjects: List<Subject> = emptyList()
 )
 
 /**
@@ -27,11 +30,13 @@ class ProfileViewModel(
 
     val uiState: StateFlow<ProfileUiState> = combine(
         repo.settings,
-        repo.observeTodayStudyDurationSeconds()
-    ) { settings, todaySeconds ->
+        repo.observeTodayStudyDurationSeconds(),
+        repo.subjects
+    ) { settings, todaySeconds, subjects ->
         ProfileUiState(
             settings = settings,
-            todayStudySeconds = todaySeconds
+            todayStudySeconds = todaySeconds,
+            subjects = subjects
         )
     }
         .stateIn(
@@ -39,11 +44,32 @@ class ProfileViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = ProfileUiState(
                 settings = repo.settings.value,
-                todayStudySeconds = repo.getTodayFocusDurationSeconds()
+                todayStudySeconds = repo.getTodayFocusDurationSeconds(),
+                subjects = repo.subjects.value
             )
         )
 
     fun updateSettings(newSettings: UserSettings) = repo.updateSettings(newSettings)
+
+    fun addSubjectCategory(name: String) = viewModelScope.launch {
+        repo.addSubjectCategory(name)
+    }
+
+    fun addSubSubject(parentId: String, name: String) = viewModelScope.launch {
+        repo.addSubSubject(parentId, name)
+    }
+
+    fun renameSubject(subjectId: String, newName: String) = viewModelScope.launch {
+        repo.renameSubject(subjectId, newName)
+    }
+
+    fun deleteSubject(subjectId: String) = viewModelScope.launch {
+        repo.deleteSubject(subjectId)
+    }
+
+    fun restoreDefaultSubjects() = viewModelScope.launch {
+        repo.restoreDefaultSubjects()
+    }
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 

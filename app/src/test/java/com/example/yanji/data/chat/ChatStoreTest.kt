@@ -116,6 +116,7 @@ class FakeYanjiDatabase(
     override fun checkInDao(): CheckInDao = throw UnsupportedOperationException()
     override fun achievementDao(): AchievementDao = throw UnsupportedOperationException()
     override fun quickStartPresetDao(): QuickStartPresetDao = throw UnsupportedOperationException()
+    override fun subjectDao(): SubjectDao = throw UnsupportedOperationException()
     override fun createInvalidationTracker(): androidx.room.InvalidationTracker =
         androidx.room.InvalidationTracker(this, emptyMap(), emptyMap(), "chat_sessions", "chat_messages")
 }

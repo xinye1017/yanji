@@ -28,14 +28,6 @@ enum class MascotThemeId {
     }
 }
 
-enum class MascotMotionStyle {
-    FLOAT,
-    TILT,
-    SWAY,
-    BOUNCE,
-    BREATHE
-}
-
 @Immutable
 data class MascotPalette(
     val lightPrimary: Color,
@@ -61,9 +53,7 @@ data class MascotThemeSpec(
     val id: MascotThemeId,
     val name: String,
     val themeName: String,
-    val tagline: String,
     @DrawableRes val drawableRes: Int,
-    val motionStyle: MascotMotionStyle,
     val palette: MascotPalette
 )
 
@@ -72,9 +62,7 @@ object MascotThemes {
         id = MascotThemeId.CLOUD,
         name = "卷卷",
         themeName = "沉静蓝",
-        tagline = "安静陪你走完备考旅程",
-        drawableRes = R.drawable.mascot_cloud,
-        motionStyle = MascotMotionStyle.FLOAT,
+        drawableRes = R.drawable.juanjuan,
         palette = MascotPalette(
             lightPrimary = YanjiPrimary,
             lightPrimaryStrong = YanjiPrimaryStrong,
@@ -99,9 +87,7 @@ object MascotThemes {
         id = MascotThemeId.BUNNY,
         name = "绵绵",
         themeName = "柔樱粉",
-        tagline = "温柔一点，也坚定一点",
-        drawableRes = R.drawable.mascot_bunny,
-        motionStyle = MascotMotionStyle.TILT,
+        drawableRes = R.drawable.mianmian,
         palette = MascotPalette(
             lightPrimary = Color(0xFFB8426B),
             lightPrimaryStrong = Color(0xFF8E3150),
@@ -126,9 +112,7 @@ object MascotThemes {
         id = MascotThemeId.PENGUIN,
         name = "冰冰",
         themeName = "冰川蓝",
-        tagline = "冷静拆题，稳稳推进",
-        drawableRes = R.drawable.mascot_penguin,
-        motionStyle = MascotMotionStyle.SWAY,
+        drawableRes = R.drawable.bingbing,
         palette = MascotPalette(
             lightPrimary = Color(0xFF3B78B8),
             lightPrimaryStrong = Color(0xFF285A8D),
@@ -153,9 +137,7 @@ object MascotThemes {
         id = MascotThemeId.SHIBA,
         name = "豆豆",
         themeName = "暖栗橙",
-        tagline = "有劲头，也有好心情",
-        drawableRes = R.drawable.mascot_shiba,
-        motionStyle = MascotMotionStyle.BOUNCE,
+        drawableRes = R.drawable.doudou,
         palette = MascotPalette(
             lightPrimary = Color(0xFFA95822),
             lightPrimaryStrong = Color(0xFF7E3E16),
@@ -180,9 +162,7 @@ object MascotThemes {
         id = MascotThemeId.FROG,
         name = "芽芽",
         themeName = "新芽绿",
-        tagline = "一点一点，把进步长出来",
-        drawableRes = R.drawable.mascot_frog,
-        motionStyle = MascotMotionStyle.BREATHE,
+        drawableRes = R.drawable.yaya,
         palette = MascotPalette(
             lightPrimary = Color(0xFF2F7F55),
             lightPrimaryStrong = Color(0xFF225E3F),

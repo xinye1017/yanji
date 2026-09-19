@@ -7,6 +7,7 @@ import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.JournalEntry
 import com.example.yanji.data.QuickStartPreset
+import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import kotlinx.serialization.Serializable
 
@@ -97,7 +98,14 @@ data class YanjiBackup(
     val chatMessages: List<ChatMessage> = emptyList(),
     val checkIns: List<CheckIn> = emptyList(),
     val unlockedAchievements: Map<String, Long> = emptyMap(),
-    val quickStartPresets: List<QuickStartPreset> = emptyList()
+    val quickStartPresets: List<QuickStartPreset> = emptyList(),
+    /**
+     * 用户自定义后的完整学科列表。
+     *
+     * 带默认值：v1 备份没有这个字段，读到时会得到空列表，导入时**不覆盖**本机学科
+     * （见 `BackupTransfer.apply`），从而保证旧备份恢复后学科与升级默认值一致。
+     */
+    val subjects: List<Subject> = emptyList()
 ) {
     /** 备份里是否一条业务数据都没有（合法的「清空后导出」状态）。 */
     val isEmpty: Boolean
@@ -109,6 +117,7 @@ data class YanjiBackup(
             checkIns.isEmpty() &&
             unlockedAchievements.isEmpty() &&
             quickStartPresets.isEmpty() &&
+            subjects.isEmpty() &&
             settings == null
 
     fun countsSummary(): String = buildString {
@@ -116,6 +125,7 @@ data class YanjiBackup(
         append(" · 对话 ${chatSessions.size}/${chatMessages.size}")
         append(" · 打卡 ${checkIns.size} · 成就 ${unlockedAchievements.size}")
         append(" · 快捷 ${quickStartPresets.size}")
+        append(" · 学科 ${subjects.size}")
     }
 
     companion object {

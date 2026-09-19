@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiSpacing
@@ -38,7 +39,7 @@ import com.example.yanji.theme.YanjiSpacing
  * 1. 一级页面（Home、Focus、Journal、Stats、Profile）：
  *    采用 Large Title (34sp / Bold)，呈现舒展安静的沉浸大标题与上下文副标；
  * 2. 次级页面与模块内：
- *    采用标准 headlineMedium (20sp / SemiBold)；
+ *    采用标准 headlineMedium (20sp / SemiBold)，可定制粗细；
  * 3. 完整的语义树：自带 semantics { heading() }，确保 TalkBack 用户快速在标题间跳转。
  */
 @Composable
@@ -47,6 +48,7 @@ fun YanjiPageHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     largeTitle: Boolean = false,
+    titleFontWeight: FontWeight = FontWeight.Bold,
     trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -65,6 +67,7 @@ fun YanjiPageHeader(
             Text(
                 text = title,
                 style = if (largeTitle) com.example.yanji.theme.YanjiTypography.largeTitle else MaterialTheme.typography.headlineMedium,
+                fontWeight = titleFontWeight,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() }
             )

@@ -62,10 +62,14 @@ fun FocusScreen(
         if (liveState is ActiveFocusState) tickingElapsed else restoredElapsed
 
     var selectedSubjectId by rememberSaveable { mutableStateOf("math_advanced") }
+    // 学科现在可被用户删除，所以不能写死回落值：优先用之前的选择，其次优先默认学科，
+    // 再退到第一个可选学科。全都没有时（用户删光了学科）才给一个占位，交由界面引导去创建。
     val selectedSubject = subjects.firstOrNull { it.id == selectedSubjectId }
         ?: subjects.firstOrNull { it.id == "math_advanced" }
+        ?: subjects.firstOrNull { it.parentId != null }
+        ?: subjects.firstOrNull()
         ?: Subject("math_advanced", "高等数学", "#356AE6", parentId = "math")
-    var selectedMode by rememberSaveable { mutableStateOf(FocusModes.COUNT_UP) }
+    var selectedMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var noteText by rememberSaveable { mutableStateOf("") }
     var showSummaryDialog by remember { mutableStateOf(false) }
     var showManualLogDialog by rememberSaveable { mutableStateOf(false) }

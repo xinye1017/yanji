@@ -173,10 +173,12 @@ enum class YanjiThemeMode {
 val LocalYanjiDarkTheme = staticCompositionLocalOf { false }
 
 @Composable
+@androidx.compose.runtime.ReadOnlyComposable
 fun yanjiIsDarkTheme(): Boolean = LocalYanjiDarkTheme.current
 
 /** 按当前主题在「亮色值 / 暗色值」之间取色。 */
 @Composable
+@androidx.compose.runtime.ReadOnlyComposable
 fun yanjiThemeColor(light: Color, dark: Color): Color =
     if (LocalYanjiDarkTheme.current) dark else light
 

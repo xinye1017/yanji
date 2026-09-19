@@ -134,6 +134,11 @@ class UiDesignSystemContractTest {
         val segmentedContent = segmentedFile.readText()
         assertTrue("GlassSegmentedControl must use Role.Tab for a11y", segmentedContent.contains("Role.Tab"))
 
+        val yanjiSegmentedFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/YanjiSegmentedControl.kt")
+        assertTrue("YanjiSegmentedControl.kt must exist", yanjiSegmentedFile.exists())
+        val yanjiSegmentedContent = yanjiSegmentedFile.readText()
+        assertTrue("YanjiSegmentedControl must use Role.Tab for a11y", yanjiSegmentedContent.contains("Role.Tab"))
+
         val rollingFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/RollingNumber.kt")
         assertTrue("RollingNumber.kt must exist", rollingFile.exists())
 

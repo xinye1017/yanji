@@ -48,8 +48,12 @@ fun StatsHeroCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // 行 1：标签 + 有效天数 + 较上周对比
+            // 固定行高：只有「本周」带「较上周」胶囊，其余两个视角没有，若让行高随内容
+            // 变化，三张卡片首行高度会不一致，切换视角时页面会有明显跳动。
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HeroHeaderRowHeight),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -218,6 +222,8 @@ fun StatsHeroCard(
         }
     }
 }
+
+private val HeroHeaderRowHeight = 26.dp
 
 private fun formatDeltaCompact(seconds: Long): String {
     if (seconds < 3600L) return "${seconds / 60}m"

@@ -19,9 +19,10 @@ import java.io.File
         ChatSessionEntity::class,
         CheckInEntity::class,
         UnlockedAchievementEntity::class,
-        QuickStartPresetEntity::class
+        QuickStartPresetEntity::class,
+        SubjectEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -35,6 +36,7 @@ abstract class YanjiDatabase : RoomDatabase() {
     abstract fun checkInDao(): CheckInDao
     abstract fun achievementDao(): AchievementDao
     abstract fun quickStartPresetDao(): QuickStartPresetDao
+    abstract fun subjectDao(): SubjectDao
 
     companion object {
 
@@ -402,6 +404,85 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v13 → v14：学科从「硬编码常量」升级为「用户可编辑并持久化的表」。
+         *
+         * 关键决策：
+         *  - **默认学科在迁移里写入，而不是在 App 启动时补种**。启动补种会破坏
+         *    `AppInitializer` 的不变量：「表为空」是合法业务状态——用户删光自定义学科后
+         *    一重启，默认学科若被重新灌入，就与「用户主动删除」的意图相悖。
+         *  - 迁移只在 13→14 这一条路径上跑一次，因此存量用户拿到默认学科，之后
+         *    的删除/改名会被如实保留。
+         *  - 索引名必须与 Room 导出的 schema 完全一致，否则 TableInfo 校验失败。
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    """
+                    CREATE TABLE IF NOT EXISTS `subjects` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `colorHex` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `enabled` INTEGER NOT NULL,
+                        `parentId` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_subjects_parentId` ON `subjects` (`parentId`)"
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_subjects_sortOrder` ON `subjects` (`sortOrder`)"
+                )
+
+                // 默认学科种子：与 SubjectCatalog 的初始内容保持一致。
+                val seeds = listOf(
+                    Triple("math", "数学一", "#356AE6") to 1,
+                    Triple("math_advanced", "高等数学", "#356AE6") to 11,
+                    Triple("math_linear", "线性代数", "#4C7BE8") to 12,
+                    Triple("math_probability", "概率论", "#678DEB") to 13,
+                    Triple("major", "408专业课", "#8B7CF6") to 2,
+                    Triple("major_organization", "计算机组成原理", "#8B7CF6") to 21,
+                    Triple("major_data_structure", "数据结构", "#9A8CFA") to 22,
+                    Triple("major_network", "计算机网络", "#AA9DFB") to 23,
+                    Triple("major_os", "操作系统", "#B8ADFC") to 24,
+                    Triple("english", "英语一", "#2F9E6D") to 3,
+                    Triple("politics", "政治", "#E67E22") to 4,
+                    Triple("other", "其他", "#667085") to 5
+                )
+                val parentOf = mapOf(
+                    "math_advanced" to "math",
+                    "math_linear" to "math",
+                    "math_probability" to "math",
+                    "major_organization" to "major",
+                    "major_data_structure" to "major",
+                    "major_network" to "major",
+                    "major_os" to "major"
+                )
+
+                val statement = connection.prepare(
+                    "INSERT OR REPLACE INTO `subjects` " +
+                        "(`id`, `name`, `colorHex`, `sortOrder`, `enabled`, `parentId`) " +
+                        "VALUES (?, ?, ?, ?, 1, ?)"
+                )
+                statement.use { stmt ->
+                    for ((triple, order) in seeds) {
+                        val (id, name, color) = triple
+                        stmt.bindText(1, id)
+                        stmt.bindText(2, name)
+                        stmt.bindText(3, color)
+                        stmt.bindInt(4, order)
+                        val parent = parentOf[id]
+                        if (parent == null) stmt.bindNull(5) else stmt.bindText(5, parent)
+                        stmt.step()
+                        stmt.reset()
+                    }
+                }
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -420,7 +501,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_9_10,
             MIGRATION_10_11,
             MIGRATION_11_12,
-            MIGRATION_12_13
+            MIGRATION_12_13,
+            MIGRATION_13_14
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

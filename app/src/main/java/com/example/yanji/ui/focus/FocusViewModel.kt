@@ -81,9 +81,6 @@ class FocusViewModel(
 
     fun acknowledgeCompletedFocus() = repo.acknowledgeCompletedFocus()
 
-    /** 新增自定义科目 */
-    fun addCustomSubject(name: String): Subject = repo.addCustomSubject(name)
-
     companion object {
         /**
          * 纯函数：校验手动补记起止时间与时长合法性。

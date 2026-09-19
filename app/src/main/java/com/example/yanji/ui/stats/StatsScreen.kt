@@ -25,8 +25,8 @@ import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
-import com.example.yanji.ui.components.GlassSegmentedControl
 import com.example.yanji.ui.components.YanjiPageHeader
+import com.example.yanji.ui.components.YanjiSegmentedControl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,14 +56,13 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.PageTopGap))
 
         YanjiPageHeader(
-            title = "学习统计",
-            subtitle = "量化备考轨迹 · 多维图表与阶段AI诊断"
+            title = "学习统计"
         )
 
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
         // Time Range Filter
-        GlassSegmentedControl(
+        YanjiSegmentedControl(
             items = listOf("本周", "本月", "全部累计"),
             selectedIndex = state.selectedTimeTab,
             onItemSelected = { viewModel.selectTimeTab(it) },

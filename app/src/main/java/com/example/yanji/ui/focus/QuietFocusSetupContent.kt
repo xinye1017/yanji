@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,10 +16,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -31,6 +34,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -38,13 +44,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,7 +59,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +70,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -80,19 +86,14 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.Subject
-import com.example.yanji.theme.SubjectEnglish
-import com.example.yanji.theme.SubjectEnglishSoft
-import com.example.yanji.theme.SubjectMajor
-import com.example.yanji.theme.SubjectMajorSoft
-import com.example.yanji.theme.SubjectMath
-import com.example.yanji.theme.SubjectMathSoft
-import com.example.yanji.theme.SubjectPolitics
-import com.example.yanji.theme.SubjectPoliticsSoft
+
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.AppContentInsets
+import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.data.YanjiTime
+import kotlin.math.abs
 
 private enum class QuietFocusStep {
     CATEGORY,
@@ -105,12 +106,28 @@ private data class QuietDurationOption(
     val mode: String
 )
 
-private val QuietDurationOptions = listOf(
-    QuietDurationOption(25, FocusModes.POMODORO_25),
-    QuietDurationOption(45, FocusModes.POMODORO_45),
-    QuietDurationOption(60, FocusModes.DEEP_60),
-    QuietDurationOption(90, FocusModes.BIG_90)
-)
+private const val QuietDurationMinMinutes = 25
+private const val QuietDurationMaxMinutes = 100
+private const val QuietDurationStepMinutes = 5
+
+private val QuietDurationOptions =
+    (QuietDurationMinMinutes..QuietDurationMaxMinutes step QuietDurationStepMinutes).map { minutes ->
+        QuietDurationOption(minutes = minutes, mode = quietModeForMinutes(minutes))
+    }
+
+private fun quietModeForMinutes(minutes: Int): String = when (minutes) {
+    25 -> FocusModes.POMODORO_25
+    45 -> FocusModes.POMODORO_45
+    60 -> FocusModes.DEEP_60
+    90 -> FocusModes.BIG_90
+    else -> "${minutes}分钟专注"
+}
+
+private fun normalizeQuietDuration(minutes: Int): Int {
+    val clamped = minutes.coerceIn(QuietDurationMinMinutes, QuietDurationMaxMinutes)
+    val steps = ((clamped - QuietDurationMinMinutes) + QuietDurationStepMinutes / 2) / QuietDurationStepMinutes
+    return QuietDurationMinMinutes + steps * QuietDurationStepMinutes
+}
 
 private val QuietCardShape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
 private val QuietControlShape = RoundedCornerShape(YanjiRadius.RowRadius)
@@ -152,9 +169,8 @@ fun QuietFocusSetupContent(
     }
     var selectedDurationMinutes by rememberSaveable(selectedMode) {
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
-        mutableIntStateOf(if (minutes > 0) minutes else 45)
+        mutableIntStateOf(normalizeQuietDuration(if (minutes > 0) minutes else 45))
     }
-    var showCustomDurationDialog by rememberSaveable { mutableStateOf(false) }
 
     val topCategories = remember(subjects) {
         subjects.filter {
@@ -182,17 +198,6 @@ fun QuietFocusSetupContent(
 
     BackHandler(enabled = currentStep != QuietFocusStep.CATEGORY) { goBack() }
 
-    val stepTitle = when (currentStep) {
-        QuietFocusStep.CATEGORY -> "选择学习方向"
-        QuietFocusStep.MODULE -> "选择知识模块"
-        QuietFocusStep.RHYTHM -> "设置专注节奏"
-    }
-    val stepSubtitle = when (currentStep) {
-        QuietFocusStep.CATEGORY -> "这次要把注意力放在哪里？"
-        QuietFocusStep.MODULE -> "选择一个具体模块，让目标更清晰。"
-        QuietFocusStep.RHYTHM -> "为 ${selectedSubject.name} 设定本次计时方式。"
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -201,9 +206,7 @@ fun QuietFocusSetupContent(
             .padding(top = 12.dp)
     ) {
         QuietFocusHeader(
-            stepIndex = currentStep.ordinal + 1,
-            title = stepTitle,
-            subtitle = stepSubtitle,
+            step = currentStep,
             todayTotalSeconds = todayTotalSeconds,
             onBack = if (currentStep == QuietFocusStep.CATEGORY) null else ::goBack,
             onTodayClick = { onNavigateToDailyDetail(todayIso) },
@@ -216,11 +219,15 @@ fun QuietFocusSetupContent(
             targetState = currentStep,
             transitionSpec = {
                 val forward = targetState.ordinal > initialState.ordinal
-                val enterOffset: (Int) -> Int = { width -> if (forward) width / 12 else -width / 12 }
-                val exitOffset: (Int) -> Int = { width -> if (forward) -width / 12 else width / 12 }
-                (fadeIn(tween(180)) + slideInHorizontally(tween(180), enterOffset))
-                    .togetherWith(fadeOut(tween(140)) + slideOutHorizontally(tween(140), exitOffset))
-                    .using(SizeTransform(clip = false))
+                if (forward) {
+                    (slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { width -> width } + fadeIn(tween(240)))
+                        .togetherWith(slideOutHorizontally(tween(280, easing = FastOutSlowInEasing)) { width -> -width } + fadeOut(tween(200)))
+                        .using(sizeTransform = null)
+                } else {
+                    (slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { width -> -width } + fadeIn(tween(240)))
+                        .togetherWith(slideOutHorizontally(tween(280, easing = FastOutSlowInEasing)) { width -> width } + fadeOut(tween(200)))
+                        .using(sizeTransform = null)
+                }
             },
             label = "quietFocusStep",
             modifier = Modifier
@@ -257,7 +264,6 @@ fun QuietFocusSetupContent(
 
                 QuietFocusStep.RHYTHM -> {
                     QuietRhythmStep(
-                        subjectName = selectedSubject.name,
                         isCountdownMode = isCountdownMode,
                         selectedDurationMinutes = selectedDurationMinutes,
                         onCountdownSelected = {
@@ -277,38 +283,29 @@ fun QuietFocusSetupContent(
                             selectedDurationMinutes = option.minutes
                             onSelectMode(option.mode)
                         },
-                        onCustomDuration = { showCustomDurationDialog = true },
-                        onStart = onStart,
-                        onNavigateToExam = onNavigateToExam
+                        onStart = onStart
                     )
                 }
             }
         }
     }
-
-    if (showCustomDurationDialog) {
-        QuietCustomDurationDialog(
-            initialMinutes = selectedDurationMinutes,
-            onDismiss = { showCustomDurationDialog = false },
-            onConfirm = { minutes ->
-                selectedDurationMinutes = minutes
-                onSelectMode("${minutes}分钟专注")
-                showCustomDurationDialog = false
-            }
-        )
-    }
 }
 
 @Composable
 private fun QuietFocusHeader(
-    stepIndex: Int,
-    title: String,
-    subtitle: String,
+    step: QuietFocusStep,
     todayTotalSeconds: Long,
     onBack: (() -> Unit)?,
     onTodayClick: () -> Unit,
     onManualLogClick: () -> Unit = {}
 ) {
+    val stepIndex = step.ordinal + 1
+    val headerTitle = when (step) {
+        QuietFocusStep.CATEGORY -> "专注准备"
+        QuietFocusStep.MODULE -> "选择学科"
+        QuietFocusStep.RHYTHM -> "选择专注时长"
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier
@@ -316,96 +313,84 @@ private fun QuietFocusHeader(
                 .height(40.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                if (onBack == null) {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .offset(x = (-8).dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Timer,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回上一步",
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(21.dp)
                     )
-                } else {
-                    IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回上一步",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "专注准备",
+                text = headerTitle,
                 style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onManualLogClick)
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "手动补记专注",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = "补记",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
 
+            // 只有第一步显示右侧的“补记”和“今日时长”
+            // 第二、三子页取消“补记”与“今日专注时长”
+            if (step == QuietFocusStep.CATEGORY) {
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onTodayClick)
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = YanjiColors.textTertiary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onManualLogClick)
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "手动补记专注",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "补记",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onTodayClick)
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = YanjiColors.textTertiary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
 
         QuietProgressIndicator(stepIndex = stepIndex)
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
     }
 }
 
@@ -449,83 +434,110 @@ private fun QuietCategoryStep(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = AppContentInsets.BottomBarPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(bottom = AppContentInsets.BottomBarPadding)
     ) {
-        categories.chunked(2).forEach { categoryRow ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                categoryRow.forEach { category ->
-                    val accent = quietCategoryAccent(category.id)
-                    val iconBackground = quietCategoryIconBackground(category.id)
-                    Surface(
-                        onClick = { onCategoryClick(category) },
+        Text(
+            text = "选择学习方向",
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            categories.forEach { category ->
+                Surface(
+                    onClick = { onCategoryClick(category) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(76.dp),
+                    shape = QuietCardShape,
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
+                    color = com.example.yanji.theme.YanjiColors.elevatedSurface
+                ) {
+                    Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(108.dp),
-                        shape = QuietCardShape,
-                        border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
-                        color = com.example.yanji.theme.YanjiColors.elevatedSurface
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(YanjiRadius.Small))
-                                        .background(iconBackground),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = quietSubjectIcon(category.id, category.name),
-                                        contentDescription = null,
-                                        tint = accent,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = category.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = quietCategoryTagline(category.id),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                        Text(
+                            text = category.name,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
-                if (categoryRow.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 模拟考试单独一行，不与学科并列
+        Surface(
+            onClick = onNavigateToExam,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp),
+            shape = QuietCardShape,
+            border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
+            color = com.example.yanji.theme.YanjiColors.elevatedSurface
         ) {
-            TextButton(onClick = onNavigateToExam) {
-                Text(
-                    text = "进入模拟考试",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(YanjiRadius.Small))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = "模拟考试",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "全真考场计时模式",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = YanjiColors.textTertiary
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = YanjiColors.textTertiary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -578,22 +590,17 @@ private fun QuietModuleStep(
 
 @Composable
 private fun QuietRhythmStep(
-    subjectName: String,
     isCountdownMode: Boolean,
     selectedDurationMinutes: Int,
     onCountdownSelected: () -> Unit,
     onCountUpSelected: () -> Unit,
     onDurationSelected: (QuietDurationOption) -> Unit,
-    onCustomDuration: () -> Unit,
-    onStart: () -> Unit,
-    onNavigateToExam: () -> Unit
+    onStart: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = AppContentInsets.BottomBarPadding),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(bottom = AppContentInsets.BottomBarPadding)
     ) {
         QuietTimerSegmentedControl(
             isCountdownMode = isCountdownMode,
@@ -601,135 +608,247 @@ private fun QuietRhythmStep(
             onCountUpSelected = onCountUpSelected
         )
 
-        if (isCountdownMode) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "$selectedDurationMinutes",
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontSize = 56.sp,
-                        lineHeight = 64.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isCountdownMode) {
+                QuietDurationWheel(
+                    selectedDurationMinutes = selectedDurationMinutes,
+                    onDurationSelected = onDurationSelected,
+                    modifier = Modifier.fillMaxSize()
                 )
-                Text(
-                    text = "分钟",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                QuietDurationOptions.forEach { option ->
-                    val selected = option.minutes == selectedDurationMinutes
-                    Surface(
-                        onClick = { onDurationSelected(option) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = QuietControlShape,
-                        color = if (selected) QuietSelectedSurface else MaterialTheme.colorScheme.surface
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "${option.minutes}",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "00:00",
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "从零开始累计，不预设结束时间。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
-            }
-
-            TextButton(
-                onClick = onCustomDuration,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "自定义时长",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "00:00",
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "从零开始累计，不预设结束时间。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
             }
         }
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Button(
+            onClick = onStart,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Text(
-                text = if (isCountdownMode) {
-                    "$subjectName · $selectedDurationMinutes 分钟"
-                } else {
-                    "$subjectName · 正向计时"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = YanjiColors.textTertiary
+                text = "开始专注",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White
             )
-            Button(
-                onClick = onStart,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text(
-                    text = "开始专注",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
-                )
+        }
+    }
+}
+
+@Composable
+private fun QuietDurationWheel(
+    selectedDurationMinutes: Int,
+    onDurationSelected: (QuietDurationOption) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val normalizedMinutes = normalizeQuietDuration(selectedDurationMinutes)
+    val selectedIndex = QuietDurationOptions.indexOfFirst { it.minutes == normalizedMinutes }
+        .coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val isDark = yanjiIsDarkTheme()
+    val itemHeight = 54.dp
+    var initialized by remember { mutableStateOf(false) }
+
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        val centerPadding = if (maxHeight > itemHeight) {
+            (maxHeight - itemHeight) / 2
+        } else {
+            0.dp
+        }
+
+        val centeredIndex by remember(listState, selectedIndex) {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                layoutInfo.visibleItemsInfo
+                    .minByOrNull { item -> abs((item.offset + item.size / 2) - viewportCenter) }
+                    ?.index
+                    ?: selectedIndex
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onNavigateToExam) {
-                    Text(
-                        text = "模拟考试",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+        LaunchedEffect(selectedIndex, centerPadding) {
+            if (!initialized) {
+                listState.scrollToItem(selectedIndex)
+                initialized = true
+            }
+        }
+
+        LaunchedEffect(centeredIndex, initialized) {
+            if (!initialized) return@LaunchedEffect
+            QuietDurationOptions.getOrNull(centeredIndex)?.let { option ->
+                if (option.minutes != selectedDurationMinutes) {
+                    onDurationSelected(option)
+                }
+            }
+        }
+
+        LaunchedEffect(normalizedMinutes) {
+            if (!initialized || listState.isScrollInProgress) return@LaunchedEffect
+            val targetIndex = QuietDurationOptions.indexOfFirst { it.minutes == normalizedMinutes }
+            if (targetIndex >= 0 && targetIndex != centeredIndex) {
+                listState.animateScrollToItem(targetIndex)
+            }
+        }
+
+        val selectionShape = RoundedCornerShape(22.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.76f)
+                .height(66.dp)
+                .shadow(
+                    elevation = if (isDark) 10.dp else 4.dp,
+                    shape = selectionShape,
+                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.18f else 0.08f),
+                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.28f else 0.14f)
+                )
+                .clip(selectionShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.10f else 0.055f))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.24f else 0.16f),
+                    shape = selectionShape
+                )
+        )
+
+        LazyColumn(
+            state = listState,
+            flingBehavior = flingBehavior,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = centerPadding)
+        ) {
+            itemsIndexed(
+                items = QuietDurationOptions,
+                key = { _, option -> option.minutes }
+            ) { index, option ->
+                val distance = abs(index - centeredIndex)
+                val isCentered = index == centeredIndex
+                val isMajorTick = option.minutes % 25 == 0
+                val tickWidth by animateDpAsState(
+                    targetValue = when {
+                        isCentered -> 72.dp
+                        isMajorTick -> 52.dp
+                        else -> 28.dp
+                    },
+                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 520f),
+                    label = "durationWheelTickWidth"
+                )
+                val tickHeight by animateDpAsState(
+                    targetValue = when {
+                        isCentered -> 3.dp
+                        isMajorTick -> 2.dp
+                        else -> 1.dp
+                    },
+                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 560f),
+                    label = "durationWheelTickHeight"
+                )
+                val textColor by animateColorAsState(
+                    targetValue = when {
+                        isCentered -> MaterialTheme.colorScheme.primary
+                        distance == 1 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
+                        distance == 2 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f)
+                        distance == 3 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.40f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
+                    },
+                    label = "durationWheelTextColor"
+                )
+                val tickColor by animateColorAsState(
+                    targetValue = when {
+                        isCentered -> MaterialTheme.colorScheme.primary
+                        isMajorTick -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+                        distance <= 2 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f)
+                    },
+                    label = "durationWheelTickColor"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .semantics { this.selected = isCentered }
+                        .clickable(
+                            role = Role.RadioButton,
+                            onClick = { onDurationSelected(option) }
+                        )
+                        .padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    QuietDurationTick(
+                        width = tickWidth,
+                        height = tickHeight,
+                        color = tickColor,
+                        glowing = isCentered
+                    )
+                    Spacer(modifier = Modifier.width(18.dp))
+                    Row(
+                        modifier = Modifier.width(104.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "${option.minutes}",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = when {
+                                    isCentered -> 32.sp
+                                    isMajorTick -> 20.sp
+                                    else -> 16.sp
+                                },
+                                fontWeight = when {
+                                    isCentered -> FontWeight.Bold
+                                    isMajorTick -> FontWeight.SemiBold
+                                    else -> FontWeight.Medium
+                                }
+                            ),
+                            color = textColor
+                        )
+                        if (isCentered) {
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "分钟",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.86f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(18.dp))
+                    QuietDurationTick(
+                        width = tickWidth,
+                        height = tickHeight,
+                        color = tickColor,
+                        glowing = isCentered
                     )
                 }
             }
@@ -738,237 +857,45 @@ private fun QuietRhythmStep(
 }
 
 @Composable
+private fun QuietDurationTick(
+    width: androidx.compose.ui.unit.Dp,
+    height: androidx.compose.ui.unit.Dp,
+    color: Color,
+    glowing: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .then(
+                if (glowing) {
+                    Modifier.shadow(
+                        elevation = 7.dp,
+                        shape = CircleShape,
+                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
+                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+@Composable
 private fun QuietTimerSegmentedControl(
     isCountdownMode: Boolean,
     onCountdownSelected: () -> Unit,
     onCountUpSelected: () -> Unit
 ) {
-    val isDark = yanjiIsDarkTheme()
-    val trackColor = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-    }
-    val trackBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.70f)
-
-    val trackPadding = 4.dp
-    val segmentSpacing = 4.dp
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(CircleShape)
-            .background(trackColor)
-            .border(1.dp, trackBorderColor, CircleShape)
-            .padding(trackPadding)
-    ) {
-        val totalInnerWidth = maxWidth
-        val segmentWidth = (totalInnerWidth - segmentSpacing) / 2f
-
-        val targetOffset = if (isCountdownMode) 0.dp else (segmentWidth + segmentSpacing)
-        val animatedOffset by animateDpAsState(
-            targetValue = targetOffset,
-            animationSpec = spring(
-                dampingRatio = 0.82f,
-                stiffness = 500f
-            ),
-            label = "timerSegmentSlider"
-        )
-
-        // 选中的圆角胶囊滑动指示器（显眼饱满的主色背景与柔和微光投影）
-        Box(
-            modifier = Modifier
-                .offset { androidx.compose.ui.unit.IntOffset(animatedOffset.roundToPx(), 0) }
-                .width(segmentWidth)
-                .fillMaxHeight()
-                .shadow(
-                    elevation = if (isDark) 4.dp else 2.dp,
-                    shape = CircleShape,
-                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.30f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                    spotColor = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.40f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
-                )
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-        )
-
-        // 倒计时与正向计时的文本选项
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(segmentSpacing)
-        ) {
-            QuietTimerSegment(
-                text = "倒计时",
-                selected = isCountdownMode,
-                onClick = onCountdownSelected,
-                modifier = Modifier.weight(1f)
-            )
-            QuietTimerSegment(
-                text = "正向计时",
-                selected = !isCountdownMode,
-                onClick = onCountUpSelected,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuietTimerSegment(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val textColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+    YanjiSegmentedControl(
+        items = listOf("倒计时", "正向计时"),
+        selectedIndex = if (isCountdownMode) 0 else 1,
+        onItemSelected = { index ->
+            if (index == 0) onCountdownSelected() else onCountUpSelected()
         },
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
-        label = "segmentTextColor"
+        modifier = Modifier.fillMaxWidth()
     )
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .clip(CircleShape)
-            .semantics { this.selected = selected }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.Tab,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-            ),
-            color = textColor
-        )
-    }
-}
-
-@Composable
-private fun QuietCustomDurationDialog(
-    initialMinutes: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var input by rememberSaveable(initialMinutes) { mutableStateOf("$initialMinutes") }
-    val commonMinutes = listOf(15, 30, 45, 60, 75, 90, 120, 150, 180)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "自定义时长",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    text = "输入 1–360 分钟，或选择常用时长。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it.filter(Char::isDigit).take(3) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("分钟") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(YanjiRadius.Small)
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    commonMinutes.forEach { minutes ->
-                        val selected = input == "$minutes"
-                        Surface(
-                            onClick = { input = "$minutes" },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (selected) QuietSelectedSurface else MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                text = "$minutes 分钟",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val minutes = (input.toIntOrNull() ?: initialMinutes).coerceIn(1, 360)
-                    onConfirm(minutes)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
-            ) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        },
-        shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    )
-}
-
-private fun quietCategoryTagline(id: String): String = when (id) {
-    "math" -> "高数 · 线代 · 概率"
-    "major" -> "数据结构 · 计组 · 操作系统 · 计网"
-    "english" -> "词汇 · 阅读 · 写作"
-    "politics" -> "马原 · 毛中特 · 史纲 · 思修"
-    else -> "考点梳理 · 专项突破"
-}
-
-private fun quietSubjectIcon(subjectId: String, name: String): ImageVector {
-    val value = (subjectId + name).lowercase()
-    return when {
-        value.contains("math") || value.contains("数") -> Icons.Default.Calculate
-        value.contains("408") || value.contains("major") || value.contains("计") -> Icons.Default.Terminal
-        value.contains("english") || value.contains("英") || value.contains("语") -> Icons.Default.Translate
-        value.contains("politic") || value.contains("政") || value.contains("思") -> Icons.Default.AutoStories
-        else -> Icons.Default.Timer
-    }
-}
-
-@Composable
-@ReadOnlyComposable
-private fun quietCategoryAccent(id: String): Color = when (id) {
-    "math" -> SubjectMath
-    "major" -> SubjectMajor
-    "english" -> SubjectEnglish
-    "politics" -> SubjectPolitics
-    else -> MaterialTheme.colorScheme.primary
-}
-
-/**
- * 科目分类的图标底色 —— 与 [quietCategoryAccent] 同色系的极浅容器。
- *
- * 使用 theme 中与分类色对应的 soft 阶，避免 Screen 内联 hex。
- */
-@Composable
-@ReadOnlyComposable
-private fun quietCategoryIconBackground(id: String): Color = when (id) {
-    "math" -> SubjectMathSoft
-    "major" -> SubjectMajorSoft
-    "english" -> SubjectEnglishSoft
-    "politics" -> SubjectPoliticsSoft
-    else -> MaterialTheme.colorScheme.surfaceVariant
 }

@@ -81,16 +81,92 @@ class YanjiRepository private constructor() {
     @Volatile
     private var cachedAiApiKey: String = ""
 
-    val defaultSubjects = SubjectCatalog.all
+    val defaultSubjects = SubjectCatalog.defaults
 
-    private val _subjects = MutableStateFlow(defaultSubjects)
+    private val _subjects = MutableStateFlow(SubjectCatalog.all)
     val subjects: StateFlow<List<Subject>> = _subjects.asStateFlow()
 
-    fun addCustomSubject(name: String, color: String = "#356AE6"): Subject {
+    /**
+     * 写入学科并同步内存镜像。
+     *
+     * 这里刻意**不**只依赖 DB Flow 回灌：`SubjectCatalog` 是同步读的镜像，如果等 Flow
+     * 下一帧才更新，紧接着的同步查询（如统计分桶）会读到旧数据。因此写完立刻
+     * 用同一个列表刷新两侧。
+     */
+    private suspend fun persistSubjects(mutate: suspend (SubjectDao) -> Unit) {
+        val dao = database?.subjectDao() ?: return
+        mutate(dao)
+        val latest = dao.getAll().map { it.toDomainModel() }
+        SubjectCatalog.replaceAll(latest)
+        _subjects.value = SubjectCatalog.all
+    }
+
+    /** 新增一个顶级学科类别。 */
+    suspend fun addSubjectCategory(name: String): Subject {
         val id = "custom_" + UUID.randomUUID().toString().take(8)
-        val newSub = Subject(id, name, color, sortOrder = _subjects.value.size + 1)
-        _subjects.value = _subjects.value + newSub
-        return newSub
+        val subject = Subject(
+            id = id,
+            name = name.trim(),
+            colorHex = nextSubjectColor(),
+            sortOrder = (_subjects.value.maxOfOrNull { it.sortOrder } ?: 0) + 1
+        )
+        persistSubjects { it.insert(SubjectEntity.fromDomainModel(subject)) }
+        return subject
+    }
+
+    /** 在指定类别下新增子学科。 */
+    suspend fun addSubSubject(parentId: String, name: String): Subject? {
+        val parent = SubjectCatalog.find(parentId) ?: return null
+        val id = "custom_" + UUID.randomUUID().toString().take(8)
+        val siblings = SubjectCatalog.all.filter { it.parentId == parentId }
+        val subject = Subject(
+            id = id,
+            name = name.trim(),
+            colorHex = parent.colorHex,
+            sortOrder = parent.sortOrder * 100 + siblings.size + 1,
+            parentId = parentId
+        )
+        persistSubjects { it.insert(SubjectEntity.fromDomainModel(subject)) }
+        return subject
+    }
+
+    /** 重命名学科（类别或子学科）。 */
+    suspend fun renameSubject(subjectId: String, newName: String) {
+        val existing = SubjectCatalog.find(subjectId) ?: return
+        persistSubjects {
+            it.insert(SubjectEntity.fromDomainModel(existing.copy(name = newName.trim())))
+        }
+    }
+
+    /**
+     * 删除学科。删除类别时连同其子学科一起删除。
+     *
+     * 历史学习记录**不做级联改动**：它们保存的是 subjectId + subjectName 的字符串快照，
+     * 删除后仍可独立展示，统计时按 id 反查不到学科会回落到「其他」分桶。
+     */
+    suspend fun deleteSubject(subjectId: String) {
+        val existing = SubjectCatalog.find(subjectId) ?: return
+        persistSubjects { dao ->
+            if (existing.isCategory) dao.deleteChildrenOf(subjectId)
+            dao.deleteById(subjectId)
+        }
+    }
+
+    /** 把学科恢复为出厂默认（覆盖式）。 */
+    suspend fun restoreDefaultSubjects() {
+        persistSubjects { dao ->
+            dao.deleteAll()
+            dao.insertAll(SubjectCatalog.defaults.map { SubjectEntity.fromDomainModel(it) })
+        }
+    }
+
+    private fun nextSubjectColor(): String {
+        val palette = listOf(
+            "#356AE6", "#8B7CF6", "#2F9E6D", "#E67E22",
+            "#B8426B", "#3B78B8", "#A95822", "#2F7F55"
+        )
+        val used = _subjects.value.filter { it.isCategory }.map { it.colorHex }.toSet()
+        return palette.firstOrNull { it !in used } ?: palette[_subjects.value.size % palette.size]
     }
 
     // ---- 领域 Store：状态与动作各自归属，Repository 只做同名委托（UI 层零改动）----
@@ -218,6 +294,17 @@ class YanjiRepository private constructor() {
             // 聊天的 DB 订阅由 ChatStore 自己负责
             chatStore.bind(db)
             checkInStore.bind(db)
+            launch {
+                // 学科的 DB 订阅：内存镜像与 StateFlow 同步刷新。
+                // 表为空时不覆盖默认值——「用户删光学科」是合法状态，但首帧仍需有内容可展示。
+                db.subjectDao().getAllFlow().collect { entities ->
+                    if (entities.isNotEmpty()) {
+                        val subjects = entities.map { it.toDomainModel() }
+                        SubjectCatalog.replaceAll(subjects)
+                        _subjects.value = SubjectCatalog.all
+                    }
+                }
+            }
             launch {
                 db.achievementDao().getAllFlow().collect { entities ->
                     _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
@@ -459,6 +546,14 @@ class YanjiRepository private constructor() {
         // 会话列表被整体替换后，"当前会话"指针必须重新校正到一个真实存在的会话上
         chatStore.onSessionsReplaced()
         timerStore.clearActiveFocus()
+
+        // 学科镜像也要立即刷新：导入是整表替换，若不在这里同步，紧接着的同步查询
+        // （统计分桶、AI 提示词）会读到导入前的旧学科列表。
+        val restoredSubjects = db.subjectDao().getAll().map { it.toDomainModel() }
+        if (restoredSubjects.isNotEmpty()) {
+            SubjectCatalog.replaceAll(restoredSubjects)
+            _subjects.value = SubjectCatalog.all
+        }
 
         BackupImportResult.Success(backup, snapshotPath, decoded.warnings)
     }

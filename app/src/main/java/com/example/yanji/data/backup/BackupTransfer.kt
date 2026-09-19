@@ -32,7 +32,8 @@ internal object BackupTransfer {
         chatMessages = db.chatMessageDao().getAll().first().map { it.toDomainModel() },
         checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
         unlockedAchievements = db.achievementDao().getAllFlow().first().associate { it.id to it.unlockedAt },
-        quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() }
+        quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() },
+        subjects = db.subjectDao().getAll().map { it.toDomainModel() }
     )
 
     /**
@@ -85,6 +86,12 @@ internal object BackupTransfer {
             db.quickStartPresetDao().insertAll(
                 backup.quickStartPresets.map { QuickStartPresetEntity.fromDomainModel(it) }
             )
+        }
+
+        // 旧版备份没有 subjects 字段：此时保持本机学科不动，避免把用户的学科清空。
+        if (backup.subjects.isNotEmpty()) {
+            db.subjectDao().deleteAll()
+            db.subjectDao().insertAll(backup.subjects.map { SubjectEntity.fromDomainModel(it) })
         }
 
         backup.settings?.let {

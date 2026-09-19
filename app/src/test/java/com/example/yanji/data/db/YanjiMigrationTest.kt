@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 13
+    private val CURRENT_VERSION = 14
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -181,8 +181,21 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_9_10,
         YanjiDatabase.MIGRATION_10_11,
         YanjiDatabase.MIGRATION_11_12,
-        YanjiDatabase.MIGRATION_12_13
+        YanjiDatabase.MIGRATION_12_13,
+        YanjiDatabase.MIGRATION_13_14
     )
+
+    /**
+     * 从 [fromVersion] 起补全到当前版本的迁移链。
+     *
+     * 单跳测试只关心自己那一跳的行为，但 `runMigrationsAndValidate` 要求给出**到达终态的
+     * 完整路径**。按起始版本切片比按数量切片更不容易错：新增版本时无需改动任何调用点。
+     *
+     * [override] 用于替换链中带副作用的迁移（如 `migration7to8` 需要测试自己的 sink）。
+     */
+    private fun chainFrom(fromVersion: Int, override: Migration? = null): List<Migration> =
+        allMigrations().filter { it.startVersion >= fromVersion }
+            .map { if (override != null && it.startVersion == override.startVersion) override else it }
 
     /** 用驱动直接把手工 DDL + 种子数据写进目标文件，并把 user_version 设成 [version]。 */
     private fun seedRawDatabase(version: Int, ddl: List<String>, statements: List<String> = emptyList()) {
@@ -316,14 +329,7 @@ class YanjiMigrationTest {
         val legacyKeys = mutableListOf<String>()
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(
-                YanjiDatabase.migration7to8 { legacyKeys += it },
-                YanjiDatabase.MIGRATION_8_9,
-                YanjiDatabase.MIGRATION_9_10,
-                YanjiDatabase.MIGRATION_10_11,
-                YanjiDatabase.MIGRATION_11_12,
-                YanjiDatabase.MIGRATION_12_13
-            )
+            chainFrom(7, YanjiDatabase.migration7to8 { legacyKeys += it })
         )
 
         // 凭据被读出，用于上层写入 Keystore；列本身必须消失
@@ -351,14 +357,7 @@ class YanjiMigrationTest {
         val legacyKeys = mutableListOf<String>()
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(
-                YanjiDatabase.migration7to8 { legacyKeys += it },
-                YanjiDatabase.MIGRATION_8_9,
-                YanjiDatabase.MIGRATION_9_10,
-                YanjiDatabase.MIGRATION_10_11,
-                YanjiDatabase.MIGRATION_11_12,
-                YanjiDatabase.MIGRATION_12_13
-            )
+            chainFrom(7, YanjiDatabase.migration7to8 { legacyKeys += it })
         )
 
         assertTrue("空凭据不应触发落盘", legacyKeys.isEmpty())
@@ -404,7 +403,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13)
+            chainFrom(9)
         )
 
         assertTrue("blockers 列应已存在", "blockers" in db.columnNames("journal_entries"))
@@ -421,7 +420,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13)
+            chainFrom(9)
         )
 
         assertEquals("迁移不应向 journal_entries 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM journal_entries"))
@@ -455,7 +454,10 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            chainFrom(11)
+        )
 
         assertTrue("themeMode 列应已存在", "themeMode" in db.columnNames("user_settings"))
         assertEquals(
@@ -474,7 +476,7 @@ class YanjiMigrationTest {
     fun migrate11To12_doesNotFabricateASettingsRow() {
         seedRawDatabase(version = 11, ddl = v10Ddl + v11IndexDdl)
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(11))
 
         assertEquals("迁移不应凭空创建 settings 行", 0, db.intValue("SELECT COUNT(*) FROM user_settings"))
         db.close()
@@ -502,7 +504,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_12_13)
+            chainFrom(12)
         )
 
         assertTrue("mascotTheme 列应已存在", "mascotTheme" in db.columnNames("user_settings"))
@@ -510,6 +512,69 @@ class YanjiMigrationTest {
         assertEquals("DARK", db.textValue("SELECT themeMode FROM user_settings WHERE id=1"))
         assertEquals("目标大学", db.textValue("SELECT targetSchool FROM user_settings WHERE id=1"))
         assertEquals(1, db.intValue("SELECT COUNT(*) FROM user_settings"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 13 -> 14 学科持久化
+
+    /**
+     * 13→14 是全库第一次出现「迁移主动写入业务表内容」。
+     *
+     * 这是**刻意**的：学科是系统提供的默认配置（相当于内置词典），不是用户产生的记录。
+     * 之所以不放在 App 启动时补种，是因为 `AppInitializer` 有一条不变量——「表为空」是合法
+     * 业务状态，启动补种会让「用户删光学科」在重启后被悄悄复活。迁移只在升级路径上跑一次，
+     * 之后的删除/改名会被如实保留。
+     */
+    @Test
+    fun migrate13To14_createsSubjectsTableSeededWithDefaults() {
+        val db13 = helper.createDatabase(13)
+        db13.close()
+
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            chainFrom(13)
+        )
+
+        val columns = db.columnNames("subjects")
+        assertTrue("subjects 应包含 id 列", "id" in columns)
+        assertTrue("subjects 应包含 parentId 列", "parentId" in columns)
+        assertTrue("subjects 应包含 sortOrder 列", "sortOrder" in columns)
+
+        // 12 条默认学科（5 个类别 + 7 个子学科）
+        assertEquals(12, db.intValue("SELECT COUNT(*) FROM subjects"))
+        assertEquals(5, db.intValue("SELECT COUNT(*) FROM subjects WHERE parentId IS NULL"))
+
+        // 默认内容与 SubjectCatalog.defaults 对齐
+        assertEquals("数学一", db.textValue("SELECT name FROM subjects WHERE id='math'"))
+        assertEquals("math", db.textValue("SELECT parentId FROM subjects WHERE id='math_advanced'"))
+        assertEquals(1, db.intValue("SELECT enabled FROM subjects WHERE id='math'"))
+        assertEquals(11, db.intValue("SELECT sortOrder FROM subjects WHERE id='math_advanced'"))
+        assertEquals("#356AE6", db.textValue("SELECT colorHex FROM subjects WHERE id='math'"))
+
+        // 索引必须建出来，否则 Room 的 TableInfo 校验会失败
+        val indexes = db.indexNames("subjects")
+        assertTrue("应存在 parentId 索引", "index_subjects_parentId" in indexes)
+        assertTrue("应存在 sortOrder 索引", "index_subjects_sortOrder" in indexes)
+
+        db.close()
+    }
+
+    @Test
+    fun migrate13To14_preservesExistingStudyRecords() {
+        val db13 = helper.createDatabase(13)
+        db13.prepare(
+            "INSERT INTO focus_sessions VALUES " +
+                "('fs1','math_advanced','高等数学',1000,2000,3600,0,0,'正向计时','','COMPLETED',1)"
+        ).use { it.step() }
+        db13.close()
+
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            chainFrom(13)
+        )
+
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM focus_sessions"))
+        assertEquals("高等数学", db.textValue("SELECT subjectName FROM focus_sessions WHERE id='fs1'"))
         db.close()
     }
 
@@ -522,6 +587,8 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(CURRENT_VERSION, allMigrations())
 
+        // 注意：`subjects` **不在**此列表中。它是系统提供的默认配置（内置学科词典），
+        // 迁移时主动写入是设计意图，见 `migrate13To14_createsSubjectsTableSeededWithDefaults`。
         listOf(
             "focus_sessions", "exam_sessions", "journal_entries",
             "chat_messages", "chat_sessions", "check_ins",
@@ -561,7 +628,10 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            chainFrom(10)
+        )
 
         assertEquals(4, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         assertEquals("updated", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-01'"))

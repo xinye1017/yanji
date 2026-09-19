@@ -15,10 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -44,6 +47,18 @@ fun SubjectDistributionCard(
     onNavigateToSubjectDetail: (String) -> Unit
 ) {
     val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
+    val mascotTheme = currentMascotTheme()
+    val isDark = yanjiIsDarkTheme()
+    val isSubcategory = subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY
+
+    val subjectColors = remember(subjectDistribution, mascotTheme, isDark, isSubcategory) {
+        resolveSubjectChartColors(
+            items = subjectDistribution.map { it.subjectId to it.subjectName },
+            palette = mascotTheme.chartPalette,
+            isDark = isDark,
+            isSubcategory = isSubcategory
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -75,15 +90,6 @@ fun SubjectDistributionCard(
                     modifier = Modifier.width(130.dp)
                 )
             }
-            Text(
-                text = if (subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY) {
-                    "按具体学科统计 · 点击查看明细"
-                } else {
-                    "已汇总子类与大类直接记录 · 点击查看明细"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = YanjiColors.textTertiary
-            )
 
             if (subjectDistribution.isEmpty()) {
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
@@ -100,13 +106,15 @@ fun SubjectDistributionCard(
                 // 单学科多态：显示 100% 紧凑信息条，不绘制巨大单色圆环
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 val singleSub = subjectDistribution.first()
-                val color = subjectDisplayColor(singleSub)
+                val color = subjectColors[singleSub.subjectName] ?: subjectChartColor(singleSub.subjectName, singleSub.subjectId)
                 val durationText = DurationFormatter.formatHoursMinutes(singleSub.durationSeconds)
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(YanjiRadius.Small))
+                        // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                        // 底部内边距(8dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
+                        // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                         .clickable { onNavigateToSubjectDetail(singleSub.subjectId) }
                         .padding(vertical = 8.dp)
                         .semantics {
@@ -141,15 +149,17 @@ fun SubjectDistributionCard(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { 1f },
+                    val singleTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    Canvas(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
-                            .clip(CircleShape),
-                        color = color,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    ) {
+                        val radius = size.height / 2f
+                        val corner = CornerRadius(radius, radius)
+                        drawRoundRect(color = singleTrackColor, cornerRadius = corner)
+                        drawRoundRect(color = color, cornerRadius = corner)
+                    }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "全部专注时间集中在该学科 · 点击查看科目详情",
@@ -162,13 +172,14 @@ fun SubjectDistributionCard(
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 SubjectDonutChart(
                     subjectDist = subjectDist,
+                    subjectColors = subjectColors,
                     totalLabel = timeRangeTitle
                 )
 
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 subjectDistribution.forEachIndexed { index, sub ->
-                    val color = subjectDisplayColor(sub)
+                    val color = subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)
                     val subSecs = sub.durationSeconds
                     val totalSecs = maxOf(1L, subjectDist.values.sum())
                     val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
@@ -176,7 +187,9 @@ fun SubjectDistributionCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
+                            // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                            // 底部内边距(4dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
+                            // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                             .clickable { onNavigateToSubjectDetail(sub.subjectId) }
                             .padding(vertical = 4.dp)
                     ) {
@@ -198,14 +211,14 @@ fun SubjectDistributionCard(
 
                 SubjectDistributionBar(
                     segments = subjectDistribution.map { sub ->
-                        subjectDisplayColor(sub) to sub.durationSeconds.toFloat()
+                        (subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)) to sub.durationSeconds.toFloat()
                     }
                 )
 
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 subjectDistribution.forEachIndexed { index, sub ->
-                    val color = subjectDisplayColor(sub)
+                    val color = subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)
                     val subSecs = sub.durationSeconds
                     val totalSecs = maxOf(1L, subjectDist.values.sum())
                     val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
@@ -213,7 +226,9 @@ fun SubjectDistributionCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
+                            // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                            // 底部内边距(4dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
+                            // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                             .clickable { onNavigateToSubjectDetail(sub.subjectId) }
                             .padding(vertical = 4.dp)
                     ) {
@@ -255,15 +270,32 @@ fun SubjectProgressBar(
             Text(text = "$time (${(percent * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
         }
         Spacer(modifier = Modifier.height(6.dp))
-        LinearProgressIndicator(
-            progress = { percent },
+        // 用 Canvas 直接绘制：轨道与填充各自 drawRoundRect，半径取半高（胶囊形）。
+        //
+        // 注意：进度条左端「像被截断」的问题**不在本函数**，而是外层可点击 Column 的
+        // clip(RoundedCornerShape(12.dp)) 在圆角处切到了进度条（详见该处注释）。
+        // 这里保持最简单、最高效的两次 drawRoundRect，不要为了绕那个问题加 clipPath。
+        val trackColor = MaterialTheme.colorScheme.surfaceVariant
+        Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(CircleShape),
-            color = color,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ) {
+            val radius = size.height / 2f
+            val corner = CornerRadius(radius, radius)
+
+            drawRoundRect(color = trackColor, cornerRadius = corner)
+
+            val filledWidth = size.width * percent.coerceIn(0f, 1f)
+            if (filledWidth > 0f) {
+                val filledRadius = min(radius, filledWidth / 2f)
+                drawRoundRect(
+                    color = color,
+                    size = Size(filledWidth, size.height),
+                    cornerRadius = CornerRadius(filledRadius, filledRadius)
+                )
+            }
+        }
     }
 }
 
@@ -292,17 +324,12 @@ private fun SubjectDistributionBar(segments: List<Pair<Color, Float>>) {
 }
 
 /**
- * 单条学科分布的显示色：优先用数据层给的 hex，解析失败再回落到学科序列色。
+ * 单条学科分布的显示色：优先当前主题的图表调色方案。
  */
 @Composable
 @ReadOnlyComposable
 private fun subjectDisplayColor(sub: SubjectDistributionItem): Color {
-    val fallback = subjectChartColor(sub.subjectName)
-    return try {
-        Color(sub.subjectColor.toColorInt())
-    } catch (_: Exception) {
-        fallback
-    }
+    return com.example.yanji.theme.subjectChartColor(sub.subjectName, sub.subjectId)
 }
 
 /**
@@ -310,20 +337,83 @@ private fun subjectDisplayColor(sub: SubjectDistributionItem): Color {
  */
 @Composable
 @ReadOnlyComposable
-fun subjectChartColor(name: String): Color = when {
-    name.contains("数学") || name.contains("线性代数") || name.contains("概率论") ->
-        yanjiSeriesToken(SubjectMath)
-    name.contains("408") || name.contains("专业课") || name.contains("数据结构") ||
-        name.contains("计算机组成") || name.contains("计算机网络") || name.contains("操作系统") ->
-        yanjiSeriesToken(SubjectMajor)
-    name.contains("英语") -> yanjiSeriesToken(SubjectEnglish)
-    name.contains("政治") -> yanjiSeriesToken(SubjectPolitics)
-    else -> yanjiSeriesToken(SubjectOther)
+fun subjectChartColor(name: String, id: String = ""): Color {
+    return com.example.yanji.theme.subjectChartColor(name, id)
+}
+
+/**
+ * 环形图单段的几何参数（弧度制），供 [annulusSegmentPath] 生成带平齐切口的路径。
+ */
+private data class AnnulusSegmentMeta(
+    val startRad: Float,
+    val endRad: Float,
+    val centre: Offset,
+    val innerRadius: Float,
+    val outerRadius: Float
+)
+
+/**
+ * 生成一段环形（annulus）扇形路径。若 [closed] 为 true，则画成一整圈不做切口。
+ *
+ * 关键点：两端切口都是**沿半径方向的直线**，并且在内弧与外弧上各缩进相同的**弧长**（gap/2），
+ * 因此两个切面彼此平行、从内到外宽度一致；不会像用固定角度切割那样向外张开成楔形。
+ */
+private fun annulusSegmentPath(
+    meta: AnnulusSegmentMeta,
+    gapPx: Float,
+    closed: Boolean
+): Path? {
+    fun pointAt(radius: Float, angle: Float) = Offset(
+        x = meta.centre.x + radius * kotlin.math.cos(angle),
+        y = meta.centre.y + radius * kotlin.math.sin(angle)
+    )
+
+    // 整段闭合：内外两个圆用 EvenOdd 填成圆环，不做任何切口。
+    if (closed) {
+        return Path().apply {
+            addOval(Rect(center = meta.centre, radius = meta.outerRadius))
+            addOval(Rect(center = meta.centre, radius = meta.innerRadius))
+            fillType = PathFillType.EvenOdd
+        }
+    }
+
+    // 把「线性间隙」换算成各自半径上的角度，两端各缩进 gap/2 对应的弧长。
+    val innerHalf = (gapPx / 2f) / meta.innerRadius
+    val outerHalf = (gapPx / 2f) / meta.outerRadius
+    val startInner = meta.startRad + innerHalf
+    val endInner = meta.endRad - innerHalf
+    val startOuter = meta.startRad + outerHalf
+    val endOuter = meta.endRad - outerHalf
+    if (endInner <= startInner || endOuter <= startOuter) return null
+
+    val outerRect = Rect(center = meta.centre, radius = meta.outerRadius)
+    val innerRect = Rect(center = meta.centre, radius = meta.innerRadius)
+
+    return Path().apply {
+        val pStartOuter = pointAt(meta.outerRadius, startOuter)
+        moveTo(pStartOuter.x, pStartOuter.y)
+        arcTo(
+            rect = outerRect,
+            startAngleDegrees = Math.toDegrees(startOuter.toDouble()).toFloat(),
+            sweepAngleDegrees = Math.toDegrees((endOuter - startOuter).toDouble()).toFloat(),
+            forceMoveTo = false
+        )
+        val pEndInner = pointAt(meta.innerRadius, endInner)
+        lineTo(pEndInner.x, pEndInner.y)
+        arcTo(
+            rect = innerRect,
+            startAngleDegrees = Math.toDegrees(endInner.toDouble()).toFloat(),
+            sweepAngleDegrees = Math.toDegrees((startInner - endInner).toDouble()).toFloat(),
+            forceMoveTo = false
+        )
+        close()
+    }
 }
 
 @Composable
 private fun SubjectDonutChart(
     subjectDist: Map<String, Long>,
+    subjectColors: Map<String, Color>,
     modifier: Modifier = Modifier,
     totalLabel: String = "今日"
 ) {
@@ -340,27 +430,30 @@ private fun SubjectDonutChart(
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant
         val seriesColors = mutableMapOf<String, Color>()
-        subjectDist.keys.forEach { name -> seriesColors[name] = subjectChartColor(name) }
+        subjectDist.keys.forEach { name -> seriesColors[name] = subjectColors[name] ?: subjectChartColor(name) }
         Canvas(modifier = Modifier.size(150.dp)) {
             if (total > 0) {
                 val strokeW = 24.dp.toPx()
                 val diameter = min(size.width, size.height) - strokeW
-                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-                val arcSize = Size(diameter, diameter)
+                val segmentCount = subjectDist.size
+                val centre = Offset(size.width / 2f, size.height / 2f)
+                val centreRadius = diameter / 2f
+                val innerRadius = centreRadius - strokeW / 2f
+                val outerRadius = centreRadius + strokeW / 2f
+                // Gap width measured along the ring, identical at the inner and outer edges.
+                val gapPx = if (segmentCount > 1) 3.dp.toPx() else 0f
                 var startAngle = -90f
 
-                subjectDist.forEach { (name, secs) ->
+                subjectDist.entries.forEachIndexed { index, (name, secs) ->
                     val sweep = secs.toFloat() / total * 360f * reveal
                     if (sweep > 0.5f) {
-                        drawArc(
-                            color = seriesColors.getValue(name),
-                            startAngle = startAngle,
-                            sweepAngle = (sweep - 2f).coerceAtLeast(0.5f),
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokeW, cap = StrokeCap.Butt)
-                        )
+                        val startRad = (startAngle * (Math.PI / 180.0)).toFloat()
+                        val endRad = ((startAngle + sweep) * (Math.PI / 180.0)).toFloat()
+                        val meta = AnnulusSegmentMeta(startRad, endRad, centre, innerRadius, outerRadius)
+                        val segmentPath = annulusSegmentPath(meta, gapPx, closed = segmentCount == 1)
+                        if (segmentPath != null) {
+                            drawPath(path = segmentPath, color = seriesColors.getValue(name))
+                        }
                     }
                     startAngle += sweep
                 }

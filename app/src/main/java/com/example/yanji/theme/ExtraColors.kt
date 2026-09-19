@@ -170,16 +170,35 @@ internal val DarkSeriesColors: Map<String, Color> = mapOf(
 @Composable
 @ReadOnlyComposable
 fun yanjiSeriesColor(hex: String, fallback: Color): Color {
-    if (!LocalYanjiDarkTheme.current) return fallback
-    return DarkSeriesColors[hex.removePrefix("#").trim().uppercase()] ?: fallback
+    val mascot = LocalMascotTheme.current
+    val isDark = LocalYanjiDarkTheme.current
+    val palette = mascot.chartPalette
+    val cleanHex = hex.removePrefix("#").trim().uppercase()
+    return when (cleanHex) {
+        "356AE6" -> palette.math(isDark)
+        "6F91EA" -> palette.major(isDark)
+        "8B7CF6" -> palette.english(isDark)
+        "7CB6D9", "E67E22" -> palette.politics(isDark)
+        "B8C6DF", "667085" -> palette.other(isDark)
+        else -> if (!isDark) fallback else DarkSeriesColors[cleanHex] ?: fallback
+    }
 }
 
-/** 亮色序列色 token → 暗色序列色 token，供直接使用 token 的调用点取色。 */
+/** 亮色序列色 token → 当前伙伴主题序列色 token，供直接使用 token 的调用点取色。 */
 @Composable
 @ReadOnlyComposable
 fun yanjiSeriesToken(light: Color): Color {
-    if (!LocalYanjiDarkTheme.current) return light
-    return DarkSeriesColors[light.toHexKey()] ?: light
+    val mascot = LocalMascotTheme.current
+    val isDark = LocalYanjiDarkTheme.current
+    val palette = mascot.chartPalette
+    return when (light) {
+        SubjectMath -> palette.math(isDark)
+        SubjectMajor -> palette.major(isDark)
+        SubjectEnglish -> palette.english(isDark)
+        SubjectPolitics -> palette.politics(isDark)
+        SubjectOther -> palette.other(isDark)
+        else -> if (!isDark) light else DarkSeriesColors[light.toHexKey()] ?: light
+    }
 }
 
 private fun Color.toHexKey(): String =

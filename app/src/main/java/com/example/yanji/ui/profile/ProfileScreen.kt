@@ -38,6 +38,7 @@ import java.util.Locale
 fun ProfileScreen(
     modifier: Modifier = Modifier,
     onNavigateToAchievements: () -> Unit = {},
+    onNavigateToSubjectManager: () -> Unit = {},
     viewModel: ProfileViewModel = yanjiViewModel { container ->
         ProfileViewModel(container.repository)
     }
@@ -195,6 +196,17 @@ fun ProfileScreen(
             ProfileThemeSelector(
                 selected = YanjiThemeMode.fromStorage(settings.themeMode),
                 onSelect = { mode -> viewModel.updateSettings(settings.copy(themeMode = mode.name)) }
+            )
+            HorizontalDivider(
+                color = YanjiColors.separator,
+                thickness = 0.8.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            ProfileSettingsItem(
+                icon = Icons.Outlined.Category,
+                title = "学科管理",
+                subtitle = "自定义学科类别与子学科",
+                onClick = onNavigateToSubjectManager
             )
         }
 

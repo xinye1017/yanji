@@ -29,7 +29,7 @@ android {
         applicationId = "com.example.yanji"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0.0"
         // 插桩测试入口（app/src/androidTest）。之前从未声明过，因此 androidTest 目录一直是空的。
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

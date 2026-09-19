@@ -89,13 +89,20 @@ data class Subject(
 }
 
 /**
- * 学科层级的单一数据源。学习记录保存最具体的可选科目 ID，
- * 统计时再根据 parentId 汇总，不需要改动现有 Room 表结构。
+ * 学科层级的**唯一事实来源**。
+ *
+ * 学科现在持久化在 Room 的 `subjects` 表（v14 起），这个 object 是该表的
+ * **同步内存镜像**：由 [com.example.yanji.data.YanjiRepository] 在数据库发射时
+ * 整体替换 [all]。之所以保留这套静态查询函数，是因为统计 / 成就 / 诊断等大量
+ * 纯函数都在同步语境里按 id 反查学科，把它们全部改成挂起或 Flow 的收益极低。
+ *
+ * 约定：**只允许 Repository 调用 [replaceAll] 写入**，其余调用方一律只读。
  */
 object SubjectCatalog {
     const val UNCLASSIFIED_SUFFIX = "__unclassified"
 
-    val all: List<Subject> = listOf(
+    /** 新装 / 迁移时写入的默认学科，同时也是「恢复默认」的数据源。 */
+    val defaults: List<Subject> = listOf(
         Subject("math", "数学一", "#356AE6", 1),
         Subject("math_advanced", "高等数学", "#356AE6", 11, parentId = "math"),
         Subject("math_linear", "线性代数", "#4C7BE8", 12, parentId = "math"),
@@ -109,6 +116,19 @@ object SubjectCatalog {
         Subject("politics", "政治", "#E67E22", 4),
         Subject("other", "其他", "#667085", 5)
     )
+
+    @Volatile
+    private var snapshot: List<Subject> = defaults
+
+    /** 当前学科列表的内存镜像。数据库为空时回落到 [defaults]，保证首帧不空白。 */
+    val all: List<Subject> get() = snapshot
+
+    /** 由 Repository 在数据库发射 / 备份恢复后调用。 */
+    fun replaceAll(subjects: List<Subject>) {
+        snapshot = if (subjects.isEmpty()) defaults else subjects.sortedWith(
+            compareBy({ it.sortOrder }, { it.name })
+        )
+    }
 
     val categories: List<Subject> get() = all.filter { it.isCategory && it.enabled }
     val selectableSubjects: List<Subject> get() = all.filter { subject ->

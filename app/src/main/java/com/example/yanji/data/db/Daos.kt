@@ -325,6 +325,35 @@ interface AchievementDao {
 }
 
 @Dao
+interface SubjectDao {
+    @Query("SELECT * FROM subjects ORDER BY sortOrder ASC, name ASC")
+    fun getAllFlow(): Flow<List<SubjectEntity>>
+
+    @Query("SELECT * FROM subjects ORDER BY sortOrder ASC, name ASC")
+    suspend fun getAll(): List<SubjectEntity>
+
+    @Query("SELECT COUNT(*) FROM subjects")
+    suspend fun count(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(subject: SubjectEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(subjects: List<SubjectEntity>)
+
+    @Query("DELETE FROM subjects WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    /** 删除某类目下的全部子学科。 */
+    @Query("DELETE FROM subjects WHERE parentId = :parentId")
+    suspend fun deleteChildrenOf(parentId: String)
+
+    /** 仅用于备份恢复：清空后按备份内容整表重建。 */
+    @Query("DELETE FROM subjects")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface QuickStartPresetDao {
     @Query("SELECT * FROM quick_start_presets ORDER BY sortOrder ASC, createdAt ASC")
     fun getAllFlow(): Flow<List<QuickStartPresetEntity>>
