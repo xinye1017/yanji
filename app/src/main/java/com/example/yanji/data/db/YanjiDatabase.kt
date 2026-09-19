@@ -21,7 +21,7 @@ import java.io.File
         UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -389,6 +389,19 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v12 → v13：学习伙伴主题。只新增一列，绝不重写学习业务数据。
+         * CLOUD 与升级前的卷卷视觉一致，因此存量用户升级后不会被强制换主题。
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "ALTER TABLE user_settings " +
+                        "ADD COLUMN mascotTheme TEXT NOT NULL DEFAULT 'CLOUD'"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -406,7 +419,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
-            MIGRATION_11_12
+            MIGRATION_11_12,
+            MIGRATION_12_13
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

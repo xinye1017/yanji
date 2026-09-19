@@ -10,6 +10,7 @@ import com.example.yanji.data.ai.ChatReplyState
 import com.example.yanji.data.db.ChatMessageEntity
 import com.example.yanji.data.db.ChatSessionEntity
 import com.example.yanji.data.db.YanjiDatabase
+import com.example.yanji.theme.MascotThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -118,7 +119,7 @@ internal class ChatStore(
         val now = System.currentTimeMillis()
         val newSession = ChatSession(newId, "新对话", now, now, model)
         val greeting = ChatMessage(
-            UUID.randomUUID().toString(), newId, ChatSender.JUANJUAN, GREETING, now
+            UUID.randomUUID().toString(), newId, ChatSender.JUANJUAN, greeting(), now
         )
 
         _chatSessions.value = listOf(newSession) + _chatSessions.value.filter { it.id != newId }
@@ -286,7 +287,7 @@ internal class ChatStore(
             db.chatMessageDao().deleteBySessionId(sessionId)
             val greeting = ChatMessage(
                 UUID.randomUUID().toString(), sessionId, ChatSender.JUANJUAN,
-                "当前对话已清空。我是卷卷，我们随时可以开启新的对话。",
+                "当前对话已清空。我是${MascotThemes.fromStorage(settingsProvider().mascotTheme).name}，我们随时可以开启新的对话。",
                 System.currentTimeMillis()
             )
             db.chatMessageDao().insert(ChatMessageEntity.fromDomainModel(greeting))
@@ -335,14 +336,17 @@ internal class ChatStore(
         }.take(10)
     }
 
+    private fun greeting(): String {
+        val mascotName = MascotThemes.fromStorage(settingsProvider().mascotTheme).name
+        return "嗨！我是$mascotName，你的考研全科专属学伴。\n\n无论遇到攻克不下的难题卡点、做题受挫时的烦躁，" +
+            "还是单纯想找人说说话，我都在这里随时陪着你。今天想聊点什么呢？"
+    }
+
     private data class PendingReply(val userMessage: ChatMessage, val model: String)
     private data class MessagePage(val rows: List<ChatMessageEntity>, val total: Int)
 
     private companion object {
         const val DEFAULT_PAGE_SIZE = 40
         const val PAGE_SIZE = 40
-        const val GREETING =
-            "嗨！我是卷卷，你的考研全科专属学伴。\n\n无论遇到攻克不下的难题卡点、做题受挫时的烦躁，" +
-                "还是单纯想找人说说话，我都在这里随时陪着你。今天想聊点什么呢？"
     }
 }

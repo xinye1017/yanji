@@ -260,7 +260,9 @@ data class UserSettings(
      * 用 String 而不是枚举，是为了让 Room 迁移、旧备份导入、以及未来新增模式都能安全降级
      * （解析走 `YanjiThemeMode.fromStorage`，未知值回落到 SYSTEM）。
      */
-    val themeMode: String = com.example.yanji.theme.YanjiThemeMode.SYSTEM.name
+    val themeMode: String = com.example.yanji.theme.YanjiThemeMode.SYSTEM.name,
+    /** 当前学习伙伴主题；未知值由主题层安全回落到 CLOUD（卷卷）。 */
+    val mascotTheme: String = com.example.yanji.theme.MascotThemeId.CLOUD.name
 ) {
     val isAiConfigured: Boolean
         get() = aiApiKey.isNotBlank() || (aiBaseUrl.isNotBlank() && !aiBaseUrl.contains("api.deepseek.com"))

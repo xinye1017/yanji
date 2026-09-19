@@ -44,6 +44,7 @@ fun ProfileScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.settings
+    val mascot = currentMascotTheme()
 
     val daysRemaining = remember(settings.targetExamDate) {
         YanjiTime.parseIsoDate(settings.targetExamDate)?.let { target ->
@@ -55,6 +56,7 @@ fun ProfileScreen(
     var showExamTargetDialog by remember { mutableStateOf(false) }
     var showAiConfigDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showMascotPicker by remember { mutableStateOf(false) }
 
     // Backup export / import state
     var isExporting by remember { mutableStateOf(false) }
@@ -179,6 +181,17 @@ fun ProfileScreen(
         ProfileSectionHeader(title = "偏好")
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
+            ProfileSettingsItem(
+                icon = Icons.Outlined.Pets,
+                title = "学习伙伴",
+                subtitle = "当前：${mascot.name}",
+                onClick = { showMascotPicker = true }
+            )
+            HorizontalDivider(
+                color = YanjiColors.separator,
+                thickness = 0.8.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
             ProfileThemeSelector(
                 selected = YanjiThemeMode.fromStorage(settings.themeMode),
                 onSelect = { mode -> viewModel.updateSettings(settings.copy(themeMode = mode.name)) }
@@ -229,13 +242,23 @@ fun ProfileScreen(
         ProfileSettingsGroup {
             ProfileSettingsItem(
                 icon = Icons.Outlined.Info,
-                title = "关于研迹与卷卷",
+                title = "关于研迹与${mascot.name}",
                 subtitle = "v1.0 · 记录、专注、积累、复盘",
                 onClick = { showAboutDialog = true }
             )
         }
 
         Spacer(modifier = Modifier.height(AppContentInsets.BottomBarPadding))
+    }
+
+    if (showMascotPicker) {
+        MascotThemeBottomSheet(
+            selected = MascotThemeId.fromStorage(settings.mascotTheme),
+            onSelect = { theme ->
+                viewModel.updateSettings(settings.copy(mascotTheme = theme.name))
+            },
+            onDismiss = { showMascotPicker = false }
+        )
     }
 
     // Exam Target Dialog

@@ -30,6 +30,7 @@ import kotlin.math.sin
 
 @Composable
 fun AiThinkingIndicator(modifier: Modifier = Modifier) {
+    val mascot = currentMascotTheme()
     val transition = rememberInfiniteTransition(label = "thinking")
     val animated by transition.animateFloat(
         initialValue = 0f,
@@ -104,7 +105,7 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
-                    text = "卷卷正在深度思考…",
+                    text = "${mascot.name}正在深度思考…",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp

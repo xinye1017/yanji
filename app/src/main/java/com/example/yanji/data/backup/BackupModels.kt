@@ -34,7 +34,9 @@ data class UserSettingsBackup(
      * 外观偏好。**必须带默认值**：v1 及更早导出的备份里没有这个字段，
      * 缺省值让它们仍能正常反序列化（导入后回落到跟随系统）。
      */
-    val themeMode: String = "SYSTEM"
+    val themeMode: String = "SYSTEM",
+    /** 学习伙伴主题；旧备份缺失时默认恢复为卷卷。 */
+    val mascotTheme: String = "CLOUD"
 ) {
     fun toDomain(): UserSettings = UserSettings(
         targetExamDate = targetExamDate,
@@ -49,7 +51,8 @@ data class UserSettingsBackup(
         aiBaseUrl = aiBaseUrl,
         aiApiKey = "",
         aiModel = aiModel,
-        themeMode = themeMode
+        themeMode = themeMode,
+        mascotTheme = mascotTheme
     )
 
     companion object {
@@ -65,7 +68,8 @@ data class UserSettingsBackup(
             aiProvider = settings.aiProvider,
             aiBaseUrl = settings.aiBaseUrl,
             aiModel = settings.aiModel,
-            themeMode = settings.themeMode
+            themeMode = settings.themeMode,
+            mascotTheme = settings.mascotTheme
         )
     }
 }

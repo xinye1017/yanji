@@ -171,7 +171,7 @@ fun CheckInCelebrationDialog(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "“把每一天的微小坚持，化作考场上的绝对从容。研途万里，卷卷始终陪着你！”",
+                            text = "“把每一天的微小坚持，化作考场上的绝对从容。研途万里，${currentMascotTheme().name}始终陪着你！”",
                             fontSize = 13.sp,
                             lineHeight = 20.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

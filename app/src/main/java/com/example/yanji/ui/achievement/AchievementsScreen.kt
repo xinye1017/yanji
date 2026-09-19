@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
+import com.example.yanji.theme.currentMascotTheme
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -1000,7 +1001,7 @@ fun AchievementDetailDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "卷卷的话：",
+                                text = "${currentMascotTheme().name}的话：",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary

@@ -1,5 +1,7 @@
 package com.example.yanji.data
 
+import com.example.yanji.theme.MascotThemes
+
 import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
@@ -537,7 +539,8 @@ class YanjiRepository private constructor() {
         }
 
         // When user has not configured API Key or custom backend
-        return "【卷卷提示 · 尚未接入 AI】\n\n当前尚未配置大模型 API 密钥。\n\n👉 请点击右上角设置图标（⚙️），填入你的 API Key 并测试连接，即可开启与卷卷的实时在线伴学！"
+        val mascotName = MascotThemes.fromStorage(settings.mascotTheme).name
+        return "【$mascotName 提示 · 尚未接入 AI】\n\n当前尚未配置大模型 API 密钥。\n\n👉 请点击右上角设置图标（⚙️），填入你的 API Key 并测试连接，即可开启与${mascotName}的实时在线伴学！"
     }
 
     private suspend fun callAiApi(
@@ -560,7 +563,7 @@ class YanjiRepository private constructor() {
         }
 
         return aiClient.completeChat(
-            systemPrompt = JuanjuanPrompt.SYSTEM_PROMPT,
+            systemPrompt = JuanjuanPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name),
             runtimeContext = JuanjuanPrompt.buildRuntimeContext(
                 settings = settings,
                 focusSessions = focusList,
@@ -868,7 +871,8 @@ class YanjiRepository private constructor() {
     private fun saveTipToJournalInternal(context: Context, content: String) {
         val todayStr = YanjiTime.todayIso()
         val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
-        val appendText = "\n\n### 卷卷说考研方法锦囊\n$content"
+        val mascotName = MascotThemes.fromStorage(_settings.value.mascotTheme).name
+        val appendText = "\n\n### ${mascotName}说考研方法锦囊\n$content"
         if (existing != null) {
             addOrUpdateJournal(existing.copy(content = existing.content + appendText))
         } else {
@@ -876,9 +880,9 @@ class YanjiRepository private constructor() {
                 JournalEntry(
                     id = UUID.randomUUID().toString(),
                     date = todayStr,
-                    title = "今日复盘与卷卷建议",
+                    title = "今日复盘与${mascotName}建议",
                     content = content,
-                    tags = listOf("卷卷建议", "方法精练")
+                    tags = listOf("${mascotName}建议", "方法精练")
                 )
             )
         }

@@ -98,7 +98,7 @@ fun ExamAiDiagnosisSection(
                             text = if (isAnalyzing) {
                                 "正在生成诊断报告…"
                             } else {
-                                "尚未生成诊断报告。\n点击右上角「生成诊断」，卷卷会只依据你已有的真实记录给出结论；记录不足时会直接说明数据缺口，不会编造分数或趋势。"
+                                "尚未生成诊断报告。\n点击右上角「生成诊断」，${currentMascotTheme().name}会只依据你已有的真实记录给出结论；记录不足时会直接说明数据缺口，不会编造分数或趋势。"
                             },
                             fontSize = 12.sp,
                             color = YanjiColors.textTertiary,

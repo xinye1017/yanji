@@ -6,6 +6,7 @@ import com.example.yanji.data.ChatSender
 import com.example.yanji.data.JuanjuanPrompt
 import com.example.yanji.data.StudyDiagnosticSnapshot
 import com.example.yanji.data.UserSettings
+import com.example.yanji.theme.MascotThemes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -205,7 +206,7 @@ internal class AiClient(
                 put(
                     jsonMessage(
                         "system",
-                        JuanjuanPrompt.SYSTEM_PROMPT + "\n\n" + AI_DIAGNOSIS_SYSTEM_PROMPT
+                        JuanjuanPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name) + "\n\n" + AI_DIAGNOSIS_SYSTEM_PROMPT
                     )
                 )
                 put(jsonMessage("user", snapshot.toPromptData()))

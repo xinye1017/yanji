@@ -189,7 +189,8 @@ data class UserSettingsEntity(
     val aiProvider: String,
     val aiBaseUrl: String,
     val aiModel: String,
-    val themeMode: String
+    val themeMode: String,
+    val mascotTheme: String
 ) {
     fun toDomainModel(): UserSettings {
         return UserSettings(
@@ -205,7 +206,8 @@ data class UserSettingsEntity(
             aiBaseUrl = aiBaseUrl,
             aiApiKey = "",
             aiModel = aiModel,
-            themeMode = themeMode
+            themeMode = themeMode,
+            mascotTheme = mascotTheme
         )
     }
 
@@ -224,7 +226,8 @@ data class UserSettingsEntity(
                 aiProvider = model.aiProvider,
                 aiBaseUrl = model.aiBaseUrl,
                 aiModel = model.aiModel,
-                themeMode = model.themeMode
+                themeMode = model.themeMode,
+                mascotTheme = model.mascotTheme
             )
         }
     }

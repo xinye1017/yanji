@@ -70,6 +70,63 @@ internal val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest = YanjiDarkSurfaceFloating
 )
 
+private fun MascotThemeSpec.lightScheme() = lightColorScheme(
+    primary = palette.lightPrimary,
+    onPrimary = YanjiOnPrimary,
+    primaryContainer = palette.lightPrimarySoft,
+    onPrimaryContainer = palette.lightPrimaryStrong,
+    secondary = palette.lightSecondary,
+    onSecondary = YanjiOnPrimary,
+    secondaryContainer = palette.lightSecondarySoft,
+    onSecondaryContainer = palette.lightSecondaryStrong,
+    tertiary = YanjiSuccess,
+    onTertiary = YanjiOnPrimary,
+    tertiaryContainer = YanjiSuccessSoft,
+    onTertiaryContainer = YanjiSuccess,
+    background = palette.lightBackground,
+    onBackground = YanjiTextPrimary,
+    surface = YanjiSurface,
+    onSurface = YanjiTextPrimary,
+    surfaceVariant = YanjiSurfaceSoft,
+    onSurfaceVariant = YanjiTextSecondary,
+    outline = YanjiBorder,
+    outlineVariant = YanjiDivider,
+    error = YanjiDanger,
+    errorContainer = YanjiDangerSoft
+)
+
+private fun MascotThemeSpec.darkScheme() = darkColorScheme(
+    primary = palette.darkPrimary,
+    onPrimary = YanjiOnPrimary,
+    primaryContainer = palette.darkPrimarySoft,
+    onPrimaryContainer = palette.darkPrimaryStrong,
+    secondary = palette.darkSecondary,
+    onSecondary = YanjiOnPrimary,
+    secondaryContainer = palette.darkSecondarySoft,
+    onSecondaryContainer = palette.darkSecondaryStrong,
+    tertiary = YanjiDarkSuccess,
+    onTertiary = YanjiOnPrimary,
+    tertiaryContainer = YanjiDarkSuccessSoft,
+    onTertiaryContainer = YanjiDarkSuccess,
+    background = palette.darkBackground,
+    onBackground = YanjiDarkTextPrimary,
+    surface = YanjiDarkSurface,
+    onSurface = YanjiDarkTextPrimary,
+    surfaceVariant = YanjiDarkSurfaceSoft,
+    onSurfaceVariant = YanjiDarkTextSecondary,
+    outline = YanjiDarkBorder,
+    outlineVariant = YanjiDarkDivider,
+    error = YanjiDarkDanger,
+    errorContainer = YanjiDarkDangerSoft,
+    surfaceDim = palette.darkBackground,
+    surfaceBright = YanjiDarkSurfaceFloating,
+    surfaceContainerLowest = palette.darkBackground,
+    surfaceContainerLow = YanjiDarkSurface,
+    surfaceContainer = YanjiDarkSurfaceSoft,
+    surfaceContainerHigh = YanjiDarkSurfaceFloating,
+    surfaceContainerHighest = YanjiDarkSurfaceFloating
+)
+
 /**
  * M3 `Shapes` 标尺的**定义处**——这是全项目唯一允许出现裸 dp 圆角的地方。
  *
@@ -135,17 +192,34 @@ fun YanjiThemeMode.resolveDarkTheme(): Boolean = when (this) {
 fun YanjiTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     reduceTransparency: Boolean = false,
+    mascotTheme: MascotThemeSpec = MascotThemes.CLOUD,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = if (darkTheme) mascotTheme.darkScheme() else mascotTheme.lightScheme()
     val glassTokens = when {
         reduceTransparency -> ReducedGlassTokens
         darkTheme -> DarkGlassTokens
         else -> LightGlassTokens
     }
+    val extraColors = if (darkTheme) {
+        DarkExtraColors.copy(
+            lavenderDeep = mascotTheme.palette.darkSecondaryStrong,
+            surfaceBlue = mascotTheme.palette.darkSurfaceBlue,
+            secondaryFill = mascotTheme.palette.darkPrimarySoft,
+            accent = mascotTheme.palette.darkPrimary
+        )
+    } else {
+        LightExtraColors.copy(
+            lavenderDeep = mascotTheme.palette.lightSecondaryStrong,
+            surfaceBlue = mascotTheme.palette.lightSurfaceBlue,
+            secondaryFill = mascotTheme.palette.lightPrimarySoft,
+            accent = mascotTheme.palette.lightPrimary
+        )
+    }
     CompositionLocalProvider(
         LocalYanjiDarkTheme provides darkTheme,
-        LocalYanjiExtraColors provides if (darkTheme) DarkExtraColors else LightExtraColors,
+        LocalYanjiExtraColors provides extraColors,
+        LocalMascotTheme provides mascotTheme,
         LocalLiquidGlassTokens provides glassTokens
     ) {
         MaterialTheme(

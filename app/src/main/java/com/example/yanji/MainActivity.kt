@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.theme.YanjiThemeMode
+import com.example.yanji.theme.MascotThemes
 import com.example.yanji.theme.resolveDarkTheme
 import com.example.yanji.ui.SystemBarAppearance
 import com.example.yanji.ui.achievement.AchievementCelebrationOverlay
@@ -33,10 +34,11 @@ class MainActivity : ComponentActivity() {
       // SYSTEM 跟随系统，LIGHT / DARK 是用户的显式选择。
       val settings by container.repository.settings.collectAsStateWithLifecycle()
       val darkTheme = YanjiThemeMode.fromStorage(settings.themeMode).resolveDarkTheme()
+      val mascotTheme = MascotThemes.fromStorage(settings.mascotTheme)
       androidx.compose.runtime.CompositionLocalProvider(
         com.example.yanji.di.LocalAppContainer provides container
       ) {
-        YanjiTheme(darkTheme = darkTheme) {
+        YanjiTheme(darkTheme = darkTheme, mascotTheme = mascotTheme) {
           // 系统栏图标明暗必须跟随「应用主题」：enableEdgeToEdge() 的默认判定只看系统
           // uiMode，用户显式选择的 LIGHT / DARK 与系统不一致时状态栏会与底色同色而看不见。
           SystemBarAppearance(darkTheme = darkTheme)

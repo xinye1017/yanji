@@ -108,7 +108,7 @@ fun StatsAiReportCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "卷卷 · AI 阶段学情诊断",
+                            text = "${currentMascotTheme().name} · AI 阶段学情诊断",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -184,7 +184,7 @@ fun StatsAiReportCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "尚未生成学情诊断。\n配置 AI 并在本周期产生专注记录后，点击右上角「生成诊断」，卷卷将只依据你的真实记录进行深度分析，绝不伪造虚假数据。",
+                        text = "尚未生成学情诊断。\n配置 AI 并在本周期产生专注记录后，点击右上角「生成诊断」，${currentMascotTheme().name}将只依据你的真实记录进行深度分析，绝不伪造虚假数据。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

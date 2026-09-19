@@ -33,6 +33,7 @@ fun ConversationWelcome(
     isAiConfigured: Boolean = false,
     onOpenAiSettings: () -> Unit = {}
 ) {
+    val mascot = currentMascotTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -76,7 +77,7 @@ fun ConversationWelcome(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "卷卷",
+                    text = mascot.name,
                     style = MaterialTheme.typography.labelMedium.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
@@ -118,7 +119,7 @@ fun ConversationWelcome(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "你好，我是卷卷！🌱",
+                        text = "你好，我是${mascot.name}！🌱",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.sp,
@@ -148,7 +149,7 @@ fun ConversationWelcome(
                     ) {
                         Text(
                             text = if (!isAiConfigured) {
-                                "⚙️ 当前尚未配置 AI 模型密钥。点击此处或底部设置按钮填入 API Key，即可开启与卷卷的智能伴学。"
+                                "⚙️ 当前尚未配置 AI 模型密钥。点击此处或底部设置按钮填入 API Key，即可开启与${mascot.name}的智能伴学。"
                             } else {
                                 "💡 可以直接输入你正在推导的题目、错因复盘，或点击下方的考研问题快速开始。"
                             },

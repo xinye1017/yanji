@@ -46,6 +46,7 @@ fun JuanjuanMessageBubble(
     onContextSourceClick: (ChatContextSource) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val mascot = currentMascotTheme()
     val parsed = remember(message.content) {
         JuanjuanResponseParser.parse(message.content)
     }
@@ -102,7 +103,7 @@ fun JuanjuanMessageBubble(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "卷卷",
+                    text = mascot.name,
                     style = MaterialTheme.typography.labelMedium.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
@@ -498,6 +499,7 @@ private fun QuickInteractionBar(
     message: com.example.yanji.data.ChatMessage,
     modifier: Modifier = Modifier
 ) {
+    val mascot = currentMascotTheme()
     var isLiked by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -513,7 +515,7 @@ private fun QuickInteractionBar(
             icon = Icons.AutoMirrored.Filled.VolumeUp,
             label = "朗读",
             onClick = {
-                Toast.makeText(context, "卷卷正在为你倾声朗读...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "${mascot.name}正在为你倾声朗读...", Toast.LENGTH_SHORT).show()
             }
         )
 
@@ -523,7 +525,7 @@ private fun QuickInteractionBar(
             label = "复制",
             onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("卷卷说", message.content)
+                val clip = ClipData.newPlainText("${mascot.name}说", message.content)
                 clipboard.setPrimaryClip(clip)
                 Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
             }

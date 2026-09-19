@@ -429,7 +429,7 @@ fun ComposerBar(
                     decorationBox = { innerTextField ->
                         if (inputText.isEmpty()) {
                             Text(
-                                text = "有问题尽管问卷卷……",
+                                text = "有问题尽管问${currentMascotTheme().name}……",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = YanjiColors.textTertiary,
                                     fontSize = 14.sp

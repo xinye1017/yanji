@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 12
+    private val CURRENT_VERSION = 13
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -180,7 +180,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_8_9,
         YanjiDatabase.MIGRATION_9_10,
         YanjiDatabase.MIGRATION_10_11,
-        YanjiDatabase.MIGRATION_11_12
+        YanjiDatabase.MIGRATION_11_12,
+        YanjiDatabase.MIGRATION_12_13
     )
 
     /** 用驱动直接把手工 DDL + 种子数据写进目标文件，并把 user_version 设成 [version]。 */
@@ -320,7 +321,8 @@ class YanjiMigrationTest {
                 YanjiDatabase.MIGRATION_8_9,
                 YanjiDatabase.MIGRATION_9_10,
                 YanjiDatabase.MIGRATION_10_11,
-                YanjiDatabase.MIGRATION_11_12
+                YanjiDatabase.MIGRATION_11_12,
+                YanjiDatabase.MIGRATION_12_13
             )
         )
 
@@ -354,7 +356,8 @@ class YanjiMigrationTest {
                 YanjiDatabase.MIGRATION_8_9,
                 YanjiDatabase.MIGRATION_9_10,
                 YanjiDatabase.MIGRATION_10_11,
-                YanjiDatabase.MIGRATION_11_12
+                YanjiDatabase.MIGRATION_11_12,
+                YanjiDatabase.MIGRATION_12_13
             )
         )
 
@@ -401,7 +404,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12)
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13)
         )
 
         assertTrue("blockers 列应已存在", "blockers" in db.columnNames("journal_entries"))
@@ -418,7 +421,7 @@ class YanjiMigrationTest {
 
         val db = helper.runMigrationsAndValidate(
             CURRENT_VERSION,
-            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12)
+            listOf(YanjiDatabase.MIGRATION_9_10, YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13)
         )
 
         assertEquals("迁移不应向 journal_entries 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM journal_entries"))
@@ -452,7 +455,7 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12))
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
 
         assertTrue("themeMode 列应已存在", "themeMode" in db.columnNames("user_settings"))
         assertEquals(
@@ -471,9 +474,42 @@ class YanjiMigrationTest {
     fun migrate11To12_doesNotFabricateASettingsRow() {
         seedRawDatabase(version = 11, ddl = v10Ddl + v11IndexDdl)
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12))
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
 
         assertEquals("迁移不应凭空创建 settings 行", 0, db.intValue("SELECT COUNT(*) FROM user_settings"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 12 -> 13 学习伙伴主题
+
+    @Test
+    fun migrate12To13_addsMascotThemeDefaultingToCloudAndPreservesSettings() {
+        val db12 = helper.createDatabase(12)
+        db12.prepare(
+            """
+            INSERT INTO user_settings (
+                id, targetExamDate, targetSchool, targetMajor, dailyGoalHours,
+                validStudyThresholdMinutes, defaultSubjectId, soundEnabled,
+                vibrationEnabled, aiProvider, aiBaseUrl, aiModel, themeMode
+            ) VALUES (
+                1, '2026-12-19', '目标大学', '计算机', 8.0,
+                30, 'math_advanced', 1,
+                1, 'deepseek', 'https://api.deepseek.com', 'deepseek-chat', 'DARK'
+            )
+            """.trimIndent()
+        ).use { it.step() }
+        db12.close()
+
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            listOf(YanjiDatabase.MIGRATION_12_13)
+        )
+
+        assertTrue("mascotTheme 列应已存在", "mascotTheme" in db.columnNames("user_settings"))
+        assertEquals("CLOUD", db.textValue("SELECT mascotTheme FROM user_settings WHERE id=1"))
+        assertEquals("DARK", db.textValue("SELECT themeMode FROM user_settings WHERE id=1"))
+        assertEquals("目标大学", db.textValue("SELECT targetSchool FROM user_settings WHERE id=1"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM user_settings"))
         db.close()
     }
 
@@ -525,7 +561,7 @@ class YanjiMigrationTest {
             )
         )
 
-        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12))
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, listOf(YanjiDatabase.MIGRATION_10_11, YanjiDatabase.MIGRATION_11_12, YanjiDatabase.MIGRATION_12_13))
 
         assertEquals(4, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         assertEquals("updated", db.textValue("SELECT id FROM journal_entries WHERE date='2026-09-01'"))

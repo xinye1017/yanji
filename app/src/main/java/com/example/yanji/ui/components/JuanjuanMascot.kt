@@ -18,15 +18,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.yanji.R
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 
 @Composable
-fun JuanjuanAvatar(
+fun MascotAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 44.dp
 ) {
+    val mascot = currentMascotTheme()
     Box(
         modifier = modifier
             .size(size)
@@ -35,13 +35,19 @@ fun JuanjuanAvatar(
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.juanjuan),
-            contentDescription = "卷卷",
+            painter = painterResource(id = mascot.drawableRes),
+            contentDescription = mascot.name,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
     }
 }
+
+@Composable
+fun JuanjuanAvatar(
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp
+) = MascotAvatar(modifier = modifier, size = size)
 
 @Composable
 fun JuanjuanEncouragementBanner(
@@ -50,6 +56,7 @@ fun JuanjuanEncouragementBanner(
     subMessage: String? = null,
     onClick: (() -> Unit)? = null
 ) {
+    val mascot = currentMascotTheme()
     val clickableModifier = if (onClick != null) {
         modifier.clickable { onClick() }
     } else {
@@ -72,8 +79,8 @@ fun JuanjuanEncouragementBanner(
             contentAlignment = Alignment.Center
         ) {
             Image(
-                painter = painterResource(id = R.drawable.juanjuan),
-                contentDescription = "卷卷",
+                painter = painterResource(id = mascot.drawableRes),
+                contentDescription = mascot.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
@@ -84,7 +91,7 @@ fun JuanjuanEncouragementBanner(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "卷卷说",
+                    text = "${mascot.name}说",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.secondary
@@ -97,7 +104,7 @@ fun JuanjuanEncouragementBanner(
                         .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {
                     Text(
-                        text = if (onClick != null) "点击找卷卷聊聊 ›" else "研迹陪伴",
+                        text = if (onClick != null) "点击找${mascot.name}聊聊 ›" else "研迹陪伴",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Medium
