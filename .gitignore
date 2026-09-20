@@ -29,6 +29,11 @@ build/
 # --- 本地工具状态 ---
 .claude/
 .commandcode/
+.agents/
+
+# --- TypeSafe/Jev 本地 Agent 工具（仅本机使用，不入库） ---
+scripts/jev/
+skills-lock.json
 
 # --- 备份/快照类文件（含真机数据，绝不入库） ---
 *.db

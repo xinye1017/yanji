@@ -388,41 +388,93 @@ class ActiveSessionPersistenceTest {
     }
 
     @Test
-    fun test12_rebootSemanticsRestoreAsPausedWithoutFakingElapsed() = runTest {
-        val clock = TestMonotonicClock(now = 100_000L, bootId = "boot-before-reboot")
+    fun test13_fileOnlyPersistenceCompletionFailsLoudly() = runTest {
+        val clock = TestMonotonicClock()
+        val filePersistence = FileTimerSessionPersistence(tempFolder.root, clock, Dispatchers.Unconfined)
+
+        // FileTimerSessionPersistence 只做活动快照，不负责完成落库：误接为 coordinator 的
+        // persistence 时，「完成」必须立刻失败，而不是静默成功却什么也没写入。
+        // 快照能力本身正常：
+        filePersistence.saveActiveSession(
+            ActiveSessionRecord(
+                activeSession = createFocusSession("file-only"),
+                timerSnapshot = TimerSnapshot(
+                    phase = TimerPhase.RUNNING,
+                    startedAtEpochMs = 1_700_000_000_000L,
+                    resumedAtMonotonicMs = clock.nowMs()
+                )
+            )
+        )
+        assertTrue(filePersistence.sessionFile.exists())
+
+        val focusFailure = runCatching {
+            filePersistence.completeFocus(createFocusSession("file-only"), 120L, 0L, 0, clock.nowMs())
+        }
+        assertTrue("文件持久化的 completeFocus 必须抛出而非静默成功", focusFailure.isFailure)
+        assertTrue(focusFailure.exceptionOrNull() is UnsupportedOperationException)
+
+        val examFailure = runCatching {
+            filePersistence.completeExam(createExamSession("file-only-exam"), 120L, clock.nowMs())
+        }
+        assertTrue("文件持久化的 completeExam 必须抛出而非静默成功", examFailure.isFailure)
+        assertTrue(examFailure.exceptionOrNull() is UnsupportedOperationException)
+    }
+
+    @Test
+    fun test14_completeFailureStopsProgressAndKeepsActiveForRetry() = runTest {
+        val clock = TestMonotonicClock()
         val filePersistence = FileTimerSessionPersistence(tempFolder.root, clock, Dispatchers.Unconfined)
         val mockPersistence = MockSessionPersistence(filePersistence)
-        val coordinator1 = ActiveSessionCoordinatorCore(mockPersistence, clock, this)
+        val coordinator = ActiveSessionCoordinatorCore(mockPersistence, clock, this)
 
-        coordinator1.begin(createFocusSession("session-reboot"))
-        coordinator1.awaitPersistence()
+        coordinator.begin(createFocusSession("session-visible-failure"))
+        coordinator.awaitPersistence()
 
-        // 运行了 60 秒后持久化
-        clock.advanceBy(60_000L)
-        coordinator1.update { it.copy(accumulatedActiveMs = 60_000L) }
-        coordinator1.awaitPersistence()
+        mockPersistence.failCompleteWith = IOException("disk full")
 
-        // 模拟设备重启：
-        // 1. bootId 变更；
-        // 2. 单调时钟复位为极小值（开机 5 秒）
-        clock.bootId = "boot-after-reboot"
-        clock.setNow(5_000L)
+        // 模拟 Service 的落库出口：捕获异常 + 用 isBusy 判定「是否保留可重试的 ACTIVE」，
+        // 这正是 FocusTimerService.commitCompletion 的判定依据。
+        var loggedFailure = false
+        val completed = try {
+            coordinator.complete(actualSeconds = 300L)
+        } catch (e: Exception) {
+            loggedFailure = true
+            false
+        }
 
-        // 进程在重启后启动
-        val coordinator2 = ActiveSessionCoordinatorCore(mockPersistence, clock, this)
-        val restored = coordinator2.restorePersistedNow()
-        coordinator2.awaitPersistence()
+        assertFalse("落库失败时 complete 不得报告成功", completed)
+        assertTrue("失败路径必须进入可记日志的分支", loggedFailure)
+        // 用户可见 + 状态收敛的前提：active 仍保留，服务据 isBusy 提示「重试」而非静默消失。
+        assertTrue("失败后必须保留活动会话供用户重试", coordinator.isBusy)
+        assertEquals(CoordinatorState.ACTIVE, coordinator.coordinatorState.value)
+        assertTrue("快照必须仍在盘上，进程重启后仍可重试", filePersistence.sessionFile.exists())
 
-        assertNotNull(restored)
-        assertTrue("Reboot 后单调时钟基准已失效，必须恢复为暂停状态待用户确认", restored!!.paused)
-        assertEquals("严禁伪造流逝时间，保持上一次安全落盘的累积时间", 60_000L, restored.accumulatedActiveMs)
-        assertEquals(TimerPhase.PAUSED, coordinator2.currentTimerSnapshot?.phase)
-        assertNull("单调时钟基准必须置空", coordinator2.currentTimerSnapshot?.resumedAtMonotonicMs)
+        // 用户点「重试」：数据库恢复后同一会话成功落库并收敛为 IDLE。
+        mockPersistence.failCompleteWith = null
+        assertTrue(coordinator.complete(actualSeconds = 300L))
+        assertEquals(1, mockPersistence.completeFocusCalls)
+        assertEquals(CoordinatorState.IDLE, coordinator.coordinatorState.value)
+        assertFalse(coordinator.isBusy)
+    }
 
-        // 检查快照文件已被更新为 PAUSED 状态并记录了新的 bootId
-        val recordOnDisk = filePersistence.loadActiveSessionRecord()
-        assertNotNull(recordOnDisk)
-        assertTrue(recordOnDisk!!.activeSession.paused)
-        assertEquals("boot-after-reboot", recordOnDisk.bootId)
+    @Test
+    fun test15_failureNotificationActionReentersCommit() = runTest {
+        val clock = TestMonotonicClock()
+        val filePersistence = FileTimerSessionPersistence(tempFolder.root, clock, Dispatchers.Unconfined)
+        val mockPersistence = MockSessionPersistence(filePersistence)
+        val coordinator = ActiveSessionCoordinatorCore(mockPersistence, clock, this)
+
+        coordinator.begin(createExamSession("exam-retry"))
+        coordinator.awaitPersistence()
+
+        mockPersistence.failCompleteWith = IOException("exam db down")
+        assertTrue(runCatching { coordinator.complete(actualSeconds = 600L) }.isFailure)
+        assertEquals(CoordinatorState.ACTIVE, coordinator.coordinatorState.value)
+
+        // 重试动作（通知栏 primaryAction = COMPLETE → ACTION_COMPLETE）以同一 session 重入。
+        mockPersistence.failCompleteWith = null
+        assertTrue(coordinator.complete(actualSeconds = 600L))
+        assertEquals(1, mockPersistence.completeExamCalls)
+        assertEquals(CoordinatorState.IDLE, coordinator.coordinatorState.value)
     }
 }

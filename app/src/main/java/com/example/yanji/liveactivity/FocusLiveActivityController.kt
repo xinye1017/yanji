@@ -97,6 +97,25 @@ class FocusLiveActivityController(private val context: Context) {
         }
     }
 
+    /**
+     * 落库失败时的**用户可见反馈**：撤掉常驻胶囊，改为一条带「重试」动作的一次性通知。
+     *
+     * 重试动作复用 `ACTION_COMPLETE`：coordinator 失败时保留 ACTIVE，用户点「重试」会以
+     * 同一个 sessionId 重新走落库；成功路径与正常完成一致（本方法不参与成功判定）。
+     *
+     * 展示能力的失败绝不升级成业务失败——与 [notify] 一致，通知被撤销时只记日志。
+     */
+    fun notifyCompletionFailure(subject: String, elapsedSeconds: Long) {
+        cancelOngoing()
+        val spec = FocusNotificationSpecs.completionFailure(
+            subject = subject,
+            elapsedSeconds = elapsedSeconds,
+            nowWallClockMs = System.currentTimeMillis()
+        )
+        notify(spec.notificationId, standard.build(spec))
+        Log.e(TAG, "保存失败通知已下发：subject=$subject elapsed=${elapsedSeconds}s（等待用户重试）")
+    }
+
     private fun notify(id: Int, notification: Notification) {
         val manager = NotificationManagerCompat.from(context)
         // 显式的运行期守卫，而不是只靠 @SuppressLint：用户在计时过程中随时可以

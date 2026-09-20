@@ -22,7 +22,7 @@ import java.io.File
         QuickStartPresetEntity::class,
         SubjectEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -483,6 +483,31 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v14 → v15：随笔支持「一天多篇 + 收藏」。
+         *
+         *  - **去掉 `journal_entries.date` 的 UNIQUE 约束**（降级为普通索引）。
+         *    否则同一天的第二篇随笔会被 `@Insert(REPLACE)` 顶掉——这正是「一天一篇」的不变量来源。
+         *    v10→v11 已保证迁移前每个 date 仅一行，因此放开唯一约束不会产生重复数据冲突。
+         *  - **新增 `isFavorite` 列**，默认 0：存量随笔一律「未收藏」，升级后行为与升级前一致。
+         *
+         * 不使用 `ALTER TABLE ... DROP COLUMN`（minSdk 24 真机 SQLite < 3.35 不支持）。
+         * 索引名必须与 Room 导出 schema 完全一致，否则 TableInfo 校验失败。
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("DROP INDEX IF EXISTS `index_journal_entries_date`")
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_journal_entries_date` " +
+                        "ON `journal_entries` (`date`)"
+                )
+                connection.exec(
+                    "ALTER TABLE journal_entries " +
+                        "ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -502,7 +527,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
-            MIGRATION_13_14
+            MIGRATION_13_14,
+            MIGRATION_14_15
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

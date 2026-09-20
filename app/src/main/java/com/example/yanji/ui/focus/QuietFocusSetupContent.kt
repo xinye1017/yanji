@@ -3,7 +3,6 @@ package com.example.yanji.ui.focus
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -14,10 +13,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -72,8 +69,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -83,13 +85,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.Subject
 
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
-import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.data.YanjiTime
@@ -109,6 +111,12 @@ private data class QuietDurationOption(
 private const val QuietDurationMinMinutes = 25
 private const val QuietDurationMaxMinutes = 100
 private const val QuietDurationStepMinutes = 5
+
+// 滚轮刻度：所有行统一长度/粗细，选中态由居中的固定指针表达，而非行内刻度变化。
+private val QuietTickLength = 44.dp
+private val QuietTickThickness = 2.dp
+private val QuietPointerLength = 72.dp
+private val QuietPointerThickness = 3.dp
 
 private val QuietDurationOptions =
     (QuietDurationMinMinutes..QuietDurationMaxMinutes step QuietDurationStepMinutes).map { minutes ->
@@ -164,10 +172,10 @@ fun QuietFocusSetupContent(
     var selectedCategoryId by rememberSaveable(subjects) {
         mutableStateOf(selectedSubject.parentId ?: selectedSubject.id)
     }
-    var isCountdownMode by rememberSaveable(selectedMode) {
-        mutableStateOf(selectedMode != FocusModes.COUNT_UP)
+    var isCountdownMode by rememberSaveable {
+        mutableStateOf(true)
     }
-    var selectedDurationMinutes by rememberSaveable(selectedMode) {
+    var selectedDurationMinutes by rememberSaveable {
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
         mutableIntStateOf(normalizeQuietDuration(if (minutes > 0) minutes else 45))
     }
@@ -243,6 +251,10 @@ fun QuietFocusSetupContent(
                             val children = subjects.filter { it.parentId == category.id && it.enabled }
                             if (children.isEmpty()) {
                                 onSelectSubject(category)
+                                isCountdownMode = true
+                                val duration = if (selectedDurationMinutes > 0) selectedDurationMinutes else 45
+                                val matched = QuietDurationOptions.firstOrNull { it.minutes == duration }
+                                onSelectMode(matched?.mode ?: "${duration}分钟专注")
                                 currentStep = QuietFocusStep.RHYTHM
                             } else {
                                 currentStep = QuietFocusStep.MODULE
@@ -257,6 +269,10 @@ fun QuietFocusSetupContent(
                         modules = subcategories,
                         onModuleClick = { subject ->
                             onSelectSubject(subject)
+                            isCountdownMode = true
+                            val duration = if (selectedDurationMinutes > 0) selectedDurationMinutes else 45
+                            val matched = QuietDurationOptions.firstOrNull { it.minutes == duration }
+                            onSelectMode(matched?.mode ?: "${duration}分钟专注")
                             currentStep = QuietFocusStep.RHYTHM
                         }
                     )
@@ -673,14 +689,14 @@ private fun QuietDurationWheel(
         .coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    val isDark = yanjiIsDarkTheme()
-    val itemHeight = 54.dp
+    val itemHeight = 44.dp
     var initialized by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
+        // 可见项数由 itemHeight + contentPadding 决定：上下留白后约看到 5 项。
         val centerPadding = if (maxHeight > itemHeight) {
             (maxHeight - itemHeight) / 2
         } else {
@@ -696,6 +712,33 @@ private fun QuietDurationWheel(
                     ?.index
                     ?: selectedIndex
             }
+        }
+
+        // 某一行的「距中心程度」：0 = 正好居中，1 = 正好差一项，以此类推。
+        val distanceInItemsAt: (Int) -> Float = remember(listState) {
+            { index ->
+                val layoutInfo = listState.layoutInfo
+                val viewportCenter =
+                    (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                if (item == null) {
+                    abs(index - centeredIndex).toFloat()
+                } else {
+                    val itemSize = item.size.toFloat().coerceAtLeast(1f)
+                    abs((item.offset + item.size / 2f) - viewportCenter) / itemSize
+                }
+            }
+        }
+
+        // 字号缓动：1 = 选中（32sp），0 = 差一项及以上（16sp）。
+        // 与旧实现一致（旧实现按索引距离线性插值）。
+        val sizeEaseAt: (Int) -> Float = remember(listState) {
+            { index -> (1f - distanceInItemsAt(index)).coerceIn(0f, 1f) }
+        }
+
+        // 透明度：比字号衰减得更缓，保证相邻项仍然看得见。
+        val fadeAt: (Int) -> Float = remember(listState) {
+            { index -> (1f - distanceInItemsAt(index) / 2.5f).coerceIn(0f, 1f) }
         }
 
         LaunchedEffect(selectedIndex, centerPadding) {
@@ -722,76 +765,87 @@ private fun QuietDurationWheel(
             }
         }
 
-        val selectionShape = RoundedCornerShape(22.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.76f)
-                .height(66.dp)
-                .shadow(
-                    elevation = if (isDark) 10.dp else 4.dp,
-                    shape = selectionShape,
-                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.18f else 0.08f),
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.28f else 0.14f)
-                )
-                .clip(selectionShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.10f else 0.055f))
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.24f else 0.16f),
-                    shape = selectionShape
-                )
-        )
+        // 手势层铺满整页（LazyColumn 占满可用区域，拖动/惯性/吸附都自然可用），
+        // 但只在中间 bandHeight 高的可见带内绘制，形成「约 5 项」的滚轮观感。
+        val visibleItems = 5
+        val bandHeight = itemHeight * visibleItems
+        val bandTopPx = with(LocalDensity.current) { ((maxHeight - bandHeight) / 2).toPx() }
+        val bandBottomPx = with(LocalDensity.current) { ((maxHeight + bandHeight) / 2).toPx() }
+
+        // 固定的左右中心指针：直接画在 LazyColumn 的绘制层里，与列表内容共享
+        // 同一套坐标，因此必然与选中行严格同线。
+        val pointerLengthPx = with(LocalDensity.current) { QuietPointerLength.toPx() }
+        val pointerThicknessPx = with(LocalDensity.current) { QuietPointerThickness.toPx() }
+        val pointerCenterX = with(LocalDensity.current) { maxWidth.toPx() / 2f }
+        val pointerGapPx = with(LocalDensity.current) { 18.dp.toPx() }
+        val pointerTextWidthPx = with(LocalDensity.current) { 104.dp.toPx() }
+        // 指针的 y 必须和「选中行」在同一条线上：行中心 = centerPadding + itemHeight/2。
+        // 不能直接用 size.height/2，因为绘制高度和 contentPadding 依据的高度可能差几 px。
+        val pointerCenterY = with(LocalDensity.current) {
+            (centerPadding + itemHeight / 2).toPx()
+        }
+        val pointerColor = MaterialTheme.colorScheme.primary
 
         LazyColumn(
             state = listState,
             flingBehavior = flingBehavior,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    clipRect(top = bandTopPx, bottom = bandBottomPx) {
+                        this@drawWithContent.drawContent()
+                    }
+                    // 指针绘制在裁剪带之外单独画，永不会被列表内容遮住。
+                    val cy = pointerCenterY
+                    val leftEnd = pointerCenterX - pointerTextWidthPx / 2f - pointerGapPx
+                    val rightStart = pointerCenterX + pointerTextWidthPx / 2f + pointerGapPx
+                    drawLine(
+                        color = pointerColor,
+                        start = Offset(leftEnd - pointerLengthPx, cy),
+                        end = Offset(leftEnd, cy),
+                        strokeWidth = pointerThicknessPx,
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = pointerColor,
+                        start = Offset(rightStart, cy),
+                        end = Offset(rightStart + pointerLengthPx, cy),
+                        strokeWidth = pointerThicknessPx,
+                        cap = StrokeCap.Round
+                    )
+                },
             contentPadding = PaddingValues(vertical = centerPadding)
         ) {
             itemsIndexed(
                 items = QuietDurationOptions,
-                key = { _, option -> option.minutes }
+                key = { _, option -> option.minutes },
+                // 所有行结构一致，交给 LazyColumn 复用已有组合，避免重复创建。
+                contentType = { _, _ -> "durationRow" }
             ) { index, option ->
-                val distance = abs(index - centeredIndex)
-                val isCentered = index == centeredIndex
                 val isMajorTick = option.minutes % 25 == 0
-                val tickWidth by animateDpAsState(
-                    targetValue = when {
-                        isCentered -> 72.dp
-                        isMajorTick -> 52.dp
-                        else -> 28.dp
-                    },
-                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 520f),
-                    label = "durationWheelTickWidth"
-                )
-                val tickHeight by animateDpAsState(
-                    targetValue = when {
-                        isCentered -> 3.dp
-                        isMajorTick -> 2.dp
-                        else -> 1.dp
-                    },
-                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 560f),
-                    label = "durationWheelTickHeight"
-                )
-                val textColor by animateColorAsState(
-                    targetValue = when {
-                        isCentered -> MaterialTheme.colorScheme.primary
-                        distance == 1 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
-                        distance == 2 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f)
-                        distance == 3 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.40f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
-                    },
-                    label = "durationWheelTextColor"
-                )
-                val tickColor by animateColorAsState(
-                    targetValue = when {
-                        isCentered -> MaterialTheme.colorScheme.primary
-                        isMajorTick -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
-                        distance <= 2 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f)
-                    },
-                    label = "durationWheelTickColor"
-                )
+
+                // 选中判定用精确的整数索引比较：centeredIndex 只在「居中项切换」时
+                // 才变化（不是每帧），因此这里的重组次数很少。
+                val isCentered = index == centeredIndex
+
+                // 颜色不再用 animateColorAsState（那会给每行各起一个动画协程，
+                // 且随滚动逐帧改色 → 逐帧重组）。改为固定基色 + 在绘制期按偏移
+                // 调整透明度：状态只影响重绘，不影响重组。
+                val baseTextColor = if (isCentered) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                val baseTickColor = if (isCentered) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                // 各行透明度上限（沿用旧视觉：选中最亮，越远越淡）。
+                val textAlphaMax = if (isCentered) 1f else 0.82f
+                val tickAlphaMax = if (isCentered) 0f else if (isMajorTick) 0.58f else 0.34f
+                val baseFontSizeSp = 16f
+                val sizeBoost = if (isMajorTick && !isCentered) 1.08f else 1f
 
                 Row(
                     modifier = Modifier
@@ -799,6 +853,9 @@ private fun QuietDurationWheel(
                         .height(itemHeight)
                         .semantics { this.selected = isCentered }
                         .clickable(
+                            // 点击直接吸附到该值，不要水波纹/阴影反馈（避免遮挡选中态）。
+                            interactionSource = null,
+                            indication = null,
                             role = Role.RadioButton,
                             onClick = { onDurationSelected(option) }
                         )
@@ -807,10 +864,11 @@ private fun QuietDurationWheel(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     QuietDurationTick(
-                        width = tickWidth,
-                        height = tickHeight,
-                        color = tickColor,
-                        glowing = isCentered
+                        width = QuietTickLength,
+                        height = QuietTickThickness,
+                        color = baseTickColor,
+                        // 透明度在绘制期按偏移计算：只重绘、不重组。
+                        alphaProvider = { fadeAt(index) * tickAlphaMax }
                     )
                     Spacer(modifier = Modifier.width(18.dp))
                     Row(
@@ -818,21 +876,29 @@ private fun QuietDurationWheel(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
+                        // 字号按连续偏移插值，但关键是把「读取滚动状态」推迟到绘制阶段：
+                        // 文本始终按**最大字号**（32sp）排版，布局盒因此永远预留足够宽度
+                        // （不会与「分钟」重叠），实际大小由 graphicsLayer 在绘制期缩小。
+                        // 这样滚动时完全跳过重组与重新排版 —— 这是滚轮顺滑的关键。
+                        val maxFontSizeSp = 32f
+                        val baseFontSizeSp = 16f
+                        val sizeBoost = if (isMajorTick && !isCentered) 1.08f else 1f
                         Text(
                             text = "${option.minutes}",
                             style = MaterialTheme.typography.titleLarge.copy(
-                                fontSize = when {
-                                    isCentered -> 32.sp
-                                    isMajorTick -> 20.sp
-                                    else -> 16.sp
-                                },
-                                fontWeight = when {
-                                    isCentered -> FontWeight.Bold
-                                    isMajorTick -> FontWeight.SemiBold
-                                    else -> FontWeight.Medium
-                                }
+                                fontSize = maxFontSizeSp.sp,
+                                fontWeight = FontWeight.Medium
                             ),
-                            color = textColor
+                            color = baseTextColor,
+                            modifier = Modifier.graphicsLayer {
+                                // 在绘制块内读取滚动状态：只触发重绘，不触发重组。
+                                val eased = sizeEaseAt(index)
+                                val target = lerp(baseFontSizeSp, maxFontSizeSp, eased) * sizeBoost
+                                val s = target / maxFontSizeSp
+                                scaleX = s
+                                scaleY = s
+                                alpha = fadeAt(index) * textAlphaMax
+                            }
                         )
                         if (isCentered) {
                             Spacer(modifier = Modifier.width(5.dp))
@@ -845,10 +911,10 @@ private fun QuietDurationWheel(
                     }
                     Spacer(modifier = Modifier.width(18.dp))
                     QuietDurationTick(
-                        width = tickWidth,
-                        height = tickHeight,
-                        color = tickColor,
-                        glowing = isCentered
+                        width = QuietTickLength,
+                        height = QuietTickThickness,
+                        color = baseTickColor,
+                        alphaProvider = { fadeAt(index) * tickAlphaMax }
                     )
                 }
             }
@@ -861,25 +927,21 @@ private fun QuietDurationTick(
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
     color: Color,
-    glowing: Boolean
+    alphaProvider: (() -> Float)? = null
 ) {
     Box(
         modifier = Modifier
             .width(width)
             .height(height)
+            .clip(CircleShape)
             .then(
-                if (glowing) {
-                    Modifier.shadow(
-                        elevation = 7.dp,
-                        shape = CircleShape,
-                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
-                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
-                    )
+                if (alphaProvider != null) {
+                    // 透明度在绘制期读取，避免滚动时驱动重组。
+                    Modifier.graphicsLayer { alpha = alphaProvider().coerceIn(0f, 1f) }
                 } else {
                     Modifier
                 }
             )
-            .clip(CircleShape)
             .background(color)
     )
 }

@@ -163,7 +163,7 @@ interface ExamSessionDao {
 
 @Dao
 interface JournalEntryDao {
-    @Query("SELECT * FROM journal_entries ORDER BY date DESC")
+    @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
     fun getAll(): Flow<List<JournalEntryEntity>>
 
     @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
@@ -172,16 +172,16 @@ interface JournalEntryDao {
     @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
     fun getByIdFlow(id: String): Flow<JournalEntryEntity?>
 
-    @Query("SELECT * FROM journal_entries WHERE date = :date LIMIT 1")
+    @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
     suspend fun getByDate(date: String): JournalEntryEntity?
 
-    @Query("SELECT * FROM journal_entries WHERE date = :date LIMIT 1")
+    @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
     fun getByDateFlow(date: String): Flow<JournalEntryEntity?>
 
     @Query("SELECT COUNT(*) FROM journal_entries")
     suspend fun count(): Int
 
-    @Query("SELECT * FROM journal_entries ORDER BY date DESC")
+    @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
     suspend fun getAllOnce(): List<JournalEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -189,6 +189,13 @@ interface JournalEntryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entries: List<JournalEntryEntity>)
+
+    /**
+     * 切换收藏。只改 isFavorite 与 updatedAt，不触碰正文与 createdAt，
+     * 保证「初次编辑完毕时间」不因收藏动作而漂移。
+     */
+    @Query("UPDATE journal_entries SET isFavorite = :value, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setFavorite(id: String, value: Int, updatedAt: Long)
 
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun deleteById(id: String)

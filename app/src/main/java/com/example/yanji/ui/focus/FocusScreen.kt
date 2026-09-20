@@ -78,7 +78,7 @@ fun FocusScreen(
 
     var pendingFocusSubjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingFocusSubjectName by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingFocusMode by rememberSaveable { mutableStateOf(FocusModes.COUNT_UP) }
+    var pendingFocusMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var pendingFocusNote by rememberSaveable { mutableStateOf("") }
     var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
 
@@ -105,7 +105,7 @@ fun FocusScreen(
     fun clearPendingFocusLaunch() {
         pendingFocusSubjectId = null
         pendingFocusSubjectName = null
-        pendingFocusMode = FocusModes.COUNT_UP
+        pendingFocusMode = FocusModes.POMODORO_25
         pendingFocusNote = ""
     }
 

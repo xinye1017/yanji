@@ -12,9 +12,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
+/**
+ * 同一天的随笔分组。[date] 为 ISO 日期，[entries] 组内按 `createdAt` 倒序（最新在上）。
+ */
+data class JournalDayGroup(
+    val date: String,
+    val entries: List<JournalEntry>
+)
+
 /** 日记域不可变 UiState。 */
 data class JournalUiState(
-    val journals: List<JournalEntry>
+    val journals: List<JournalEntry>,
+    /** 按日期分组后的视图模型，供历史页渲染分组头 + 组内条目。 */
+    val groups: List<JournalDayGroup> = emptyList()
 )
 
 /**
@@ -27,11 +37,11 @@ open class JournalViewModel(
 ) : ViewModel() {
 
     val uiState: StateFlow<JournalUiState> = repo.journalEntries
-        .map { JournalUiState(it) }
+        .map { groupsOf(it) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = JournalUiState(repo.journalEntries.value)
+            initialValue = groupsOf(repo.journalEntries.value)
         )
 
     /**
@@ -41,9 +51,35 @@ open class JournalViewModel(
      */
     open fun saveJournal(entry: JournalEntry) = repo.addOrUpdateJournal(entry)
 
+    /** 切换收藏（历史页向右滑 / 编辑页收藏按钮）。 */
+    open fun setFavorite(id: String, favorite: Boolean) = repo.setJournalFavorite(id, favorite)
+
+    /** 删除一篇随笔（历史页向左滑 + 二次确认后调用）。 */
+    open fun deleteJournal(id: String) = repo.deleteJournal(id)
+
     /** 用户设置（同步读缓存），编辑页用于计算初试倒计时。 */
     val settings: StateFlow<UserSettings> get() = repo.settings
 
     /** 该日期真实学习时长（单一事实来源：FocusSession + ExamSession 聚合）。 */
     fun dailySummaryFor(date: String): DailyStudySummary = statsRepo.getDailyStudySummary(date)
+
+    companion object {
+        /**
+         * 按日期分组。入参已由 DAO 按 `date DESC, createdAt DESC` 排序；
+         * 这里用 `groupBy` 的插入序保证「日期倒序」稳定，组内再按 `createdAt` 倒序。
+         * 纯函数，便于单测。
+         */
+        fun groupsOf(entries: List<JournalEntry>): JournalUiState {
+            val groups = entries
+                .groupBy { it.date }
+                .map { (date, dayEntries) ->
+                    JournalDayGroup(
+                        date = date,
+                        entries = dayEntries.sortedByDescending { it.createdAt }
+                    )
+                }
+                .sortedByDescending { it.date }
+            return JournalUiState(journals = entries, groups = groups)
+        }
+    }
 }

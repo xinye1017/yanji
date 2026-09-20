@@ -141,15 +141,23 @@ object DurationFormatter {
 }
 
 class StudyStatisticsRepository(
-    private val repo: YanjiRepository = YanjiRepository.getInstance()
+    private val repo: YanjiRepository
 ) {
+    /**
+     * @Deprecated 遗留的进程级单例入口，仅保留给尚未接入 [com.example.yanji.di.AppContainer]
+     * 的少量测试调用点。生产代码必须由 AppContainer 显式构造注入。不得新增调用方。
+     */
     companion object {
         @Volatile
         private var instance: StudyStatisticsRepository? = null
 
+        @Deprecated(
+            message = "请改用 AppContainer 注入的 StudyStatisticsRepository；此入口仅兼容遗留测试",
+            level = DeprecationLevel.WARNING
+        )
         fun getInstance(): StudyStatisticsRepository {
             return instance ?: synchronized(this) {
-                instance ?: StudyStatisticsRepository().also { instance = it }
+                instance ?: StudyStatisticsRepository(YanjiRepository.getInstance()).also { instance = it }
             }
         }
     }

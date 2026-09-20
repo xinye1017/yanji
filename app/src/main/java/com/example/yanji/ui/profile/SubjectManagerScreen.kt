@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -386,11 +387,14 @@ private sealed interface SubjectEditTarget {
     data class Rename(val subject: Subject) : SubjectEditTarget
 }
 
-/** 把 `#RRGGBB` 解析成 Compose Color；非法值回落到主题主色。 */
+/** 把 `#RRGGBB` 解析成 Compose Color；非法值回落到主题次级标签色（随亮暗主题变化）。 */
+@Composable
+@ReadOnlyComposable
 private fun parseHexColor(hex: String): Color {
     val cleaned = hex.removePrefix("#")
-    if (cleaned.length != 6) return Color(0xFF667085)
+    val fallback = YanjiColors.secondaryLabel
+    if (cleaned.length != 6) return fallback
     return runCatching {
         Color(cleaned.toLong(16) or 0xFF000000L)
-    }.getOrDefault(Color(0xFF667085))
+    }.getOrDefault(fallback)
 }

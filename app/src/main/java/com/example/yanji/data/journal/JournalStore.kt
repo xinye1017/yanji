@@ -36,24 +36,36 @@ internal class JournalStore(
     }
 
     /**
-     * 保存日记。**以 Room 为唯一事实来源**。
+     * 保存随笔。**以 Room 为唯一事实来源**。
      *
      * 修复过的问题：
      * 1. 旧代码把 `updatedAt` 只写进内存副本，却把原始 entry 写库，两边不一致；
-     * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库，会产生两条同日期日记。
-     *    现在统一按日期归一化 id / createdAt。
+     * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库，会产生两条同日期随笔。
+     *
+     * v15 起改为**按 id 归一化**（不再按 date）：一天允许多篇随笔，
+     * 每篇的归属只由自己的 id 决定。`createdAt` 仍只在首次落库时生成，
+     * 因此「初次编辑完毕时间」不会被后续编辑刷新。
      */
     fun addOrUpdate(entry: JournalEntry) {
         scope.launch {
             val dao = dbProvider()?.journalEntryDao() ?: return@launch
-            val existing = dao.getByDate(entry.date)
+            val existing = dao.getById(entry.id)
             val normalized = entry.copy(
-                id = existing?.id ?: entry.id,
                 createdAt = existing?.createdAt ?: entry.createdAt,
                 updatedAt = System.currentTimeMillis()
             )
             dao.insert(JournalEntryEntity.fromDomainModel(normalized))
             onAchievementEvent?.invoke(AchievementEvent.JournalCreated(normalized))
+        }
+    }
+
+    /**
+     * 切换收藏。只更新 `isFavorite` 与 `updatedAt`，不改正文与 `createdAt`。
+     */
+    fun setFavorite(id: String, favorite: Boolean) {
+        scope.launch {
+            val dao = dbProvider()?.journalEntryDao() ?: return@launch
+            dao.setFavorite(id, if (favorite) 1 else 0, System.currentTimeMillis())
         }
     }
 

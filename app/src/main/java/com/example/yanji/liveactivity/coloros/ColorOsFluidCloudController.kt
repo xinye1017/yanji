@@ -30,7 +30,14 @@ data class ColorOsCapability(
     val sdkInt: Int,
     /** 标准 Android 16 Live Update 在本机是否可用。 */
     val standardLiveUpdateAvailable: Boolean,
-    /** 是否已接入 OPPO 原生流体云能力。当前恒为 false，见 [nativeIntegrationNote]。 */
+    /**
+     * 是否已接入 OPPO 原生流体云能力。
+     *
+     * 本字段**恒为 false**：本项目未接入 OPPO 私有 API（无反射、无 Hidden API、无 SystemUI Hook），
+     * 该控制器只做能力分类与文案。ColorOS 上的「流体云」实为**标准 Android 16 Live Update**
+     * 由系统侧呈现（见 [AndroidLiveUpdateController] 与三级降级路径 [Path]）。
+     * 详见 [nativeIntegrationNote]。
+     */
     val nativeFluidCloudIntegrated: Boolean = false
 ) {
     /** 当前实际生效的展示路径，用于日志与交付报告。 */

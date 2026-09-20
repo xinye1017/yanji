@@ -10,6 +10,9 @@ import com.example.yanji.data.AchievementRepository
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.timer.ActiveSessionCoordinator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * 轻量级依赖注入容器。
@@ -28,6 +31,16 @@ interface AppContainer {
 }
 
 class DefaultAppContainer(private val context: Context) : AppContainer {
+    /**
+     * 应用级受控协程作用域：由组合根持有，随 AppContainer 生命周期存活。
+     *
+     * 供需要后台并发的仓储（如 AchievementRepository）注入，避免各仓储自建
+     * `CoroutineScope(Dispatchers.Default + SupervisorJob())` 造成生命周期不受管辖。
+     * 用 SupervisorJob：单个子任务失败不牵连其他后台任务。
+     */
+    private val applicationScope: CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override val repository: YanjiRepository by lazy {
         YanjiRepository.init(context.applicationContext)
         YanjiRepository.getInstance()
@@ -36,7 +49,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         StudyStatisticsRepository(repository)
     }
     override val achievementRepository: AchievementRepository by lazy {
-        AchievementRepository(repository)
+        AchievementRepository(repository, applicationScope)
     }
     override val activeSessionCoordinator: ActiveSessionCoordinator get() = ActiveSessionCoordinator
 }

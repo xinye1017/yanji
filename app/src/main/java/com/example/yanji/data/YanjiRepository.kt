@@ -6,7 +6,6 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
 import com.example.yanji.data.backup.BackupCodec
-import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.backup.BackupImportResult
 import com.example.yanji.data.achievement.AchievementCatalog
 import com.example.yanji.data.achievement.AchievementDef
@@ -14,7 +13,6 @@ import com.example.yanji.data.achievement.AchievementEvaluator
 import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
 import com.example.yanji.data.ai.ChatReplyState
-import com.example.yanji.data.backup.BackupTransfer
 import com.example.yanji.data.chat.ChatStore
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
@@ -40,7 +38,6 @@ import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.time.Instant
 import java.util.UUID
 
 class YanjiRepository private constructor() {
@@ -376,21 +373,9 @@ class YanjiRepository private constructor() {
         return combine(focusFlow, examFlow) { f, e -> f + e }
     }
 
-    /**
-     * 由 [ActiveSessionCoordinator] 调用的落库出口：专注完成。
-     *
-     * 数据只写 Room，内存列表交给 DAO 的 Flow 回灌，避免"内存一份缓存 + DB 一份"的双写不一致。
-     */
-
-
-    /** 由 [ActiveSessionCoordinator] 调用的落库出口：模考完成。 */
-
-
     /** 探测可用模型列表。协议与传输细节见 [com.example.yanji.data.ai.AiClient]。 */
     suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> =
         runCatching { aiClient.fetchModels(baseUrl, apiKey) }
-
-
 
     suspend fun addFocusSession(session: FocusSession) = timerStore.addFocusSession(session)
 
@@ -446,19 +431,19 @@ class YanjiRepository private constructor() {
         checkNotNull(database) { "YanjiRepository.init(context) must run before database queries" }
 
     /**
-     * 保存日记。**以 Room 为唯一事实来源**，不再维护"内存一份 + DB 一份"的双缓存。
+     * 保存随笔。**以 Room 为唯一事实来源**，不再维护"内存一份 + DB 一份"的双缓存。
      *
      * 修复了旧实现的两个问题：
      * 1. 旧代码把 `updatedAt` 只写进内存副本，却把**原始 entry** 写进数据库，
      *    导致同一条记录在内存与 DB 中 `updatedAt` 不一致。
-     * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库；当传入的 entry 用了新 id
-     *    但日期已存在时，会产生两条同日期日记。现在统一按日期归一化 id/createdAt。
-     */
-    /**
-     * 保存日记。**以 Room 为唯一事实来源**；按日期归一化 id/createdAt 的规则见
-     * [JournalStore.addOrUpdate]。
+     * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库。
+     *
+     * v15 起改为按 **id** 归一化（一天允许多篇随笔），规则见 [JournalStore.addOrUpdate]。
      */
     fun addOrUpdateJournal(entry: JournalEntry) = journalStore.addOrUpdate(entry)
+
+    /** 切换随笔收藏标记（历史页向右滑 / 编辑页收藏按钮）。 */
+    fun setJournalFavorite(id: String, favorite: Boolean) = journalStore.setFavorite(id, favorite)
 
     fun deleteJournal(id: String) = journalStore.delete(id)
 
@@ -490,82 +475,45 @@ class YanjiRepository private constructor() {
     // ==================================================================
     // 备份导出 / 导入
     //
-    // 关键约定：
+    // 职责已抽出到 [com.example.yanji.data.backup.BackupStore]（阶段 2 拆分第一刀）。
+    // 这里只保留**同名委托方法**，外部调用点（ProfileViewModel / ProfileScreen）
+    // 不需要任何改动，行为与拆分前完全一致。
+    //
+    // 关键约定（实现见 BackupStore，语义逐字未变）：
     //  - 导出内容**不含 AI API Key**（凭据不在 Room 里；UserSettingsBackup 结构上就没有这个字段）
     //  - 导入是「整表替换」，全部写操作在**单个事务**内完成；任一步失败则整体回滚
     //  - 导入前自动把当前数据快照到 filesDir/pre_import_snapshots/，出问题还能找回
     //  - 计时进行中拒绝导入，避免正在跑的会话与恢复后的数据打架
     // ==================================================================
 
-    /** 采集当前全部数据，生成可序列化的备份负载。实现见 [BackupTransfer.collect]。 */
-    private suspend fun buildBackupPayload(): YanjiBackup {
-        val db = database ?: return YanjiBackup(exportedAt = System.currentTimeMillis())
-        return BackupTransfer.collect(db, appVersionName())
+    /**
+     * 备份导出 / 导入的委托实现。
+     *
+     * 三个回调把导入成功后的内存镜像校正留在 Repository 内：BackupStore 只负责
+     * 事务与校验，不反持 Repository 的内部状态（学科镜像、会话指针、活动计时）。
+     */
+    private val backupStore by lazy {
+        com.example.yanji.data.backup.BackupStore(
+            dbProvider = { database },
+            contextProvider = { appContext },
+            onSessionsReplaced = { chatStore.onSessionsReplaced() },
+            onActiveFocusCleared = { timerStore.clearActiveFocus() },
+            onSubjectsReplaced = { restored ->
+                SubjectCatalog.replaceAll(restored)
+                _subjects.value = SubjectCatalog.all
+            }
+        )
     }
-
-    private fun appVersionName(): String = runCatching {
-        val ctx = appContext ?: return@runCatching ""
-        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName.orEmpty()
-    }.getOrDefault("")
 
     /** 导出为 JSON 字符串。写文件（SAF）由 UI 层负责，这里只产出内容。 */
-    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
-        BackupCodec.encode(buildBackupPayload())
-    }
+    suspend fun exportBackupJson(): String = backupStore.exportJson()
 
     /**
      * 从 JSON 导入并整表替换本机数据。
      *
      * @return 成功时带回落盘快照路径与来自 [BackupCodec] 的提醒；失败时 message 可直接展示给用户。
      */
-    suspend fun importBackupJson(rawJson: String): BackupImportResult = withContext(Dispatchers.IO) {
-        if (ActiveSessionCoordinator.isBusy) {
-            return@withContext BackupImportResult.Failure("正在计时中，请先结束当前的专注或模考再导入")
-        }
-
-        val decoded = BackupCodec.decode(rawJson)
-        if (decoded is BackupDecodeResult.Failure) {
-            return@withContext BackupImportResult.Failure(decoded.message)
-        }
-        val backup = (decoded as BackupDecodeResult.Success).backup
-
-        val db = database
-            ?: return@withContext BackupImportResult.Failure("数据库尚未初始化，请重启研迹后重试")
-
-        // 先留一份「导入前」快照。即使导入事务回滚，这份快照也不受影响。
-        val snapshotPath = runCatching { writePreImportSnapshot() }.getOrNull()
-
-        val applied = runCatching {
-            BackupTransfer.applyInTransaction(db, backup)
-        }
-        if (applied.isFailure) {
-            val reason = applied.exceptionOrNull()?.localizedMessage ?: "未知错误"
-            return@withContext BackupImportResult.Failure("导入失败，已回滚，本机数据未改变（$reason）")
-        }
-
-        // 会话列表被整体替换后，"当前会话"指针必须重新校正到一个真实存在的会话上
-        chatStore.onSessionsReplaced()
-        timerStore.clearActiveFocus()
-
-        // 学科镜像也要立即刷新：导入是整表替换，若不在这里同步，紧接着的同步查询
-        // （统计分桶、AI 提示词）会读到导入前的旧学科列表。
-        val restoredSubjects = db.subjectDao().getAll().map { it.toDomainModel() }
-        if (restoredSubjects.isNotEmpty()) {
-            SubjectCatalog.replaceAll(restoredSubjects)
-            _subjects.value = SubjectCatalog.all
-        }
-
-        BackupImportResult.Success(backup, snapshotPath, decoded.warnings)
-    }
-
-    private suspend fun writePreImportSnapshot(): String? {
-        val ctx = appContext ?: return null
-        val dir = File(ctx.filesDir, "pre_import_snapshots").apply { mkdirs() }
-        val stamp = YanjiTime.backupStamp(Instant.now())
-        val file = File(dir, "yanji-pre-import-$stamp.json")
-        file.writeText(BackupCodec.encode(buildBackupPayload()))
-        return file.absolutePath
-    }
+    suspend fun importBackupJson(rawJson: String): BackupImportResult = backupStore.importJson(rawJson)
 
     suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
         val settings = _settings.value
@@ -965,7 +913,10 @@ class YanjiRepository private constructor() {
      */
     private fun saveTipToJournalInternal(context: Context, content: String) {
         val todayStr = YanjiTime.todayIso()
-        val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
+        // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
+        val existing = journalStore.journalEntries.value
+            .filter { it.date == todayStr }
+            .maxByOrNull { it.createdAt }
         val mascotName = MascotThemes.fromStorage(_settings.value.mascotTheme).name
         val appendText = "\n\n### ${mascotName}说考研方法锦囊\n$content"
         if (existing != null) {
@@ -989,7 +940,10 @@ class YanjiRepository private constructor() {
      */
     private fun addPlanToJournalInternal(context: Context, planText: String) {
         val todayStr = YanjiTime.todayIso()
-        val existing = journalStore.journalEntries.value.firstOrNull { it.date == todayStr }
+        // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
+        val existing = journalStore.journalEntries.value
+            .filter { it.date == todayStr }
+            .maxByOrNull { it.createdAt }
         val cleanPlan = planText.replace("要将『", "").replace("』加为明早计划吗？", "").replace("？", "").trim()
         val planItem = "\n- [ ] 明早实践：$cleanPlan"
         if (existing != null) {

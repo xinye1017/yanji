@@ -43,7 +43,7 @@ import com.example.yanji.theme.yanjiIsDarkTheme
  * 研迹统一分段导航栏 (YanjiSegmentedControl)
  *
  * 统一标准：以「设置专注节奏」分段导航栏样式为基准，背景色为纯实色。
- * 1. 外层轨道：纯实色背景（亮色柔和浅灰实色 Color(0xFFECEFF5)，暗色为实色 surfaceVariant Color(0xFF1C2331)），
+ * 1. 外层轨道：复用主题 surfaceVariant 实色背景，
  *    无半透明透出，外加精致轮廓边框；
  * 2. 滑动指示器：饱满的主题色 (primary) 实色圆角胶囊，附带柔和环境微光与投影 (shadow)，
  *    采用高响应阻尼物理弹簧曲线跟随平滑位移；
@@ -65,11 +65,7 @@ fun <T> YanjiSegmentedControl(
 
     val isDark = yanjiIsDarkTheme()
     // 纯实色背景（杜绝 alpha 半透明透出）
-    val trackColor = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant
-    } else {
-        Color(0xFFECEFF5)
-    }
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val trackBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.70f)
 
     val trackPadding = 4.dp

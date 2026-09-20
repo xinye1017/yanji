@@ -290,7 +290,7 @@ fun DailySessionRowCard(
                 modifier = Modifier
                     .width(4.dp)
                     .height(42.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(2.dp))  // token-exempt: 4dp 宽左侧色条端部几何，非产品组件圆角
                     .background(tagColor)
             )
 

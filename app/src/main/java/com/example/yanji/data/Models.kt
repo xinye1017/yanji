@@ -242,7 +242,9 @@ data class JournalEntry(
     val blockers: String = "", // 遇到的困难 / 卡点（v10 新增，按行书写）
     val tags: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    /** 收藏标记（v15 新增）。历史页向右滑即可切换。 */
+    val isFavorite: Boolean = false
 )
 
 @Serializable

@@ -18,15 +18,28 @@ import kotlinx.coroutines.launch
  *  - 修复真实计时判定：模考严格基于 actualDurationSeconds，严禁以计划时长冒充实际耗时。
  */
 class AchievementRepository internal constructor(
-    private val repo: YanjiRepository = YanjiRepository.getInstance()
+    private val repo: YanjiRepository,
+    private val scope: CoroutineScope
 ) {
+    /**
+     * @Deprecated 遗留的进程级单例入口，仅保留给尚未接入 [com.example.yanji.di.AppContainer]
+     * 的少量测试调用点。生产代码必须由 AppContainer 显式构造注入（含受控 [CoroutineScope]）。
+     * 不得新增调用方。
+     */
     companion object {
         @Volatile
         private var instance: AchievementRepository? = null
 
+        @Deprecated(
+            message = "请改用 AppContainer 注入的 AchievementRepository；此入口仅兼容遗留测试",
+            level = DeprecationLevel.WARNING
+        )
         fun getInstance(): AchievementRepository {
             return instance ?: synchronized(this) {
-                instance ?: AchievementRepository().also { instance = it }
+                instance ?: AchievementRepository(
+                    repo = YanjiRepository.getInstance(),
+                    scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+                ).also { instance = it }
             }
         }
 
@@ -38,8 +51,6 @@ class AchievementRepository internal constructor(
         const val SERIES_EXAM_COUNT = AchievementCatalog.SERIES_EXAM_COUNT
         const val SERIES_REVIEW_COUNT = AchievementCatalog.SERIES_REVIEW_COUNT
     }
-
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     val definitions: List<AchievementDef>
         get() = AchievementCatalog.definitions

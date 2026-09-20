@@ -66,6 +66,9 @@ class FocusTimerService : Service() {
         private const val UI_TICK_MS = 1000L
         private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
 
+        /** 与既有告警日志一致的 tag，便于 `adb logcat -s FocusTimer:V` 排查失败路径。 */
+        private const val TAG = "FocusTimer"
+
         private val _liveState = MutableStateFlow<FocusLiveState>(Idle)
 
         /**
@@ -308,17 +311,20 @@ class FocusTimerService : Service() {
         val seconds = machine.snapshot.targetDurationSeconds
         serviceScope.launch {
             freezeWhileCommitting(seconds)
-            val completed = runCatching {
-                ActiveSessionCoordinator.complete(
-                    actualSeconds = seconds,
-                    // 倒计时自然归零也必须记录真实暂停时长：机器里存着 pauseCount 与单调时钟，
-                    // 这里写死 0 会让「暂停过 10 分钟的番茄」在库里自相矛盾。
-                    pausedSeconds = machine.pausedMs(System.currentTimeMillis()) / 1000L,
-                    pauseCount = machine.snapshot.pauseCount,
-                    endEpochMs = System.currentTimeMillis()
-                )
-            }.getOrDefault(false)
-            if (!completed) return@launch
+            val outcome = commitCompletion(
+                run = {
+                    ActiveSessionCoordinator.complete(
+                        actualSeconds = seconds,
+                        // 倒计时自然归零也必须记录真实暂停时长：机器里存着 pauseCount 与单调时钟，
+                        // 这里写死 0 会让「暂停过 10 分钟的番茄」在库里自相矛盾。
+                        pausedSeconds = machine.pausedMs(System.currentTimeMillis()) / 1000L,
+                        pauseCount = machine.snapshot.pauseCount,
+                        endEpochMs = System.currentTimeMillis()
+                    )
+                },
+                elapsedSeconds = seconds
+            )
+            if (outcome != CommitOutcome.SUCCESS) return@launch
             machine.finish()
             publishSemanticState(elapsedSeconds = seconds)
             finishAndRelease(postCompletion = true)
@@ -327,24 +333,94 @@ class FocusTimerService : Service() {
 
     /** 用户主动结束：按实际时长完成并落库。 */
     private fun completeByUser() {
+        // 失败重试路径：服务已被 stopSelf()，process 可能是全新的（machine 仍为 IDLE）。
+        // 此时必须先从 coordinator 的持久化快照恢复计时状态，否则 elapsed 会算成 0。
+        if (machine.snapshot.phase == TimerPhase.IDLE) {
+            if (!restoreMachineFromCoordinator()) {
+                android.util.Log.e(TAG, "结束请求到达但无活动会话可恢复，忽略")
+                stopSelf()
+                return
+            }
+        }
         val elapsed = machine.elapsedSeconds()
         val pausedSeconds = machine.pausedMs(System.currentTimeMillis()) / 1000L
         serviceScope.launch {
             freezeWhileCommitting(elapsed)
-            val completed = runCatching {
-                ActiveSessionCoordinator.complete(
-                    actualSeconds = elapsed,
-                    pausedSeconds = pausedSeconds,
-                    pauseCount = machine.snapshot.pauseCount,
-                    endEpochMs = System.currentTimeMillis()
-                )
-            }.getOrDefault(false)
-            if (!completed) return@launch
+            val outcome = commitCompletion(
+                run = {
+                    ActiveSessionCoordinator.complete(
+                        actualSeconds = elapsed,
+                        pausedSeconds = pausedSeconds,
+                        pauseCount = machine.snapshot.pauseCount,
+                        endEpochMs = System.currentTimeMillis()
+                    )
+                },
+                elapsedSeconds = elapsed
+            )
+            if (outcome != CommitOutcome.SUCCESS) return@launch
             machine.finish()
             publishSemanticState(elapsedSeconds = elapsed)
             // 正向计时由用户主动收尾时，App 内结算弹窗已经给出反馈，不再额外打扰。
             finishAndRelease(postCompletion = machine.snapshot.isCountdown)
         }
+    }
+
+    /**
+     * 从 [ActiveSessionCoordinator] 的内存/持久化快照把 [machine] 恢复到可提交状态。
+     * @return false 表示当前没有任何活动会话可恢复（调用方应放弃本次请求）。
+     */
+    private fun restoreMachineFromCoordinator(): Boolean {
+        val active = ActiveSessionCoordinator.active.value ?: return false
+        val snapshot = ActiveSessionCoordinator.currentTimerSnapshot ?: return false
+        machine.restore(snapshot)
+        kind = if (active.kind == ActiveSessionKind.EXAM) FocusKind.EXAM else FocusKind.FOCUS
+        subject = active.subjectName
+        sessionId = active.sessionId
+        return true
+    }
+
+    /** 完成落库的结果。失败时活跃会话仍为 ACTIVE，可经用户重试恢复。 */
+    private enum class CommitOutcome { SUCCESS, FAILED }
+
+    /**
+     * 执行完成落库，并统一处理失败路径。
+     *
+     * 成功 → [CommitOutcome.SUCCESS]，调用方继续走终态收尾。
+     * 失败 → 记 `Log.e`、切换为**用户可见的失败通知**（带「重试」动作）、
+     * 并以 [finishWithFailure] 拆除常驻 chronometer，避免「倒计时已归零、胶囊还在走」的假状态。
+     *
+     * 失败时**不回收** [ActiveSessionCoordinator] 的 active 会话：coordinator 已按契约回滚为
+     * ACTIVE，用户点「重试」会以同一个 sessionId 重新走 [ActiveSessionCoordinator.complete]。
+     */
+    private suspend fun commitCompletion(run: suspend () -> Boolean, elapsedSeconds: Long): CommitOutcome {
+        val completed = try {
+            run()
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "保存失败：session=$sessionId 落库异常，保留活动会话供重试", e)
+            false
+        }
+        if (!completed) {
+            if (ActiveSessionCoordinator.isBusy) {
+                android.util.Log.e(TAG, "保存失败：session=$sessionId 计时已冻结，等待用户重试")
+            } else {
+                android.util.Log.e(TAG, "保存失败：session=$sessionId 未完成且无活动会话可重试")
+            }
+            finishWithFailure(elapsedSeconds)
+            return CommitOutcome.FAILED
+        }
+        return CommitOutcome.SUCCESS
+    }
+
+    /**
+     * 失败态收尾：撤掉常驻 chronometer（否则用户看到「计时还在走」的假状态），
+     * 改为一条带「重试」动作的失败通知，然后结束本服务。
+     */
+    private fun finishWithFailure(elapsedSeconds: Long) {
+        timerJob?.cancel()
+        releaseWakeLock()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        liveActivity.notifyCompletionFailure(subject = subject, elapsedSeconds = elapsedSeconds)
+        stopSelf()
     }
 
     /**

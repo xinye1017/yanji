@@ -61,7 +61,7 @@ enum class YanjiTab(
 ) {
     HOME("首页", PhosphorIcons.Fill.House, PhosphorIcons.Regular.House),
     FOCUS("专注", PhosphorIcons.Fill.Timer, PhosphorIcons.Regular.Timer),
-    JOURNAL("日记", PhosphorIcons.Fill.Notebook, PhosphorIcons.Regular.Notebook),
+    JOURNAL("随笔", PhosphorIcons.Fill.Notebook, PhosphorIcons.Regular.Notebook),
     STATS("统计", PhosphorIcons.Fill.ChartBar, PhosphorIcons.Regular.ChartBar),
     PROFILE("我的", PhosphorIcons.Fill.UserCircle, PhosphorIcons.Regular.UserCircle)
 }

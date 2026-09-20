@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 
 UI_DIR="app/src/main/java/com/example/yanji/ui"
 RAW_COLOR_CEILING=0
-RADIUS_CEILING=64
+RADIUS_CEILING=62
 STATIC_COLOR_CEILING=0
 
 PATTERN_COLOR='Color\(0x'

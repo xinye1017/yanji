@@ -31,6 +31,12 @@ import com.example.yanji.data.AchievementRarity
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.di.LocalAppContainer
+import com.example.yanji.theme.AchievementCommon
+import com.example.yanji.theme.AchievementEpic
+import com.example.yanji.theme.AchievementLegendary
+import com.example.yanji.theme.AchievementMythic
+import com.example.yanji.theme.AchievementRare
+import com.example.yanji.theme.AchievementUncommon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
@@ -106,15 +112,19 @@ fun AchievementCelebrationOverlay(
 
 /**
  * 成就完成悬浮卡片主体
+ *
+ * 稀有度强调色统一取自 theme/Color.kt 的 Achievement* token（与
+ * AchievementsScreen.rarityColor 同源），不再内联十六进制颜色字面量：
+ * 内联值曾与 token 漂移，导致同一成就的徽章与庆祝卡片颜色不一致。
  */
 fun celebrationAccentColor(rarity: AchievementRarity): Color {
     return when (rarity) {
-        AchievementRarity.COMMON -> Color(0xFF3B82F6) // 鲜明活力蓝
-        AchievementRarity.UNCOMMON -> Color(0xFF10B981) // 翡翠绿
-        AchievementRarity.RARE -> Color(0xFF06B6D4) // 青碧蓝
-        AchievementRarity.EPIC -> Color(0xFFA855F7) // 史诗紫
-        AchievementRarity.LEGENDARY -> Color(0xFFF59E0B) // 传说金
-        AchievementRarity.MYTHIC -> Color(0xFFEF4444) // 神话赤红
+        AchievementRarity.COMMON -> AchievementCommon
+        AchievementRarity.UNCOMMON -> AchievementUncommon
+        AchievementRarity.RARE -> AchievementRare
+        AchievementRarity.EPIC -> AchievementEpic
+        AchievementRarity.LEGENDARY -> AchievementLegendary
+        AchievementRarity.MYTHIC -> AchievementMythic
     }
 }
 
@@ -191,7 +201,7 @@ private fun AchievementCelebrationCard(
                         )
 
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(6.dp),  // token-exempt: 稀有度微徽章（10sp label）端部几何，小于最小 token 8dp
                             color = rarityBackground(achievement.rarity),
                             border = BorderStroke(0.5.dp, accentColor.copy(alpha = 0.4f))
                         ) {

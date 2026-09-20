@@ -328,18 +328,6 @@ open class ActiveSessionCoordinatorCore(
         }
     }
 
-    /** 异步非阻塞完成入口。 */
-    fun completeAsync(
-        actualSeconds: Long,
-        pausedSeconds: Long = 0L,
-        pauseCount: Int = 0,
-        endEpochMs: Long = System.currentTimeMillis()
-    ): Job = scope.launch {
-        runCatching {
-            complete(actualSeconds, pausedSeconds, pauseCount, endEpochMs)
-        }
-    }
-
     /** 用户放弃本次计时：不产生任何记录，清空持久化快照。 */
     fun cancel() {
         val sessionId = synchronized(stateLock) {

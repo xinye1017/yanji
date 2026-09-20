@@ -20,6 +20,7 @@ ksp = "2.3.11"
 room = "2.8.4"
 phosphor = "1.0.0"
 haze = "1.5.4"
+markdownRenderer = "0.40.2"
 desugarJdkLibs = "2.1.5"
 
 [libraries]
@@ -52,6 +53,8 @@ androidx-room-testing-jvm = { module = "androidx.room:room-testing-jvm", version
 androidx-sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version = "2.6.2" }
 phosphor-icon = { module = "com.adamglin:phosphor-icon", version.ref = "phosphor" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
+markdown-renderer = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdownRenderer" }
+markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 [plugins]

@@ -14,16 +14,16 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * 数据库迁移链测试（1 → 8 全链 + 7 → 8 单跳），纯 JVM 运行，不依赖设备。
+ * 数据库迁移链测试（1 → 14 全链 + 各单跳），纯 JVM 运行，不依赖设备。
  *
  * ## 为什么起点 schema 手写、终点 schema 用真实导出
  *
- * 仓库里只保留了 Room 实际导出的 `7.json` 与 `8.json`，没有 1~6 的历史 JSON
+ * 仓库里保留了 Room 实际导出的 `7.json` ～ `14.json`，但没有 1~6 的历史 JSON
  * （Room 的 `exportSchema` 只写"当前版本"这一份，历史版本必须随代码一起提交才能留存）。
  * 因此：
  *  - **起点**（v1）用手写 DDL 构造，与 `MIGRATION_1_2` / `MIGRATION_3_4` 注释记录的
  *    历史结构一致（`chat_messages` 曾用 `text` + `isThinking` 列）；
- *  - **终点**用 Room 导出的真实 `8.json` 做结构校验 —— 这是最关键的一环：
+ *  - **终点**用 Room 导出的真实 `14.json` 做结构校验 —— 这是最关键的一环：
  *    它能抓住"迁移写出的表结构 Room 打不开"这类只会在用户升级时爆炸的问题。
  *
  * ## 覆盖的回归点
@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 14
+    private val CURRENT_VERSION = 15
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -164,7 +164,7 @@ class YanjiMigrationTest {
     /**
      * v2 起才存在的表（由 MIGRATION_1_2 创建）。
      * 当测试直接从 v2 / v3 起跳时，MIGRATION_1_2 不会再执行，必须手工补上这张表，
-     * 否则终点结构无法通过 8.json 校验。
+     * 否则终点结构无法通过 14.json 校验。
      */
     private val chatSessionsDdl: String =
         "CREATE TABLE IF NOT EXISTS chat_sessions (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, model TEXT NOT NULL)"
@@ -182,7 +182,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_10_11,
         YanjiDatabase.MIGRATION_11_12,
         YanjiDatabase.MIGRATION_12_13,
-        YanjiDatabase.MIGRATION_13_14
+        YanjiDatabase.MIGRATION_13_14,
+        YanjiDatabase.MIGRATION_14_15
     )
 
     /**
@@ -578,6 +579,74 @@ class YanjiMigrationTest {
         db.close()
     }
 
+    // ---------------------------------------------------------------- 14 -> 15 随笔多篇 + 收藏
+
+    /**
+     * 14→15 的两个关键不变量：
+     *  1. `journal_entries.date` 的 UNIQUE 约束必须被放开——否则同一天的第二篇随笔会被
+     *     `@Insert(REPLACE)` 顶掉（这正是「一天一篇」的来源）；
+     *  2. 新增的 `isFavorite` 列默认 0，使存量随笔升级后全部为「未收藏」，视觉与升级前一致。
+     */
+    @Test
+    fun migrate14To15_allowsMultipleEntriesPerDayAndAddsFavoriteColumn() {
+        val db14 = helper.createDatabase(14)
+        db14.close()
+
+        val db = helper.runMigrationsAndValidate(
+            CURRENT_VERSION,
+            chainFrom(14)
+        )
+
+        assertTrue("isFavorite 列应已存在", "isFavorite" in db.columnNames("journal_entries"))
+
+        // 迁移后同一天写入两篇：唯一约束已放开，两篇都必须留存。
+        insertJournalRow(db, "j-1", "2026-09-21", "第一篇", 1000L)
+        insertJournalRow(db, "j-2", "2026-09-21", "第二篇", 2000L)
+
+        assertEquals(
+            "同一天必须允许存在多篇随笔",
+            2,
+            db.intValue("SELECT COUNT(*) FROM journal_entries WHERE date='2026-09-21'")
+        )
+
+        // 存量行默认未收藏
+        assertEquals(0, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='j-1'"))
+
+        // 收藏标记可持久化
+        db.prepare("UPDATE journal_entries SET isFavorite=1 WHERE id='j-1'").use { it.step() }
+        assertEquals(1, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='j-1'"))
+        assertEquals(0, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='j-2'"))
+
+        // date 索引仍然存在（降级为普通索引），供按日期分组/排序使用
+        assertTrue(
+            "date 普通索引必须保留",
+            "index_journal_entries_date" in db.indexNames("journal_entries")
+        )
+
+        db.close()
+    }
+
+    @Test
+    fun migrate14To15_preservesExistingJournalContent() {
+        val db14 = helper.createDatabase(14)
+        db14.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt) VALUES " +
+                "('legacy-j','2026-09-20','旧随笔','原始正文',4,4,4,'','','复盘',111,222)"
+        ).use { it.step() }
+        db14.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(14))
+
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals("原始正文", db.textValue("SELECT content FROM journal_entries WHERE id='legacy-j'"))
+        assertEquals("旧随笔", db.textValue("SELECT title FROM journal_entries WHERE id='legacy-j'"))
+        assertEquals(111L, db.longValue("SELECT createdAt FROM journal_entries WHERE id='legacy-j'"))
+        assertEquals(0, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='legacy-j'"))
+        db.close()
+    }
+
     // ---------------------------------------------------------------- 不造数据
 
     @Test
@@ -628,8 +697,10 @@ class YanjiMigrationTest {
             )
         )
 
+        // v10→v11 这一跳要求 date 唯一 —— 必须**只跑到 v11 为止**校验，
+        // 因为 v14→v15 会刻意放开该唯一约束（一天允许多篇随笔）。
         val db = helper.runMigrationsAndValidate(
-            CURRENT_VERSION,
+            11,
             chainFrom(10)
         )
 
@@ -656,6 +727,29 @@ class YanjiMigrationTest {
     }
 
     // ---------------------------------------------------------------- SQL 小工具
+
+    /** 插入一行随笔，其余列填中性默认值。用于验证「一天多篇」与 isFavorite 默认值。 */
+    private fun insertJournalRow(
+        db: SQLiteConnection,
+        id: String,
+        date: String,
+        title: String,
+        createdAt: Long
+    ) {
+        db.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt) VALUES " +
+                "(?, ?, ?, '', 3, 3, 3, '', '', '', ?, ?)"
+        ).use { statement ->
+            statement.bindText(1, id)
+            statement.bindText(2, date)
+            statement.bindText(3, title)
+            statement.bindLong(4, createdAt)
+            statement.bindLong(5, createdAt)
+            statement.step()
+        }
+    }
 
     private fun SQLiteConnection.intValue(sql: String): Int =
         prepare(sql).use { it.step(); it.getInt(0) }

@@ -213,3 +213,12 @@ val AchievementUncommonGradientEnd = Color(0xFFA7F3D0)
 val AchievementRareGradientEnd = Color(0xFF93C5FD)
 val AchievementEpicGradientEnd = Color(0xFFC4B5FD)
 val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)
+
+/**
+ * 分段导航栏（YanjiSegmentedControl）未选中轨道的亮色实色背景。
+ *
+ * 单列的原因：该控件要求「纯实色、无半透明透出」，与其他容器语义不同；
+ * 暗色分支复用 `MaterialTheme.colorScheme.surfaceVariant`，故这里只定义亮色值。
+ * UI 层只能引用本 token，不得内联 `Color(0xFFECEFF5)`。
+ */
+val YanjiSegmentTrack = Color(0xFFECEFF5)

@@ -60,63 +60,23 @@ class JournalEditorScreenInstrumentedTest {
     }
 
     @Test
-    fun editorRendersMoodSelectorWritingAreasAndSaveAction() {
+    fun editorRendersWritingAreaAndSaveAction() {
         setEditorContent()
 
-        // 页面已加载：五个情绪档位 + 两个写作区 + 保存键全部就位。
-        (1..5).forEach { score ->
-            composeRule.onNodeWithTag(JournalEditorTags.moodOption(score))
-                .performScrollTo()
-                .assertExists()
-        }
-        composeRule.onNodeWithTag(JournalEditorTags.ContentInput).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(JournalEditorTags.BlockersInput).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).performScrollTo().assertExists()
+        // 页面已加载：写作区 + 保存键就位。
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput).assertExists()
+        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).assertExists()
     }
 
     @Test
-    fun selectingMoodUpdatesSelectedState() {
-        setEditorContent()
-
-        // 新建日记默认选中「深度心流」(score = 5)。
-        composeRule.onNodeWithTag(JournalEditorTags.moodOption(5))
-            .performScrollTo()
-            .assertIsSelected()
-
-        composeRule.onNodeWithTag(JournalEditorTags.moodOption(3))
-            .performScrollTo()
-            .performClick()
-
-        composeRule.onNodeWithTag(JournalEditorTags.moodOption(3)).assertIsSelected()
-        composeRule.onNodeWithTag(JournalEditorTags.moodOption(5)).assertIsNotSelected()
-    }
-
-    @Test
-    fun writingAreasAcceptTypedContent() {
+    fun writingAreaAcceptsTypedContent() {
         setEditorContent()
 
         val reflection = "今天把数学真题的错题重新推导了一遍，思路顺了很多。"
-        val blocker = "选择题最后一题运算量偏大，需要再练。"
-        val plan = "明天先复盘专业课第二章。"
 
         composeRule.onNodeWithTag(JournalEditorTags.ContentInput)
-            .performScrollTo()
             .performTextInput(reflection)
         composeRule.onNodeWithTag(JournalEditorTags.ContentInput).assertTextContains(reflection)
-
-        composeRule.onNodeWithTag(JournalEditorTags.BlockersInput)
-            .performScrollTo()
-            .performTextInput(blocker)
-        composeRule.onNodeWithTag(JournalEditorTags.BlockersInput).assertTextContains(blocker)
-
-        // 明日规划是「输入 + 回车/点击添加」的动态任务列表，验证添加后任务文本出现在页面上。
-        composeRule.onNodeWithTag(JournalEditorTags.PlanInput)
-            .performScrollTo()
-            .performTextInput(plan)
-        composeRule.onNodeWithTag(JournalEditorTags.PlanAddButton)
-            .performScrollTo()
-            .performClick()
-        composeRule.onNodeWithText(plan).performScrollTo().assertExists()
     }
 
     @Test
@@ -124,7 +84,7 @@ class JournalEditorScreenInstrumentedTest {
         var saveSucceeded = false
         setEditorContent(onSaveSuccess = { saveSucceeded = true })
 
-        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).performScrollTo().performClick()
+        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).performClick()
 
         assertFalse("内容为空时必须拦下保存，不得回调成功反馈", saveSucceeded)
     }
@@ -135,11 +95,49 @@ class JournalEditorScreenInstrumentedTest {
         setEditorContent(onSaveSuccess = { saveSucceeded = true })
 
         composeRule.onNodeWithTag(JournalEditorTags.ContentInput)
-            .performScrollTo()
             .performTextInput("今天完成了数学真题复盘，效率很高。")
-        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).performScrollTo().performClick()
+        composeRule.onNodeWithTag(JournalEditorTags.SaveButton).performClick()
 
         assertTrue("有内容时保存应回调成功反馈", saveSucceeded)
+    }
+
+    // ---- 富文本格式栏 ----
+
+    @Test
+    fun formatToolbarRendersAllFormatActions() {
+        setEditorContent()
+
+        composeRule.onNodeWithTag(JournalEditorTags.BoldButton).assertExists()
+        composeRule.onNodeWithTag(JournalEditorTags.ItalicButton).assertExists()
+        composeRule.onNodeWithTag(JournalEditorTags.UnderlineButton).assertExists()
+        composeRule.onNodeWithTag(JournalEditorTags.ListButton).assertExists()
+        composeRule.onNodeWithTag(JournalEditorTags.DividerButton).assertExists()
+    }
+
+    @Test
+    fun boldButtonInsertsMarkersAroundTypedText() {
+        setEditorContent()
+
+        // 先输入正文，光标停在末尾；点 B 后应在光标处插入一对标记，
+        // 光标落在两者之间 —— 紧接着输入的文字就落在标记内部。
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput).performTextInput("重点")
+        composeRule.onNodeWithTag(JournalEditorTags.BoldButton).performClick()
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput).performTextInput("内容")
+
+        // transformation 只加样式不改字符，因此断言仍然读得到包含标记的原文。
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput)
+            .assertTextContains("重点**内容**")
+    }
+
+    @Test
+    fun listButtonAddsBulletPrefixToCurrentLine() {
+        setEditorContent()
+
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput).performTextInput("第一条")
+        composeRule.onNodeWithTag(JournalEditorTags.ListButton).performClick()
+
+        composeRule.onNodeWithTag(JournalEditorTags.ContentInput)
+            .assertTextContains("• 第一条")
     }
 
     companion object {

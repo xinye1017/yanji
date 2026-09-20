@@ -3,3 +3,10 @@
 #
 # Keep this file empty unless production runtime data is intentional. Add a nearby
 # comment explaining ownership and removal criteria when granting an exception.
+#
+# [DEFAULT SUBJECT SEED] Owner: data/db (YanjiDatabase.kt onCreate). Not test data:
+# this is the intentional default subject catalog inserted on first database creation,
+# and it is kept in sync with SubjectCatalog's initial content. Removal criteria:
+# delete this entry only if default-subject seeding is removed from onCreate()
+# (or moved to a non-`seeds`-named symbol so the fixture heuristic no longer matches).
+app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt|fixture-shaped-list|val seeds = listOf(

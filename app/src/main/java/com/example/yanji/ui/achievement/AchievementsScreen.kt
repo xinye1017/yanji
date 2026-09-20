@@ -496,7 +496,7 @@ fun UpcomingAchievementCard(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(6.dp),  // token-exempt: 稀有度微徽章（title 10sp）端部几何，小于最小 token 8dp
                     color = rarityBackground(achievement.rarity)
                 ) {
                     Text(
@@ -579,7 +579,7 @@ fun AchievementGridCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(6.dp),  // token-exempt: 稀有度微徽章（title 9sp）端部几何，小于最小 token 8dp
                     color = rarityBackground(achievement.rarity)
                 ) {
                     Text(

@@ -47,23 +47,33 @@ class FileTimerSessionPersistence(
     val tmpFile: File get() = File(directory, TMP_FILE_NAME)
     val corruptedFile: File get() = File(directory, CORRUPTED_FILE_NAME)
 
+    /**
+     * 完成落库**不属于**本类的职责：本类只负责 noBackupFilesDir 上的活动会话快照
+     * （saveActiveSession / loadActiveSession / clearActiveSession）。真实完成落库由
+     * `TimerStore.persistence` 的 Room DAO 实现。
+     *
+     * 这里显式抛异常而不是留空桩：同一 `TimerSessionPersistence` 接口有两套实现，
+     * 若把本类误接成 coordinator 的 persistence，「完成」会静默成功却什么都没写入
+     * （用户以为已保存、实际丢数据）。让它**立刻失败**，把「改错地方」暴露在启动期而非用户升级后。
+     */
     override suspend fun completeFocus(
         session: ActiveSession,
         actualSeconds: Long,
         pausedSeconds: Long,
         pauseCount: Int,
         endEpochMs: Long
-    ) {
-        // 完成落库由外层 TimerStore Room DAO 负责
-    }
+    ): Unit = throw UnsupportedOperationException(
+        "FileTimerSessionPersistence 只做活动快照持久化，不负责完成落库；请使用 TimerStore.persistence（Room DAO）"
+    )
 
+    /** 同 [completeFocus]：文件持久化不负责模考完成落库，误用必须立刻失败而非静默成功。 */
     override suspend fun completeExam(
         session: ActiveSession,
         actualSeconds: Long,
         endEpochMs: Long
-    ) {
-        // 完成落库由外层 TimerStore Room DAO 负责
-    }
+    ): Unit = throw UnsupportedOperationException(
+        "FileTimerSessionPersistence 只做活动快照持久化，不负责完成落库；请使用 TimerStore.persistence（Room DAO）"
+    )
 
     override suspend fun saveActiveSession(record: ActiveSessionRecord): Unit = withContext(ioDispatcher) {
         if (!directory.exists() && !directory.mkdirs()) {

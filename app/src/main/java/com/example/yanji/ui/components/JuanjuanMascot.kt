@@ -99,7 +99,7 @@ fun JuanjuanEncouragementBanner(
                 Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(4.dp))  // token-exempt: 行内微标签（1dp 垂直内边距）端部几何，非产品组件圆角
                         .background(MaterialTheme.colorScheme.secondaryContainer)
                         .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {

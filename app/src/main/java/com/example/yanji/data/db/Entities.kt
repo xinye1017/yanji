@@ -117,7 +117,8 @@ data class ExamSessionEntity(
 
 @Entity(
     tableName = "journal_entries",
-    indices = [Index(value = ["date"], unique = true)]
+    // v15 起 date 不再是唯一键：一天允许多篇随笔。保留普通索引供按日期分组/排序使用。
+    indices = [Index(value = ["date"], unique = false)]
 )
 data class JournalEntryEntity(
     @PrimaryKey val id: String,
@@ -131,7 +132,8 @@ data class JournalEntryEntity(
     val blockers: String, // 遇到的困难 / 卡点（v10 新增）
     val tags: String, // Comma separated
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val isFavorite: Int = 0 // v15 新增：0/1，随笔收藏标记
 ) {
     fun toDomainModel(): JournalEntry {
         return JournalEntry(
@@ -146,7 +148,8 @@ data class JournalEntryEntity(
             blockers = blockers,
             tags = if (tags.isBlank()) emptyList() else tags.split(",").map { it.trim() },
             createdAt = createdAt,
-            updatedAt = updatedAt
+            updatedAt = updatedAt,
+            isFavorite = isFavorite != 0
         )
     }
 
@@ -164,7 +167,8 @@ data class JournalEntryEntity(
                 blockers = model.blockers,
                 tags = model.tags.joinToString(","),
                 createdAt = model.createdAt,
-                updatedAt = model.updatedAt
+                updatedAt = model.updatedAt,
+                isFavorite = if (model.isFavorite) 1 else 0
             )
         }
     }

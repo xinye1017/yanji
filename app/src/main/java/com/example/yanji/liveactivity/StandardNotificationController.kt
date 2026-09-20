@@ -90,10 +90,10 @@ class StandardNotificationController(private val context: Context) {
         }
 
         spec.primaryAction?.let { action ->
-            builder.addAction(0, labelOf(action), serviceAction(REQUEST_CODE_TOGGLE, action))
+            builder.addAction(0, spec.primaryActionLabel ?: labelOf(action), serviceAction(REQUEST_CODE_TOGGLE, action))
         }
         spec.secondaryAction?.let { action ->
-            builder.addAction(0, labelOf(action), serviceAction(REQUEST_CODE_COMPLETE, action))
+            builder.addAction(0, spec.secondaryActionLabel ?: labelOf(action), serviceAction(REQUEST_CODE_COMPLETE, action))
         }
 
         return builder

@@ -72,7 +72,13 @@ data class FocusNotificationSpec(
      */
     val shortCriticalText: String?,
     val primaryAction: FocusNotificationAction?,
-    val secondaryAction: FocusNotificationAction?
+    val secondaryAction: FocusNotificationAction?,
+    /**
+     * 覆盖主/次动作按钮文案。null 时用 [FocusNotificationAction] 的默认标签
+     * （暂停/继续/结束）。失败通知需要把 COMPLETE 显示成「重试」而不改动作语义。
+     */
+    val primaryActionLabel: String? = null,
+    val secondaryActionLabel: String? = null
 )
 
 /**
@@ -88,6 +94,11 @@ object FocusNotificationSpecs {
 
     /** 完成后的普通通知。 */
     const val COMPLETION_NOTIFICATION_ID = 1002
+
+    /**
+     * 落库失败后的兜底通知。复用完成后通知的 id 段，确保不会与完成通知同时存在两条矛盾胶囊。
+     */
+    const val COMPLETION_FAILURE_NOTIFICATION_ID = 1003
 
     const val CHANNEL_ID = "yanji_timer_channel"
 
@@ -187,4 +198,32 @@ object FocusNotificationSpecs {
             secondaryAction = null
         )
     }
+
+    /**
+     * 构建落库失败后的一次性通知描述。
+     *
+     * 用固定的 [COMPLETION_FAILURE_NOTIFICATION_ID] 复用常驻通知 id，避免残留两条互相矛盾的胶囊；
+     * 主操作为 [FocusNotificationAction.COMPLETE]（语义即「重试保存」），对应 action 字符串
+     * 仍是 `ACTION_COMPLETE`——失败时 coordinator 保留 ACTIVE，重入会再次尝试落库。
+     */
+    fun completionFailure(subject: String, elapsedSeconds: Long, nowWallClockMs: Long): FocusNotificationSpec =
+        FocusNotificationSpec(
+            notificationId = COMPLETION_FAILURE_NOTIFICATION_ID,
+            title = "保存失败",
+            contentText = "${subject.ifBlank { "本次专注" }} · ${formatFocusClock(elapsedSeconds)} 未保存，点「重试」再试一次",
+            subText = null,
+            ongoing = false,
+            autoCancel = true,
+            usesChronometer = false,
+            chronometerCountDown = false,
+            referenceWallClockMs = nowWallClockMs,
+            showWhen = false,
+            progressPercent = 0,
+            showProgress = false,
+            requestPromoted = false,
+            shortCriticalText = null,
+            primaryAction = FocusNotificationAction.COMPLETE,
+            secondaryAction = null,
+            primaryActionLabel = "重试"
+        )
 }
