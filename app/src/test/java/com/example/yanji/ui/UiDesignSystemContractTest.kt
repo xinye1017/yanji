@@ -18,7 +18,7 @@ import java.io.File
  * 1. 散落随意手写的 Detail TopBar 与返回按键（破坏统一体验）；
  * 2. 随意硬编码 Card 圆角（例如 RoundedCornerShape(20.dp) 违背 DESIGN.md）；
  * 3. 破坏 Radius 与 Spacing 关键 token 契约；
- * 4. 破坏 GlassBottomBar 浮动 Dock 宽度响应式范围约束（260dp..360dp）。
+ * 4. 破坏 GlassBottomBar 浮动 Dock 的响应式宽度与全宽渐变模糊契约。
  */
 class UiDesignSystemContractTest {
 
@@ -105,6 +105,24 @@ class UiDesignSystemContractTest {
         assertTrue(
             "GlassBottomBar must not have fixed 272.dp dock width",
             !content.contains("val dockWidth = 272.dp")
+        )
+        assertTrue(
+            "GlassBottomBar must apply a full-width progressive backdrop below the dock top edge",
+            content.contains("HazeProgressive.verticalGradient") &&
+                content.contains(".then(gradientBackdrop)")
+        )
+        assertTrue(
+            "Progressive backdrop must fade from clear to full blur",
+            content.contains("startIntensity = 0f") && content.contains("endIntensity = 1f")
+        )
+        assertTrue(
+            "Dock and backdrop must share the same liquid-glass blur token",
+            content.contains("blurRadius = glassTokens.blurRadius") &&
+                content.contains("hazeState = hazeState")
+        )
+        assertTrue(
+            "Every hazeEffect must provide an explicit background color to prevent device crashes",
+            content.contains("backgroundColor = Color.Transparent")
         )
     }
 

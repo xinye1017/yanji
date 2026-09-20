@@ -127,7 +127,7 @@ class DesignSystemVisualMatrixInstrumentedTest {
         // 验证 GlassBottomBar 所有的 5 个 Tab 节点均正常呈现并具备点击语义
         composeRule.onNodeWithTag("nav_tab_home").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithTag("nav_tab_focus").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithTag("nav_tab_journal").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithTag("nav_tab_note").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithTag("nav_tab_stats").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithTag("nav_tab_profile").assertIsDisplayed().assertHasClickAction()
     }

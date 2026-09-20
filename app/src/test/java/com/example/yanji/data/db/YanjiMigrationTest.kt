@@ -416,7 +416,7 @@ class YanjiMigrationTest {
     }
 
     @Test
-    fun migrate9To10_emptyJournalTableStaysEmpty() {
+    fun migrate9To10_emptyNoteTableStaysEmpty() {
         seedRawDatabase(version = 9, ddl = v9Ddl + v9IndexDdl)
 
         val db = helper.runMigrationsAndValidate(
@@ -600,8 +600,8 @@ class YanjiMigrationTest {
         assertTrue("isFavorite 列应已存在", "isFavorite" in db.columnNames("journal_entries"))
 
         // 迁移后同一天写入两篇：唯一约束已放开，两篇都必须留存。
-        insertJournalRow(db, "j-1", "2026-09-21", "第一篇", 1000L)
-        insertJournalRow(db, "j-2", "2026-09-21", "第二篇", 2000L)
+        insertNoteRow(db, "j-1", "2026-09-21", "第一篇", 1000L)
+        insertNoteRow(db, "j-2", "2026-09-21", "第二篇", 2000L)
 
         assertEquals(
             "同一天必须允许存在多篇随笔",
@@ -627,7 +627,7 @@ class YanjiMigrationTest {
     }
 
     @Test
-    fun migrate14To15_preservesExistingJournalContent() {
+    fun migrate14To15_preservesExistingNoteContent() {
         val db14 = helper.createDatabase(14)
         db14.prepare(
             "INSERT INTO journal_entries " +
@@ -722,14 +722,14 @@ class YanjiMigrationTest {
                 "INSERT INTO journal_entries VALUES ('duplicate','2026-09-04','','','3','3','3','','','','31','401')"
             ).use { it.step() }
         }
-        assertTrue("database must reject a second journal for the same date", duplicateInsert.isFailure)
+        assertTrue("database must reject a second notes for the same date", duplicateInsert.isFailure)
         db.close()
     }
 
     // ---------------------------------------------------------------- SQL 小工具
 
     /** 插入一行随笔，其余列填中性默认值。用于验证「一天多篇」与 isFavorite 默认值。 */
-    private fun insertJournalRow(
+    private fun insertNoteRow(
         db: SQLiteConnection,
         id: String,
         date: String,

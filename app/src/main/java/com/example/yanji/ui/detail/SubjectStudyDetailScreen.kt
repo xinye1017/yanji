@@ -24,7 +24,7 @@ import com.example.yanji.data.StudyTimeRange
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.yanjiSeriesColor
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -192,7 +192,7 @@ fun SubjectStudyDetailScreen(
                                 .padding(36.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            JuanjuanAvatar(size = 56.dp)
+                            AiAvatar(size = 56.dp)
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = "这个科目在${selectedRange.title}还没有专注记录。",

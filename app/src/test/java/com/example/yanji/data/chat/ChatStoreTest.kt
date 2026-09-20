@@ -111,7 +111,7 @@ class FakeYanjiDatabase(
     override fun chatMessageDao(): ChatMessageDao = messageDao
     override fun focusSessionDao(): FocusSessionDao = throw UnsupportedOperationException()
     override fun examSessionDao(): ExamSessionDao = throw UnsupportedOperationException()
-    override fun journalEntryDao(): JournalEntryDao = throw UnsupportedOperationException()
+    override fun noteEntryDao(): NoteEntryDao = throw UnsupportedOperationException()
     override fun userSettingsDao(): UserSettingsDao = throw UnsupportedOperationException()
     override fun checkInDao(): CheckInDao = throw UnsupportedOperationException()
     override fun achievementDao(): AchievementDao = throw UnsupportedOperationException()

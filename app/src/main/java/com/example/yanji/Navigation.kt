@@ -31,7 +31,7 @@ import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.ui.achievement.AchievementsScreen
-import com.example.yanji.ui.chat.JuanjuanChatScreen
+import com.example.yanji.ui.chat.AiChatScreen
 import com.example.yanji.ui.detail.DailyStudyDetailScreen
 import com.example.yanji.ui.detail.FocusSessionDetailScreen
 import com.example.yanji.ui.detail.SubjectStudyDetailScreen
@@ -40,8 +40,8 @@ import com.example.yanji.ui.exam.ExamHistoryScreen
 import com.example.yanji.ui.exam.ExamScreen
 import com.example.yanji.ui.focus.FocusScreen
 import com.example.yanji.ui.home.HomeScreen
-import com.example.yanji.ui.journal.JournalEditorScreen
-import com.example.yanji.ui.journal.JournalScreen
+import com.example.yanji.ui.note.NoteEditorScreen
+import com.example.yanji.ui.note.NoteScreen
 import com.example.yanji.ui.navigation.GlassBottomBar
 import com.example.yanji.ui.profile.ProfileScreen
 import com.example.yanji.ui.profile.ProfileViewModel
@@ -53,6 +53,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import java.util.UUID
 
 enum class YanjiTab(
     val title: String,
@@ -61,7 +62,7 @@ enum class YanjiTab(
 ) {
     HOME("首页", PhosphorIcons.Fill.House, PhosphorIcons.Regular.House),
     FOCUS("专注", PhosphorIcons.Fill.Timer, PhosphorIcons.Regular.Timer),
-    JOURNAL("随笔", PhosphorIcons.Fill.Notebook, PhosphorIcons.Regular.Notebook),
+    NOTE("随笔", PhosphorIcons.Fill.Notebook, PhosphorIcons.Regular.Notebook),
     STATS("统计", PhosphorIcons.Fill.ChartBar, PhosphorIcons.Regular.ChartBar),
     PROFILE("我的", PhosphorIcons.Fill.UserCircle, PhosphorIcons.Regular.UserCircle)
 }
@@ -78,12 +79,22 @@ sealed interface YanjiSubScreen {
     data object ExamHistory : YanjiSubScreen
     @Serializable
     data class ExamDetail(val examId: String) : YanjiSubScreen
+    /**
+     * 随笔编辑页。两种进入方式：
+     *  - [noteId] 非空：编辑历史里已存在的那一篇；
+     *  - [noteId] 为空：新建一篇，[newEntryNonce] 用唯一值断开与上一次新建页的
+     *    状态继承（同一天连续新建时，`(null, date)` 相同会让 rememberSaveable 复用旧草稿）。
+     */
     @Serializable
-    data class JournalEditor(val journalId: String? = null, val date: String) : YanjiSubScreen
+    data class NoteEditor(
+        val noteId: String? = null,
+        val date: String,
+        val newEntryNonce: String = ""
+    ) : YanjiSubScreen
     @Serializable
     data object ExamMode : YanjiSubScreen
     @Serializable
-    data object JuanjuanChat : YanjiSubScreen
+    data object AiChat : YanjiSubScreen
     @Serializable
     data object Achievements : YanjiSubScreen
     @Serializable
@@ -216,10 +227,11 @@ fun MainNavigation() {
                                 onBack = { screenStack.removeLastOrNull() }
                             )
                         }
-                        is YanjiSubScreen.JournalEditor -> {
-                            JournalEditorScreen(
-                                journalId = screen.journalId,
+                        is YanjiSubScreen.NoteEditor -> {
+                            NoteEditorScreen(
+                                noteId = screen.noteId,
                                 date = screen.date,
+                                draftKeySuffix = screen.newEntryNonce,
                                 onBack = { screenStack.removeLastOrNull() },
                                 onSaveSuccess = { screenStack.removeLastOrNull() },
                                 onNavigateToDailyDetail = { d ->
@@ -233,8 +245,8 @@ fun MainNavigation() {
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        is YanjiSubScreen.JuanjuanChat -> {
-                            JuanjuanChatScreen(
+                        is YanjiSubScreen.AiChat -> {
+                            AiChatScreen(
                                 onNavigateBack = { screenStack.removeLastOrNull() }
                             )
                         }
@@ -273,14 +285,21 @@ fun MainNavigation() {
                             HomeScreen(
                                 onNavigateToFocus = { currentTab = YanjiTab.FOCUS },
                                 onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
-                                onNavigateToJournal = { currentTab = YanjiTab.JOURNAL },
+                                onNavigateToNote = { currentTab = YanjiTab.NOTE },
                                 onNavigateToStats = { currentTab = YanjiTab.STATS },
                                 onNavigateToSettings = { currentTab = YanjiTab.PROFILE },
-                                onNavigateToJuanjuanChat = { screenStack.add(YanjiSubScreen.JuanjuanChat) },
+                                onNavigateToAiChat = { screenStack.add(YanjiSubScreen.AiChat) },
                                 onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
                                 onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
                                 onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) },
-                                onNavigateToJournalEditor = { d -> screenStack.add(YanjiSubScreen.JournalEditor(date = d)) },
+                                onNavigateToNoteEditor = { d ->
+                                    screenStack.add(
+                                        YanjiSubScreen.NoteEditor(
+                                            date = d,
+                                            newEntryNonce = UUID.randomUUID().toString()
+                                        )
+                                    )
+                                },
                                 onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
                             )
                         }
@@ -291,10 +310,19 @@ fun MainNavigation() {
                                 onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) }
                             )
                         }
-                        YanjiTab.JOURNAL -> {
-                            JournalScreen(
+                        YanjiTab.NOTE -> {
+                            NoteScreen(
                                 onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                                onNavigateToJournalEditor = { jId, d -> screenStack.add(YanjiSubScreen.JournalEditor(jId, d)) }
+                                onNavigateToNoteEditor = { jId, d ->
+                                    screenStack.add(
+                                        YanjiSubScreen.NoteEditor(
+                                            noteId = jId,
+                                            date = d,
+                                            // 新建一篇时给唯一 nonce，避免同一天连续新建复用上一次的草稿状态。
+                                            newEntryNonce = if (jId == null) UUID.randomUUID().toString() else ""
+                                        )
+                                    )
+                                }
                             )
                         }
                         YanjiTab.STATS -> {

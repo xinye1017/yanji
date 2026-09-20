@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -49,9 +49,9 @@ fun AiThinkingIndicator(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.Start
     ) {
-        // Juanjuan Avatar with sparkle badge
+        // Ai Avatar with sparkle badge
         Box(modifier = Modifier.size(40.dp)) {
-            JuanjuanAvatar(size = 40.dp)
+            AiAvatar(size = 40.dp)
             Box(
                 modifier = Modifier
                     .size(16.dp)

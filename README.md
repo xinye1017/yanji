@@ -95,7 +95,7 @@
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        UI Layer (Jetpack Compose)                      │
 │   ┌────────────────────────────────────────────────────────────────┐   │
-│   │ FocusScreen │ ExamScreen │ StatsScreen │ ChatScreen │ Journal  │   │
+│   │ FocusScreen │ ExamScreen │ StatsScreen │ ChatScreen │ Note     │   │
 │   └────────────────────────────────────────────────────────────────┘   │
 │          ▲                                                 │           │
 │    Immutable UiState                                 Intent / Action   │
@@ -109,7 +109,7 @@
 │                    Domain & Repository Layer (Pure Kotlin DI)          │
 │   ┌────────────────────────────────────────────────────────────────┐   │
 │   │                AppContainer (DefaultAppContainer)              │   │
-│   │   ├── YanjiRepository (TimerStore / ChatStore / JournalStore)  │   │
+│   │   ├── YanjiRepository (TimerStore / ChatStore / NoteStore)     │   │
 │   │   ├── StudyStatisticsRepository (Room StatsDao Pushdown)       │   │
 │   │   └── ActiveSessionCoordinator (Active State Concurrency Guard)│   │
 │   └────────────────────────────────────────────────────────────────┘   │
@@ -210,7 +210,7 @@ com.example.yanji
 │   ├── focus/                         # 专注心流模块
 │   ├── stats/                         # 统计与学情分析模块
 │   ├── chat/                          # 卷卷伴学对话模块
-│   ├── journal/                       # 研迹考研日记模块
+│   ├── note/                          # 随笔 / 日记模块
 │   └── profile/                       # 个人资料、目标与备份模块
 └── YanjiApplication.kt                # 应用程序入口，持有 AppContainer
 ```
@@ -231,8 +231,8 @@ com.example.yanji
 
 ### 2. Android 仪器测试与视觉矩阵 (`androidTest`)
 * `FocusScreenVisualMatrixTest`：在四种主流视口规格（360x800, 390x844, 412x915 及 390x844-1.3x 大字号无障碍）下自动化断言无截断、无重叠。
-* `JournalEditorScreenInstrumentedTest`：日记编辑器全流程交互与落库断言。
-* `JuanjuanChatScreenInstrumentedTest`：卷卷伴学问答与交互流断言。
+* `NoteEditorScreenInstrumentedTest`：日记编辑器全流程交互与落库断言。
+* `AiChatScreenInstrumentedTest`：卷卷伴学问答与交互流断言。
 
 ### 3. CI 与发布矩阵
 * Push / PR：JVM 单测、Lint、Debug、未签名 Release、API 34 完整仪器测试。

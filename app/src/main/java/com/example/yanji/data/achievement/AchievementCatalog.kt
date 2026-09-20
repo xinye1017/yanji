@@ -5,7 +5,7 @@ import com.example.yanji.data.AchievementRarity
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.checkin.CheckInLogic
 import java.time.Instant
@@ -32,7 +32,7 @@ data class AchievementDef(
     val calculateProgress: (
         focusSessions: List<FocusSession>,
         examSessions: List<ExamSession>,
-        journalEntries: List<JournalEntry>,
+        noteEntries: List<NoteEntry>,
         checkIns: List<CheckIn>
     ) -> Long
 )
@@ -121,8 +121,8 @@ object AchievementCatalog {
             target = 1L,
             unit = "篇",
             rewardQuote = "笔尖划过纸页的沙沙声，是内心安定沉静的力量。",
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(1L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(1L)
             }
         ),
         AchievementDef(
@@ -911,8 +911,8 @@ object AchievementCatalog {
             rewardQuote = "第一篇复盘。敢于直面问题的人，已经赢了一半。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 1,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(1L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(1L)
             }
         ),
         AchievementDef(
@@ -927,8 +927,8 @@ object AchievementCatalog {
             rewardQuote = "吾日三省吾身，知得失而明进退。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 2,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(3L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(3L)
             }
         ),
         AchievementDef(
@@ -943,8 +943,8 @@ object AchievementCatalog {
             rewardQuote = "七篇反思总结，让模糊的灵感沉淀为清晰的方法论。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 3,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(7L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(7L)
             }
         ),
         AchievementDef(
@@ -959,8 +959,8 @@ object AchievementCatalog {
             rewardQuote = "半月反思，字字句句皆是研路心血。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 4,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(15L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(15L)
             }
         ),
         AchievementDef(
@@ -975,8 +975,8 @@ object AchievementCatalog {
             rewardQuote = "三十篇深度复盘，你已拥有属于自己的错题心法。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 5,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(30L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(30L)
             }
         ),
         AchievementDef(
@@ -991,8 +991,8 @@ object AchievementCatalog {
             rewardQuote = "五十篇凝练自省。知错能改，善莫大焉。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 6,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(50L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(50L)
             }
         ),
         AchievementDef(
@@ -1007,8 +1007,8 @@ object AchievementCatalog {
             rewardQuote = "百篇自省之书。以此为鉴，照亮远方。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 7,
-            calculateProgress = { _, _, journal, _ ->
-                journal.size.toLong().coerceAtMost(100L)
+            calculateProgress = { _, _, notes, _ ->
+                notes.size.toLong().coerceAtMost(100L)
             }
         ),
         AchievementDef(
@@ -1021,9 +1021,9 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "趁热打铁。考后二十四小时的复盘黄金期，你抓住了！",
-            calculateProgress = { _, exam, journal, _ ->
+            calculateProgress = { _, exam, notes, _ ->
                 val ok = exam.any { e ->
-                    journal.any { j ->
+                    notes.any { j ->
                         j.createdAt in e.endTime..(e.endTime + 86400000L)
                     }
                 }
@@ -1040,12 +1040,12 @@ object AchievementCatalog {
             target = 5L,
             unit = "次",
             rewardQuote = "连续五场考后当天立克复盘！执行力就是你的超能力！",
-            calculateProgress = { _, exam, journal, _ ->
+            calculateProgress = { _, exam, notes, _ ->
                 val sortedExams = exam.sortedBy { it.endTime }
                 var count = 0
                 for (e in sortedExams) {
                     val examDay = dateKey(e.endTime)
-                    val hasSameDay = journal.any { j -> dateKey(j.createdAt) == examDay }
+                    val hasSameDay = notes.any { j -> dateKey(j.createdAt) == examDay }
                     if (hasSameDay) count++ else count = 0
                     if (count >= 5) break
                 }

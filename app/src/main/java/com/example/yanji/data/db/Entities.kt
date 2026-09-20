@@ -120,7 +120,7 @@ data class ExamSessionEntity(
     // v15 起 date 不再是唯一键：一天允许多篇随笔。保留普通索引供按日期分组/排序使用。
     indices = [Index(value = ["date"], unique = false)]
 )
-data class JournalEntryEntity(
+data class NoteEntryEntity(
     @PrimaryKey val id: String,
     val date: String,
     val title: String,
@@ -135,8 +135,8 @@ data class JournalEntryEntity(
     val updatedAt: Long,
     val isFavorite: Int = 0 // v15 新增：0/1，随笔收藏标记
 ) {
-    fun toDomainModel(): JournalEntry {
-        return JournalEntry(
+    fun toDomainModel(): NoteEntry {
+        return NoteEntry(
             id = id,
             date = date,
             title = title,
@@ -154,8 +154,8 @@ data class JournalEntryEntity(
     }
 
     companion object {
-        fun fromDomainModel(model: JournalEntry): JournalEntryEntity {
-            return JournalEntryEntity(
+        fun fromDomainModel(model: NoteEntry): NoteEntryEntity {
+            return NoteEntryEntity(
                 id = model.id,
                 date = model.date,
                 title = model.title,

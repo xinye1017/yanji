@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.ChatContextSource
 import com.example.yanji.data.ChatMessage
 import com.example.yanji.data.ChatSession
-import com.example.yanji.data.JuanjuanAction
+import com.example.yanji.data.AiAction
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.ai.ChatReplyState
@@ -96,7 +96,7 @@ class ChatViewModel(
 
     fun loadMoreMessages() = repo.loadMoreChatMessages()
 
-    fun executeAction(action: JuanjuanAction, context: android.content.Context): Boolean =
+    fun executeAction(action: AiAction, context: android.content.Context): Boolean =
         repo.executeAction(action, context)
 
     fun switchChatSession(sessionId: String) = repo.switchChatSession(sessionId)

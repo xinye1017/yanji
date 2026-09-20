@@ -23,7 +23,7 @@ data class LiquidGlassTokens(
 )
 
 val LightGlassTokens = LiquidGlassTokens(
-    blurRadius = 22.dp,
+    blurRadius = 26.dp,
     tintAlpha = 0.58f,
     borderAlpha = 0.42f,
     highlightAlpha = 0.72f,
@@ -31,7 +31,7 @@ val LightGlassTokens = LiquidGlassTokens(
 )
 
 val DarkGlassTokens = LiquidGlassTokens(
-    blurRadius = 24.dp,
+    blurRadius = 28.dp,
     tintAlpha = 0.68f,
     borderAlpha = 0.18f,
     highlightAlpha = 0.28f,

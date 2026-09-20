@@ -39,6 +39,7 @@ object FocusModes {
 /**
  * 首页快捷操作。type 区分内置模板与用户自定义组合：
  * - start_focus / exam / journal：出厂默认三项，行为与原先写死的三个按钮一致
+ *   （`journal` 是写入 `quick_start_presets.type` 的持久化值，不随代码命名调整）
  * - custom：在专注计时页保存的「科目 + 计时模式 + 备注」组合
  * 所有项统一支持长按删除。
  */
@@ -230,7 +231,7 @@ data class ExamSession(
  * `studyDurationSeconds`，导致"真实统计为 0"时回退到陈旧副本、同一指标出现两个事实来源。
  */
 @Serializable
-data class JournalEntry(
+data class NoteEntry(
     val id: String,
     val date: String, // e.g. "2026-09-05"
     val title: String = "",
@@ -350,15 +351,15 @@ enum class ContextSourceType {
  * 操作；UI 不应只是把 label 当成另一条 prompt 发出去。
  */
 @Serializable
-data class JuanjuanAction(
+data class AiAction(
     val id: String,
-    val type: JuanjuanActionType,
+    val type: AiActionType,
     val label: String,
     val payload: String = ""
 )
 
-enum class JuanjuanActionType {
-    /** 把动作写入当日 / 次日计划（journal tomorrowPlan） */
+enum class AiActionType {
+    /** 把动作写入当日 / 次日计划（notes tomorrowPlan） */
     CREATE_PLAN,
     /** 把当前回答摘要存入日记 */
     SAVE_TO_JOURNAL,
@@ -384,12 +385,12 @@ enum class JuanjuanActionType {
  *   - FOLLOWUP    追问 / 引导
  */
 @Serializable
-data class JuanjuanResponseBlock(
-    val kind: JuanjuanBlockKind,
+data class AiResponseBlock(
+    val kind: AiBlockKind,
     val text: String
 )
 
-enum class JuanjuanBlockKind {
+enum class AiBlockKind {
     DIAGNOSIS,
     EVIDENCE,
     MAIN,
@@ -403,11 +404,11 @@ enum class JuanjuanBlockKind {
  * 旧的纯文本段落拆分，保留对历史消息的 100% 兼容。
  */
 @Serializable
-data class JuanjuanResponse(
+data class AiResponse(
     val diagnosis: String? = null,
     val evidence: String? = null,
-    val blocks: List<JuanjuanResponseBlock> = emptyList(),
-    val actions: List<JuanjuanAction> = emptyList(),
+    val blocks: List<AiResponseBlock> = emptyList(),
+    val actions: List<AiAction> = emptyList(),
     val followups: List<String> = emptyList(),
     val contextSources: List<ChatContextSource> = emptyList()
 )

@@ -9,8 +9,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,11 +21,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.yanji.R
 import com.example.yanji.theme.YanjiColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -255,7 +255,7 @@ fun YanjiPeekRating(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Star,
+                        painter = painterResource(R.drawable.star),
                         contentDescription = "评星 ${i + 1}",
                         tint = if (isLit) activeColor else idleColor,
                         modifier = Modifier.size(size)
@@ -265,3 +265,4 @@ fun YanjiPeekRating(
         }
     }
 }
+

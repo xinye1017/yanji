@@ -19,7 +19,7 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.ExamSession
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -63,7 +63,7 @@ fun ExamHistoryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    JuanjuanAvatar(size = 56.dp)
+                    AiAvatar(size = 56.dp)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "暂无模拟考试记录",

@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 
 @Composable
 fun ImportConfirmDialog(
@@ -122,7 +122,7 @@ fun AboutYanjiDialog(
         },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                JuanjuanAvatar(size = 36.dp)
+                AiAvatar(size = 36.dp)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text("关于研迹 (Yanji)", fontWeight = FontWeight.Bold)
             }

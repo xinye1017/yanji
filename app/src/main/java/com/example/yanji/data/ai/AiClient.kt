@@ -3,7 +3,7 @@ package com.example.yanji.data.ai
 import android.util.Log
 import com.example.yanji.data.ChatMessage
 import com.example.yanji.data.ChatSender
-import com.example.yanji.data.JuanjuanPrompt
+import com.example.yanji.data.AiPrompt
 import com.example.yanji.data.StudyDiagnosticSnapshot
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.MascotThemes
@@ -206,7 +206,7 @@ internal class AiClient(
                 put(
                     jsonMessage(
                         "system",
-                        JuanjuanPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name) + "\n\n" + AI_DIAGNOSIS_SYSTEM_PROMPT
+                        AiPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name) + "\n\n" + AI_DIAGNOSIS_SYSTEM_PROMPT
                     )
                 )
                 put(jsonMessage("user", snapshot.toPromptData()))

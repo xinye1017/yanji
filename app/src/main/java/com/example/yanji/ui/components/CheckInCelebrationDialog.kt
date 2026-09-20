@@ -81,7 +81,7 @@ fun CheckInCelebrationDialog(
                             .padding(4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        JuanjuanAvatar(size = 72.dp)
+                        AiAvatar(size = 72.dp)
                     }
 
                     // Check badge

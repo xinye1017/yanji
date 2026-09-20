@@ -5,10 +5,11 @@ import com.example.yanji.data.ChatMessage
 import com.example.yanji.data.ChatSession
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -93,7 +94,15 @@ data class YanjiBackup(
     val settings: UserSettingsBackup? = null,
     val focusSessions: List<FocusSession> = emptyList(),
     val examSessions: List<ExamSession> = emptyList(),
-    val journalEntries: List<JournalEntry> = emptyList(),
+    /**
+     * 日记（随笔）条目。
+     *
+     * JSON 键**刻意保持 `journalEntries`**：这是已导出备份文件的线上格式，
+     * 且该字段带默认值——改名会让用户手里的旧备份在导入时静默变成空列表。
+     * Kotlin 侧属性名随模块更名为 note，线上格式由 @SerialName 显式钉住。
+     */
+    @SerialName("journalEntries")
+    val noteEntries: List<NoteEntry> = emptyList(),
     val chatSessions: List<ChatSession> = emptyList(),
     val chatMessages: List<ChatMessage> = emptyList(),
     val checkIns: List<CheckIn> = emptyList(),
@@ -111,7 +120,7 @@ data class YanjiBackup(
     val isEmpty: Boolean
         get() = focusSessions.isEmpty() &&
             examSessions.isEmpty() &&
-            journalEntries.isEmpty() &&
+            noteEntries.isEmpty() &&
             chatSessions.isEmpty() &&
             chatMessages.isEmpty() &&
             checkIns.isEmpty() &&
@@ -121,7 +130,7 @@ data class YanjiBackup(
             settings == null
 
     fun countsSummary(): String = buildString {
-        append("专注 ${focusSessions.size} · 模考 ${examSessions.size} · 日记 ${journalEntries.size}")
+        append("专注 ${focusSessions.size} · 模考 ${examSessions.size} · 日记 ${noteEntries.size}")
         append(" · 对话 ${chatSessions.size}/${chatMessages.size}")
         append(" · 打卡 ${checkIns.size} · 成就 ${unlockedAchievements.size}")
         append(" · 快捷 ${quickStartPresets.size}")

@@ -59,8 +59,8 @@ import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.CheckInCard
 import com.example.yanji.ui.components.CheckInCelebrationDialog
-import com.example.yanji.ui.components.JuanjuanAvatar
-import com.example.yanji.ui.components.JuanjuanEncouragementBanner
+import com.example.yanji.ui.components.AiAvatar
+import com.example.yanji.ui.components.AiEncouragementBanner
 import com.example.yanji.ui.components.RollingNumber
 import com.example.yanji.ui.components.YanjiGroupedCard
 import com.example.yanji.ui.components.YanjiSection
@@ -71,15 +71,15 @@ import java.util.*
 fun HomeScreen(
     onNavigateToFocus: () -> Unit,
     onNavigateToExam: () -> Unit,
-    onNavigateToJournal: () -> Unit,
+    onNavigateToNote: () -> Unit,
     onNavigateToStats: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    onNavigateToJuanjuanChat: () -> Unit = {},
+    onNavigateToAiChat: () -> Unit = {},
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToSubjectDetail: (subjectId: String) -> Unit = {},
     onNavigateToExamHistory: () -> Unit = {},
-    onNavigateToJournalEditor: (date: String) -> Unit = {},
+    onNavigateToNoteEditor: (date: String) -> Unit = {},
     onNavigateToAchievements: () -> Unit = {},
     viewModel: HomeViewModel = yanjiViewModel { container ->
         HomeViewModel(container.repository, container.statisticsRepository)
@@ -353,11 +353,11 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        // 6. Juanjuan Encouragement
+        // 6. Ai Encouragement
         // 注意：这里不能对连续天数做 `maxOf(1, ...)` —— 没有任何连续学习记录时
         // 显示"已达成 1 天"属于伪造统计。真实的 0 天就如实呈现，只是换成引导文案。
         val streakDays = state.streakDays
-        JuanjuanEncouragementBanner(
+        AiEncouragementBanner(
             message = if (todaySecs > 0) {
                 "今天已经积累 ${todayHours} 小时 ${todayMins} 分钟。专注的轨迹正在清晰留下，不急不躁，按部就班。"
             } else {
@@ -368,18 +368,18 @@ fun HomeScreen(
             } else {
                 "还没有连续学习记录 · 今天开始第一段专注吧"
             },
-            onClick = onNavigateToJuanjuanChat
+            onClick = onNavigateToAiChat
         )
 
         // Unified Bottom Inset Padding
         Spacer(modifier = Modifier.height(AppContentInsets.BottomBarPadding))
     }
 
-    // 2. Floating Draggable Juanjuan Ball (吸附在左右两侧，支持自由拖动与点击唤起伴学)
-    FloatingJuanjuanBall(
+    // 2. Floating Draggable Ai Ball (吸附在左右两侧，支持自由拖动与点击唤起伴学)
+    FloatingAiBall(
         screenWidthPx = screenWidthPx,
         screenHeightPx = screenHeightPx,
-        onClick = onNavigateToJuanjuanChat
+        onClick = onNavigateToAiChat
     )
 
     celebratingCheckIn?.let { checkIn ->
@@ -444,7 +444,7 @@ fun SubjectTimeChip(
  * 5. 点击（轻触位移小于 touchSlop）触发伴学对话。
  */
 @Composable
-fun FloatingJuanjuanBall(
+fun FloatingAiBall(
     screenWidthPx: Float,
     screenHeightPx: Float,
     onClick: () -> Unit,
@@ -617,7 +617,7 @@ fun FloatingJuanjuanBall(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            JuanjuanAvatar(size = 44.dp)
+            AiAvatar(size = 44.dp)
         }
     }
 }

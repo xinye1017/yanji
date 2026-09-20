@@ -13,7 +13,7 @@ import java.io.File
     entities = [
         FocusSessionEntity::class,
         ExamSessionEntity::class,
-        JournalEntryEntity::class,
+        NoteEntryEntity::class,
         UserSettingsEntity::class,
         ChatMessageEntity::class,
         ChatSessionEntity::class,
@@ -29,7 +29,7 @@ abstract class YanjiDatabase : RoomDatabase() {
 
     abstract fun focusSessionDao(): FocusSessionDao
     abstract fun examSessionDao(): ExamSessionDao
-    abstract fun journalEntryDao(): JournalEntryDao
+    abstract fun noteEntryDao(): NoteEntryDao
     abstract fun userSettingsDao(): UserSettingsDao
     abstract fun chatMessageDao(): ChatMessageDao
     abstract fun chatSessionDao(): ChatSessionDao
@@ -334,7 +334,7 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
-         * v11: enforce the domain invariant "one journal per calendar date" in SQLite.
+         * v11: enforce the domain invariant "one notes per calendar date" in SQLite.
          *
          * Older builds only normalized this in repository code, so concurrent writes/imports
          * could leave duplicate dates. Before replacing the old non-unique index, keep exactly

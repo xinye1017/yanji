@@ -38,7 +38,7 @@ class ScopedSessionQueriesConsumerTest {
     }
 
     @Test
-    fun testJuanjuanRuntimeContextBuildsWithScopedSessions() {
+    fun testAiRuntimeContextBuildsWithScopedSessions() {
         val now = System.currentTimeMillis()
         val session = FocusSession(
             id = "f_recent",
@@ -50,11 +50,11 @@ class ScopedSessionQueriesConsumerTest {
             status = SessionStatus.COMPLETED
         )
 
-        val context = JuanjuanPrompt.buildRuntimeContext(
+        val context = AiPrompt.buildRuntimeContext(
             settings = UserSettings(),
             focusSessions = listOf(session),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             activeFocus = null,
             now = now
         )

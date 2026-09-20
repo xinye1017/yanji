@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard as Card
 
 /**
@@ -39,7 +39,7 @@ fun ExamAiDiagnosisSection(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    JuanjuanAvatar(size = 36.dp)
+                    AiAvatar(size = 36.dp)
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

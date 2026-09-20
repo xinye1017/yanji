@@ -3,7 +3,7 @@ package com.example.yanji.data.achievement
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.SessionStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +20,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.ReconcileAll,
             focusSessions = emptyList(),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -45,7 +45,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -74,7 +74,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -101,7 +101,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -111,8 +111,8 @@ class AchievementEvaluatorComparisonTest {
 
     @Test
     fun testEventFilteringEfficiency() {
-        // When JournalCreated occurs, only review & journey_journal achievements can unlock
-        val j = JournalEntry(
+        // When NoteCreated occurs, only review & journey_journal achievements can unlock
+        val j = NoteEntry(
             id = "j1",
             date = "2026-09-18",
             title = "今日复盘",
@@ -126,10 +126,10 @@ class AchievementEvaluatorComparisonTest {
         )
 
         val unlocked = evaluator.evaluate(
-            event = AchievementEvent.JournalCreated(j),
+            event = AchievementEvent.NoteCreated(j),
             focusSessions = emptyList(),
             examSessions = emptyList(),
-            journalEntries = listOf(j),
+            noteEntries = listOf(j),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -157,7 +157,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         ).toSet()
@@ -168,7 +168,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = firstUnlocked
         )
@@ -186,8 +186,8 @@ class AchievementEvaluatorComparisonTest {
         val examList = listOf(
             ExamSession("e1", "sub_math", "数学一", 10800, 10800, now - 20000_000, now - 9200_000, score = 105.0, maxScore = 150.0, status = SessionStatus.COMPLETED)
         )
-        val journalList = listOf(
-            JournalEntry(
+        val noteList = listOf(
+            NoteEntry(
                 id = "j1",
                 date = "2026-09-17",
                 title = "复盘1",
@@ -203,7 +203,7 @@ class AchievementEvaluatorComparisonTest {
 
         // Old implementation parity check:
         val expected = AchievementCatalog.definitions
-            .filter { it.calculateProgress(focusList, examList, journalList, checkInList) >= it.target }
+            .filter { it.calculateProgress(focusList, examList, noteList, checkInList) >= it.target }
             .map { it.id }
             .toSet()
 
@@ -212,7 +212,7 @@ class AchievementEvaluatorComparisonTest {
             event = AchievementEvent.ReconcileAll,
             focusSessions = focusList,
             examSessions = examList,
-            journalEntries = journalList,
+            noteEntries = noteList,
             checkIns = checkInList,
             unlockedIds = emptySet()
         ).toSet()

@@ -27,7 +27,7 @@ internal object BackupTransfer {
             ?.let { UserSettingsBackup.fromDomain(it.toDomainModel()) },
         focusSessions = db.focusSessionDao().getAll().first().map { it.toDomainModel() },
         examSessions = db.examSessionDao().getAll().first().map { it.toDomainModel() },
-        journalEntries = db.journalEntryDao().getAll().first().map { it.toDomainModel() },
+        noteEntries = db.noteEntryDao().getAll().first().map { it.toDomainModel() },
         chatSessions = db.chatSessionDao().getAll().first().map { it.toDomainModel() },
         chatMessages = db.chatMessageDao().getAll().first().map { it.toDomainModel() },
         checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
@@ -53,9 +53,9 @@ internal object BackupTransfer {
             db.examSessionDao().insertAll(backup.examSessions.map { ExamSessionEntity.fromDomainModel(it) })
         }
 
-        db.journalEntryDao().deleteAll()
-        if (backup.journalEntries.isNotEmpty()) {
-            db.journalEntryDao().insertAll(backup.journalEntries.map { JournalEntryEntity.fromDomainModel(it) })
+        db.noteEntryDao().deleteAll()
+        if (backup.noteEntries.isNotEmpty()) {
+            db.noteEntryDao().insertAll(backup.noteEntries.map { NoteEntryEntity.fromDomainModel(it) })
         }
 
         db.chatMessageDao().clearAll()

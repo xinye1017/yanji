@@ -11,7 +11,7 @@ import com.example.yanji.data.ChatSender
 import com.example.yanji.data.ChatSession
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.Subject
@@ -71,7 +71,7 @@ class BackupTransferInstrumentedTest {
         assertTrue("全新数据库必须采集为空备份", backup.isEmpty)
         assertEquals(0, db.focusSessionDao().count())
         assertEquals(0, db.examSessionDao().count())
-        assertEquals(0, db.journalEntryDao().count())
+        assertEquals(0, db.noteEntryDao().count())
 
         // 空备份 → JSON → 解析，仍然为空；这保证「删空后导出」是合法且可还原的状态
         val json = BackupCodec.encode(backup)
@@ -224,7 +224,7 @@ class BackupTransferInstrumentedTest {
 
             assertEquals(1, secondDb.focusSessionDao().count())
             assertEquals(1, secondDb.examSessionDao().count())
-            assertEquals(1, secondDb.journalEntryDao().count())
+            assertEquals(1, secondDb.noteEntryDao().count())
             assertEquals(1, secondDb.chatSessionDao().count())
             assertEquals(2, secondDb.chatMessageDao().count())
             assertEquals(1, secondDb.checkInDao().count())
@@ -238,8 +238,8 @@ class BackupTransferInstrumentedTest {
             assertEquals(SessionStatus.COMPLETED, focus.status)
             assertEquals("正向计时", focus.mode)
 
-            val journal = secondDb.journalEntryDao().getByDate("2026-09-05")!!
-            assertEquals(listOf("数学突破", "心态平和"), journal.toDomainModel().tags)
+            val notes = secondDb.noteEntryDao().getByDate("2026-09-05")!!
+            assertEquals(listOf("数学突破", "心态平和"), notes.toDomainModel().tags)
 
             val settings = secondDb.userSettingsDao().getSettings().first()!!.toDomainModel()
             assertEquals("浙江大学 计算机学院", settings.targetSchool)
@@ -302,8 +302,8 @@ class BackupTransferInstrumentedTest {
                 note = "中值定理失分"
             )
         ),
-        journalEntries = listOf(
-            JournalEntry(
+        noteEntries = listOf(
+            NoteEntry(
                 id = "j-1",
                 date = "2026-09-05",
                 title = "渐入佳境",

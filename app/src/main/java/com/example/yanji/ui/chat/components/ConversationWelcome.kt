@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 
 @Composable
 fun ConversationWelcome(
@@ -41,9 +41,9 @@ fun ConversationWelcome(
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
-        // Juanjuan Avatar with sparkle badge (40dp)
+        // Ai Avatar with sparkle badge (40dp)
         Box(modifier = Modifier.size(40.dp)) {
-            JuanjuanAvatar(size = 40.dp)
+            AiAvatar(size = 40.dp)
             Box(
                 modifier = Modifier
                     .size(16.dp)

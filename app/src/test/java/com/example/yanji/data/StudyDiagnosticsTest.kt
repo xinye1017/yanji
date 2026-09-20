@@ -17,8 +17,8 @@ class StudyDiagnosticsTest {
                 FocusSession("cancelled", "major", "408", now - 3_000, now, 9_999, status = SessionStatus.CANCELLED)
             ),
             examSessions = listOf(ExamSession("exam", "math", "数学", score = 120.0, maxScore = 150.0)),
-            journalEntries = listOf(
-                JournalEntry("journal", YanjiTime.localDate(now).toString(), content = "复盘积分计算")
+            noteEntries = listOf(
+                NoteEntry("journal", YanjiTime.localDate(now).toString(), content = "复盘积分计算")
             ),
             now = now
         )

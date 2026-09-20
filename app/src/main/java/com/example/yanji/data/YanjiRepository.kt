@@ -16,7 +16,7 @@ import com.example.yanji.data.ai.ChatReplyState
 import com.example.yanji.data.chat.ChatStore
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
-import com.example.yanji.data.journal.JournalStore
+import com.example.yanji.data.note.NoteStore
 import com.example.yanji.data.study.StudyStats
 import com.example.yanji.data.timer.TimerStore
 import com.example.yanji.data.backup.UserSettingsBackup
@@ -168,7 +168,7 @@ class YanjiRepository private constructor() {
 
     // ---- 领域 Store：状态与动作各自归属，Repository 只做同名委托（UI 层零改动）----
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
-    private val journalStore = JournalStore(scope = repoScope, dbProvider = { database })
+    private val noteStore = NoteStore(scope = repoScope, dbProvider = { database })
     private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
     val achievementEvaluator = AchievementEvaluator()
 
@@ -176,7 +176,7 @@ class YanjiRepository private constructor() {
         timerStore.onAchievementEvent = { event ->
             triggerAchievementEvaluation(event)
         }
-        journalStore.onAchievementEvent = { event ->
+        noteStore.onAchievementEvent = { event ->
             triggerAchievementEvaluation(event)
         }
         checkInStore.onAchievementEvent = { event ->
@@ -187,7 +187,7 @@ class YanjiRepository private constructor() {
     val focusSessions: StateFlow<List<FocusSession>> get() = timerStore.focusSessions
     val examSessions: StateFlow<List<ExamSession>> get() = timerStore.examSessions
 
-    val journalEntries: StateFlow<List<JournalEntry>> get() = journalStore.journalEntries
+    val noteEntries: StateFlow<List<NoteEntry>> get() = noteStore.noteEntries
 
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
@@ -213,7 +213,7 @@ class YanjiRepository private constructor() {
         scope = repoScope,
         dbProvider = { database },
         settingsProvider = { _settings.value },
-        replyProvider = { message, model -> generateJuanjuanReply(message, model) },
+        replyProvider = { message, model -> generateAiReply(message, model) },
         aiClient = aiClient
     )
 
@@ -279,7 +279,7 @@ class YanjiRepository private constructor() {
             // rapid parallel writes.
             // 专注/模考、日记的 DB 订阅由各自的 Store 负责
             timerStore.bind(db)
-            journalStore.bind(db)
+            noteStore.bind(db)
             launch {
                 db.userSettingsDao().getSettings().collect { entity ->
                     if (entity != null) {
@@ -438,14 +438,14 @@ class YanjiRepository private constructor() {
      *    导致同一条记录在内存与 DB 中 `updatedAt` 不一致。
      * 2. 旧代码按 `date || id` 匹配内存行、却按 `id` 覆盖写库。
      *
-     * v15 起改为按 **id** 归一化（一天允许多篇随笔），规则见 [JournalStore.addOrUpdate]。
+     * v15 起改为按 **id** 归一化（一天允许多篇随笔），规则见 [NoteStore.addOrUpdate]。
      */
-    fun addOrUpdateJournal(entry: JournalEntry) = journalStore.addOrUpdate(entry)
+    fun addOrUpdateNote(entry: NoteEntry) = noteStore.addOrUpdate(entry)
 
     /** 切换随笔收藏标记（历史页向右滑 / 编辑页收藏按钮）。 */
-    fun setJournalFavorite(id: String, favorite: Boolean) = journalStore.setFavorite(id, favorite)
+    fun setNoteFavorite(id: String, favorite: Boolean) = noteStore.setFavorite(id, favorite)
 
-    fun deleteJournal(id: String) = journalStore.delete(id)
+    fun deleteNote(id: String) = noteStore.delete(id)
 
     /**
      * 保存用户设置。
@@ -539,7 +539,7 @@ class YanjiRepository private constructor() {
             settings = settings,
             focusSessions = focusList,
             examSessions = examList,
-            journalEntries = journalStore.journalEntries.value
+            noteEntries = noteStore.noteEntries.value
         )
         if (snapshot.sessionCount == 0) {
             throw com.example.yanji.data.ai.AiException("本周期内暂无有效专注记录，无法生成阶段学情诊断。完成学习后再来诊断吧。")
@@ -573,7 +573,7 @@ class YanjiRepository private constructor() {
 
     fun clearChatMessages() = chatStore.clearChatMessages()
 
-    suspend fun generateJuanjuanReply(userMessage: ChatMessage, model: String? = null): String {
+    suspend fun generateAiReply(userMessage: ChatMessage, model: String? = null): String {
         val settings = _settings.value
         val targetModel = model ?: settings.aiModel
 
@@ -606,12 +606,12 @@ class YanjiRepository private constructor() {
         }
 
         return aiClient.completeChat(
-            systemPrompt = JuanjuanPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name),
-            runtimeContext = JuanjuanPrompt.buildRuntimeContext(
+            systemPrompt = AiPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name),
+            runtimeContext = AiPrompt.buildRuntimeContext(
                 settings = settings,
                 focusSessions = focusList,
                 examSessions = examList,
-                journalEntries = journalStore.journalEntries.value,
+                noteEntries = noteStore.noteEntries.value,
                 activeFocus = timerStore.activeFocus.value
             ),
             history = history,
@@ -701,7 +701,7 @@ class YanjiRepository private constructor() {
         val db = database ?: return@withContext
         val focus = focusSessions.value
         val exam = examSessions.value
-        val journal = journalEntries.value
+        val notes = noteEntries.value
         val checkInList = checkIns.value
         val unlockedIds = _unlockedAchievements.value.keys
 
@@ -717,11 +717,11 @@ class YanjiRepository private constructor() {
             }
             else -> exam
         }
-        val currentJournal = when (event) {
-            is AchievementEvent.JournalCreated -> {
-                if (journal.any { it.id == event.entry.id }) journal else listOf(event.entry) + journal
+        val currentNote = when (event) {
+            is AchievementEvent.NoteCreated -> {
+                if (notes.any { it.id == event.entry.id }) notes else listOf(event.entry) + notes
             }
-            else -> journal
+            else -> notes
         }
         val currentCheckIns = when (event) {
             is AchievementEvent.CheckInRecorded -> {
@@ -735,7 +735,7 @@ class YanjiRepository private constructor() {
             db = db,
             focusSessions = currentFocus,
             examSessions = currentExam,
-            journalEntries = currentJournal,
+            noteEntries = currentNote,
             checkIns = currentCheckIns,
             unlockedIds = unlockedIds
         )
@@ -754,7 +754,7 @@ class YanjiRepository private constructor() {
         val db = database ?: return@withContext
         val focus = db.focusSessionDao().getAllOnce().map { it.toDomainModel() }
         val exam = db.examSessionDao().getAllOnce().map { it.toDomainModel() }
-        val journal = db.journalEntryDao().getAllOnce().map { it.toDomainModel() }
+        val notes = db.noteEntryDao().getAllOnce().map { it.toDomainModel() }
         val checkInList = db.checkInDao().getAllOnce().map { it.toDomainModel() }
         val unlockedIds = db.achievementDao().getUnlockedIds().toSet()
 
@@ -763,7 +763,7 @@ class YanjiRepository private constructor() {
             db = db,
             focusSessions = focus,
             examSessions = exam,
-            journalEntries = journal,
+            noteEntries = notes,
             checkIns = checkInList,
             unlockedIds = unlockedIds
         )
@@ -798,7 +798,7 @@ class YanjiRepository private constructor() {
         _unlockedAchievements.value = emptyMap()
         db.focusSessionDao().deleteAll()
         db.examSessionDao().deleteAll()
-        db.journalEntryDao().deleteAll()
+        db.noteEntryDao().deleteAll()
         db.checkInDao().deleteAll()
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
@@ -823,11 +823,11 @@ class YanjiRepository private constructor() {
             )
         }
 
-        // 错题/学习记录（近 7 天 focus + exam note 含「错」+ journal 含「错」）
+        // 错题/学习记录（近 7 天 focus + exam note 含「错」+ notes 含「错」）
         val recentFocus = timerStore.focusSessions.value.filter { it.startTime >= sevenDaysAgo }
         val wrongNotesCount = recentFocus.count { it.note.contains("错") }
             + timerStore.examSessions.value.filter { it.startTime >= sevenDaysAgo }.count { it.note.contains("错") }
-            + journalStore.journalEntries.value.filter { it.updatedAt >= sevenDaysAgo }.count { it.content.contains("错") }
+            + noteStore.noteEntries.value.filter { it.updatedAt >= sevenDaysAgo }.count { it.content.contains("错") }
         if (wrongNotesCount > 0) {
             sources += ChatContextSource(
                 ContextSourceType.WRONG_NOTES,
@@ -864,18 +864,18 @@ class YanjiRepository private constructor() {
      * 执行卷卷回复中嵌入的行动指令。
      * 返回 true 表示成功执行并已给用户 Toast 反馈（UI 层自行显示）。
      */
-    fun executeAction(action: JuanjuanAction, context: android.content.Context): Boolean = when (action.type) {
-        JuanjuanActionType.CREATE_PLAN -> {
+    fun executeAction(action: AiAction, context: android.content.Context): Boolean = when (action.type) {
+        AiActionType.CREATE_PLAN -> {
             // 把动作写入今日/明日计划
-            addPlanToJournalInternal(context, action.payload)
+            addPlanToNoteInternal(context, action.payload)
             true
         }
-        JuanjuanActionType.SAVE_TO_JOURNAL -> {
+        AiActionType.SAVE_TO_JOURNAL -> {
             // 存入日记（内容即当前回复全文；这里需要调用方传完整文本）
-            saveTipToJournalInternal(context, action.payload)
+            saveTipToNoteInternal(context, action.payload)
             true
         }
-        JuanjuanActionType.START_FOCUS -> {
+        AiActionType.START_FOCUS -> {
             // payload 格式 "subjectId|mode|note"
             val parts = action.payload.split("|")
             if (parts.size >= 2) {
@@ -891,39 +891,39 @@ class YanjiRepository private constructor() {
                 }
             } else false
         }
-        JuanjuanActionType.OPEN_JOURNAL -> {
+        AiActionType.OPEN_JOURNAL -> {
             // UI 跳转处理，Repository 仅标记意图
             true
         }
-        JuanjuanActionType.OPEN_EXAM -> {
+        AiActionType.OPEN_EXAM -> {
             true
         }
-        JuanjuanActionType.SET_REMINDER -> {
+        AiActionType.SET_REMINDER -> {
             // 暂不实现，占位
             true
         }
-        JuanjuanActionType.GENERATE_TEMPLATE -> {
+        AiActionType.GENERATE_TEMPLATE -> {
             // payload 是模板 ID，UI 处理复制/下载
             true
         }
     }
 
     /**
-     * Internal: save to journal (extracted from old saveTipToJournal).
+     * Internal: save to notes (extracted from old saveTipToNote).
      */
-    private fun saveTipToJournalInternal(context: Context, content: String) {
+    private fun saveTipToNoteInternal(context: Context, content: String) {
         val todayStr = YanjiTime.todayIso()
         // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
-        val existing = journalStore.journalEntries.value
+        val existing = noteStore.noteEntries.value
             .filter { it.date == todayStr }
             .maxByOrNull { it.createdAt }
         val mascotName = MascotThemes.fromStorage(_settings.value.mascotTheme).name
         val appendText = "\n\n### ${mascotName}说考研方法锦囊\n$content"
         if (existing != null) {
-            addOrUpdateJournal(existing.copy(content = existing.content + appendText))
+            addOrUpdateNote(existing.copy(content = existing.content + appendText))
         } else {
-            addOrUpdateJournal(
-                JournalEntry(
+            addOrUpdateNote(
+                NoteEntry(
                     id = UUID.randomUUID().toString(),
                     date = todayStr,
                     title = "今日复盘与${mascotName}建议",
@@ -936,21 +936,21 @@ class YanjiRepository private constructor() {
     }
 
     /**
-     * Internal: add plan to journal (extracted from old addPlanToJournal).
+     * Internal: add plan to notes (extracted from old addPlanToNote).
      */
-    private fun addPlanToJournalInternal(context: Context, planText: String) {
+    private fun addPlanToNoteInternal(context: Context, planText: String) {
         val todayStr = YanjiTime.todayIso()
         // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
-        val existing = journalStore.journalEntries.value
+        val existing = noteStore.noteEntries.value
             .filter { it.date == todayStr }
             .maxByOrNull { it.createdAt }
         val cleanPlan = planText.replace("要将『", "").replace("』加为明早计划吗？", "").replace("？", "").trim()
         val planItem = "\n- [ ] 明早实践：$cleanPlan"
         if (existing != null) {
-            addOrUpdateJournal(existing.copy(content = existing.content + planItem))
+            addOrUpdateNote(existing.copy(content = existing.content + planItem))
         } else {
-            addOrUpdateJournal(
-                JournalEntry(
+            addOrUpdateNote(
+                NoteEntry(
                     id = UUID.randomUUID().toString(),
                     date = todayStr,
                     title = "今日复盘与明日计划",

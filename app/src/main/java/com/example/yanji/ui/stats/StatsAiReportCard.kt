@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard as Card
 
 @Composable
@@ -104,7 +104,7 @@ fun StatsAiReportCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    JuanjuanAvatar(size = 36.dp)
+                    AiAvatar(size = 36.dp)
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(

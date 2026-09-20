@@ -3,14 +3,14 @@ package com.example.yanji.data.achievement
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.db.UnlockedAchievementEntity
 import com.example.yanji.data.db.YanjiDatabase
 
 sealed interface AchievementEvent {
     data class FocusCompleted(val session: FocusSession) : AchievementEvent
     data class ExamCompleted(val session: ExamSession) : AchievementEvent
-    data class JournalCreated(val entry: JournalEntry) : AchievementEvent
+    data class NoteCreated(val entry: NoteEntry) : AchievementEvent
     data class CheckInRecorded(val checkIn: CheckIn) : AchievementEvent
     object ReconcileAll : AchievementEvent
 }
@@ -57,7 +57,7 @@ object AchievementEventFilter {
         return when (event) {
             is AchievementEvent.FocusCompleted -> FOCUS_CANDIDATES
             is AchievementEvent.ExamCompleted -> EXAM_CANDIDATES
-            is AchievementEvent.JournalCreated -> JOURNAL_CANDIDATES
+            is AchievementEvent.NoteCreated -> JOURNAL_CANDIDATES
             is AchievementEvent.CheckInRecorded -> CHECKIN_CANDIDATES
             is AchievementEvent.ReconcileAll -> null // null means all 59
         }
@@ -83,7 +83,7 @@ class AchievementEvaluator(
      * @param event 触发事件（用于过滤候选集）
      * @param focusSessions 专注历史
      * @param examSessions 模考历史
-     * @param journalEntries 日记历史
+     * @param noteEntries 日记历史
      * @param checkIns 打卡历史
      * @param unlockedIds 已经解锁的成就 ID 集合（避免重复计算）
      * @return 本次新满足解锁条件且尚未解锁的成就 ID 列表
@@ -92,7 +92,7 @@ class AchievementEvaluator(
         event: AchievementEvent,
         focusSessions: List<FocusSession>,
         examSessions: List<ExamSession>,
-        journalEntries: List<JournalEntry>,
+        noteEntries: List<NoteEntry>,
         checkIns: List<CheckIn>,
         unlockedIds: Set<String>
     ): List<String> {
@@ -107,7 +107,7 @@ class AchievementEvaluator(
             if (candidates != null && !candidates.contains(def.id)) continue
 
             // 3. 计算进度
-            val progress = def.calculateProgress(focusSessions, examSessions, journalEntries, checkIns)
+            val progress = def.calculateProgress(focusSessions, examSessions, noteEntries, checkIns)
             if (progress >= def.target) {
                 newlyUnlocked.add(def.id)
             }
@@ -124,7 +124,7 @@ class AchievementEvaluator(
         db: YanjiDatabase,
         focusSessions: List<FocusSession>,
         examSessions: List<ExamSession>,
-        journalEntries: List<JournalEntry>,
+        noteEntries: List<NoteEntry>,
         checkIns: List<CheckIn>,
         unlockedIds: Set<String>,
         nowMs: Long = System.currentTimeMillis()
@@ -133,7 +133,7 @@ class AchievementEvaluator(
             event = event,
             focusSessions = focusSessions,
             examSessions = examSessions,
-            journalEntries = journalEntries,
+            noteEntries = noteEntries,
             checkIns = checkIns,
             unlockedIds = unlockedIds
         )

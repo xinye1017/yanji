@@ -31,8 +31,8 @@ class NavigationRecreationTest {
             YanjiSubScreen.ExamDetail(examId = "exam-2026-09-13"),
             YanjiSubScreen.DailyStudyDetail(date = "2026-09-13"),
             YanjiSubScreen.SubjectStudyDetail(subjectId = "math_advanced"),
-            YanjiSubScreen.JournalEditor(journalId = "j-123", date = "2026-09-13"),
-            YanjiSubScreen.JuanjuanChat,
+            YanjiSubScreen.NoteEditor(noteId = "j-123", date = "2026-09-13"),
+            YanjiSubScreen.AiChat,
             YanjiSubScreen.Achievements
         )
 
@@ -50,8 +50,8 @@ class NavigationRecreationTest {
         assertEquals(YanjiSubScreen.ExamDetail("exam-2026-09-13"), restoredStack[1])
         assertEquals(YanjiSubScreen.DailyStudyDetail("2026-09-13"), restoredStack[2])
         assertEquals(YanjiSubScreen.SubjectStudyDetail("math_advanced"), restoredStack[3])
-        assertEquals(YanjiSubScreen.JournalEditor(journalId = "j-123", date = "2026-09-13"), restoredStack[4])
-        assertEquals(YanjiSubScreen.JuanjuanChat, restoredStack[5])
+        assertEquals(YanjiSubScreen.NoteEditor(noteId = "j-123", date = "2026-09-13"), restoredStack[4])
+        assertEquals(YanjiSubScreen.AiChat, restoredStack[5])
         assertEquals(YanjiSubScreen.Achievements, restoredStack[6])
     }
 

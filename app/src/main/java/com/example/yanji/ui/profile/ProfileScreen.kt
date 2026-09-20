@@ -19,7 +19,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
-import com.example.yanji.data.journal.JournalHeaderPreferences
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiThemeMode
@@ -59,18 +58,6 @@ fun ProfileScreen(
     var showAiConfigDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showMascotPicker by remember { mutableStateOf(false) }
-    var showJournalHeaderDialog by remember { mutableStateOf(false) }
-
-    val journalHeaderPrefs = remember { JournalHeaderPreferences.getInstance(context) }
-    val journalHeaderConfig by journalHeaderPrefs.configFlow.collectAsStateWithLifecycle()
-    val journalHeaderSubtitle = remember(journalHeaderConfig) {
-        val items = buildList {
-            add("打分(固定)")
-            if (journalHeaderConfig.showTime) add("时间")
-            if (journalHeaderConfig.showWeather) add("天气")
-        }
-        items.joinToString(" · ")
-    }
 
     // Backup export / import state
     var isExporting by remember { mutableStateOf(false) }
@@ -221,17 +208,6 @@ fun ProfileScreen(
                 subtitle = "自定义学科类别与子学科",
                 onClick = onNavigateToSubjectManager
             )
-            HorizontalDivider(
-                color = YanjiColors.separator,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            ProfileSettingsItem(
-                icon = Icons.Outlined.Tune,
-                title = "随笔顶部信息栏",
-                subtitle = journalHeaderSubtitle,
-                onClick = { showJournalHeaderDialog = true }
-            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -363,15 +339,6 @@ fun ProfileScreen(
     if (showAboutDialog) {
         AboutYanjiDialog(
             onDismiss = { showAboutDialog = false }
-        )
-    }
-
-    // Journal Header Config Dialog
-    if (showJournalHeaderDialog) {
-        JournalHeaderConfigDialog(
-            config = journalHeaderConfig,
-            onConfigChange = { journalHeaderPrefs.updateConfig(it) },
-            onDismiss = { showJournalHeaderDialog = false }
         )
     }
 }

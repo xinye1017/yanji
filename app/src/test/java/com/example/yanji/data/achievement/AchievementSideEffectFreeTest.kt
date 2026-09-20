@@ -4,7 +4,7 @@ import com.example.yanji.data.AchievementRepository
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.SessionStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Assert.assertEquals
@@ -46,7 +46,7 @@ class AchievementSideEffectFreeTest {
             event = AchievementEvent.ReconcileAll,
             focusSessions = completedFocus,
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )
@@ -59,7 +59,7 @@ class AchievementSideEffectFreeTest {
             event = AchievementEvent.ReconcileAll,
             focusSessions = completedFocus,
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = newlyUnlocked.toSet()
         )
@@ -84,7 +84,7 @@ class AchievementSideEffectFreeTest {
             event = AchievementEvent.FocusCompleted(s),
             focusSessions = listOf(s),
             examSessions = emptyList(),
-            journalEntries = emptyList(),
+            noteEntries = emptyList(),
             checkIns = emptyList(),
             unlockedIds = emptySet()
         )

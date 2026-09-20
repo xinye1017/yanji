@@ -46,7 +46,7 @@ import com.example.yanji.data.AchievementRarity
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -997,7 +997,7 @@ fun AchievementDetailDialog(
                         .padding(14.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
-                        JuanjuanAvatar(size = 36.dp)
+                        AiAvatar(size = 36.dp)
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(

@@ -46,7 +46,7 @@ while IFS= read -r file; do initializer_files+=("$file"); done < <(
 )
 if [ "${#initializer_files[@]}" -gt 0 ]; then
   normalize_matches "initializer-business-entity" \
-    '(FocusSession|ExamSession|JournalEntry|ChatSession|ChatMessage|CheckIn|UnlockedAchievement|QuickStartPreset)Entity[[:space:]]*\(' \
+    '(FocusSession|ExamSession|NoteEntry|ChatSession|ChatMessage|CheckIn|UnlockedAchievement|QuickStartPreset)Entity[[:space:]]*\(' \
     "${initializer_files[@]}"
 fi
 

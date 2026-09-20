@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import java.util.Locale
 
 @Composable
@@ -52,7 +52,7 @@ fun ProfileIdentityCard(settings: UserSettings) {
                 .padding(horizontal = 18.dp, vertical = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            JuanjuanAvatar(size = 64.dp)
+            AiAvatar(size = 64.dp)
             Spacer(modifier = Modifier.width(16.dp))
             Column(
                 modifier = Modifier.weight(1f),

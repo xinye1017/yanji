@@ -9,7 +9,7 @@ import com.example.yanji.data.db.ChatMessageEntity
 import com.example.yanji.data.db.ChatSessionEntity
 import com.example.yanji.data.db.ExamSessionEntity
 import com.example.yanji.data.db.FocusSessionEntity
-import com.example.yanji.data.db.JournalEntryEntity
+import com.example.yanji.data.db.NoteEntryEntity
 import com.example.yanji.data.db.QuickStartPresetEntity
 import com.example.yanji.data.db.UnlockedAchievementEntity
 import com.example.yanji.data.db.UserSettingsEntity
@@ -62,7 +62,7 @@ class AppInitializerInstrumentedTest {
     private suspend fun businessRowCount(): Int =
         db.focusSessionDao().count() +
             db.examSessionDao().count() +
-            db.journalEntryDao().count() +
+            db.noteEntryDao().count() +
             db.chatMessageDao().count() +
             db.chatSessionDao().count() +
             db.checkInDao().count() +
@@ -102,8 +102,8 @@ class AppInitializerInstrumentedTest {
                 )
             )
         )
-        db.journalEntryDao().insert(
-            JournalEntryEntity.fromDomainModel(JournalEntry(id = "j-1", date = "2026-09-05"))
+        db.noteEntryDao().insert(
+            NoteEntryEntity.fromDomainModel(NoteEntry(id = "j-1", date = "2026-09-05"))
         )
         db.examSessionDao().insert(
             ExamSessionEntity.fromDomainModel(
@@ -134,7 +134,7 @@ class AppInitializerInstrumentedTest {
         // 2) 用户主动清空全部业务记录（设置保留）。
         db.focusSessionDao().deleteAll()
         db.examSessionDao().deleteAll()
-        db.journalEntryDao().deleteAll()
+        db.noteEntryDao().deleteAll()
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
         db.checkInDao().deleteAll()

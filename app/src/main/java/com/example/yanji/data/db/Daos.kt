@@ -162,33 +162,33 @@ interface ExamSessionDao {
 }
 
 @Dao
-interface JournalEntryDao {
+interface NoteEntryDao {
     @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
-    fun getAll(): Flow<List<JournalEntryEntity>>
+    fun getAll(): Flow<List<NoteEntryEntity>>
 
     @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
-    suspend fun getById(id: String): JournalEntryEntity?
+    suspend fun getById(id: String): NoteEntryEntity?
 
     @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
-    fun getByIdFlow(id: String): Flow<JournalEntryEntity?>
+    fun getByIdFlow(id: String): Flow<NoteEntryEntity?>
 
     @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
-    suspend fun getByDate(date: String): JournalEntryEntity?
+    suspend fun getByDate(date: String): NoteEntryEntity?
 
     @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
-    fun getByDateFlow(date: String): Flow<JournalEntryEntity?>
+    fun getByDateFlow(date: String): Flow<NoteEntryEntity?>
 
     @Query("SELECT COUNT(*) FROM journal_entries")
     suspend fun count(): Int
 
     @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
-    suspend fun getAllOnce(): List<JournalEntryEntity>
+    suspend fun getAllOnce(): List<NoteEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(entry: JournalEntryEntity)
+    suspend fun insert(entry: NoteEntryEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(entries: List<JournalEntryEntity>)
+    suspend fun insertAll(entries: List<NoteEntryEntity>)
 
     /**
      * 切换收藏。只改 isFavorite 与 updatedAt，不触碰正文与 createdAt，

@@ -36,7 +36,7 @@ import com.example.yanji.theme.YanjiSpacing
 /**
  * 标准页面页眉 —— 支持标准中标题与 iOS-inspired Large Title 两种层级。
  *
- * 1. 一级页面（Home、Focus、Journal、Stats、Profile）：
+ * 1. 一级页面（Home、Focus、Note、Stats、Profile）：
  *    采用 Large Title (34sp / Bold)，呈现舒展安静的沉浸大标题与上下文副标；
  * 2. 次级页面与模块内：
  *    采用标准 headlineMedium (20sp / SemiBold)，可定制粗细；

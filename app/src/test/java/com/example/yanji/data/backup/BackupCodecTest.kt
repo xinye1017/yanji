@@ -5,7 +5,7 @@ import com.example.yanji.data.ChatSender
 import com.example.yanji.data.ChatSession
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.JournalEntry
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.UserSettings
@@ -68,8 +68,8 @@ class BackupCodecTest {
                 note = "中值定理失分"
             )
         ),
-        journalEntries = listOf(
-            JournalEntry(
+        noteEntries = listOf(
+            NoteEntry(
                 id = "j-1",
                 date = "2026-09-05",
                 title = "渐入佳境",
@@ -106,7 +106,7 @@ class BackupCodecTest {
         assertEquals("正向计时", restored.focusSessions.first().mode)
         assertEquals(126.0, restored.examSessions.first().score!!, 0.001)
         assertEquals("高等数学", restored.focusSessions.first().subjectName)
-        assertEquals(listOf("数学突破", "心态平和"), restored.journalEntries.first().tags)
+        assertEquals(listOf("数学突破", "心态平和"), restored.noteEntries.first().tags)
         assertEquals(2, restored.chatMessages.size)
         assertEquals(ChatSender.JUANJUAN, restored.chatMessages[1].sender)
         assertEquals(2, restored.unlockedAchievements.size)

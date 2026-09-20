@@ -58,12 +58,12 @@ class AchievementRepository internal constructor(
     val achievements: StateFlow<List<Achievement>> = combine(
         repo.focusSessions,
         repo.examSessions,
-        repo.journalEntries,
+        repo.noteEntries,
         repo.checkIns,
         repo.unlockedAchievements
-    ) { focus, exam, journal, checkIns, unlockedMap ->
+    ) { focus, exam, notes, checkIns, unlockedMap ->
         definitions.map { def ->
-            val progress = def.calculateProgress(focus, exam, journal, checkIns)
+            val progress = def.calculateProgress(focus, exam, notes, checkIns)
             val isUnlocked = unlockedMap.containsKey(def.id) || progress >= def.target
             val unlockedAt = unlockedMap[def.id] ?: if (isUnlocked) System.currentTimeMillis() else null
 

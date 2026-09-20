@@ -23,7 +23,7 @@ import com.example.yanji.data.*
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.yanjiSeriesColor
-import com.example.yanji.ui.components.JuanjuanAvatar
+import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
@@ -198,7 +198,7 @@ fun DailyStudyDetailScreen(
                                 .padding(36.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            JuanjuanAvatar(size = 56.dp)
+                            AiAvatar(size = 56.dp)
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = "今天还没有留下学习轨迹。",

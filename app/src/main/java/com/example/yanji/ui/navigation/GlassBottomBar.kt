@@ -46,9 +46,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiDarkDockPanel
+import com.example.yanji.theme.YanjiLiquidGlass
 import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.GlassSurface
+import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.abs
 
 private val DockHeight = 60.dp
@@ -57,6 +61,7 @@ private val DockIndicatorMaxStretch = 4.dp
 private val MinDockWidth = 260.dp
 private val MaxDockWidth = 360.dp
 private val HorizontalMargin = 44.dp
+private val DockBottomGap = 8.dp
 
 /**
  * 响应式浮动液态玻璃导航栏（GlassBottomBar）：
@@ -80,6 +85,38 @@ fun GlassBottomBar(
         Animatable(selectedIndex.toFloat())
     }
     val reduceMotion = com.example.yanji.theme.YanjiMotion.isReduceMotionEnabled()
+    val isDark = yanjiIsDarkTheme()
+    val glassTokens = YanjiLiquidGlass
+    val dockSurfaceColor = if (isDark) {
+        YanjiDarkDockPanel
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+    }
+
+    // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
+    // 与胶囊共用同一 blurRadius，保证两层玻璃在交界处没有光学强度断层。
+    val gradientBackdrop = if (hazeState != null && glassTokens.blurRadius > 0.dp) {
+        Modifier.hazeEffect(state = hazeState) {
+            blurRadius = glassTokens.blurRadius
+            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.42f else 0.38f)))
+            noiseFactor = glassTokens.noiseFactor
+            progressive = HazeProgressive.verticalGradient(
+                startIntensity = 0f,
+                endIntensity = 1f,
+                preferPerformance = true
+            )
+            backgroundColor = Color.Transparent
+        }
+    } else {
+        Modifier.background(
+            Brush.verticalGradient(
+                listOf(
+                    Color.Transparent,
+                    dockSurfaceColor.copy(alpha = if (isDark) 0.70f else 0.62f)
+                )
+            )
+        )
+    }
 
     LaunchedEffect(selectedIndex, reduceMotion) {
         if (reduceMotion) {
@@ -99,8 +136,9 @@ fun GlassBottomBar(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            .then(gradientBackdrop)
             .navigationBarsPadding()
-            .padding(bottom = 8.dp),
+            .padding(bottom = DockBottomGap),
         contentAlignment = Alignment.Center
     ) {
         val availableWidth = maxWidth - HorizontalMargin * 2
@@ -116,7 +154,6 @@ fun GlassBottomBar(
         val indicatorWidth = if (reduceMotion) DockIndicatorSize else DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
         val indicatorCenter = firstTabCenter + step * indicatorPosition.value
 
-        val isDark = yanjiIsDarkTheme()
         val primaryColor = MaterialTheme.colorScheme.primary
         val onSurfaceColor = MaterialTheme.colorScheme.onSurface
         val outlineVariant = MaterialTheme.colorScheme.outlineVariant
@@ -202,7 +239,7 @@ fun GlassBottomBar(
                 .height(DockHeight),
             hazeState = hazeState,
             shape = CircleShape,
-            fallbackColor = if (isDark) YanjiDarkDockPanel else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+            fallbackColor = dockSurfaceColor,
             border = BorderStroke(1.dp, glassBorderBrush)
         ) {
             // 滑动指示器（按同心圆几何中心与动态拉伸渲染）

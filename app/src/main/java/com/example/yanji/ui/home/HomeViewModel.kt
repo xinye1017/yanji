@@ -36,7 +36,7 @@ data class HomeUiState(
  * 首页 Feature ViewModel。
  *
  * 依赖通过构造函数注入（无默认单例取值），宿主用 `viewModel { HomeViewModel(...) }` 创建；
- * Store 层（Timer/Chat/Journal/CheckIn）仍是进程级单例，这里只是状态编排层。
+ * Store 层（Timer/Chat/Note/CheckIn）仍是进程级单例，这里只是状态编排层。
  */
 class HomeViewModel(
     private val repo: YanjiRepository,
