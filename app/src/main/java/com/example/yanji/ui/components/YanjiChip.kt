@@ -48,7 +48,7 @@ fun YanjiChip(
         selected -> Triple(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary, null)
         style == YanjiChipStyle.PRIMARY -> Triple(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer, MaterialTheme.colorScheme.outline)
         style == YanjiChipStyle.LAVENDER -> Triple(MaterialTheme.colorScheme.secondaryContainer, YanjiColors.lavenderDeep, null)
-        style == YanjiChipStyle.SUCCESS -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.tertiary, null)
+        style == YanjiChipStyle.SUCCESS -> Triple(YanjiColors.successSoft, YanjiColors.success, null)
         style == YanjiChipStyle.WARNING -> Triple(YanjiColors.warningSoft, YanjiColors.warning, null)
         style == YanjiChipStyle.DANGER -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, null)
         else -> Triple(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.outline)

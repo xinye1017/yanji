@@ -74,7 +74,7 @@ fun StatsHeroCard(
                         text = "有效学习 ${activeDays} 天",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = YanjiColors.success
                     )
                 }
 
@@ -86,12 +86,12 @@ fun StatsHeroCard(
                         val isFlat = delta == 0L
                         val pillBg = when {
                             isFlat -> MaterialTheme.colorScheme.surfaceVariant
-                            isUp -> MaterialTheme.colorScheme.tertiaryContainer
+                            isUp -> YanjiColors.successSoft
                             else -> YanjiColors.warningSoft
                         }
                         val pillFg = when {
                             isFlat -> MaterialTheme.colorScheme.onSurfaceVariant
-                            isUp -> MaterialTheme.colorScheme.tertiary
+                            isUp -> YanjiColors.success
                             else -> YanjiColors.warning
                         }
                         Row(

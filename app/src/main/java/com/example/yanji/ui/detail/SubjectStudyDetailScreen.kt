@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.StudyTimeRange
-import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.AiAvatar
@@ -55,8 +54,7 @@ fun SubjectStudyDetailScreen(
         viewModel.selectRange(selectedRange)
     }
 
-    // 颜色来自当前主题色阶，按该学科在学科目录中的稳定顺序取色（与学科名无关）。
-    val subjectColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(subjectId))
+    val subjectColor = yanjiSubjectColor(subjectId)
 
     Column(
         modifier = modifier

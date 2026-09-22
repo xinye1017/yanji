@@ -234,7 +234,7 @@ fun StatsAiReportCard(
                                 text = "优势亮点",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = YanjiColors.success
                             )
                             report.strengths.forEach { s ->
                                 Text(

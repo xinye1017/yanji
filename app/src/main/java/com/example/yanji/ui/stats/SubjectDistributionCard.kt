@@ -27,7 +27,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.toColorInt
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.SubjectDistributionItem
@@ -48,19 +47,14 @@ fun SubjectDistributionCard(
     onNavigateToSubjectDetail: (String) -> Unit
 ) {
     val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
-    val mascotTheme = currentMascotTheme()
     val isDark = yanjiIsDarkTheme()
 
-    // 颜色一律由 SubjectCatalog 的稳定顺序索引决定，与学科名无关：
-    // 大类/子类都可由用户自定义，任何按名字选色的映射都会让自定义科目退化成同一个兜底色。
-    // 用 colorIndexOf + 主题色板而非「显示列表下标」，是为了让同一学科在统计卡、详情页、
-    // 模考卡片等所有语境下都拿到同一个颜色，避免同一科目在不同页面显示成不同色。
-    val subjectColors = remember(subjectDistribution, mascotTheme, isDark) {
-        val steps = mascotTheme.chartPalette.steps(isDark)
-        subjectDistribution.map { item -> steps[SubjectCatalog.colorIndexOf(item.subjectId) % steps.size] }
+    // 学科色直接来自持久化的 Subject.colorHex；换伙伴主题、增删或排序学科都不会改变颜色身份。
+    val subjectColors = remember(subjectDistribution, isDark) {
+        subjectDistribution.map { item -> resolveSubjectColor(item.subjectColor, isDark) }
     }
 
-    /** 取第 index 个学科在本主题下的显示色（顺序映射，与学科名无关）。 */
+    /** 取第 index 个学科的稳定显示色。 */
     fun colorFor(index: Int): Color = subjectColors[index % subjectColors.size]
 
     YanjiCard(
@@ -408,14 +402,14 @@ private fun SubjectDonutChart(
         label = "subjectDonutReveal"
     )
     // 调用方始终会为每个扇区传入颜色；此处仅作兜底，在 Composable 作用域内解析一次。
-    val fallbackColor = yanjiSeriesColorAt(0)
+    val fallbackColor = yanjiSubjectColor("other")
 
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant
-        // 颜色由调用方按学科顺序传入（缺失时回落到主题色阶首色，不再按学科名猜色）。
+        // 颜色由调用方按 Subject.colorHex 传入；缺失时回落到“其他”的稳定学科色。
         val seriesColors = mutableMapOf<String, Color>()
         subjectDist.keys.forEach { name -> seriesColors[name] = subjectColors[name] ?: fallbackColor }
         Canvas(modifier = Modifier.size(150.dp)) {

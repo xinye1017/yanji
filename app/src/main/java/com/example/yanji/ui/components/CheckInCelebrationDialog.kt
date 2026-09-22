@@ -89,7 +89,7 @@ fun CheckInCelebrationDialog(
                         modifier = Modifier
                             .size(26.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiary)
+                            .background(YanjiColors.success)
                             .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {

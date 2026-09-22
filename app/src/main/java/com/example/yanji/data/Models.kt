@@ -94,11 +94,11 @@ object SubjectCatalog {
     /** 新装 / 迁移时写入的默认学科，同时也是「恢复默认」的数据源。 */
     val defaults: List<Subject> = listOf(
         Subject("math", "数学一", "#356AE6", 1),
-        Subject("math_advanced", "高等数学", "#356AE6", 11, parentId = "math"),
+        Subject("math_advanced", "高等数学", "#2453BF", 11, parentId = "math"),
         Subject("math_linear", "线性代数", "#4C7BE8", 12, parentId = "math"),
         Subject("math_probability", "概率论", "#678DEB", 13, parentId = "math"),
         Subject("major", "408专业课", "#8B7CF6", 2),
-        Subject("major_organization", "计算机组成原理", "#8B7CF6", 21, parentId = "major"),
+        Subject("major_organization", "计算机组成原理", "#725FD8", 21, parentId = "major"),
         Subject("major_data_structure", "数据结构", "#9A8CFA", 22, parentId = "major"),
         Subject("major_network", "计算机网络", "#AA9DFB", 23, parentId = "major"),
         Subject("major_os", "操作系统", "#B8ADFC", 24, parentId = "major"),
@@ -136,42 +136,6 @@ object SubjectCatalog {
     }
 
     fun categoryOf(subjectId: String): Subject? = find(categoryIdOf(subjectId))
-
-    /**
-     * 学科在**图表色阶**中的稳定顺序索引（0 起），供渲染层按序取色。
-     *
-     * 颜色与学科语义完全解耦（学科可自定义），所以需要一个稳定、可复现的顺序来源。
-     *
-     * 分两种语境，与两个视图的一致性原则对应：
-     * 1. **大类视图**（`SubjectStatsLevel.CATEGORY`）：列表顺序就是 [categories] 的顺序，
-     *    所以大类取其在 [categories] 中的位置（0,1,2,…），与 `resolveSubjectChartColors` 的
-     *    顺序分配完全一致。
-     * 2. **子类视图 / 单科语境**（详情页、模考卡片）：同一父大类下的子类必须互不同色。
-     *    这里让子类进入**独立的子类色带**：`SUBJECT_COLOR_STRIDE + (父大类位置 * 每类子类上限) + 子类序号`，
-     *    使其与「大类色带」0..4 整体错开，避免子类恰好与某个大类撞成同色。
-     *
-     * 返回值可能超出 5，调用方按色阶长度循环取模即可（见 `MascotChartPalette.colorAt`）。
-     */
-    fun colorIndexOf(subjectId: String): Int {
-        val cleanId = subjectId.removeSuffix(UNCLASSIFIED_SUFFIX)
-        val categoryIndex = categories.indexOfFirst { it.id == categoryIdOf(cleanId) }
-        if (categoryIndex < 0) return 0
-        val subject = find(cleanId)
-        // 大类：与「大类视图」的顺序分配保持同一套索引。
-        if (subject == null || subject.parentId == null) return categoryIndex
-        // 子类：进入独立子类色带，父大类位置 × 子类上限 + 子类序号。
-        val siblings = childrenOf(subject.parentId)
-        val siblingIndex = siblings.indexOfFirst { it.id == cleanId }.coerceAtLeast(0)
-        return SUBJECT_COLOR_STRIDE +
-            categoryIndex * MAX_SUBJECTS_PER_CATEGORY +
-            siblingIndex.coerceAtMost(MAX_SUBJECTS_PER_CATEGORY - 1)
-    }
-
-    /** 一套主题色板的长度（5）：大类色带 0..4 用满它，子类色带紧随其后。 */
-    const val SUBJECT_COLOR_STRIDE = 5
-
-    /** 单个大类下的子类上限（产品约束：每大类最多 5 个子类）。 */
-    const val MAX_SUBJECTS_PER_CATEGORY = 5
 
     fun directBucketId(categoryId: String): String = "$categoryId$UNCLASSIFIED_SUFFIX"
 

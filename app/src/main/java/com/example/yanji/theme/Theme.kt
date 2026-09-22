@@ -12,65 +12,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-internal val LightColorScheme = lightColorScheme(
-    primary = YanjiPrimary,
-    onPrimary = YanjiOnPrimary,
-    primaryContainer = YanjiPrimarySoft,
-    onPrimaryContainer = YanjiPrimaryStrong,
-    secondary = YanjiLavender,
-    onSecondary = YanjiOnPrimary,
-    secondaryContainer = YanjiLavenderSoft,
-    onSecondaryContainer = YanjiLavender,
-    tertiary = YanjiSuccess,
-    onTertiary = YanjiOnPrimary,
-    tertiaryContainer = YanjiSuccessSoft,
-    onTertiaryContainer = YanjiSuccess,
-    background = YanjiBackground,
-    onBackground = YanjiTextPrimary,
-    surface = YanjiSurface,
-    onSurface = YanjiTextPrimary,
-    surfaceVariant = YanjiSurfaceSoft,
-    onSurfaceVariant = YanjiTextSecondary,
-    outline = YanjiBorder,
-    outlineVariant = YanjiDivider,
-    error = YanjiDanger,
-    errorContainer = YanjiDangerSoft
-)
-
-internal val DarkColorScheme = darkColorScheme(
-    primary = YanjiDarkPrimary,
-    onPrimary = YanjiOnPrimary,
-    primaryContainer = YanjiDarkPrimarySoft,
-    onPrimaryContainer = YanjiDarkPrimaryStrong,
-    secondary = YanjiDarkLavender,
-    onSecondary = YanjiOnPrimary,
-    secondaryContainer = YanjiDarkLavenderSoft,
-    onSecondaryContainer = YanjiDarkLavender,
-    tertiary = YanjiDarkSuccess,
-    onTertiary = YanjiOnPrimary,
-    tertiaryContainer = YanjiDarkSuccessSoft,
-    onTertiaryContainer = YanjiDarkSuccess,
-    background = YanjiDarkBackground,
-    onBackground = YanjiDarkTextPrimary,
-    // 深色卡片标准底色：#151B28（YanjiDarkSurface）。
-    surface = YanjiDarkSurface,
-    onSurface = YanjiDarkTextPrimary,
-    surfaceVariant = YanjiDarkSurfaceSoft,
-    onSurfaceVariant = YanjiDarkTextSecondary,
-    outline = YanjiDarkBorder,
-    outlineVariant = YanjiDarkDivider,
-    error = YanjiDarkDanger,
-    errorContainer = YanjiDarkDangerSoft,
-    // design_dark.md §1.2：暗色靠「表面明度递进」而不是阴影表达海拔层级。
-    surfaceDim = YanjiDarkBackground,
-    surfaceBright = YanjiDarkSurfaceFloating,
-    surfaceContainerLowest = YanjiDarkBackground,
-    surfaceContainerLow = YanjiDarkSurface,
-    surfaceContainer = YanjiDarkSurfaceSoft,
-    surfaceContainerHigh = YanjiDarkSurfaceFloating,
-    surfaceContainerHighest = YanjiDarkSurfaceFloating
-)
-
 private fun MascotThemeSpec.lightScheme() = lightColorScheme(
     primary = palette.lightPrimary,
     onPrimary = YanjiOnPrimary,
@@ -80,10 +21,10 @@ private fun MascotThemeSpec.lightScheme() = lightColorScheme(
     onSecondary = YanjiOnPrimary,
     secondaryContainer = palette.lightSecondarySoft,
     onSecondaryContainer = palette.lightSecondaryStrong,
-    tertiary = YanjiSuccess,
+    tertiary = palette.lightSecondaryStrong,
     onTertiary = YanjiOnPrimary,
-    tertiaryContainer = YanjiSuccessSoft,
-    onTertiaryContainer = YanjiSuccess,
+    tertiaryContainer = palette.lightSecondarySoft,
+    onTertiaryContainer = palette.lightSecondaryStrong,
     // 页面背景固定为中性色（只区分浅/深），不跟随吉祥物主题；
     // 按钮、强调色等仍由 palette 驱动。
     background = YanjiBackground,
@@ -107,10 +48,10 @@ private fun MascotThemeSpec.darkScheme() = darkColorScheme(
     onSecondary = YanjiOnPrimary,
     secondaryContainer = palette.darkSecondarySoft,
     onSecondaryContainer = palette.darkSecondaryStrong,
-    tertiary = YanjiDarkSuccess,
+    tertiary = palette.darkSecondaryStrong,
     onTertiary = YanjiOnPrimary,
-    tertiaryContainer = YanjiDarkSuccessSoft,
-    onTertiaryContainer = YanjiDarkSuccess,
+    tertiaryContainer = palette.darkSecondarySoft,
+    onTertiaryContainer = palette.darkSecondaryStrong,
     // 同 lightScheme：页面背景固定中性，不随吉祥物主题变色。
     background = YanjiDarkBackground,
     onBackground = YanjiDarkTextPrimary,

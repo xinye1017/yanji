@@ -128,7 +128,7 @@ fun ExamAiDiagnosisSection(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("已确认的优势", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     analysis.strengths.forEach { item ->
-                        BulletLine(text = item, color = MaterialTheme.colorScheme.tertiary)
+                        BulletLine(text = item, color = YanjiColors.success)
                     }
                 }
 

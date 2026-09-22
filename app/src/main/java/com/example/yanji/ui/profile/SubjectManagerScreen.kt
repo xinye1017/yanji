@@ -242,11 +242,12 @@ private fun CategoryRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val categoryColor = com.example.yanji.theme.yanjiSubjectColor(category.id)
             Box(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(parseHexColor(category.colorHex))
+                    .background(categoryColor)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
@@ -311,6 +312,14 @@ private fun CategoryRow(
                         .padding(start = 20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val childColor = com.example.yanji.theme.yanjiSubjectColor(child.id)
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(childColor)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = child.name,
                         style = MaterialTheme.typography.bodyMedium,
@@ -390,16 +399,4 @@ private sealed interface SubjectEditTarget {
     data object AddCategory : SubjectEditTarget
     data class AddChild(val parentId: String, val parentName: String) : SubjectEditTarget
     data class Rename(val subject: Subject) : SubjectEditTarget
-}
-
-/** 把 `#RRGGBB` 解析成 Compose Color；非法值回落到主题次级标签色（随亮暗主题变化）。 */
-@Composable
-@ReadOnlyComposable
-private fun parseHexColor(hex: String): Color {
-    val cleaned = hex.removePrefix("#")
-    val fallback = YanjiColors.secondaryLabel
-    if (cleaned.length != 6) return fallback
-    return runCatching {
-        Color(cleaned.toLong(16) or 0xFF000000L)
-    }.getOrDefault(fallback)
 }

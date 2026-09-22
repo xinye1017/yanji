@@ -64,10 +64,8 @@ val YanjiDangerSoft = Color(0xFFFDECEC)
 val YanjiError = YanjiDanger
 val YanjiBorderSoft = Color(0xFFF2F4F7)
 
-// 注意：这里不再定义「学科语义色」（原 SubjectMath / SubjectEnglish …）。
-// 学科大类与子类均可由用户自由增删改名，任何「某个名字对应某个颜色」的常量都会让自定义科目
-// 退化到兜底色。学科色现由每套伙伴主题的 5 阶色板按**顺序索引**提供，
-// 见 MascotChartTheme.kt 的 MascotChartPalette 与 yanjiSeriesColorAt()。
+// 学科色不属于 App Theme：它是 Subject.colorHex 的持久化内容数据。
+// 统一解析与亮/暗对比度处理见 SubjectColors.kt；伙伴主题只负责 UI Accent。
 
 // ===========================================================================
 // Yanji Dark Palette —— 严格对齐 design_dark.md「Midnight Blue」

@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 @Immutable
 data class YanjiExtraColors(
     val textTertiary: Color,
+    val success: Color,
+    val successSoft: Color,
     val warning: Color,
     val warningSoft: Color,
     val lavenderDeep: Color,
@@ -45,6 +47,8 @@ data class YanjiExtraColors(
 /** 亮色实例：与既有 `YanjiTextTertiary` / `YanjiWarning` 等**逐值相同**。 */
 internal val LightExtraColors = YanjiExtraColors(
     textTertiary = YanjiTextTertiary,
+    success = YanjiSuccess,
+    successSoft = YanjiSuccessSoft,
     warning = YanjiWarning,
     warningSoft = YanjiWarningSoft,
     lavenderDeep = YanjiLavenderDeep,
@@ -64,6 +68,8 @@ internal val LightExtraColors = YanjiExtraColors(
 /** 暗色实例：design_dark.md §colors 的对应值。 */
 internal val DarkExtraColors = YanjiExtraColors(
     textTertiary = YanjiDarkTextTertiary,
+    success = YanjiDarkSuccess,
+    successSoft = YanjiDarkSuccessSoft,
     warning = YanjiDarkWarning,
     warningSoft = YanjiDarkWarningSoft,
     lavenderDeep = YanjiDarkLavenderDeep,
@@ -91,6 +97,12 @@ internal val LocalYanjiExtraColors = staticCompositionLocalOf { LightExtraColors
 object YanjiColors {
     val textTertiary: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.textTertiary
+
+    val success: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.success
+
+    val successSoft: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.successSoft
 
     val warning: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.warning
@@ -134,27 +146,4 @@ object YanjiColors {
 
     val accent: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.accent
-}
-
-// ---------------------------------------------------------------------------
-// 学科序列色（按顺序索引分配，不做学科语义绑定）
-// ---------------------------------------------------------------------------
-
-/**
- * 按**学科顺序索引**取当前伙伴主题下的显示色。
- *
- * 历史背景：这里原本是「亮色 hex → 主题色」的查表翻译（`356AE6` 一定是数学、`8B7CF6` 一定是英语）。
- * 但学科大类/子类都可由用户自由增删改名，查表会让所有自定义科目落进同一个兜底分支、显示成同色。
- * 因此改为**纯顺序映射**：第 i 个学科取主题色阶的第 i 个颜色，与学科叫什么名字无关。
- *
- * 调用方需传入该学科在**同一展示列表中的稳定顺序**（通常来自 `SubjectCatalog` 的 sortOrder 排序）。
- *
- * @param index 学科在展示列表中的顺序（0 起）；超出 5 时按 [MascotChartPalette] 循环取色
- */
-@Composable
-@ReadOnlyComposable
-fun yanjiSeriesColorAt(index: Int): Color {
-    val mascot = LocalMascotTheme.current
-    val isDark = LocalYanjiDarkTheme.current
-    return mascot.chartPalette.colorAt(index, isDark)
 }

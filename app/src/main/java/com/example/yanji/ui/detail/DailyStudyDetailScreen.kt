@@ -128,9 +128,9 @@ fun DailyStudyDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                summary.subjectDistribution.entries.forEachIndexed { index, (subName, secs) ->
-                                    // 按学科顺序取主题色阶，不做学科名判断（学科可自定义）。
-                                    val chipColor = com.example.yanji.theme.yanjiSeriesColorAt(index)
+                                summary.subjectDistribution.forEach { (subName, secs) ->
+                                    // 学科颜色来自持久化 colorHex，与当前伙伴主题无关。
+                                    val chipColor = com.example.yanji.theme.yanjiSubjectColorOf(subName)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
@@ -258,8 +258,7 @@ fun DailySessionRowCard(
     item: DailySessionItem,
     onClick: () -> Unit
 ) {
-    // 颜色来自当前主题色阶，按该学科在学科目录中的稳定顺序取色（与学科名无关）。
-    val tagColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(item.subjectId))
+    val tagColor = yanjiSubjectColor(item.subjectId)
 
     YanjiCard(
         onClick = onClick,
@@ -330,7 +329,7 @@ fun DailySessionRowCard(
                         text = "${item.score.toInt()} 分",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
+                        color = YanjiColors.success
                     )
                 } else if (item.pauseCount > 0) {
                     Spacer(modifier = Modifier.height(2.dp))

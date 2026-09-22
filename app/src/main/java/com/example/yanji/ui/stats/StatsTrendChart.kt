@@ -343,8 +343,8 @@ private fun MonthTickTrendView(
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val successColor = YanjiColors.success
+    val successContainer = YanjiColors.successSoft
     val errorColor = MaterialTheme.colorScheme.error
     val errorContainer = MaterialTheme.colorScheme.errorContainer
     val fillBg = YanjiColors.fill
@@ -447,8 +447,8 @@ private fun MonthTickTrendView(
                             "+${(diffSeconds + 59) / 60}m"
                         }
                         Triple(
-                            tertiaryContainer,
-                            tertiaryColor,
+                            successContainer,
+                            successColor,
                             label
                         )
                     }

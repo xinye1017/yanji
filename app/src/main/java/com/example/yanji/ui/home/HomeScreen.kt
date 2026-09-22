@@ -259,7 +259,7 @@ fun HomeScreen(
                                 text = if (settings.dailyGoalHours > 0f) "达成 ${(progress * 100).toInt()}%" else "达成 -",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Medium,
-                                color = if (progress >= 1f && settings.dailyGoalHours > 0f) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                                color = if (progress >= 1f && settings.dailyGoalHours > 0f) YanjiColors.success else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
@@ -281,7 +281,7 @@ fun HomeScreen(
                     // Progress bar
                     val goalTrackColor = MaterialTheme.colorScheme.surfaceVariant
                     val goalProgressColor = if (progress >= 1f && settings.dailyGoalHours > 0f) {
-                        MaterialTheme.colorScheme.tertiary
+                        YanjiColors.success
                     } else {
                         MaterialTheme.colorScheme.primary
                     }
@@ -324,13 +324,12 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            state.todaySummary.subjectDistribution.entries.forEachIndexed { index, (subName, secs) ->
-                                // 颜色按学科顺序分配，不按名字判断：大类/子类都可由用户自定义，
-                                // 任何按名取色的分支都会让自定义科目全部落进同一个兜底色。
+                            state.todaySummary.subjectDistribution.forEach { (subName, secs) ->
+                                // 学科颜色来自持久化 colorHex，不随伙伴主题或列表顺序改变。
                                 SubjectTimeChip(
                                     name = subName,
                                     time = DurationFormatter.formatHoursMinutes(secs),
-                                    color = com.example.yanji.theme.yanjiSeriesColorAt(index),
+                                    color = com.example.yanji.theme.yanjiSubjectColorOf(subName),
                                     modifier = Modifier.clickable { onNavigateToSubjectDetail(subName) }
                                 )
                             }

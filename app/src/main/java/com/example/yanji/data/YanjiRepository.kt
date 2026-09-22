@@ -119,7 +119,7 @@ class YanjiRepository private constructor() {
         val subject = Subject(
             id = id,
             name = name.trim(),
-            colorHex = parent.colorHex,
+            colorHex = nextSubSubjectColor(parent.colorHex, siblings.size),
             sortOrder = parent.sortOrder * 100 + siblings.size + 1,
             parentId = parentId
         )
@@ -164,6 +164,33 @@ class YanjiRepository private constructor() {
         )
         val used = _subjects.value.filter { it.isCategory }.map { it.colorHex }.toSet()
         return palette.firstOrNull { it !in used } ?: palette[_subjects.value.size % palette.size]
+    }
+
+    /**
+     * 子学科继承父级 hue，但把自己的 tone 直接写进 colorHex。
+     * 颜色一旦创建即成为该学科的稳定数据，不再依赖 sibling 顺序参与渲染。
+     */
+    private fun nextSubSubjectColor(parentColorHex: String, siblingIndex: Int): String {
+        val raw = parentColorHex.removePrefix("#")
+        val rgb = raw.toIntOrNull(16) ?: return parentColorHex
+        val r = (rgb shr 16) and 0xFF
+        val g = (rgb shr 8) and 0xFF
+        val b = rgb and 0xFF
+
+        val level = siblingIndex / 2 + 1
+        val amount = (0.12f + (level - 1) * 0.08f).coerceAtMost(0.44f)
+        val lighten = siblingIndex % 2 == 1
+
+        fun tone(component: Int): Int {
+            val value = if (lighten) {
+                component + (255 - component) * amount
+            } else {
+                component * (1f - amount)
+            }
+            return value.toInt().coerceIn(0, 255)
+        }
+
+        return "#%02X%02X%02X".format(tone(r), tone(g), tone(b))
     }
 
     // ---- 领域 Store：状态与动作各自归属，Repository 只做同名委托（UI 层零改动）----

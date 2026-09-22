@@ -85,7 +85,7 @@ fun CheckInCard(
                 val todayCheckIn = state.todayCheckIn
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = if (state.isCheckedInToday) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer,
+                    color = if (state.isCheckedInToday) YanjiColors.success.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer,
                     onClick = {
                         if (state.isCheckedInToday && todayCheckIn != null) {
                             onCheckInSuccess(todayCheckIn)
@@ -101,7 +101,7 @@ fun CheckInCard(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary,
+                                tint = YanjiColors.success,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
@@ -109,7 +109,7 @@ fun CheckInCard(
                                 text = "今日已签",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = YanjiColors.success
                             )
                         } else {
                             Box(

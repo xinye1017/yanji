@@ -23,7 +23,6 @@ import com.adamglin.PhosphorIcons
 import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.Trash
 import com.example.yanji.data.DurationFormatter
-import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.YanjiCard
@@ -63,8 +62,7 @@ fun ExamDetailScreen(
         return
     }
 
-    // 颜色按学科在目录中的顺序取主题色阶，不做学科名判断（学科可自定义）。
-    val subjectColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(exam.subjectId))
+    val subjectColor = yanjiSubjectColor(exam.subjectId)
 
     Column(
         modifier = modifier
@@ -113,7 +111,7 @@ fun ExamDetailScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                .background(YanjiColors.successSoft)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
@@ -133,7 +131,7 @@ fun ExamDetailScreen(
                                 text = "${exam.score.toInt()}",
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = YanjiColors.success
                             )
                             Text(
                                 text = " / ${exam.maxScore?.toInt() ?: 150} 分",

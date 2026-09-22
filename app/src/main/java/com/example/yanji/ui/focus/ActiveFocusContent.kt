@@ -302,7 +302,7 @@ private fun FocusSessionHeader(
     onEnterPowerSaving: () -> Unit
 ) {
     val indicatorColor by animateColorAsState(
-        targetValue = if (isPaused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+        targetValue = if (isPaused) MaterialTheme.colorScheme.error else YanjiColors.success,
         animationSpec = tween(360),
         label = "focusStatusIndicatorColor"
     )

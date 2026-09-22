@@ -24,7 +24,6 @@ import com.adamglin.phosphoricons.Regular
 import com.adamglin.phosphoricons.regular.PencilSimple
 import com.adamglin.phosphoricons.regular.Trash
 import com.example.yanji.data.DurationFormatter
-import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.YanjiCard
@@ -73,8 +72,7 @@ fun FocusSessionDetailScreen(
         return
     }
 
-    // 颜色按学科在目录中的顺序取主题色阶，不做学科名判断（学科可自定义）。
-    val subjectColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(session.subjectId))
+    val subjectColor = yanjiSubjectColor(session.subjectId)
 
     Column(
         modifier = modifier

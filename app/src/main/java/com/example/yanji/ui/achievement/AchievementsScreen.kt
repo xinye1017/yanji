@@ -877,7 +877,7 @@ fun AchievementDetailDialog(
                     Text(
                         text = "达成时间：${unlockDateStr ?: "已点亮"}",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        color = YanjiColors.success,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -933,14 +933,14 @@ fun AchievementDetailDialog(
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = when {
-                                            isUnlockedDef -> MaterialTheme.colorScheme.tertiaryContainer
+                                            isUnlockedDef -> YanjiColors.successSoft
                                             isCurrent -> MaterialTheme.colorScheme.primaryContainer
                                             else -> MaterialTheme.colorScheme.surface
                                         },
                                         border = BorderStroke(
                                             1.dp,
                                             when {
-                                                isUnlockedDef -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
+                                                isUnlockedDef -> YanjiColors.success.copy(alpha = 0.5f)
                                                 isCurrent -> MaterialTheme.colorScheme.primary
                                                 else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                             }
@@ -955,7 +955,7 @@ fun AchievementDetailDialog(
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = when {
-                                                    isUnlockedDef -> MaterialTheme.colorScheme.tertiary
+                                                    isUnlockedDef -> YanjiColors.success
                                                     isCurrent -> MaterialTheme.colorScheme.primary
                                                     else -> YanjiColors.textTertiary
                                                 }

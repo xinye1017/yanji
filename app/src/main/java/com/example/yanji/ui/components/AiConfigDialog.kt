@@ -360,10 +360,10 @@ fun AiConfigDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        color = if (connectionSucceeded == true) YanjiColors.success.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
                         border = BorderStroke(
                             1.dp,
-                            if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                            if (connectionSucceeded == true) YanjiColors.success.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -379,14 +379,14 @@ fun AiConfigDialog(
                                     Icons.Outlined.ErrorOutline
                                 },
                                 contentDescription = null,
-                                tint = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                                tint = if (connectionSucceeded == true) YanjiColors.success else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = message,
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
-                                color = if (connectionSucceeded == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+                                color = if (connectionSucceeded == true) YanjiColors.success else MaterialTheme.colorScheme.error
                             )
                         }
                     }
