@@ -5,6 +5,13 @@ plugins {
   alias(libs.plugins.ksp)
 }
 
+// 编译期 Compose 度量：每次重组/跳过情况写到 build/compose_compiler（HTML + .metrics.txt），
+// 用于确认随笔编辑页的热路径还剩多少真实重组。纯构建期产物，不进 APK、不影响运行时行为。
+composeCompiler {
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+}
+
 val releaseSigningStoreFile = providers.environmentVariable("YANJI_SIGNING_STORE_FILE").orNull
 val releaseSigningStorePassword = providers.environmentVariable("YANJI_SIGNING_STORE_PASSWORD").orNull
 val releaseSigningKeyAlias = providers.environmentVariable("YANJI_SIGNING_KEY_ALIAS").orNull

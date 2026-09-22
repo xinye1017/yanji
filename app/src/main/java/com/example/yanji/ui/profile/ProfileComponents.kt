@@ -340,6 +340,51 @@ fun ProfileSettingsItem(
     }
 }
 
+@Composable
+fun ProfileSettingsSwitchItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ProfileSettingsIcon(icon = icon, enabled = enabled)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = YanjiTypography.body,
+                fontWeight = FontWeight.Medium,
+                color = if (enabled) YanjiColors.primaryLabel else YanjiColors.textTertiary
+            )
+            if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = YanjiTypography.footnote,
+                    color = YanjiColors.secondaryLabel,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 外观（主题）切换
 // ---------------------------------------------------------------------------

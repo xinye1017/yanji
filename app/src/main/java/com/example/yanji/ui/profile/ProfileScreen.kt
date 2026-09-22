@@ -4,21 +4,29 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
+import com.example.yanji.data.timer.FocusPreferences
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiThemeMode
@@ -54,10 +62,15 @@ fun ProfileScreen(
     }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val focusPrefs = remember(context) { FocusPreferences.getInstance(context) }
+    val autoPowerSavingEnabled by focusPrefs.autoPowerSavingEnabled.collectAsStateWithLifecycle()
+    val timeoutSeconds by focusPrefs.timeoutSeconds.collectAsStateWithLifecycle()
+
     var showExamTargetDialog by remember { mutableStateOf(false) }
     var showAiConfigDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showMascotPicker by remember { mutableStateOf(false) }
+    var showTimeoutDialog by remember { mutableStateOf(false) }
 
     // Backup export / import state
     var isExporting by remember { mutableStateOf(false) }
@@ -208,6 +221,31 @@ fun ProfileScreen(
                 subtitle = "自定义学科类别与子学科",
                 onClick = onNavigateToSubjectManager
             )
+            HorizontalDivider(
+                color = YanjiColors.separator,
+                thickness = 0.8.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            ProfileSettingsSwitchItem(
+                icon = Icons.Outlined.BrightnessAuto,
+                title = "自动沉浸省电",
+                subtitle = if (autoPowerSavingEnabled) "静置自动进入全屏纯黑省电模式" else "已关闭自动沉浸",
+                checked = autoPowerSavingEnabled,
+                onCheckedChange = { focusPrefs.setAutoPowerSavingEnabled(it) }
+            )
+            if (autoPowerSavingEnabled) {
+                HorizontalDivider(
+                    color = YanjiColors.separator,
+                    thickness = 0.8.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                ProfileSettingsItem(
+                    icon = Icons.Outlined.Timer,
+                    title = "沉浸等待时长",
+                    subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
+                    onClick = { showTimeoutDialog = true }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -341,4 +379,87 @@ fun ProfileScreen(
             onDismiss = { showAboutDialog = false }
         )
     }
+
+    // Power Saving Timeout Dialog
+    if (showTimeoutDialog) {
+        PowerSavingTimeoutDialog(
+            currentSeconds = timeoutSeconds,
+            onSelect = { focusPrefs.setTimeoutSeconds(it) },
+            onDismiss = { showTimeoutDialog = false }
+        )
+    }
 }
+
+@Composable
+private fun PowerSavingTimeoutDialog(
+    currentSeconds: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "省电沉浸等待时长",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "在专注计时界面无触碰达到设定时长后，将自动进入全屏纯黑省电模式：",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FocusPreferences.TIMEOUT_OPTIONS.forEach { seconds ->
+                    val isSelected = seconds == currentSeconds
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
+                            .clickable {
+                                onSelect(seconds)
+                                onDismiss()
+                            },
+                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                        shape = RoundedCornerShape(YanjiRadius.ItemRadius)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (seconds == 30) "$seconds 秒 (默认推荐)" else "$seconds 秒",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+

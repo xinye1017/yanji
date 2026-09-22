@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -233,10 +232,7 @@ fun MainNavigation() {
                                 date = screen.date,
                                 draftKeySuffix = screen.newEntryNonce,
                                 onBack = { screenStack.removeLastOrNull() },
-                                onSaveSuccess = { screenStack.removeLastOrNull() },
-                                onNavigateToDailyDetail = { d ->
-                                    screenStack.add(YanjiSubScreen.DailyStudyDetail(d))
-                                }
+                                onSaveSuccess = { /* 保存后保留在编辑页，不退出到历史页 */ }
                             )
                         }
                         is YanjiSubScreen.ExamMode -> {
@@ -266,14 +262,14 @@ fun MainNavigation() {
                     }
                 }
             } else {
-                // Primary Tabs with crossfade + micro scale
+                // Keep tab transitions to opacity; scaling the full haze source adds rendering work.
                 AnimatedContent(
                     targetState = visibleTab,
                     transitionSpec = {
                         if (reduceMotion) {
                             fadeIn(tween(0)) togetherWith fadeOut(tween(0))
                         } else {
-                            (fadeIn(tween(200)) + scaleIn(initialScale = 0.98f, animationSpec = tween(200)))
+                            fadeIn(tween(200))
                                 .togetherWith(fadeOut(tween(140)))
                         }
                     },

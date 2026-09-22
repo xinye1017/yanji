@@ -38,12 +38,15 @@
 - **解法**：Android 11+ 无线调试自带 TLS mDNS 广播。只要手机与电脑在同一 Wi-Fi 且开着无线调试，`adb start-server` 后等待约 2 秒，ADB 就会自动发现形如 `adb-<SERIAL>-<HASH>._adb-tls-connect._tcp` 的设备序列号。
 - **铁律**：**直接使用 mDNS 动态发现的设备串，不要向用户索要 5 位端口号，也不要用 `adb connect <ip>:<port>` 去碰运气。** 若动态发现为空，应**显式报错并停止**，而不是回退到某个写死的设备串（**文档与脚本中不得出现任何写死的序列号 / IP / 端口**）。
 
-### 3. 【最效率】日常功能开发不要去跑备份、抓数据或自行截屏验证
+### 3. 【最效率】严禁自行操作真机与截屏验证，依赖用户及时反馈
 
 - **陷阱 1（冗余备份与查库）**：曾见 Agent 每次改代码后都去跑复杂备份脚本、拉取 SQLite、用 `sqlite3` 检查 `user_version`、检查 `no_backup` 凭据——严重浪费时间且极易因 Windows 路径格式或环境缺失中断。
 - **陷阱 2（自行截屏验证）**：曾见 Agent 推送后自行执行 `adb screencap` 导出截图甚至做交叉视觉比对——不仅消耗大量时间和 Token，还会打扰用户真机使用。
+- **陷阱 3（自行模拟操作真机）**：曾见 Agent 在应用启动后自行调用 `adb shell input tap/swipe`、`uiautomator dump` 等命令试图模拟点击或排查——此类操作极度低效、消耗大量轮次与 Token，更会强行抢占或打扰用户当前正在使用的手机屏幕。
 - **正道**：
-  - **绝大多数日常 UI / 功能 / 业务逻辑修改**：只需编译 APK → 单次推送安装 → 调起主界面即可完成交付。**UI 与视觉体验由用户在真机上亲自查看，AI 严禁自行截屏验证**（除非用户在对话中明确要求截屏）。
+  - **真机交付终点**：编译 APK → 单次推送安装（`install -r -d`）→ 调起主界面（`am start`）即宣告交付完成。
+  - **用户主导测试**：**UI 视觉、交互操作与逻辑测试完全由用户在真机上亲自体验，并及时在对话中给出反馈**。
+  - **AI 严禁越俎代庖**：严禁 AI 自行截屏验证（禁 `screencap`），严禁 AI 自行模拟点击滑动操作真机（禁 `input tap`、`input swipe`、`uiautomator dump`）。
   - **只有且仅有改动了数据库实体（Room Schema）并需验证迁移链时**：才先跑 `.\gradlew.bat :app:testDebugUnitTest` 验证迁移测试，必要时才备份数据。
 
 ### 4. 【高频排错】为什么有时设备搜不到？
@@ -71,7 +74,7 @@
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
 10. **无证据不宣称通过**：严格区分「编译成功」「测试执行成功」「真机推送成功」；未运行项必须显式标注，环境故障不得伪装成产品缺陷。
-11. **严禁自行截屏验证**：真机验证以「APK 安装成功且主入口 Activity 正常拉起（无启动崩溃）」为交付终点。**严禁 AI 自行使用 `screencap` 抓取屏幕截图或跑深浅色交叉比对**；视觉呈现与交互效果由用户在真机上肉眼确认。除非用户在当前提示中明确要求截屏，否则绝不主动执行截屏。
+11. **严禁自行操作真机与截屏验证**：真机验证以「APK 安装成功且主入口 Activity 正常拉起（无启动崩溃）」为交付终点。**严禁 AI 自行使用 `input tap`、`input swipe`、`uiautomator dump` 等命令模拟操作真机，严禁使用 `screencap` 抓取屏幕截图或跑深浅色交叉比对**。测试操作、交互体验与视觉效果完全由用户在真机上亲自进行并及时反馈，AI 严禁越俎代庖操作用户手机或后台截屏。
 
 ---
 
@@ -219,20 +222,20 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 ---
 
-## 七、真机工作流：常用调试与 UI 定位（严禁自行截屏）
+## 七、真机工作流：部署安装与日志排查（严禁自主操作真机与截屏）
 
 ### 1. 常用调试与验证指令
 
-| 任务 | 命令行 |
-| :--- | :--- |
-| **查看当前连接设备** | `adb devices -l` |
-| **检查应用是否在运行** | `adb shell pidof com.example.yanji` |
-| **启动应用** | `adb shell am start -n com.example.yanji/.MainActivity` |
-| **强制停止应用** | `adb shell am force-stop com.example.yanji` |
-| **查看应用实时崩溃与异常** | `adb logcat *:E` |
-| **查看特定业务日志** | `adb logcat -s FocusTimer:V RoomDatabase:V StudyStats:V` |
-| **清除应用所有本地数据（慎用）** | `adb shell pm clear com.example.yanji` |
-| **屏幕截图导出（仅限用户要求）** | `adb exec-out screencap -p > screenshot.png` |
+| 任务 | 命令行 | 说明 |
+| :--- | :--- | :--- |
+| **查看当前连接设备** | `adb devices -l` | 查看 mDNS 设备连接状态 |
+| **检查应用是否在运行** | `adb shell pidof com.example.yanji` | 查看应用进程 PID |
+| **启动应用** | `adb shell am start -n com.example.yanji/.MainActivity` | **真机推送交付终点** |
+| **强制停止应用** | `adb shell am force-stop com.example.yanji` | 停止应用进程 |
+| **查看应用实时崩溃与异常** | `adb logcat *:E` | 仅在启动即崩等严重异常时排查使用 |
+| **查看特定业务日志** | `adb logcat -s FocusTimer:V RoomDatabase:V StudyStats:V` | 查看业务日志输出 |
+| **清除应用所有本地数据（慎用）** | `adb shell pm clear com.example.yanji` | 重置应用本地数据（谨慎） |
+| **屏幕截图导出（严禁自主执行）** | `adb exec-out screencap -p > screenshot.png` | **仅限用户在提示词中明确要求时配合执行** |
 
 > 执行上述命令时同样遵守 §二.1：若环境会回收子进程，请把相关步骤放在同一次调用内。
 
@@ -240,23 +243,18 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 无线调试的 mDNS 广播并不稳定（实测同一轮操作中会先 `device`、随后 `no devices/emulators found`），且 `adb` server 可能随每次工具调用被回收。**等待设备上线的循环与安装/启动写在同一次调用内**，见 §五 第二步的 Bash 块（`adb start-server` → 轮询 `_adb-tls-connect.*device` → 为空则报错退出）。
 
-确认在线后再执行 `install` / `shell` / `pull`。安装 debug APK 走无线约需十几秒，不要因为前一条命令报 `not found` 就判定失败——重新发现设备后重试即可。
+确认在线后再执行 `install` / `shell`。安装 debug APK 走无线约需十几秒，不要因为前一条命令报 `not found` 就判定失败——重新发现设备后重试即可。
 
-### 3. 定位控件：uiautomator dump + 坐标点击
+### 3. 【绝对铁律】严禁 AI 自主 dump UI 与模拟点击滑动（严禁操作真机）
 
-`uiautomator dump` 的 XML 是**单行**的，因此 `grep '…' | grep -o 'bounds="…"'` 会把整个文件的 bounds 全部抓出、无法与控件配对。用 `scripts/dump_ui.py` 解析最省事：
-
-```bash
-adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-adb pull /sdcard/ui.xml build/ui.xml
-python scripts/dump_ui.py build/ui.xml          # 输出「可见文本 / 描述 -> 中心坐标」
-adb shell input tap <x> <y>
-```
-
-- dump **只包含当前视口内**的元素；目标不在屏内时先滚动再 dump：
-  `adb shell input swipe <x1> <y1> <x2> <y2> <duration_ms>`
-- Compose 的底部 Tab 走 `content-desc`（如 `我的`、`统计`），正文走 `text`。
-- 真机逻辑分辨率见 §4.4 Owner-specific 小节；点击坐标按 dump 结果来，不要凭机型假设。
+- **现象与教训**：曾见 Agent 在真机部署后，自行执行 `adb shell uiautomator dump`、`scripts/dump_ui.py` 解析坐标，再调用 `adb shell input tap` 或 `input swipe` 模拟点击、滑动与排查——**这一行为被严格禁止**！
+- **为什么必须禁止**：
+  1. **极其低效**：一次 dump + pull + 解析 + 模拟 tap 耗费数个工具调用轮次与海量 Token，严重拖慢交付节奏；
+  2. **严重干扰用户**：用户正在手持真机进行真实交互与测试，AI 在后台强行模拟点击或滑动会与用户的手指手势直接冲突，打乱用户手机界面，破坏测试环境；
+  3. **无法替代真实体验**：真机的软键盘弹出、系统动画、抗锯齿与手指触控手感，AI 模拟脚本无法准确还原。
+- **正道准则**：
+  - **交付终点**：AI 推送安装成功且 `am start` 成功拉起 `MainActivity` 即宣告交付完成；
+  - **用户主导反馈**：**用户会在真机上亲自测试真实体验，并及时给出精准的测试反馈**，AI 绝对不要越俎代庖去操作真机。
 
 ### 4. 截图（仅限用户明确要求时，严禁自主执行）
 
@@ -289,7 +287,7 @@ adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png build/s.png
 | `*.db` / `*.db-wal` / `*.db-shm` / `device-backup/` | **绝不提交**（真机数据，`.gitignore` 已覆盖） |
 | `build/`（含真机备份、截图、临时报告） | **绝不提交**（`.gitignore` 已覆盖；临时报告统一写 `build/orca-reports/`） |
 | `*.yanji-backup` / `*.backup.json` / 密钥库（`*.jks` / `*.keystore` / `*.pem` / `*.pfx`） | **绝不提交** |
-| 日常 UI / 业务改动 | 只编译 + 推送启动；**不跑**备份 / 抓库，**不自行截屏** |
+| 日常 UI / 业务改动 | 只编译 + 推送启动；**不跑**备份 / 抓库，**不自行截屏**，**严禁自行模拟操作真机** |
 | 仅有的两个例外：改动 Room Schema 需验证迁移链 | 才先跑 `:app:testDebugUnitTest` 迁移测试，必要时才备份 |
 
 > 权威忽略清单以仓库根 `.gitignore` 为准；本表为速查。

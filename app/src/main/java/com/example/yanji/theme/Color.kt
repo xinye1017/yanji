@@ -222,3 +222,17 @@ val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)
  * UI 层只能引用本 token，不得内联 `Color(0xFFECEFF5)`。
  */
 val YanjiSegmentTrack = Color(0xFFECEFF5)
+
+// ---------------------------------------------------------------------------
+// Power Saving Mode tokens（专注计时省电模式）
+//
+// 用于在专注计时中静置无触碰时自动进入的省电/极黑时钟模式：
+// 1. 背景为 OLED 灭屏级纯黑 #000000（像素级熄灭，极度省电）；
+// 2. 文字为柔和冷白，夜间不刺眼且低功耗；
+// 3. 轨道为极弱透明白，进度条使用心流主蓝。
+// ---------------------------------------------------------------------------
+val YanjiPowerSavingBackground = Color(0xFF000000)
+val YanjiPowerSavingText = Color(0xFFE2E8F0)
+val YanjiPowerSavingTrack = Color(0x26FFFFFF)
+val YanjiPowerSavingProgress = Color(0xFF4F7DF3)
+
