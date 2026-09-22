@@ -1,6 +1,5 @@
 package com.example.yanji.data
 
-import com.example.yanji.theme.MascotThemes
 
 import android.content.Context
 import android.util.Log
@@ -12,8 +11,6 @@ import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.data.achievement.AchievementEvaluator
 import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
-import com.example.yanji.data.ai.ChatReplyState
-import com.example.yanji.data.chat.ChatStore
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
 import com.example.yanji.data.note.NoteStore
@@ -32,7 +29,6 @@ import com.example.yanji.data.timer.FileTimerSessionPersistence
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerSessionPersistence
 import com.example.yanji.service.FocusTimerService
-import java.util.Locale
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
@@ -234,22 +230,6 @@ class YanjiRepository private constructor() {
     private val _settings = MutableStateFlow(UserSettings())
     val settings: StateFlow<UserSettings> = _settings.asStateFlow()
 
-    // 聊天的状态与动作归 [ChatStore] 所有；这里只做同名委托，UI 层调用方式不变。
-    // 注意构造顺序：chatStore 依赖 repoScope / aiClient / _settings，必须声明在它们之后。
-    private val chatStore = ChatStore(
-        scope = repoScope,
-        dbProvider = { database },
-        settingsProvider = { _settings.value },
-        replyProvider = { message, model -> generateAiReply(message, model) },
-        aiClient = aiClient
-    )
-
-    val chatSessions: StateFlow<List<ChatSession>> get() = chatStore.chatSessions
-    val chatMessages: StateFlow<List<ChatMessage>> get() = chatStore.chatMessages
-    val currentSessionId: StateFlow<String> get() = chatStore.currentSessionId
-    val chatReplyStates: StateFlow<Map<String, ChatReplyState>> get() = chatStore.replyStates
-    val hasMoreChatMessages: StateFlow<Boolean> get() = chatStore.hasMoreMessages
-
     val checkIns: StateFlow<List<CheckIn>> get() = checkInStore.checkIns
 
     private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -315,8 +295,6 @@ class YanjiRepository private constructor() {
                     }
                 }
             }
-            // 聊天的 DB 订阅由 ChatStore 自己负责
-            chatStore.bind(db)
             checkInStore.bind(db)
             launch {
                 // 学科的 DB 订阅：内存镜像与 StateFlow 同步刷新。
@@ -516,14 +494,12 @@ class YanjiRepository private constructor() {
     /**
      * 备份导出 / 导入的委托实现。
      *
-     * 三个回调把导入成功后的内存镜像校正留在 Repository 内：BackupStore 只负责
-     * 事务与校验，不反持 Repository 的内部状态（学科镜像、会话指针、活动计时）。
+     * 导入成功后校正学科镜像和活动计时状态。
      */
     private val backupStore by lazy {
         com.example.yanji.data.backup.BackupStore(
             dbProvider = { database },
             contextProvider = { appContext },
-            onSessionsReplaced = { chatStore.onSessionsReplaced() },
             onActiveFocusCleared = { timerStore.clearActiveFocus() },
             onSubjectsReplaced = { restored ->
                 SubjectCatalog.replaceAll(restored)
@@ -545,14 +521,14 @@ class YanjiRepository private constructor() {
     suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
         val settings = _settings.value
         if (!settings.isAiConfigured) {
-            throw com.example.yanji.data.ai.AiException("尚未配置 AI 模型 API Key，无法生成学情诊断。请在右上角【设置】中配置你的 API 密钥。")
+            throw com.example.yanji.data.ai.AiException("尚未配置 AI 服务。请在【我的】→【AI API 配置】中完成设置。")
         }
         val db = database
         val safePeriodDays = periodDays.coerceIn(1, 90)
+        val now = System.currentTimeMillis()
         val (focusList, examList) = if (db != null) {
-            val now = System.currentTimeMillis()
             val endDay = YanjiTime.localDate(now)
-            val startDay = endDay.minusDays((safePeriodDays - 1).toLong())
+            val startDay = endDay.minusDays((safePeriodDays * 2 - 1).toLong())
             val start = YanjiTime.dayRange(startDay).startInclusive
             val focus = db.focusSessionDao().getSessionsSince(start).map { it.toDomainModel() }
             val exams = db.examSessionDao().getSessionsSince(start).map { it.toDomainModel() }
@@ -562,89 +538,19 @@ class YanjiRepository private constructor() {
         }
 
         val snapshot = StudyDiagnosticSnapshot.from(
-            periodDays = periodDays,
+            periodDays = safePeriodDays,
             settings = settings,
             focusSessions = focusList,
             examSessions = examList,
-            noteEntries = noteStore.noteEntries.value
+            noteEntries = noteStore.noteEntries.value,
+            now = now
         )
-        if (snapshot.sessionCount == 0) {
-            throw com.example.yanji.data.ai.AiException("本周期内暂无有效专注记录，无法生成阶段学情诊断。完成学习后再来诊断吧。")
+        if (!snapshot.hasStudyData) {
+            throw com.example.yanji.data.ai.AiException("本周期内暂无已完成的专注或模考，也没有已保存的随笔。记录一次学习后再生成分析。")
         }
         val analysis = callAiDiagnosticApi(snapshot, settings)
         _aiAnalyses.value = listOf(analysis) + _aiAnalyses.value
         analysis
-    }
-
-    // ---------------------------------------------------------------- 聊天
-    // 会话/消息的状态与动作都在 [ChatStore]；这里只做同名委托。
-
-    fun createNewChatSession(initialModel: String? = null): String = chatStore.createNewChatSession(initialModel)
-
-    fun switchChatSession(sessionId: String) = chatStore.switchChatSession(sessionId)
-
-    fun deleteChatSession(sessionId: String) = chatStore.deleteChatSession(sessionId)
-
-    fun updateSessionModel(sessionId: String, model: String) = chatStore.updateSessionModel(sessionId, model)
-
-    fun sendChatMessage(text: String, model: String? = null, onFinished: () -> Unit = {}) =
-        chatStore.sendChatMessage(text, model, onFinished)
-
-    fun retryChatReply(sessionId: String, onFinished: () -> Unit = {}) =
-        chatStore.retryFailedReply(sessionId, onFinished)
-
-    fun cancelChatReply(sessionId: String = currentSessionId.value) =
-        chatStore.cancelReply(sessionId)
-
-    fun loadMoreChatMessages() = chatStore.loadMoreMessages()
-
-    fun clearChatMessages() = chatStore.clearChatMessages()
-
-    suspend fun generateAiReply(userMessage: ChatMessage, model: String? = null): String {
-        val settings = _settings.value
-        val targetModel = model ?: settings.aiModel
-
-        if (settings.isAiConfigured) {
-            return callAiApi(userMessage, settings, targetModel)
-        }
-
-        // When user has not configured API Key or custom backend
-        val mascotName = MascotThemes.fromStorage(settings.mascotTheme).name
-        return "【$mascotName 提示 · 尚未接入 AI】\n\n当前尚未配置大模型 API 密钥。\n\n👉 请点击右上角设置图标（⚙️），填入你的 API Key 并测试连接，即可开启与${mascotName}的实时在线伴学！"
-    }
-
-    private suspend fun callAiApi(
-        userMessage: ChatMessage,
-        settings: UserSettings,
-        model: String = settings.aiModel
-    ): String {
-        // 历史消息与运行时上下文由业务层提供；AiClient 只负责传输与协议。
-        val history = chatStore.currentMessages().toMutableList()
-        if (history.lastOrNull()?.id != userMessage.id) history += userMessage
-
-        val db = database
-        val (focusList, examList) = if (db != null) {
-            val sevenDaysAgo = YanjiTime.lastDaysRange(7).startInclusive
-            val focus = db.focusSessionDao().getSessionsSince(sevenDaysAgo).map { it.toDomainModel() }
-            val exams = db.examSessionDao().getSessionsSince(sevenDaysAgo).map { it.toDomainModel() }
-            focus to exams
-        } else {
-            timerStore.focusSessions.value to timerStore.examSessions.value
-        }
-
-        return aiClient.completeChat(
-            systemPrompt = AiPrompt.systemPrompt(MascotThemes.fromStorage(settings.mascotTheme).name),
-            runtimeContext = AiPrompt.buildRuntimeContext(
-                settings = settings,
-                focusSessions = focusList,
-                examSessions = examList,
-                noteEntries = noteStore.noteEntries.value,
-                activeFocus = timerStore.activeFocus.value
-            ),
-            history = history,
-            settings = settings,
-            model = model
-        )
     }
 
     private suspend fun callAiDiagnosticApi(
@@ -653,7 +559,7 @@ class YanjiRepository private constructor() {
     ): AiAnalysis {
         val content = aiClient.diagnoseRaw(snapshot, settings)
         return parseAiDiagnostic(content, snapshot, settings)
-            ?: throw IllegalArgumentException("AI diagnosis response is not valid JSON")
+            ?: throw com.example.yanji.data.ai.AiException("AI 分析结果格式不完整，请重新生成。", failure = com.example.yanji.data.ai.AiFailure.InvalidResponse)
     }
 
     private fun parseAiDiagnostic(
@@ -671,23 +577,27 @@ class YanjiRepository private constructor() {
             }
         }.orEmpty()
         val overview = json.optString("overview").trim()
-        val strengths = stringList("strengths").take(3)
-        val weaknesses = stringList("weaknesses").take(3)
+        val strengths = stringList("strengths").take(3).map { it.take(220) }
+        val weaknesses = stringList("weaknesses").take(3).map { it.take(220) }
         val trend = json.optString("trendAnalysis").trim()
-        val suggestions = stringList("threeDayPlan").take(3)
-        require(overview.isNotBlank() && trend.isNotBlank() && suggestions.isNotEmpty())
+        val suggestions = stringList("threeDayPlan")
+        require(overview.isNotBlank() && trend.isNotBlank() && suggestions.size == 3)
         AiAnalysis(
             id = UUID.randomUUID().toString(),
             periodStart = snapshot.periodStart,
             periodEnd = snapshot.periodEnd,
-            provider = settings.aiProvider,
-            model = settings.aiModel,
+            provider = settings.aiProvider.ifBlank { "自定义 AI" },
+            model = settings.aiModel.ifBlank { com.example.yanji.data.ai.AiProtocol.DEFAULT_MODEL },
             requestSnapshot = snapshot.requestSnapshot(),
-            overview = overview,
-            strengths = strengths.ifEmpty { listOf("本周期已形成 ${snapshot.activeDays} 天有效学习记录。") },
-            weaknesses = weaknesses.ifEmpty { listOf("继续补充学习与复盘记录，诊断会更准确。") },
-            trendAnalysis = trend,
-            suggestions = suggestions
+            overview = overview.take(600),
+            strengths = strengths,
+            weaknesses = weaknesses,
+            trendAnalysis = if (snapshot.previousSessionCount == 0 && snapshot.previousExamCount == 0) {
+                "前一同长周期没有可比的专注或模考记录，暂时无法判断变化趋势。"
+            } else {
+                trend.take(400)
+            },
+            suggestions = suggestions.map { it.take(250) }
         )
     }.getOrNull()
 
@@ -829,163 +739,5 @@ class YanjiRepository private constructor() {
         db.checkInDao().deleteAll()
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
-    }
-
-    /**
-     * 返回本次对话已关联的真实研迹学习数据来源。
-     * 每一项都基于真实本地数据；无数据时返回空列表（UI 展示为「暂无关联记录」）。
-     */
-    fun currentContextSources(): List<ChatContextSource> {
-        val sources = mutableListOf<ChatContextSource>()
-        val sevenDaysAgo = System.currentTimeMillis() - 7 * 86400000L
-
-        // 数学模考
-        val mathExams = timerStore.examSessions.value
-            .filter { it.score != null && SubjectCatalog.categoryIdOf(it.subjectId) == "math" && it.startTime >= sevenDaysAgo }
-        if (mathExams.isNotEmpty()) {
-            sources += ChatContextSource(
-                ContextSourceType.MATH_EXAM,
-                mathExams.size,
-                "最近 ${mathExams.size} 次数学模考（最高 ${mathExams.mapNotNull { it.score }.maxOrNull()?.toInt() ?: 0} 分）"
-            )
-        }
-
-        // 错题/学习记录（近 7 天 focus + exam note 含「错」+ notes 含「错」）
-        val recentFocus = timerStore.focusSessions.value.filter { it.startTime >= sevenDaysAgo }
-        val wrongNotesCount = recentFocus.count { it.note.contains("错") }
-            + timerStore.examSessions.value.filter { it.startTime >= sevenDaysAgo }.count { it.note.contains("错") }
-            + noteStore.noteEntries.value.filter { it.updatedAt >= sevenDaysAgo }.count { it.content.contains("错") }
-        if (wrongNotesCount > 0) {
-            sources += ChatContextSource(
-                ContextSourceType.WRONG_NOTES,
-                wrongNotesCount,
-                "近 7 天错题/复盘记录 $wrongNotesCount 条"
-            )
-        }
-
-        // 专注记录
-        if (recentFocus.isNotEmpty()) {
-            val hours = (recentFocus.sumOf { it.durationSeconds } / 3600.0)
-                .let { String.format(Locale.US, "%.1f", it) }
-            sources += ChatContextSource(
-                ContextSourceType.FOCUS,
-                recentFocus.size,
-                "近 7 天专注 $hours 小时（共 ${recentFocus.size} 段）"
-            )
-        }
-
-        // 当前对话（最后 8 条）
-        val recentChat = chatStore.currentMessages().takeLast(8)
-        if (recentChat.isNotEmpty()) {
-            sources += ChatContextSource(
-                ContextSourceType.CURRENT_CONVERSATION,
-                recentChat.size,
-                "本次对话最近 ${recentChat.size} 条消息"
-            )
-        }
-
-        return sources
-    }
-
-    /**
-     * 执行卷卷回复中嵌入的行动指令。
-     * 返回 true 表示成功执行并已给用户 Toast 反馈（UI 层自行显示）。
-     */
-    fun executeAction(action: AiAction, context: android.content.Context): Boolean = when (action.type) {
-        AiActionType.CREATE_PLAN -> {
-            // 把动作写入今日/明日计划
-            addPlanToNoteInternal(context, action.payload)
-            true
-        }
-        AiActionType.SAVE_TO_JOURNAL -> {
-            // 存入日记（内容即当前回复全文；这里需要调用方传完整文本）
-            saveTipToNoteInternal(context, action.payload)
-            true
-        }
-        AiActionType.START_FOCUS -> {
-            // payload 格式 "subjectId|mode|note"
-            val parts = action.payload.split("|")
-            if (parts.size >= 2) {
-                val subjectId = parts[0]
-                val mode = parts[1]
-                val note = parts.getOrNull(2) ?: ""
-                val subject = SubjectCatalog.find(subjectId)
-                if (subject != null) {
-                    repoScope.launch { startFocus(subjectId, subject.name, note, mode) }
-                    true
-                } else {
-                    false
-                }
-            } else false
-        }
-        AiActionType.OPEN_JOURNAL -> {
-            // UI 跳转处理，Repository 仅标记意图
-            true
-        }
-        AiActionType.OPEN_EXAM -> {
-            true
-        }
-        AiActionType.SET_REMINDER -> {
-            // 暂不实现，占位
-            true
-        }
-        AiActionType.GENERATE_TEMPLATE -> {
-            // payload 是模板 ID，UI 处理复制/下载
-            true
-        }
-    }
-
-    /**
-     * Internal: save to notes (extracted from old saveTipToNote).
-     */
-    private fun saveTipToNoteInternal(context: Context, content: String) {
-        val todayStr = YanjiTime.todayIso()
-        // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
-        val existing = noteStore.noteEntries.value
-            .filter { it.date == todayStr }
-            .maxByOrNull { it.createdAt }
-        val mascotName = MascotThemes.fromStorage(_settings.value.mascotTheme).name
-        val appendText = "\n\n### ${mascotName}说考研方法锦囊\n$content"
-        if (existing != null) {
-            addOrUpdateNote(existing.copy(content = existing.content + appendText))
-        } else {
-            addOrUpdateNote(
-                NoteEntry(
-                    id = UUID.randomUUID().toString(),
-                    date = todayStr,
-                    title = "今日复盘与${mascotName}建议",
-                    content = content,
-                    tags = listOf("${mascotName}建议", "方法精练")
-                )
-            )
-        }
-        // Toast handled by caller
-    }
-
-    /**
-     * Internal: add plan to notes (extracted from old addPlanToNote).
-     */
-    private fun addPlanToNoteInternal(context: Context, planText: String) {
-        val todayStr = YanjiTime.todayIso()
-        // v15 起一天可有多篇：追加到当天**最新**一篇，而不是任意一篇。
-        val existing = noteStore.noteEntries.value
-            .filter { it.date == todayStr }
-            .maxByOrNull { it.createdAt }
-        val cleanPlan = planText.replace("要将『", "").replace("』加为明早计划吗？", "").replace("？", "").trim()
-        val planItem = "\n- [ ] 明早实践：$cleanPlan"
-        if (existing != null) {
-            addOrUpdateNote(existing.copy(content = existing.content + planItem))
-        } else {
-            addOrUpdateNote(
-                NoteEntry(
-                    id = UUID.randomUUID().toString(),
-                    date = todayStr,
-                    title = "今日复盘与明日计划",
-                    content = "### 备考待办计划\n$planItem",
-                    tags = listOf("待办计划")
-                )
-            )
-        }
-        // Toast handled by caller
     }
 }

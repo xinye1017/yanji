@@ -16,7 +16,7 @@ sealed interface AiFailure {
     }
 
     data object Endpoint : AiFailure {
-        override val userMessage: String = "未找到 AI 对话接口，请检查 Base URL。"
+        override val userMessage: String = "未找到 AI 分析接口，请检查 Base URL。"
     }
 
     data object Timeout : AiFailure {
@@ -28,7 +28,7 @@ sealed interface AiFailure {
     }
 
     data object Cancelled : AiFailure {
-        override val userMessage: String = "AI 请求已取消，可以重新发送。"
+        override val userMessage: String = "AI 请求已取消，可以重新生成。"
     }
 
     data object InvalidResponse : AiFailure {
@@ -52,7 +52,7 @@ sealed interface AiFailure {
             return when {
                 "401" in message || "403" in message || "unauthorized" in message || "api key" in message -> Authentication
                 "429" in message || "额度" in message || "rate limit" in message -> Quota
-                "404" in message || "base url" in message || "未找到对话接口" in message -> Endpoint
+                "404" in message || "base url" in message || "未找到分析接口" in message -> Endpoint
                 "超时" in message || "timeout" in message -> Timeout
                 "返回内容为空" in message || "invalid" in message || "parse" in message -> InvalidResponse
                 else -> Service
@@ -68,8 +68,3 @@ sealed interface AiFailure {
         }
     }
 }
-
-data class ChatReplyState(
-    val isReplying: Boolean = false,
-    val failure: AiFailure? = null
-)

@@ -131,7 +131,7 @@ data class YanjiBackup(
 
     fun countsSummary(): String = buildString {
         append("专注 ${focusSessions.size} · 模考 ${examSessions.size} · 日记 ${noteEntries.size}")
-        append(" · 对话 ${chatSessions.size}/${chatMessages.size}")
+        append(" · 旧版对话 ${chatSessions.size}/${chatMessages.size}")
         append(" · 打卡 ${checkIns.size} · 成就 ${unlockedAchievements.size}")
         append(" · 快捷 ${quickStartPresets.size}")
         append(" · 学科 ${subjects.size}")

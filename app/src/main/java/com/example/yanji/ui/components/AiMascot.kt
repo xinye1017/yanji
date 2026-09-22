@@ -100,7 +100,7 @@ fun AiEncouragementBanner(
                             .padding(horizontal = 6.dp, vertical = 1.dp)
                     ) {
                         Text(
-                            text = if (onClick != null) "点击找${mascot.name}聊聊 ›" else "研迹陪伴",
+                            text = if (onClick != null) "查看学情分析 ›" else "研迹陪伴",
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.Medium

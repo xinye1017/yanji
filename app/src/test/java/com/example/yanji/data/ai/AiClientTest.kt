@@ -1,7 +1,7 @@
 package com.example.yanji.data.ai
 
-import com.example.yanji.data.ChatMessage
-import com.example.yanji.data.ChatSender
+import com.example.yanji.data.FocusSession
+import com.example.yanji.data.StudyDiagnosticSnapshot
 import com.example.yanji.data.UserSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,8 +29,13 @@ class AiClientTest {
         aiApiKey = "test-key",
         aiModel = "test-model"
     )
-    private val history = listOf(
-        ChatMessage("m1", "s1", ChatSender.USER, "你好", 1L)
+    private val snapshot = StudyDiagnosticSnapshot.from(
+        periodDays = 7,
+        settings = UserSettings(),
+        focusSessions = listOf(FocusSession("f1", "math", "数学", 1_700_000_000_000L, 1_700_000_003_600L, 3_600L)),
+        examSessions = emptyList(),
+        noteEntries = emptyList(),
+        now = 1_700_000_004_000L
     )
 
     @Test
@@ -40,18 +45,19 @@ class AiClientTest {
             responseBody = """{"choices":[{"message":{"content":"可用回复"}}]}"""
         )
 
-        val result = client(connection).completeChat("system", "context", history, settings, "test-model")
+        val result = client(connection).diagnoseRaw(snapshot, settings)
 
         assertEquals("可用回复", result)
         assertTrue(connection.disconnected)
         assertTrue(connection.writtenBody.toString(Charsets.UTF_8.name()).contains("\"messages\""))
+        assertTrue(connection.writtenBody.toString(Charsets.UTF_8.name()).contains("study_snapshot"))
     }
 
     @Test
     fun fourHundredAndFiveHundredFailuresAreClassifiedWithoutRawHtml() = runBlocking {
         val clientError = FakeConnection(422, errorBody = "<html>provider secret diagnostics</html>")
         val clientException = expectAiException {
-            client(clientError).completeChat("system", "context", history, settings, "test-model")
+            client(clientError).diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.ClientRequest, clientException.failure)
         assertFalse(clientException.message.orEmpty().contains("provider secret"))
@@ -59,7 +65,7 @@ class AiClientTest {
 
         val serverError = FakeConnection(503, errorBody = """{"error":{"message":"temporary"}}""")
         val serverException = expectAiException {
-            client(serverError).completeChat("system", "context", history, settings, "test-model")
+            client(serverError).diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.Service, serverException.failure)
         assertTrue(serverError.disconnected)
@@ -68,12 +74,12 @@ class AiClientTest {
     @Test
     fun authenticationAndRateLimitHaveStableCategories() = runBlocking {
         val unauthorized = expectAiException {
-            client(FakeConnection(401)).completeChat("system", "context", history, settings, "test-model")
+            client(FakeConnection(401)).diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.Authentication, unauthorized.failure)
 
         val throttled = expectAiException {
-            client(FakeConnection(429)).completeChat("system", "context", history, settings, "test-model")
+            client(FakeConnection(429)).diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.Quota, throttled.failure)
     }
@@ -82,14 +88,14 @@ class AiClientTest {
     fun malformedJsonAndEmptyPayloadAreInvalidResponses() = runBlocking {
         val malformed = expectAiException {
             client(FakeConnection(200, responseBody = "<html>not json</html>"))
-                .completeChat("system", "context", history, settings, "test-model")
+                .diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.InvalidResponse, malformed.failure)
         assertTrue(malformed.message.orEmpty().contains("JSON"))
 
         val empty = expectAiException {
             client(FakeConnection(200, responseBody = "   "))
-                .completeChat("system", "context", history, settings, "test-model")
+                .diagnoseRaw(snapshot, settings)
         }
         assertEquals(AiFailure.InvalidResponse, empty.failure)
         assertTrue(empty.message.orEmpty().contains("内容为空"))
@@ -100,7 +106,7 @@ class AiClientTest {
         val connection = FakeConnection(200, responseCodeFailure = SocketTimeoutException("read timed out"))
 
         val exception = expectAiException {
-            client(connection).completeChat("system", "context", history, settings, "test-model")
+            client(connection).diagnoseRaw(snapshot, settings)
         }
 
         assertEquals(AiFailure.Timeout, exception.failure)
@@ -111,7 +117,7 @@ class AiClientTest {
     fun coroutineCancellationDisconnectsBlockedConnectionPromptly() = runBlocking {
         val connection = BlockingConnection()
         val request = async(Dispatchers.Default) {
-            client(connection).completeChat("system", "context", history, settings, "test-model")
+            client(connection).diagnoseRaw(snapshot, settings)
         }
         assertTrue("request did not reach responseCode", connection.entered.await(2, TimeUnit.SECONDS))
 

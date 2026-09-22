@@ -1,16 +1,16 @@
 package com.example.yanji.ui.profile
 
+import com.example.yanji.ui.icons.RemixIcons
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
@@ -22,10 +22,12 @@ fun ExamTargetDialog(
     onDismiss: () -> Unit,
     onSave: (UserSettings) -> Unit
 ) {
-    var school by remember { mutableStateOf(settings.targetSchool) }
-    var major by remember { mutableStateOf(settings.targetMajor) }
-    var date by remember { mutableStateOf(settings.targetExamDate) }
-    var goalH by remember { mutableFloatStateOf(if (settings.dailyGoalHours in 0f..16f) settings.dailyGoalHours else 0f) }
+    var school by rememberSaveable { mutableStateOf(settings.targetSchool) }
+    var major by rememberSaveable { mutableStateOf(settings.targetMajor) }
+    var date by rememberSaveable { mutableStateOf(settings.targetExamDate) }
+    var goalH by rememberSaveable {
+        mutableFloatStateOf(settings.dailyGoalHours.takeIf { it in 0f..16f } ?: 0f)
+    }
     var showExamDatePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -35,17 +37,16 @@ fun ExamTargetDialog(
                 onClick = {
                     onSave(
                         settings.copy(
-                            targetSchool = school,
-                            targetMajor = major,
+                            targetSchool = school.trim(),
+                            targetMajor = major.trim(),
                             targetExamDate = date,
                             dailyGoalHours = goalH
                         )
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(YanjiRadius.ButtonRadius)
             ) {
-                Text("保存设置", fontWeight = FontWeight.Bold)
+                Text("保存")
             }
         },
         dismissButton = {
@@ -53,71 +54,92 @@ fun ExamTargetDialog(
                 Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        title = { Text("考研目标设置", fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                text = "编辑备考信息",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 440.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 OutlinedTextField(
                     value = school,
                     onValueChange = { school = it },
                     label = { Text("目标院校") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.Small),
+                    shape = RoundedCornerShape(YanjiRadius.InputRadius),
                     singleLine = true
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = major,
                     onValueChange = { major = it },
                     label = { Text("目标专业") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.Small),
+                    shape = RoundedCornerShape(YanjiRadius.InputRadius),
                     singleLine = true
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedCard(
+                Surface(
                     onClick = { showExamDatePicker = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.Small),
-                    colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
+                    shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "考研初试日期",
+                                text = "初试日期",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = date.ifBlank { "点击选择初试日期" },
-                                style = MaterialTheme.typography.titleMedium,
+                                text = date.takeIf(String::isNotBlank)?.let(::formatExamDateCompact) ?: "选择日期",
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = if (date.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Icon(
-                            imageVector = Icons.Outlined.CalendarMonth,
-                            contentDescription = "选择考研初试日期",
-                            tint = MaterialTheme.colorScheme.primary
+                            imageVector = RemixIcons.CalendarLine,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                val goalText = if (goalH <= 0f) "未设置（滑动选择）" else "${goalH.toInt()} 小时"
-                Text("每日专注学习目标：$goalText", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Slider(
-                    value = goalH,
-                    onValueChange = { goalH = it },
-                    valueRange = 0f..16f,
-                    steps = 15
-                )
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("每日学习目标", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = if (goalH <= 0f) "未设置" else formatGoalHours(goalH),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = goalH,
+                        onValueChange = { goalH = it },
+                        valueRange = 0f..16f,
+                        steps = 15
+                    )
+                }
             }
         },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
         containerColor = MaterialTheme.colorScheme.surface
     )
 

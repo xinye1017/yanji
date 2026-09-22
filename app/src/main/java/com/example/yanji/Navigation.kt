@@ -1,5 +1,6 @@
 package com.example.yanji
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -22,15 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.theme.YanjiMotion
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.fill.*
-import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.ui.achievement.AchievementsScreen
-import com.example.yanji.ui.chat.AiChatScreen
 import com.example.yanji.ui.detail.DailyStudyDetailScreen
 import com.example.yanji.ui.detail.FocusSessionDetailScreen
 import com.example.yanji.ui.detail.SubjectStudyDetailScreen
@@ -59,11 +54,11 @@ enum class YanjiTab(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    HOME("首页", PhosphorIcons.Fill.House, PhosphorIcons.Regular.House),
-    FOCUS("专注", PhosphorIcons.Fill.Timer, PhosphorIcons.Regular.Timer),
-    NOTE("随笔", PhosphorIcons.Fill.Notebook, PhosphorIcons.Regular.Notebook),
-    STATS("统计", PhosphorIcons.Fill.ChartBar, PhosphorIcons.Regular.ChartBar),
-    PROFILE("我的", PhosphorIcons.Fill.UserCircle, PhosphorIcons.Regular.UserCircle)
+    HOME("首页", RemixIcons.Home5Fill, RemixIcons.Home5Line),
+    FOCUS("专注", RemixIcons.TimerFill, RemixIcons.TimerLine),
+    NOTE("随笔", RemixIcons.BookletFill, RemixIcons.BookletLine),
+    STATS("统计", RemixIcons.BarChartBoxFill, RemixIcons.BarChartBoxLine),
+    PROFILE("我的", RemixIcons.User3Fill, RemixIcons.User3Line)
 }
 
 @Serializable
@@ -92,8 +87,6 @@ sealed interface YanjiSubScreen {
     ) : YanjiSubScreen
     @Serializable
     data object ExamMode : YanjiSubScreen
-    @Serializable
-    data object AiChat : YanjiSubScreen
     @Serializable
     data object Achievements : YanjiSubScreen
     @Serializable
@@ -241,11 +234,6 @@ fun MainNavigation() {
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        is YanjiSubScreen.AiChat -> {
-                            AiChatScreen(
-                                onNavigateBack = { screenStack.removeLastOrNull() }
-                            )
-                        }
                         is YanjiSubScreen.Achievements -> {
                             AchievementsScreen(
                                 onBack = { screenStack.removeLastOrNull() }
@@ -284,7 +272,6 @@ fun MainNavigation() {
                                 onNavigateToNote = { currentTab = YanjiTab.NOTE },
                                 onNavigateToStats = { currentTab = YanjiTab.STATS },
                                 onNavigateToSettings = { currentTab = YanjiTab.PROFILE },
-                                onNavigateToAiChat = { screenStack.add(YanjiSubScreen.AiChat) },
                                 onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
                                 onNavigateToSubjectDetail = { subId -> screenStack.add(YanjiSubScreen.SubjectStudyDetail(subId)) },
                                 onNavigateToExamHistory = { screenStack.add(YanjiSubScreen.ExamHistory) },

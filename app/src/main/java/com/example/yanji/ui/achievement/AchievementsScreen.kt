@@ -1,24 +1,21 @@
 package com.example.yanji.ui.achievement
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.MaterialTheme
-import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.currentMascotTheme
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiProgressBar
 import com.example.yanji.ui.components.YanjiDetailTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,22 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.fill.*
-import com.adamglin.phosphoricons.regular.*
 import com.example.yanji.data.Achievement
 import com.example.yanji.data.AchievementCategory
 import com.example.yanji.data.AchievementRarity
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
-import com.example.yanji.theme.YanjiSpacing
-import com.example.yanji.ui.components.AiAvatar
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -54,46 +43,46 @@ import java.util.Locale
 
 fun getAchievementIcon(iconKey: String, isUnlocked: Boolean): ImageVector {
     return when (iconKey) {
-        "book" -> if (isUnlocked) PhosphorIcons.Fill.BookOpen else PhosphorIcons.Regular.BookOpen
-        "hourglass" -> if (isUnlocked) PhosphorIcons.Fill.Hourglass else PhosphorIcons.Regular.Hourglass
-        "compass" -> if (isUnlocked) PhosphorIcons.Fill.Compass else PhosphorIcons.Regular.Compass
-        "crown" -> if (isUnlocked) PhosphorIcons.Fill.Crown else PhosphorIcons.Regular.Crown
-        "timer" -> if (isUnlocked) PhosphorIcons.Fill.Timer else PhosphorIcons.Regular.Timer
-        "sunrise", "sun_horizon" -> if (isUnlocked) PhosphorIcons.Fill.SunHorizon else PhosphorIcons.Regular.SunHorizon
-        "moon", "moon_stars" -> if (isUnlocked) PhosphorIcons.Fill.Moon else PhosphorIcons.Regular.Moon
-        "award", "trophy" -> if (isUnlocked) PhosphorIcons.Fill.Trophy else PhosphorIcons.Regular.Trophy
-        "shield" -> if (isUnlocked) PhosphorIcons.Fill.ShieldCheck else PhosphorIcons.Regular.ShieldCheck
-        "medal" -> if (isUnlocked) PhosphorIcons.Fill.Medal else PhosphorIcons.Regular.Medal
-        "pencil" -> if (isUnlocked) PhosphorIcons.Fill.PencilSimple else PhosphorIcons.Regular.PencilSimple
-        "feather" -> if (isUnlocked) PhosphorIcons.Fill.Feather else PhosphorIcons.Regular.Feather
-        "check_circle" -> if (isUnlocked) PhosphorIcons.Fill.CheckCircle else PhosphorIcons.Regular.CheckCircle
-        "fire", "flame" -> if (isUnlocked) PhosphorIcons.Fill.Fire else PhosphorIcons.Regular.Fire
-        "diamond", "gem" -> if (isUnlocked) PhosphorIcons.Fill.Diamond else PhosphorIcons.Regular.Diamond
-        "rocket", "rocket_launch" -> if (isUnlocked) PhosphorIcons.Fill.Rocket else PhosphorIcons.Regular.Rocket
-        "target", "crosshair" -> if (isUnlocked) PhosphorIcons.Fill.Target else PhosphorIcons.Regular.Target
-        "clock" -> if (isUnlocked) PhosphorIcons.Fill.Clock else PhosphorIcons.Regular.Clock
-        "drop" -> if (isUnlocked) PhosphorIcons.Fill.Drop else PhosphorIcons.Regular.Drop
-        "lightning" -> if (isUnlocked) PhosphorIcons.Fill.Lightning else PhosphorIcons.Regular.Lightning
-        "sparkle", "sparkles" -> if (isUnlocked) PhosphorIcons.Fill.Sparkle else PhosphorIcons.Regular.Sparkle
-        "sun" -> if (isUnlocked) PhosphorIcons.Fill.Sun else PhosphorIcons.Regular.Sun
-        "star", "shooting_star" -> if (isUnlocked) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star
-        "sword" -> if (isUnlocked) PhosphorIcons.Fill.Sword else PhosphorIcons.Regular.Sword
-        "mountain", "mountains" -> if (isUnlocked) PhosphorIcons.Fill.Mountains else PhosphorIcons.Regular.Mountains
-        "scales" -> if (isUnlocked) PhosphorIcons.Fill.Scales else PhosphorIcons.Regular.Scales
-        "scroll" -> if (isUnlocked) PhosphorIcons.Fill.Scroll else PhosphorIcons.Regular.Scroll
-        "heart" -> if (isUnlocked) PhosphorIcons.Fill.Heart else PhosphorIcons.Regular.Heart
-        "coffee" -> if (isUnlocked) PhosphorIcons.Fill.Coffee else PhosphorIcons.Regular.Coffee
-        "waves" -> if (isUnlocked) PhosphorIcons.Fill.Waves else PhosphorIcons.Regular.Waves
-        "first_aid" -> if (isUnlocked) PhosphorIcons.Fill.FirstAid else PhosphorIcons.Regular.FirstAid
-        "confetti" -> if (isUnlocked) PhosphorIcons.Fill.Confetti else PhosphorIcons.Regular.Confetti
-        "footprints" -> if (isUnlocked) PhosphorIcons.Fill.Footprints else PhosphorIcons.Regular.Footprints
-        "barbell" -> if (isUnlocked) PhosphorIcons.Fill.Barbell else PhosphorIcons.Regular.Barbell
-        "brain" -> if (isUnlocked) PhosphorIcons.Fill.Brain else PhosphorIcons.Regular.Brain
-        "notebook" -> if (isUnlocked) PhosphorIcons.Fill.Notebook else PhosphorIcons.Regular.Notebook
-        "fire_extinguisher" -> if (isUnlocked) PhosphorIcons.Fill.FireExtinguisher else PhosphorIcons.Regular.FireExtinguisher
-        "infinity" -> if (isUnlocked) PhosphorIcons.Fill.Infinity else PhosphorIcons.Regular.Infinity
-        "eye_slash" -> if (isUnlocked) PhosphorIcons.Fill.EyeSlash else PhosphorIcons.Regular.EyeSlash
-        else -> if (isUnlocked) PhosphorIcons.Fill.Trophy else PhosphorIcons.Regular.Trophy
+        "book" -> if (isUnlocked) RemixIcons.BookOpenFill else RemixIcons.BookOpenLine
+        "hourglass" -> if (isUnlocked) RemixIcons.HourglassFill else RemixIcons.HourglassLine
+        "compass" -> if (isUnlocked) RemixIcons.CompassFill else RemixIcons.CompassLine
+        "crown" -> if (isUnlocked) RemixIcons.VipCrownFill else RemixIcons.VipCrownLine
+        "timer" -> if (isUnlocked) RemixIcons.TimerFill else RemixIcons.TimerLine
+        "sunrise", "sun_horizon" -> if (isUnlocked) RemixIcons.SunFoggyFill else RemixIcons.SunFoggyLine
+        "moon", "moon_stars" -> if (isUnlocked) RemixIcons.MoonFill else RemixIcons.MoonLine
+        "award", "trophy" -> if (isUnlocked) RemixIcons.TrophyFill else RemixIcons.TrophyLine
+        "shield" -> if (isUnlocked) RemixIcons.ShieldCheckFill else RemixIcons.ShieldCheckLine
+        "medal" -> if (isUnlocked) RemixIcons.MedalFill else RemixIcons.MedalLine
+        "pencil" -> if (isUnlocked) RemixIcons.Edit2Fill else RemixIcons.Edit2Line
+        "feather" -> if (isUnlocked) RemixIcons.QuillPenFill else RemixIcons.QuillPenLine
+        "check_circle" -> if (isUnlocked) RemixIcons.CheckboxCircleFill else RemixIcons.CheckboxCircleLine
+        "fire", "flame" -> if (isUnlocked) RemixIcons.FireFill else RemixIcons.FireLine
+        "diamond", "gem" -> if (isUnlocked) RemixIcons.DiamondFill else RemixIcons.DiamondLine
+        "rocket", "rocket_launch" -> if (isUnlocked) RemixIcons.RocketFill else RemixIcons.RocketLine
+        "target", "crosshair" -> if (isUnlocked) RemixIcons.Focus3Fill else RemixIcons.Focus3Line
+        "clock" -> if (isUnlocked) RemixIcons.TimeFill else RemixIcons.TimeLine
+        "drop" -> if (isUnlocked) RemixIcons.DropFill else RemixIcons.DropLine
+        "lightning" -> if (isUnlocked) RemixIcons.FlashlightFill else RemixIcons.FlashlightLine
+        "sparkle", "sparkles" -> if (isUnlocked) RemixIcons.SparklingFill else RemixIcons.SparklingLine
+        "sun" -> if (isUnlocked) RemixIcons.SunFill else RemixIcons.SunLine
+        "star", "shooting_star" -> if (isUnlocked) RemixIcons.StarFill else RemixIcons.StarLine
+        "sword" -> if (isUnlocked) RemixIcons.SwordFill else RemixIcons.SwordLine
+        "mountain", "mountains" -> if (isUnlocked) RemixIcons.LandscapeFill else RemixIcons.LandscapeLine
+        "scales" -> if (isUnlocked) RemixIcons.ScalesFill else RemixIcons.ScalesLine
+        "scroll" -> if (isUnlocked) RemixIcons.FilePaperFill else RemixIcons.FilePaperLine
+        "heart" -> if (isUnlocked) RemixIcons.HeartFill else RemixIcons.HeartLine
+        "coffee" -> if (isUnlocked) RemixIcons.CupFill else RemixIcons.CupLine
+        "waves" -> if (isUnlocked) RemixIcons.SailboatFill else RemixIcons.SailboatLine
+        "first_aid" -> if (isUnlocked) RemixIcons.FirstAidKitFill else RemixIcons.FirstAidKitLine
+        "confetti" -> if (isUnlocked) RemixIcons.GiftFill else RemixIcons.GiftLine
+        "footprints" -> if (isUnlocked) RemixIcons.FootprintFill else RemixIcons.FootprintLine
+        "barbell" -> if (isUnlocked) RemixIcons.WeightFill else RemixIcons.WeightLine
+        "brain" -> if (isUnlocked) RemixIcons.BrainFill else RemixIcons.BrainLine
+        "notebook" -> if (isUnlocked) RemixIcons.BookletFill else RemixIcons.BookletLine
+        "fire_extinguisher" -> if (isUnlocked) RemixIcons.AlarmWarningFill else RemixIcons.AlarmWarningLine
+        "infinity" -> if (isUnlocked) RemixIcons.InfinityFill else RemixIcons.InfinityLine
+        "eye_slash" -> if (isUnlocked) RemixIcons.EyeOffFill else RemixIcons.EyeOffLine
+        else -> if (isUnlocked) RemixIcons.TrophyFill else RemixIcons.TrophyLine
     }
 }
 
@@ -160,583 +149,212 @@ fun AchievementsScreen(
     val achievements by viewModel.achievements.collectAsStateWithLifecycle()
     val unlockedCount by viewModel.unlockedCount.collectAsStateWithLifecycle()
     val totalCount = viewModel.totalCount
-
     var selectedCategory by remember { mutableStateOf<AchievementCategory?>(null) }
     var viewingAchievement by remember { mutableStateOf<Achievement?>(null) }
 
-    val filteredAchievements = remember(achievements, selectedCategory) {
-        if (selectedCategory == null || selectedCategory == AchievementCategory.ALL) {
-            achievements
-        } else {
-            achievements.filter { it.category == selectedCategory }
-        }
+    val visibleAchievements = remember(achievements, selectedCategory) {
+        selectedCategory?.let { category -> achievements.filter { it.category == category } } ?: achievements
     }
-
-    // Top 3-5 uncompleted non-hidden achievements closest to completion
-    val upcomingAchievements = remember(achievements) {
-        achievements
-            .filter { !it.isUnlocked && !it.isHidden }
-            .map { ach ->
-                val ratio = if (ach.targetProgress > 0) ach.currentProgress.toFloat() / ach.targetProgress.toFloat() else 0f
-                ach to ratio
-            }
-            .sortedWith(
-                compareByDescending<Pair<Achievement, Float>> { it.second }
-                    .thenBy { it.first.rarity.ordinal }
-            )
-            .take(4)
-            .map { it.first }
+    val groups = remember(visibleAchievements) { visibleAchievements.groupBy { it.category } }
+    val nextAchievement = remember(achievements) {
+        val available = achievements.filter { !it.isUnlocked && !it.isHidden && it.targetProgress > 0L }
+        available.filter { it.currentProgress > 0L }
+            .maxByOrNull { it.currentProgress.toDouble() / it.targetProgress.toDouble() }
+            ?: available.firstOrNull()
     }
+    val progress = if (totalCount > 0) (unlockedCount.toFloat() / totalCount).coerceIn(0f, 1f) else 0f
 
-    val progressRatio = if (totalCount > 0) unlockedCount.toFloat() / totalCount.toFloat() else 0f
-    val progressPercent = (progressRatio * 100).toInt()
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        YanjiDetailTopBar(title = "考研成就殿堂", onBack = onBack)
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                top = YanjiSpacing.PageTopGap,
-                bottom = 32.dp
-            ),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 32.dp)
         ) {
-            // 1. Top Bar
-            item(span = { GridItemSpan(2) }) {
-                YanjiDetailTopBar(
-                    title = "考研成就殿堂",
-                    subtitle = "记录考研路上的每一个高光时刻",
-                    onBack = onBack
-                )
-            }
-
-            // 2. Banner Showcase Card
-            item(span = { GridItemSpan(2) }) {
+            item {
                 YanjiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    variant = YanjiCardVariant.Hero
+                    variant = YanjiCardVariant.Grouped,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
                 ) {
-                    Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.radialGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.primaryContainer,
-                                                MaterialTheme.colorScheme.surface
-                                            )
-                                        )
-                                    )
-                                    .border(1.5.dp, MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                                contentAlignment = Alignment.Center
+                    Column(Modifier.padding(20.dp)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                text = "$unlockedCount",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "/ $totalCount 枚已点亮",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        YanjiProgressBar(
+                            progress = progress,
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                        )
+                        nextAchievement?.let { achievement ->
+                            Spacer(Modifier.height(16.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { viewingAchievement = achievement }.padding(top = 14.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = PhosphorIcons.Fill.Trophy,
+                                    imageVector = RemixIcons.Focus3Line,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(30.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
-                            }
-
-                            Spacer(modifier = Modifier.width(YanjiSpacing.InlineGap))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom
-                                ) {
-                                    Text(
-                                        text = "已点亮 $unlockedCount / $totalCount 枚徽章",
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "$progressPercent%",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                LinearProgressIndicator(
-                                    progress = { progressRatio },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.background,
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "下一枚 · ${achievement.title}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                Text(
+                                    text = "${achievement.currentProgress}/${achievement.targetProgress}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(RemixIcons.ArrowRightSLine, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Rarity Statistics Chips Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            AchievementRarity.entries.forEach { rarity ->
-                                val totalRarity = achievements.count { it.rarity == rarity }
-                                val unlockedRarity = achievements.count { it.rarity == rarity && it.isUnlocked }
-                                val color = rarityColor(rarity)
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = rarityBackground(rarity),
-                                    border = BorderStroke(1.dp, color.copy(alpha = 0.25f))
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .clip(CircleShape)
-                                                .background(color)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "${rarity.title} $unlockedRarity/$totalRarity",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = color
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .background(MaterialTheme.colorScheme.background)
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                    }
+                }
+                Spacer(Modifier.height(26.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val categories = listOf<AchievementCategory?>(null) + AchievementCategory.entries.filter { it != AchievementCategory.ALL }
+                    categories.forEach { category ->
+                        val selected = selectedCategory == category
+                        Surface(
+                            onClick = { selectedCategory = category },
+                            shape = RoundedCornerShape(YanjiRadius.Small),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Text(
-                                text = "“每一枚被点亮的徽章，都是你打败拖延与迷茫的铁证。”",
+                                text = category?.title ?: "全部",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            groups.forEach { (category, itemsInCategory) ->
+                item(key = "header_${category.name}") {
+                    Column(Modifier.padding(top = 16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "${itemsInCategory.count { it.isUnlocked }} / ${itemsInCategory.size}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                }
-            }
-
-            // 3. Upcoming Achievements Section (即将点亮)
-            if (upcomingAchievements.isNotEmpty()) {
-                item(span = { GridItemSpan(2) }) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Fill.Sparkle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "即将点亮",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "最接近突破的下一个目标",
-                                fontSize = 11.sp,
-                                color = YanjiColors.textTertiary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            upcomingAchievements.forEach { ach ->
-                                UpcomingAchievementCard(
-                                    achievement = ach,
-                                    onClick = { viewingAchievement = ach }
+                        YanjiCard(modifier = Modifier.fillMaxWidth(), variant = YanjiCardVariant.Grouped) {
+                            itemsInCategory.forEachIndexed { index, achievement ->
+                                AchievementListRow(
+                                    achievement = achievement,
+                                    onClick = { viewingAchievement = achievement }
                                 )
+                                if (index < itemsInCategory.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 69.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-
-            // 4. Category Filter Chips
-            item(span = { GridItemSpan(2) }) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val categories = listOf(
-                        null to "全部",
-                        AchievementCategory.JOURNEY to "研途启程",
-                        AchievementCategory.FOCUS to "专注修炼",
-                        AchievementCategory.STREAK to "坚持之路",
-                        AchievementCategory.EXAM to "模考试炼",
-                        AchievementCategory.MATH to "数学征途",
-                        AchievementCategory.REVIEW to "复盘沉淀",
-                        AchievementCategory.HIDDEN to "隐藏成就"
-                    )
-
-                    categories.forEach { (cat, title) ->
-                        val isSelected = selectedCategory == cat
-                        Surface(
-                            shape = RoundedCornerShape(YanjiRadius.Small),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.clickable { selectedCategory = cat }
-                        ) {
-                            val count = if (cat == null) totalCount else achievements.count { it.category == cat }
-                            Text(
-                                text = "$title ($count)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 5. Achievement Grid Items
-            items(filteredAchievements, key = { it.id }) { item ->
-                AchievementGridCard(
-                    achievement = item,
-                    onClick = { viewingAchievement = item }
-                )
-            }
         }
+    }
 
-        // 6. Achievement Detail Dialog
-        viewingAchievement?.let { item ->
-            AchievementDetailDialog(
-                achievement = item,
-                allAchievements = achievements,
-                onDismiss = { viewingAchievement = null }
-            )
-        }
+    viewingAchievement?.let { achievement ->
+        AchievementDetailDialog(
+            achievement = achievement,
+            allAchievements = achievements,
+            onDismiss = { viewingAchievement = null }
+        )
     }
 }
 
 @Composable
-fun UpcomingAchievementCard(
-    achievement: Achievement,
-    onClick: () -> Unit
-) {
-    val icon = getAchievementIcon(achievement.iconKey, false)
-    val color = rarityColor(achievement.rarity)
-    val remaining = (achievement.targetProgress - achievement.currentProgress).coerceAtLeast(0L)
-    val progressRatio = if (achievement.targetProgress > 0) {
-        (achievement.currentProgress.toFloat() / achievement.targetProgress.toFloat()).coerceIn(0f, 1f)
+private fun AchievementListRow(achievement: Achievement, onClick: () -> Unit) {
+    val isHiddenLocked = achievement.isHidden && !achievement.isUnlocked
+    val accent = if (achievement.isUnlocked) rarityColor(achievement.rarity) else MaterialTheme.colorScheme.onSurfaceVariant
+    val icon = if (isHiddenLocked) RemixIcons.LockLine else getAchievementIcon(achievement.iconKey, achievement.isUnlocked)
+    val progress = if (achievement.targetProgress > 0L) {
+        (achievement.currentProgress.toFloat() / achievement.targetProgress).coerceIn(0f, 1f)
     } else 0f
 
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.width(180.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
+    Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.background),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(6.dp),  // token-exempt: 稀有度微徽章（title 10sp）端部几何，小于最小 token 8dp
-                    color = rarityBackground(achievement.rarity)
-                ) {
-                    Text(
-                        text = achievement.rarity.title,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = color,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = achievement.title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = "还差 $remaining ${achievement.unit}",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LinearProgressIndicator(
-                progress = { progressRatio },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.background
-            )
-        }
-    }
-}
-
-@Composable
-fun AchievementGridCard(
-    achievement: Achievement,
-    onClick: () -> Unit
-) {
-    val isUnlocked = achievement.isUnlocked
-    val isHiddenLocked = achievement.isHidden && !isUnlocked
-    val icon = if (isHiddenLocked) PhosphorIcons.Regular.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
-    val rarityColor = rarityColor(achievement.rarity)
-
-    YanjiCard(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        variant = YanjiCardVariant.Grouped,
-        border = CardDefaults.outlinedCardBorder().copy(
-            width = if (isUnlocked && (achievement.rarity == AchievementRarity.MYTHIC || achievement.rarity == AchievementRarity.LEGENDARY)) 1.5.dp else 1.dp,
-            brush = rarityBorderBrush(achievement.rarity, isUnlocked)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Rarity Tag Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),  // token-exempt: 稀有度微徽章（title 9sp）端部几何，小于最小 token 8dp
-                    color = rarityBackground(achievement.rarity)
-                ) {
-                    Text(
-                        text = achievement.rarity.title,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = rarityColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Icon Circle
             Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isUnlocked) {
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    rarityBackground(achievement.rarity),
-                                    MaterialTheme.colorScheme.surface
-                                )
-                            )
-                        } else {
-                            Brush.radialGradient(
-                                colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface)
-                            )
-                        }
-                    )
-                    .then(
-                        if (isUnlocked) {
-                            Modifier.border(1.5.dp, rarityColor.copy(alpha = 0.4f), CircleShape)
-                        } else Modifier
-                    ),
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(YanjiRadius.Small))
+                    .background(if (achievement.isUnlocked) rarityBackground(achievement.rarity) else MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isUnlocked) rarityColor else YanjiColors.textTertiary,
-                    modifier = Modifier.size(26.dp)
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(23.dp))
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isHiddenLocked) "隐藏成就" else achievement.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (achievement.isUnlocked) FontWeight.SemiBold else FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Title
-            Text(
-                text = if (isHiddenLocked) "???" else achievement.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isUnlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Description
-            Text(
-                text = if (isHiddenLocked) "这是一项隐藏成就，达成后揭晓" else achievement.description,
-                fontSize = 11.sp,
-                color = YanjiColors.textTertiary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                maxLines = 2,
-                lineHeight = 14.sp,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Progress or Unlocked tag
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(28.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isUnlocked) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = rarityBackground(achievement.rarity)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Check,
-                                contentDescription = null,
-                                tint = rarityColor,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "已点亮",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = rarityColor
-                            )
-                        }
-                    }
-                } else if (isHiddenLocked) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Lock,
-                                contentDescription = null,
-                                tint = YanjiColors.textTertiary,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "未探索",
-                                fontSize = 10.sp,
-                                color = YanjiColors.textTertiary
-                            )
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val progressRatio = (achievement.currentProgress.toFloat() / achievement.targetProgress.toFloat()).coerceIn(0f, 1f)
-                        LinearProgressIndicator(
-                            progress = { progressRatio },
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),  // token-exempt: 进度条轨道几何，不是产品组件圆角
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                            trackColor = MaterialTheme.colorScheme.background
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${achievement.currentProgress}/${achievement.targetProgress} ${achievement.unit}",
-                            fontSize = 10.sp,
-                            color = YanjiColors.textTertiary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = when {
+                        achievement.isUnlocked -> "已点亮 · ${achievement.rarity.title}"
+                        isHiddenLocked -> "达成后揭晓"
+                        else -> "${achievement.currentProgress} / ${achievement.targetProgress} ${achievement.unit}"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (achievement.isUnlocked) accent else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (!achievement.isUnlocked && !isHiddenLocked && achievement.currentProgress > 0L) {
+                    Spacer(Modifier.height(7.dp))
+                    YanjiProgressBar(
+                        progress = progress,
+                        color = MaterialTheme.colorScheme.primary,
+                        height = 6.dp
+                    )
                 }
             }
+            Spacer(Modifier.width(10.dp))
+            Icon(RemixIcons.ArrowRightSLine, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         }
-    }
 }
 
 @Composable
@@ -745,290 +363,111 @@ fun AchievementDetailDialog(
     allAchievements: List<Achievement>,
     onDismiss: () -> Unit
 ) {
-    val isUnlocked = achievement.isUnlocked
-    val isHiddenLocked = achievement.isHidden && !isUnlocked
-    val icon = if (isHiddenLocked) PhosphorIcons.Regular.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
-    val rarityColor = rarityColor(achievement.rarity)
-    val unlockDateStr = remember(achievement.unlockedAt) {
+    val isHiddenLocked = achievement.isHidden && !achievement.isUnlocked
+    val icon = if (isHiddenLocked) RemixIcons.LockLine else getAchievementIcon(achievement.iconKey, achievement.isUnlocked)
+    val accent = if (achievement.isUnlocked) rarityColor(achievement.rarity) else MaterialTheme.colorScheme.onSurfaceVariant
+    val unlockDate = remember(achievement.unlockedAt) {
         achievement.unlockedAt?.let {
             Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm", Locale.CHINESE))
         }
     }
-
-    // Series progression ladder if applicable
-    val seriesList = remember(achievement.seriesId, allAchievements) {
-        achievement.seriesId?.let { seriesId ->
-            allAchievements.filter { it.seriesId == seriesId }.sortedBy { it.seriesOrder }
-        } ?: emptyList()
+    val series = remember(achievement.seriesId, allAchievements) {
+        achievement.seriesId?.let { id -> allAchievements.filter { it.seriesId == id }.sortedBy { it.seriesOrder } } ?: emptyList()
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .clip(RoundedCornerShape(26.dp))
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(0.88f).heightIn(max = 620.dp)
+                .clip(RoundedCornerShape(YanjiRadius.DialogRadius))
                 .background(MaterialTheme.colorScheme.surface)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier.size(64.dp).clip(CircleShape)
+                    .background(if (achievement.isUnlocked) rarityBackground(achievement.rarity) else MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
             ) {
-                // Large Badge Circle with Rarity Glow
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isUnlocked) {
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        rarityBackground(achievement.rarity),
-                                        MaterialTheme.colorScheme.surface
-                                    )
-                                )
-                            } else {
-                                Brush.radialGradient(
-                                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface)
-                                )
-                            }
-                        )
-                        .border(
-                            2.dp,
-                            if (isUnlocked) rarityColor else MaterialTheme.colorScheme.outlineVariant,
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (isUnlocked) rarityColor else YanjiColors.textTertiary,
-                        modifier = Modifier.size(38.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Title
-                Text(
-                    text = if (isHiddenLocked) "???" else achievement.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(32.dp))
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = if (isHiddenLocked) "隐藏成就" else achievement.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (isHiddenLocked) achievement.category.title else "${achievement.category.title} · ${achievement.rarity.title}",
+                style = MaterialTheme.typography.labelMedium,
+                color = accent
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = if (isHiddenLocked) "达成后揭晓" else achievement.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(16.dp))
+            when {
+                achievement.isUnlocked -> Text(
+                    text = unlockDate?.let { "点亮于 $it" } ?: "已点亮",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Pills Row: Rarity + Category
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = rarityBackground(achievement.rarity),
-                        border = BorderStroke(1.dp, rarityColor.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = achievement.rarity.title,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = rarityColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        Text(
-                            text = achievement.category.title,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Target Requirement / Description
-                Text(
-                    text = if (isHiddenLocked) "达成条件：这是一项隐藏成就，达成后揭晓。" else "达成条件：${achievement.description}",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Status info
-                if (isUnlocked) {
+                isHiddenLocked -> Text("尚未解锁", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> {
                     Text(
-                        text = "达成时间：${unlockDateStr ?: "已点亮"}",
-                        fontSize = 12.sp,
-                        color = YanjiColors.success,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        text = "进度 ${achievement.currentProgress} / ${achievement.targetProgress} ${achievement.unit}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                } else if (isHiddenLocked) {
-                    Text(
-                        text = "探索状态：未解锁（继续你的考研征途以揭晓）",
-                        fontSize = 12.sp,
-                        color = YanjiColors.textTertiary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                    Spacer(Modifier.height(8.dp))
+                    YanjiProgressBar(
+                        progress = if (achievement.targetProgress > 0L) (achievement.currentProgress.toFloat() / achievement.targetProgress).coerceIn(0f, 1f) else 0f,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    Text(
-                        text = "当前进度：${achievement.currentProgress} / ${achievement.targetProgress} ${achievement.unit}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Series Progression Ladder (if part of a series)
-                if (seriesList.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(10.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "成长阶梯系列",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                seriesList.forEachIndexed { index, def ->
-                                    val isUnlockedDef = def.isUnlocked
-                                    val isCurrent = def.id == achievement.id
-
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = when {
-                                            isUnlockedDef -> YanjiColors.successSoft
-                                            isCurrent -> MaterialTheme.colorScheme.primaryContainer
-                                            else -> MaterialTheme.colorScheme.surface
-                                        },
-                                        border = BorderStroke(
-                                            1.dp,
-                                            when {
-                                                isUnlockedDef -> YanjiColors.success.copy(alpha = 0.5f)
-                                                isCurrent -> MaterialTheme.colorScheme.primary
-                                                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-                                            }
-                                        )
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = if (isUnlockedDef) "✓" else if (isCurrent) "○" else "🔒",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = when {
-                                                    isUnlockedDef -> YanjiColors.success
-                                                    isCurrent -> MaterialTheme.colorScheme.primary
-                                                    else -> YanjiColors.textTertiary
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.width(3.dp))
-                                            Text(
-                                                text = "${def.targetProgress}${def.unit}",
-                                                fontSize = 11.sp,
-                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isUnlockedDef || isCurrent) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
-                                            )
-                                        }
-                                    }
-                                    if (index < seriesList.lastIndex) {
-                                        Text(
-                                            text = "→",
-                                            fontSize = 11.sp,
-                                            color = YanjiColors.textTertiary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // JuanJuan Quote Box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(14.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        AiAvatar(size = 36.dp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "${currentMascotTheme().name}的话：",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (isHiddenLocked) "“坚持做正确的事，惊喜会在不经意间降临。”" else "“${achievement.rewardQuote}”",
-                                fontSize = 12.sp,
-                                lineHeight = 18.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp),
-                    shape = RoundedCornerShape(YanjiRadius.ButtonRadius),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text("关 闭", fontSize = 14.sp)
                 }
             }
+            if (!isHiddenLocked && series.size > 1) {
+                Spacer(Modifier.height(20.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "成长阶梯 · ${series.count { it.isUnlocked }} / ${series.size} 已点亮",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    series.forEach { milestone ->
+                        Text(
+                            "${milestone.targetProgress}${milestone.unit}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (milestone.id == achievement.id) FontWeight.Bold else FontWeight.Normal,
+                            color = if (milestone.isUnlocked) rarityColor(milestone.rarity) else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            if (achievement.isUnlocked && achievement.rewardQuote.isNotBlank()) {
+                Spacer(Modifier.height(20.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "${currentMascotTheme().name} · ${achievement.rewardQuote}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            TextButton(onClick = onDismiss) { Text("关闭") }
         }
     }
 }

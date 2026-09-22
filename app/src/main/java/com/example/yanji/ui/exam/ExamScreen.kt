@@ -14,6 +14,7 @@ import com.example.yanji.ui.components.YanjiDetailTopBar
 import com.example.yanji.ui.components.YanjiPageHeader
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiSegmentedControlVariant
+import com.example.yanji.ui.components.AiConfigDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +32,7 @@ import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.service.FocusTimerService
 import com.example.yanji.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun ExamScreen(
@@ -42,6 +44,7 @@ fun ExamScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val examSessions = state.examSessions
     var currentSubTab by rememberSaveable { mutableIntStateOf(0) } // 0: 备考发起, 1: 走势与记录, 2: AI诊断
 
@@ -54,14 +57,13 @@ fun ExamScreen(
     val activeExamStartTime = activeExam?.startedAtEpochMs ?: 0L
     val isExamPaused = activeExam?.paused == true
 
-    var latestAiAnalysis by remember { mutableStateOf(state.aiAnalyses.firstOrNull()) }
+    val latestAiAnalysis = state.aiAnalyses.firstOrNull()
     // The request lives in the composition scope. Never restore a stale "loading" flag after the
     // request was cancelled by Activity/process recreation.
     var isAnalyzingAi by remember { mutableStateOf(false) }
+    var analysisError by remember { mutableStateOf<String?>(null) }
+    var showAiConfigDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(state.aiAnalyses) {
-        if (latestAiAnalysis == null) latestAiAnalysis = state.aiAnalyses.firstOrNull()
-    }
     // Dialog for score entry
     var showScoreDialog by rememberSaveable { mutableStateOf(false) }
     var pendingExamSessionId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -173,13 +175,23 @@ fun ExamScreen(
                     ExamAiDiagnosisSection(
                         analysis = latestAiAnalysis,
                         isAnalyzing = isAnalyzingAi,
+                        errorMessage = analysisError,
                         onGenerate = {
-                            coroutineScope.launch {
-                                isAnalyzingAi = true
-                                try {
-                                    latestAiAnalysis = viewModel.generateAnalysis(7)
-                                } finally {
-                                    isAnalyzingAi = false
+                            if (!settings.isAiConfigured) {
+                                showAiConfigDialog = true
+                            } else if (!isAnalyzingAi) {
+                                coroutineScope.launch {
+                                    isAnalyzingAi = true
+                                    analysisError = null
+                                    try {
+                                        viewModel.generateAnalysis(7)
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (error: Exception) {
+                                        analysisError = error.message ?: "生成学情分析失败，请稍后重试。"
+                                    } finally {
+                                        isAnalyzingAi = false
+                                    }
                                 }
                             }
                         }
@@ -201,5 +213,8 @@ fun ExamScreen(
                 dismissScoreDialog()
             }
         )
+    }
+    if (showAiConfigDialog) {
+        AiConfigDialog(onDismissRequest = { showAiConfigDialog = false })
     }
 }

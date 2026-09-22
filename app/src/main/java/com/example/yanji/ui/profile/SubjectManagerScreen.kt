@@ -1,5 +1,6 @@
 package com.example.yanji.ui.profile
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -153,7 +150,7 @@ private fun SubjectManagerContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Add,
+                        imageVector = RemixIcons.AddLine,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -262,7 +259,7 @@ private fun CategoryRow(
                 modifier = Modifier.testTag(SubjectManagerTags.addChild(category.id))
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Add,
+                    imageVector = RemixIcons.AddLine,
                     contentDescription = "新增子学科",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -273,7 +270,7 @@ private fun CategoryRow(
                 modifier = Modifier.testTag(SubjectManagerTags.editRow(category.id))
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Edit,
+                    imageVector = RemixIcons.Edit2Line,
                     contentDescription = "重命名",
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier.size(18.dp)
@@ -284,7 +281,7 @@ private fun CategoryRow(
                 modifier = Modifier.testTag(SubjectManagerTags.deleteRow(category.id))
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
+                    imageVector = RemixIcons.DeleteBinLine,
                     contentDescription = "删除",
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier.size(18.dp)
@@ -331,7 +328,7 @@ private fun CategoryRow(
                         modifier = Modifier.testTag(SubjectManagerTags.editRow(child.id))
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Edit,
+                            imageVector = RemixIcons.Edit2Line,
                             contentDescription = "重命名",
                             tint = YanjiColors.textTertiary,
                             modifier = Modifier.size(16.dp)
@@ -342,7 +339,7 @@ private fun CategoryRow(
                         modifier = Modifier.testTag(SubjectManagerTags.deleteRow(child.id))
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.DeleteOutline,
+                            imageVector = RemixIcons.DeleteBinLine,
                             contentDescription = "删除",
                             tint = YanjiColors.textTertiary,
                             modifier = Modifier.size(16.dp)

@@ -4,38 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import com.example.yanji.data.ChatMessage
-import com.example.yanji.data.ChatSender
 
 /**
  * AI 协议层的纯 JVM 测试。
  *
- * 这一层抽出来之前埋在 `YanjiRepository.callAiApi` 的 92 行里，完全测不到。
- * 测它的价值在于：不同厂商返回的 `/models` 结构并不一致（`data` / `models`、对象数组 /
+ * 不同厂商返回的 `/models` 结构并不一致（`data` / `models`、对象数组 /
  * 字符串数组），解析失败会直接导致"测试连接"报错。
  */
 class AiProtocolTest {
-    @Test
-    fun historyBudgetKeepsNewestMessagesAndTruncatesOneOversizedMessage() {
-        val messages = listOf(
-            ChatMessage("old", "s", ChatSender.USER, "old".repeat(100), 1L),
-            ChatMessage("middle", "s", ChatSender.JUANJUAN, "middle".repeat(30), 2L),
-            ChatMessage("new", "s", ChatSender.USER, "N".repeat(600), 3L)
-        )
-
-        val selected = AiProtocol.historyWithinCharacterBudget(
-            messages = messages,
-            maxMessages = 10,
-            maxCharacters = 220
-        )
-
-        assertEquals(listOf("new"), selected.map { it.id })
-        assertTrue(selected.single().content.length <= 204)
-        assertTrue(selected.single().content.contains("…"))
-        assertTrue(selected.single().content.startsWith("N"))
-        assertTrue(selected.single().content.endsWith("N"))
-    }
-
     @Test
     fun nonJsonProviderErrorBodyIsNeverReturnedToUi() {
         val detail = AiProtocol.extractErrorDetail("<html>secret provider diagnostics</html>")
@@ -142,18 +118,8 @@ class AiProtocolTest {
         assertTrue(
             AiProtocol.describeHttpError(AiCallKind.MODELS, 404, "", "https://x/v1/models").contains("https://x/v1/models")
         )
-        // CHAT：聊天失败的措辞更偏向"下一步怎么办"
-        assertTrue(AiProtocol.describeHttpError(AiCallKind.CHAT, 429, "").contains("服务额度已用尽"))
-        // DIAGNOSIS：只报状态码，正文不进用户可见文案
+        assertTrue(AiProtocol.describeHttpError(AiCallKind.DIAGNOSIS, 429, "").contains("额度已用尽"))
+        // DIAGNOSIS：正文不进用户可见文案
         assertEquals("AI 诊断接口返回 HTTP 500", AiProtocol.describeHttpError(AiCallKind.DIAGNOSIS, 500, "whatever"))
-    }
-
-    // ---------------------------------------------------------------- 其它
-
-    @Test
-    fun `hasCustomBackend only treats non-deepseek urls as custom`() {
-        assertTrue(AiProtocol.hasCustomBackend("http://127.0.0.1:11434/v1"))
-        assertFalse(AiProtocol.hasCustomBackend("https://api.deepseek.com/v1"))
-        assertFalse("空白地址不算自定义后端", AiProtocol.hasCustomBackend(""))
     }
 }

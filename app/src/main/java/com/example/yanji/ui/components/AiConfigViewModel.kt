@@ -19,7 +19,7 @@ data class AiConfigUiState(
 
 /**
  * AI 后端配置 Feature ViewModel：设置读写 + 模型列表探测。
- * AiConfigDialog 自包含使用，被「我的」页与对话页两处宿主复用。
+ * AiConfigDialog 自包含使用，被「我的」、统计与模考页面复用。
  * 注意：API Key 的加密存储由 [YanjiRepository.updateSettings] 内部处理（Keystore），
  * 这里不触碰任何密钥细节。
  */

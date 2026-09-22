@@ -14,10 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
@@ -36,6 +34,7 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.GlassSegmentedControl
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiProgressBar
 import kotlin.math.min
 
 @Composable
@@ -143,17 +142,7 @@ fun SubjectDistributionCard(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    val singleTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                    ) {
-                        val radius = size.height / 2f
-                        val corner = CornerRadius(radius, radius)
-                        drawRoundRect(color = singleTrackColor, cornerRadius = corner)
-                        drawRoundRect(color = color, cornerRadius = corner)
-                    }
+                    YanjiProgressBar(progress = 1f, color = color)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "全部专注时间集中在该学科 · 点击查看科目详情",
@@ -266,32 +255,7 @@ fun SubjectProgressBar(
             Text(text = "$time (${(percent * 100).toInt()}%)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
         }
         Spacer(modifier = Modifier.height(6.dp))
-        // 用 Canvas 直接绘制：轨道与填充各自 drawRoundRect，半径取半高（胶囊形）。
-        //
-        // 注意：进度条左端「像被截断」的问题**不在本函数**，而是外层可点击 Column 的
-        // clip(RoundedCornerShape(12.dp)) 在圆角处切到了进度条（详见该处注释）。
-        // 这里保持最简单、最高效的两次 drawRoundRect，不要为了绕那个问题加 clipPath。
-        val trackColor = MaterialTheme.colorScheme.surfaceVariant
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-        ) {
-            val radius = size.height / 2f
-            val corner = CornerRadius(radius, radius)
-
-            drawRoundRect(color = trackColor, cornerRadius = corner)
-
-            val filledWidth = size.width * percent.coerceIn(0f, 1f)
-            if (filledWidth > 0f) {
-                val filledRadius = min(radius, filledWidth / 2f)
-                drawRoundRect(
-                    color = color,
-                    size = Size(filledWidth, size.height),
-                    cornerRadius = CornerRadius(filledRadius, filledRadius)
-                )
-            }
-        }
+        YanjiProgressBar(progress = percent, color = color)
     }
 }
 

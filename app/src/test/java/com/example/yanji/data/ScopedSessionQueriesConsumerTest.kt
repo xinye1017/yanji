@@ -38,7 +38,7 @@ class ScopedSessionQueriesConsumerTest {
     }
 
     @Test
-    fun testAiRuntimeContextBuildsWithScopedSessions() {
+    fun testAiDiagnosticSnapshotBuildsWithScopedSessions() {
         val now = System.currentTimeMillis()
         val session = FocusSession(
             id = "f_recent",
@@ -50,16 +50,16 @@ class ScopedSessionQueriesConsumerTest {
             status = SessionStatus.COMPLETED
         )
 
-        val context = AiPrompt.buildRuntimeContext(
+        val snapshot = StudyDiagnosticSnapshot.from(
+            periodDays = 7,
             settings = UserSettings(),
             focusSessions = listOf(session),
             examSessions = emptyList(),
             noteEntries = emptyList(),
-            activeFocus = null,
             now = now
         )
 
-        assertNotNull(context)
-        org.junit.Assert.assertTrue(context.contains("数学一"))
+        assertNotNull(snapshot)
+        org.junit.Assert.assertTrue(snapshot.toPromptData().contains("数学一"))
     }
 }

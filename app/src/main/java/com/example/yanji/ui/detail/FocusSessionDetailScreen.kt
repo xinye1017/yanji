@@ -1,5 +1,6 @@
 package com.example.yanji.ui.detail
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -19,10 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.regular.PencilSimple
-import com.adamglin.phosphoricons.regular.Trash
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
@@ -206,7 +203,7 @@ fun FocusSessionDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Icon(
-                                    imageVector = PhosphorIcons.Regular.PencilSimple,
+                                    imageVector = RemixIcons.Edit2Line,
                                     contentDescription = "编辑",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
@@ -275,7 +272,7 @@ fun FocusSessionDetailScreen(
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
                 Icon(
-                    imageVector = PhosphorIcons.Regular.Trash,
+                    imageVector = RemixIcons.DeleteBinLine,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )

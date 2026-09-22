@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.data.UserSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,8 @@ data class ExamUiState(
 class ExamViewModel(
     private val repo: YanjiRepository
 ) : ViewModel() {
+
+    val settings: StateFlow<UserSettings> get() = repo.settings
 
     val uiState: StateFlow<ExamUiState> = combine(
         repo.examSessions,

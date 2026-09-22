@@ -1,5 +1,6 @@
 package com.example.yanji.ui.profile
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,9 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -23,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.yanji.data.YanjiTime
 import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.timer.FocusPreferences
@@ -39,7 +36,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 @Composable
@@ -55,11 +51,6 @@ fun ProfileScreen(
     val settings = state.settings
     val mascot = currentMascotTheme()
 
-    val daysRemaining = remember(settings.targetExamDate) {
-        YanjiTime.parseIsoDate(settings.targetExamDate)?.let { target ->
-            ChronoUnit.DAYS.between(YanjiTime.today(), target).toInt()
-        }
-    }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusPrefs = remember(context) { FocusPreferences.getInstance(context) }
@@ -155,20 +146,9 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        ProfileIdentityCard(settings = settings)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        ProfileSectionHeader(
-            title = "备考概览",
-            actionLabel = "编辑",
-            onAction = { showExamTargetDialog = true }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        PreparationOverviewCard(
+        ProfileIdentityCard(
             settings = settings,
-            daysRemaining = daysRemaining,
-            todayStudySeconds = state.todayStudySeconds
+            onClick = { showExamTargetDialog = true }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -183,7 +163,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
-                icon = Icons.Outlined.Psychology,
+                icon = RemixIcons.BrainLine,
                 title = "AI API 配置",
                 subtitle = "兼容 OpenAI API",
                 onClick = { showAiConfigDialog = true }
@@ -196,7 +176,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
-                icon = Icons.Outlined.Pets,
+                icon = RemixIcons.BearSmileLine,
                 title = "学习伙伴",
                 subtitle = "当前：${mascot.name}",
                 onClick = { showMascotPicker = true }
@@ -216,7 +196,7 @@ fun ProfileScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             ProfileSettingsItem(
-                icon = Icons.Outlined.Category,
+                icon = RemixIcons.Apps2Line,
                 title = "学科管理",
                 subtitle = "自定义学科类别与子学科",
                 onClick = onNavigateToSubjectManager
@@ -227,7 +207,7 @@ fun ProfileScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             ProfileSettingsSwitchItem(
-                icon = Icons.Outlined.BrightnessAuto,
+                icon = RemixIcons.SunLine,
                 title = "自动沉浸省电",
                 subtitle = if (autoPowerSavingEnabled) "静置自动进入全屏纯黑省电模式" else "已关闭自动沉浸",
                 checked = autoPowerSavingEnabled,
@@ -240,7 +220,7 @@ fun ProfileScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 ProfileSettingsItem(
-                    icon = Icons.Outlined.Timer,
+                    icon = RemixIcons.TimerLine,
                     title = "沉浸等待时长",
                     subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
                     onClick = { showTimeoutDialog = true }
@@ -257,7 +237,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
-                icon = Icons.Outlined.CloudDownload,
+                icon = RemixIcons.DownloadCloudLine,
                 title = "导出备份",
                 subtitle = if (isExporting) {
                     "正在导出…"
@@ -273,7 +253,7 @@ fun ProfileScreen(
                 modifier = Modifier.padding(start = 52.dp, end = 16.dp)
             )
             ProfileSettingsItem(
-                icon = Icons.Outlined.CloudUpload,
+                icon = RemixIcons.UploadCloudLine,
                 title = "导入恢复",
                 subtitle = if (isImporting) {
                     "正在导入…"
@@ -291,7 +271,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
-                icon = Icons.Outlined.Info,
+                icon = RemixIcons.InformationLine,
                 title = "关于研迹与${mascot.name}",
                 subtitle = "v1.0 · 记录、专注、积累、复盘",
                 onClick = { showAboutDialog = true }
@@ -442,7 +422,7 @@ private fun PowerSavingTimeoutDialog(
                             )
                             if (isSelected) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = RemixIcons.CheckLine,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)

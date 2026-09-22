@@ -1,5 +1,6 @@
 package com.example.yanji.ui.focus
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -39,12 +40,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -339,7 +334,7 @@ private fun QuietFocusHeader(
                         .offset(x = (-8).dp)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = RemixIcons.ArrowLeftLine,
                         contentDescription = "返回上一步",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(21.dp)
@@ -371,7 +366,7 @@ private fun QuietFocusHeader(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
+                            imageVector = RemixIcons.Edit2Line,
                             contentDescription = "手动补记专注",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(13.dp)
@@ -393,7 +388,7 @@ private fun QuietFocusHeader(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Schedule,
+                            imageVector = RemixIcons.TimeLine,
                             contentDescription = null,
                             tint = YanjiColors.textTertiary,
                             modifier = Modifier.size(14.dp)
@@ -524,7 +519,7 @@ private fun QuietCategoryStep(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Timer,
+                            imageVector = RemixIcons.TimerLine,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -548,7 +543,7 @@ private fun QuietCategoryStep(
                     }
                 }
                 Icon(
-                    imageVector = Icons.Default.ChevronRight,
+                    imageVector = RemixIcons.ArrowRightSLine,
                     contentDescription = null,
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier.size(20.dp)

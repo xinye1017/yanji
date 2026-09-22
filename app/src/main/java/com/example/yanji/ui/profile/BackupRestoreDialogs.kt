@@ -45,7 +45,7 @@ fun ImportConfirmDialog(
         text = {
             Column {
                 Text(
-                    "本机现有的专注、模考、日记、对话、打卡与成就将被整体替换为备份内容。",
+                    "本机现有的专注、模考、日记、旧版对话记录、打卡与成就将被整体替换为备份内容。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

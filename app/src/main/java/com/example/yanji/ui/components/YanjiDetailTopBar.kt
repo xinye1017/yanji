@@ -1,5 +1,6 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -23,14 +24,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.regular.ArrowLeft
 import com.example.yanji.theme.YanjiSpacing
 
 /**
  * 标准子页面导航顶栏（全应用单一事实源）。
- * 包含统一的返回按钮 (Phosphor ArrowLeft)、页面标题、可选的标题前置元素（如学科圆点）、
+ * 包含统一的返回按钮 (Remix ArrowLeft)、页面标题、可选的标题前置元素（如学科圆点）、
  * 可选副标题，以及尾部操作区域。
  */
 @Composable
@@ -58,7 +56,7 @@ fun YanjiDetailTopBar(
                 .testTag("detail_top_bar_back")
         ) {
             Icon(
-                imageVector = PhosphorIcons.Regular.ArrowLeft,
+                imageVector = RemixIcons.ArrowLeftLine,
                 contentDescription = "返回",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp)

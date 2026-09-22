@@ -1,13 +1,12 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -23,10 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.fill.Fire
-import com.adamglin.phosphoricons.fill.Sparkle
 import com.example.yanji.data.CheckIn
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
@@ -94,7 +89,7 @@ fun CheckInCelebrationDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = RemixIcons.CheckLine,
                             contentDescription = "已完成",
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)
@@ -110,7 +105,7 @@ fun CheckInCelebrationDialog(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = PhosphorIcons.Fill.Sparkle,
+                        imageVector = RemixIcons.SparklingFill,
                         contentDescription = null,
                         tint = YanjiColors.warning,
                         modifier = Modifier.size(18.dp)
@@ -124,7 +119,7 @@ fun CheckInCelebrationDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
-                        imageVector = PhosphorIcons.Fill.Sparkle,
+                        imageVector = RemixIcons.SparklingFill,
                         contentDescription = null,
                         tint = YanjiColors.warning,
                         modifier = Modifier.size(18.dp)
@@ -144,7 +139,7 @@ fun CheckInCelebrationDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = PhosphorIcons.Fill.Fire,
+                            imageVector = RemixIcons.FireFill,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)

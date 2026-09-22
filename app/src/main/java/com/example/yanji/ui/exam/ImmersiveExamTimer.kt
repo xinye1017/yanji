@@ -1,12 +1,9 @@
 package com.example.yanji.ui.exam
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -22,6 +19,7 @@ import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiProgressBar
 import java.util.Locale
 
 import androidx.compose.runtime.State
@@ -119,7 +117,7 @@ fun ImmersiveExamTimer(
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Icon(
-                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        imageVector = if (isPaused) RemixIcons.PlayFill else RemixIcons.PauseFill,
                         contentDescription = null
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -134,7 +132,7 @@ fun ImmersiveExamTimer(
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                    Icon(imageVector = RemixIcons.CheckLine, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("提前交卷", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
@@ -214,12 +212,8 @@ private fun ExamCountdownCenter(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(12.dp)),
+            YanjiProgressBar(
+                progress = progress,
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.primaryContainer
             )

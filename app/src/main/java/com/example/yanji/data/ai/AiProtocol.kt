@@ -1,10 +1,9 @@
 package com.example.yanji.data.ai
 
-import com.example.yanji.data.ChatMessage
 import org.json.JSONObject
 
 /** 调用类型，决定错误文案（不同入口面向用户的措辞不同）。 */
-internal enum class AiCallKind { MODELS, CHAT, DIAGNOSIS }
+internal enum class AiCallKind { MODELS, DIAGNOSIS }
 
 /**
  * 第三方 AI 接口的**协议层**：URL 拼接、响应解析、错误文案。
@@ -92,49 +91,6 @@ internal object AiProtocol {
         return "服务未提供可读的 JSON 错误信息"
     }
 
-    /**
-     * Selects newest history within a rough character budget. This is intentionally not a model-
-     * specific tokenizer: it is deterministic, provider-neutral, and prevents one very large
-     * message from exhausting the whole context window.
-     */
-    fun historyWithinCharacterBudget(
-        messages: List<ChatMessage>,
-        maxMessages: Int,
-        maxCharacters: Int
-    ): List<ChatMessage> {
-        require(maxMessages > 0)
-        require(maxCharacters > 0)
-        val selectedNewestFirst = mutableListOf<ChatMessage>()
-        var remaining = maxCharacters
-        for (message in messages.asReversed()) {
-            if (selectedNewestFirst.size >= maxMessages || remaining <= 0) break
-            val overhead = 16
-            val availableForContent = (remaining - overhead).coerceAtLeast(0)
-            if (availableForContent == 0) break
-            val content = if (message.content.length <= availableForContent) {
-                message.content
-            } else {
-                truncateKeepingEdges(message.content, availableForContent)
-            }
-            if (content.isEmpty()) break
-            selectedNewestFirst += message.copy(content = content)
-            remaining -= content.length + overhead
-            if (content.length < message.content.length) break
-        }
-        return selectedNewestFirst.asReversed()
-    }
-
-    private fun truncateKeepingEdges(value: String, limit: Int): String {
-        if (value.length <= limit) return value
-        if (limit <= 1) return value.take(limit)
-        val marker = "…"
-        if (limit <= marker.length + 2) return value.take(limit)
-        val contentBudget = limit - marker.length
-        val prefixLength = (contentBudget * 2) / 3
-        val suffixLength = contentBudget - prefixLength
-        return value.take(prefixLength) + marker + value.takeLast(suffixLength)
-    }
-
     /** 统一的 HTTP 错误文案。保持与抽取前完全一致的措辞，避免改变用户已熟悉的提示。 */
     fun describeHttpError(kind: AiCallKind, code: Int, detail: String, url: String = ""): String = when (kind) {
         AiCallKind.MODELS -> when (code) {
@@ -144,19 +100,15 @@ internal object AiProtocol {
             429 -> "HTTP 429 请求受限：API 额度已用尽或请求过多 ($detail)"
             else -> "HTTP $code: $detail"
         }
-        AiCallKind.CHAT -> when (code) {
+        AiCallKind.DIAGNOSIS -> when (code) {
             401 -> "API Key 未授权或失效 (HTTP 401)"
-            403 -> "接口访问受限 (HTTP 403)"
-            404 -> "未找到对话接口 (HTTP 404，请核对 Base URL)"
-            429 -> "服务额度已用尽或请求过于频繁 (HTTP 429)"
-            else -> "服务响应异常 (HTTP $code)"
+            403 -> "AI 分析接口访问受限 (HTTP 403)"
+            404 -> "未找到 AI 分析接口 (HTTP 404，请核对 Base URL)"
+            429 -> "AI 服务额度已用尽或请求过于频繁 (HTTP 429)"
+            else -> "AI 分析接口返回 HTTP $code"
         }
-        AiCallKind.DIAGNOSIS -> "AI 诊断接口返回 HTTP $code"
     }
 
-    /** 本地兜底时判断"是否配置过自定义后端"（决定了要不要尝试真实请求）。 */
-    fun hasCustomBackend(baseUrl: String): Boolean =
-        baseUrl.isNotBlank() && !baseUrl.contains("api.deepseek.com")
 }
 
 /** AI 调用失败。message 已经是**可直接展示给用户**的文案。 */

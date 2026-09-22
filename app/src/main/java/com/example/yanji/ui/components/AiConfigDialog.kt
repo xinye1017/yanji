@@ -1,14 +1,12 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -76,7 +74,7 @@ fun AiConfigDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Outlined.Psychology,
+                    imageVector = RemixIcons.BrainLine,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -119,7 +117,7 @@ fun AiConfigDialog(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = if (providerDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                    imageVector = if (providerDropdownExpanded) RemixIcons.ArrowUpSLine else RemixIcons.ArrowDownSLine,
                                     contentDescription = "展开服务商下拉列表"
                                 )
                             }
@@ -193,7 +191,7 @@ fun AiConfigDialog(
                                 trailingIcon = if (provider == preset.name) {
                                     {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = RemixIcons.CheckLine,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
@@ -253,7 +251,7 @@ fun AiConfigDialog(
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
-                                imageVector = if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                imageVector = if (showPassword) RemixIcons.EyeLine else RemixIcons.EyeOffLine,
                                 contentDescription = null
                             )
                         }
@@ -293,7 +291,7 @@ fun AiConfigDialog(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = if (modelDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                    imageVector = if (modelDropdownExpanded) RemixIcons.ArrowUpSLine else RemixIcons.ArrowDownSLine,
                                     contentDescription = if (availableModels.isEmpty()) {
                                         "测试连接成功后可展开模型列表"
                                     } else {
@@ -343,7 +341,7 @@ fun AiConfigDialog(
                                 trailingIcon = if (m == model) {
                                     {
                                         Icon(
-                                            imageVector = Icons.Default.Check,
+                                            imageVector = RemixIcons.CheckLine,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
@@ -374,9 +372,9 @@ fun AiConfigDialog(
                         ) {
                             Icon(
                                 imageVector = if (connectionSucceeded == true) {
-                                    Icons.Outlined.CheckCircle
+                                    RemixIcons.CheckboxCircleLine
                                 } else {
-                                    Icons.Outlined.ErrorOutline
+                                    RemixIcons.ErrorWarningLine
                                 },
                                 contentDescription = null,
                                 tint = if (connectionSucceeded == true) YanjiColors.success else MaterialTheme.colorScheme.error,
@@ -406,7 +404,7 @@ fun AiConfigDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Lock,
+                                imageVector = RemixIcons.LockLine,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp)
@@ -487,7 +485,7 @@ fun AiConfigDialog(
                         Text("测试中...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     } else {
                         Icon(
-                            imageVector = Icons.Outlined.NetworkCheck,
+                            imageVector = RemixIcons.NetworkLine,
                             contentDescription = null,
                             modifier = Modifier.size(15.dp)
                         )

@@ -35,7 +35,6 @@ class BackupStore(
     /** 用于解析 `filesDir` 与包版本号；null 表示尚未 attach（导出仍可用，快照会被跳过）。 */
     private val contextProvider: () -> Context?,
     /** 导入事务成功后的镜像校正回调。由组合根（Repository）注入，避免本类反持其内部状态。 */
-    private val onSessionsReplaced: () -> Unit,
     private val onActiveFocusCleared: () -> Unit,
     private val onSubjectsReplaced: (List<Subject>) -> Unit
 ) {
@@ -86,8 +85,6 @@ class BackupStore(
             return@withContext BackupImportResult.Failure("导入失败，已回滚，本机数据未改变（$reason）")
         }
 
-        // 会话列表被整体替换后，"当前会话"指针必须重新校正到一个真实存在的会话上
-        onSessionsReplaced()
         onActiveFocusCleared()
 
         // 学科镜像也要立即刷新：导入是整表替换，若不在这里同步，紧接着的同步查询

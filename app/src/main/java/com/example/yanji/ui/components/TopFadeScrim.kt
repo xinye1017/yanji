@@ -12,10 +12,10 @@ import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiSpacing
 
 /**
- * 顶部渐隐遮罩（全应用唯一定义，AI 聊天页与随笔编辑页共用）。
+ * 顶部渐隐遮罩，供随笔编辑页使用。
  *
  * 采用多段平滑背景渐变（从 0.96 柔和过渡到完全透明），无硬边界、无底部分割线、无灰色块，
- * 让正文与聊天消息在向上滚动时自然羽化消融在背景中。
+ * 让正文在向上滚动时自然羽化消融在背景中。
  */
 @Composable
 fun TopFadeScrim(

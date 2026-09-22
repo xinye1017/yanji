@@ -1,14 +1,11 @@
 package com.example.yanji.ui.stats
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Quiz
-import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -25,6 +22,7 @@ import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
+import com.example.yanji.ui.components.AiConfigDialog
 import com.example.yanji.ui.components.YanjiPageHeader
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiSegmentedControlVariant
@@ -45,6 +43,7 @@ fun StatsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     var selectedDayForSheet by remember { mutableStateOf<DayBarData?>(null) }
+    var showAiConfigDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
@@ -120,7 +119,7 @@ fun StatsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MetricMiniCard(
-                icon = Icons.Default.LocalFireDepartment,
+                icon = RemixIcons.FireFill,
                 iconTint = YanjiColors.warning,
                 iconBg = YanjiColors.warningSoft,
                 title = "连续研读",
@@ -131,7 +130,7 @@ fun StatsScreen(
 
             val longest = if (state.selectedTimeTab == 1) state.monthlySummary.longestSession else state.weeklySummary.longestSession
             MetricMiniCard(
-                icon = Icons.Default.Timelapse,
+                icon = RemixIcons.TimeLine,
                 iconTint = MaterialTheme.colorScheme.primary,
                 iconBg = MaterialTheme.colorScheme.primaryContainer,
                 title = "单次最长",
@@ -142,7 +141,7 @@ fun StatsScreen(
 
             val examCount = if (state.selectedTimeTab == 1) state.monthlySummary.examCount else state.weeklySummary.examCount
             MetricMiniCard(
-                icon = Icons.Default.Quiz,
+                icon = RemixIcons.QuestionnaireLine,
                 iconTint = MaterialTheme.colorScheme.secondary,
                 iconBg = MaterialTheme.colorScheme.secondaryContainer,
                 title = "全真模拟",
@@ -160,7 +159,10 @@ fun StatsScreen(
             report = state.latestReport,
             isAnalyzing = state.isAnalyzing,
             errorMessage = state.analysisError,
-            onGenerate = { viewModel.generateAnalysis() }
+            onGenerate = {
+                if (settings.isAiConfigured) viewModel.generateAnalysis()
+                else showAiConfigDialog = true
+            }
         )
 
         Spacer(modifier = Modifier.height(AppContentInsets.BottomBarPadding))
@@ -173,5 +175,8 @@ fun StatsScreen(
             onDismiss = { selectedDayForSheet = null },
             onNavigateToDailyDetail = onNavigateToDailyDetail
         )
+    }
+    if (showAiConfigDialog) {
+        AiConfigDialog(onDismissRequest = { showAiConfigDialog = false })
     }
 }

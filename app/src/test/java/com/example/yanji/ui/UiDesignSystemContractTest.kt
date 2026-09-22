@@ -1,8 +1,11 @@
 package com.example.yanji.ui
 
 import androidx.compose.ui.unit.dp
-import com.example.yanji.theme.DarkColorScheme
-import com.example.yanji.theme.LightColorScheme
+import com.example.yanji.theme.YanjiDarkBackground
+import com.example.yanji.theme.YanjiDarkSurface
+import com.example.yanji.theme.YanjiDarkSurfaceSoft
+import com.example.yanji.theme.YanjiBackground
+import com.example.yanji.theme.YanjiSurface
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
 import org.junit.Assert.assertEquals
@@ -46,13 +49,13 @@ class UiDesignSystemContractTest {
     fun verifyDarkThemeColorSchemeIsCalmSlateNavy() {
         // Dark theme should NOT be harsh pure black #000000
         val pureBlack = androidx.compose.ui.graphics.Color(0xFF000000)
-        assertNotEquals("Dark background must not be pure #000000", pureBlack, DarkColorScheme.background)
-        assertNotEquals("Dark surface must not be pure #000000", pureBlack, DarkColorScheme.surface)
-        assertNotEquals("Dark surfaceVariant must not be pure #000000", pureBlack, DarkColorScheme.surfaceVariant)
+        assertNotEquals("Dark background must not be pure #000000", pureBlack, YanjiDarkBackground)
+        assertNotEquals("Dark surface must not be pure #000000", pureBlack, YanjiDarkSurface)
+        assertNotEquals("Dark surfaceVariant must not be pure #000000", pureBlack, YanjiDarkSurfaceSoft)
 
         // Light color scheme sanity
-        assertEquals("Light background", com.example.yanji.theme.YanjiBackground, LightColorScheme.background)
-        assertEquals("Light surface", com.example.yanji.theme.YanjiSurface, LightColorScheme.surface)
+        assertNotEquals("Light background differs from dark", YanjiDarkBackground, YanjiBackground)
+        assertNotEquals("Light surface differs from dark", YanjiDarkSurface, YanjiSurface)
     }
 
     @Test

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 /**
  * 统计页不可变 UiState：周/月/全部的选择态、图表模式与全部统计数据都在这里。
@@ -63,7 +64,6 @@ class StatsViewModel(
             trendChartMode = TrendMode.BAR
         )
     )
-    private val latestReport = MutableStateFlow<AiAnalysis?>(null)
     private val isAnalyzing = MutableStateFlow(false)
     private val analysisError = MutableStateFlow<String?>(null)
 
@@ -76,8 +76,8 @@ class StatsViewModel(
             .map { list -> list.filter { it.durationSeconds > 0L } }
     }
 
-    private val reportState = combine(latestReport, isAnalyzing, repo.aiAnalyses, analysisError) { report, analyzing, all, error ->
-        ReportStateTuple(report, analyzing, all, error)
+    private val reportState = combine(isAnalyzing, repo.aiAnalyses, analysisError) { analyzing, all, error ->
+        ReportStateTuple(analyzing, all, error)
     }
 
     private val periodDurationFlow = filterState.map { it.timeTab }.distinctUntilChanged().flatMapLatest { tab ->
@@ -116,7 +116,7 @@ class StatsViewModel(
     ) { weekly, monthly, distribution, metrics, reportTuple ->
         val tab = metrics.tab
         val level = metrics.level
-        val (report, analyzing, allAnalyses, error) = reportTuple
+        val (analyzing, allAnalyses, error) = reportTuple
         StatsUiState(
             selectedTimeTab = tab,
             subjectStatsLevel = level,
@@ -128,7 +128,7 @@ class StatsViewModel(
             periodDurationSeconds = metrics.periodSeconds,
             // Previous calendar week: Monday 00:00 through this Monday 00:00.
             previousWeekSeconds = metrics.previousWeekSeconds,
-            latestReport = report ?: allAnalyses.firstOrNull(),
+            latestReport = allAnalyses.firstOrNull(),
             isAnalyzing = analyzing,
             analysisError = error
         )
@@ -173,7 +173,9 @@ class StatsViewModel(
             isAnalyzing.value = true
             analysisError.value = null
             try {
-                latestReport.value = repo.generateAiAnalysis(7)
+                repo.generateAiAnalysis(7)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 analysisError.value = e.message ?: "生成学情诊断失败"
             } finally {
@@ -203,7 +205,6 @@ class StatsViewModel(
     )
 
     private data class ReportStateTuple(
-        val report: AiAnalysis?,
         val isAnalyzing: Boolean,
         val allAnalyses: List<AiAnalysis>,
         val error: String?

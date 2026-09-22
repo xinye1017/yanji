@@ -501,7 +501,7 @@ fun NoteEditorScreen(
     // 只在下方的协程里读取，不在屏幕体里读取——屏幕体一旦订阅它，每次排版完成都会多跑一遍整屏重组。
     val textLayoutState = remember { mutableStateOf<TextLayoutResult?>(null) }
 
-    // 滚动视口从屏幕顶端开始（与 AI 聊天页的 LazyColumn 一致），所以顶部让位必须算上状态栏高度，
+    // 滚动视口从屏幕顶端开始，所以顶部让位必须算上状态栏高度，
     // 且让位要放进**滚动内容内部**：正文静止时首行仍落在导航按钮下沿，滚动时则能在导航栏区域里
     // 被 TopFadeScrim 渐隐穿过，而不是被硬切在导航栏下方（那看起来就像"导航栏把正文挡住了"）。
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -728,7 +728,7 @@ fun NoteEditorScreen(
               }
           }
         }
-        // 顶部渐隐遮罩：多段平滑背景渐变，与 AI 聊天页共用，正文向上滚动时自然羽化消融在背景中。
+        // 顶部渐隐遮罩：多段平滑背景渐变，正文向上滚动时自然羽化消融在背景中。
         TopFadeScrim(
             modifier = Modifier
                 .align(Alignment.TopCenter)

@@ -1,17 +1,11 @@
 package com.example.yanji.ui.profile
 
-import androidx.compose.foundation.BorderStroke
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -20,12 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
@@ -36,154 +28,63 @@ import com.example.yanji.ui.components.YanjiSegmentedControl
 import java.util.Locale
 
 @Composable
-fun ProfileIdentityCard(settings: UserSettings) {
+fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
     val examYear = settings.targetExamDate
         .substringBefore("-")
         .takeIf { it.length == 4 && it.all(Char::isDigit) }
+    val details = buildList {
+        settings.targetMajor.takeIf(String::isNotBlank)?.let(::add)
+        settings.targetExamDate.takeIf(String::isNotBlank)?.let {
+            add("初试 ${formatExamDateCompact(it)}")
+        }
+    }.joinToString(" · ").ifBlank { "未设置专业与初试日期" }
 
     YanjiCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 128.dp),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         variant = YanjiCardVariant.Grouped
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 20.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AiAvatar(size = 64.dp)
-            Spacer(modifier = Modifier.width(16.dp))
+            AiAvatar(size = 56.dp)
+            Spacer(modifier = Modifier.width(14.dp))
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = examYear?.let { "$it 考研备战" } ?: "考研备战",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = settings.targetSchool.ifBlank { "点击设置目标院校" },
+                    text = settings.targetSchool.ifBlank { "设置目标院校" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (settings.targetSchool.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = settings.targetMajor.ifBlank { "未设置专业" },
+                    text = details,
                     style = MaterialTheme.typography.labelMedium,
                     color = YanjiColors.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun PreparationOverviewCard(
-    settings: UserSettings,
-    daysRemaining: Int?,
-    todayStudySeconds: Long
-) {
-    val safeDays = daysRemaining?.coerceAtLeast(0)
-    val goalSeconds = settings.dailyGoalHours * 3_600f
-    val progress = if (goalSeconds > 0f) (todayStudySeconds / goalSeconds).coerceIn(0f, 1f) else 0f
-
-    YanjiCard(
-        modifier = Modifier.fillMaxWidth(),
-        variant = YanjiCardVariant.Grouped
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (daysRemaining != null && daysRemaining < 0) {
-                            "初试日期已到"
-                        } else {
-                            "距离初试"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = safeDays?.toString() ?: "—",
-                            fontSize = 48.sp,
-                            lineHeight = 54.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        if (safeDays != null) {
-                            Text(
-                                text = "天",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 7.dp)
-                            )
-                        }
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = formatExamDateCompact(settings.targetExamDate),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "初试",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = YanjiColors.textTertiary
-                    )
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.8.dp)
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "今日学习",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${formatStudyDuration(todayStudySeconds)} / ${formatGoalHours(settings.dailyGoalHours)}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(progress)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = RemixIcons.Edit2Line,
+                contentDescription = "编辑备考信息",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -191,8 +92,6 @@ fun PreparationOverviewCard(
 @Composable
 fun ProfileSectionHeader(
     title: String,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -208,22 +107,7 @@ fun ProfileSectionHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.weight(1f))
-        when {
-            actionLabel != null && onAction != null -> {
-                TextButton(
-                    onClick = onAction,
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        text = actionLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            trailingContent != null -> trailingContent()
-        }
+        trailingContent?.invoke()
     }
 }
 
@@ -234,7 +118,7 @@ fun LocalDataStatus() {
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Icon(
-            imageVector = Icons.Outlined.Lock,
+            imageVector = RemixIcons.LockLine,
             contentDescription = null,
             tint = YanjiColors.textTertiary,
             modifier = Modifier.size(14.dp)
@@ -329,7 +213,7 @@ fun ProfileSettingsItem(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
-            imageVector = Icons.Default.ChevronRight,
+            imageVector = RemixIcons.ArrowRightSLine,
             contentDescription = null,
             tint = YanjiColors.tertiaryLabel,
             modifier = Modifier.size(18.dp)
@@ -417,7 +301,7 @@ fun ProfileThemeSelector(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ProfileSettingsIcon(icon = Icons.Outlined.DarkMode)
+            ProfileSettingsIcon(icon = RemixIcons.MoonLine)
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -440,12 +324,6 @@ fun ProfileThemeSelector(
             itemModifier = { mode, _ -> Modifier.testTag(ProfileThemeTags.option(mode)) }
         )
     }
-}
-
-fun formatStudyDuration(seconds: Long): String {
-    val hours = seconds / 3_600
-    val minutes = (seconds % 3_600) / 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
 fun formatGoalHours(hours: Float): String =

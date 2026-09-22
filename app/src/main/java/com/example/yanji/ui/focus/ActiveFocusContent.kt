@@ -1,5 +1,6 @@
 package com.example.yanji.ui.focus
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
@@ -21,10 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -332,7 +329,7 @@ private fun FocusSessionHeader(
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Fullscreen,
+                    imageVector = RemixIcons.FullscreenLine,
                     contentDescription = "全屏沉浸省电",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -504,7 +501,7 @@ private fun FlowFocusBody(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow,
+                        imageVector = RemixIcons.PlayFill,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = timerColor
@@ -675,7 +672,7 @@ private fun FocusCancelDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Pause,
+                        imageVector = RemixIcons.PauseFill,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(26.dp)

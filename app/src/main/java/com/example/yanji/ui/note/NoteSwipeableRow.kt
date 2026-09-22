@@ -1,5 +1,6 @@
 package com.example.yanji.ui.note
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.view.ViewConfiguration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -9,9 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -153,7 +151,7 @@ fun NoteSwipeableRow(
                 width = actionWidth,
                 container = MaterialTheme.colorScheme.primary,
                 tint = MaterialTheme.colorScheme.onPrimary,
-                icon = Icons.Filled.Bookmark,
+                icon = RemixIcons.BookmarkFill,
                 contentDescription = if (entry.isFavorite) "取消收藏" else "收藏",
                 revealProgress = revealProgress,
                 onClick = {
@@ -167,7 +165,7 @@ fun NoteSwipeableRow(
                 width = actionWidth,
                 container = MaterialTheme.colorScheme.error,
                 tint = MaterialTheme.colorScheme.onError,
-                icon = Icons.Default.Delete,
+                icon = RemixIcons.DeleteBinLine,
                 contentDescription = "删除",
                 revealProgress = revealProgress,
                 onClick = {
@@ -311,7 +309,7 @@ private fun NoteRowContent(
         // 加粗实心、主题色，位置在时间与随记内容之间。
         if (entry.isFavorite) {
             Icon(
-                imageVector = Icons.Filled.Bookmark,
+                imageVector = RemixIcons.BookmarkFill,
                 contentDescription = "已收藏",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(13.dp)

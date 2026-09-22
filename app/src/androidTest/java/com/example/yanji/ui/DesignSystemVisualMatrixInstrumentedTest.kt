@@ -26,9 +26,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.regular.ShareNetwork
 import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.ui.components.YanjiCard

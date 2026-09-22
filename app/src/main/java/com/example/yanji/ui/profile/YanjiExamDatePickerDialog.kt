@@ -1,14 +1,12 @@
 package com.example.yanji.ui.profile
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -117,7 +115,7 @@ fun YanjiExamDatePickerDialog(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ChevronLeft,
+                            imageVector = RemixIcons.ArrowLeftSLine,
                             contentDescription = "上个月",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -131,7 +129,7 @@ fun YanjiExamDatePickerDialog(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
+                            imageVector = RemixIcons.ArrowRightSLine,
                             contentDescription = "下个月",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )

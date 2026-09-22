@@ -1,5 +1,6 @@
 package com.example.yanji.ui.note
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.app.Activity
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
@@ -22,11 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
@@ -263,7 +259,7 @@ fun NoteScreen(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = RemixIcons.AddLine,
                     contentDescription = "记今天",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(26.dp)
@@ -429,7 +425,7 @@ private fun NoteSearchBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = RemixIcons.SearchLine,
                     contentDescription = null,
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier
@@ -453,7 +449,7 @@ private fun NoteSearchBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = RemixIcons.SearchLine,
                     contentDescription = null,
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier
@@ -500,7 +496,7 @@ private fun NoteSearchBar(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = RemixIcons.CloseLine,
                             contentDescription = "清除",
                             tint = YanjiColors.textTertiary,
                             modifier = Modifier.size(18.dp)
@@ -523,7 +519,7 @@ private fun NoteNoResultState(query: String) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            imageVector = Icons.Default.Search,
+            imageVector = RemixIcons.SearchLine,
             contentDescription = null,
             tint = YanjiColors.textTertiary,
             modifier = Modifier.size(30.dp)
@@ -632,7 +628,7 @@ private fun NoteEmptyState(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.EditNote,
+                    imageVector = RemixIcons.DraftLine,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(34.dp)
@@ -666,7 +662,7 @@ private fun NoteEmptyState(
                 onClick = onStartRecording,
                 icon = {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = RemixIcons.AddLine,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )

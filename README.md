@@ -74,10 +74,10 @@
 * **清晰统计视图**：自然周趋势（周一至周日 ISO 标准）、月度热力、科目占比饼图、历史累计与最长单次专注记录。
 * **自然周环比洞见**：精确呈现相较上周同时段的学习时长增减比例。
 
-### 5. 卷卷 AI 伴学诊断 (Juanjuan AI Tutor)
+### 5. AI 学情分析与建议 (Study Analysis)
 * **开放协议兼容**：兼容 OpenAI 开放接口规范，无缝直连 DeepSeek、硅基流动、智谱清言 GLM、OpenAI 或本地部署的 Ollama。
-* **情境化学情诊断**：结合用户近期的真实学科时长、模考趋势与日记卡点，输出理智而温暖的学情分析。
-* **工业级通信架构**：密封类型化 `AiFailure`（细分网络不可达、认证鉴权失败、频次超限等），支持无重复幂等重试与独立会话状态隔离。
+* **有依据的阶段分析**：基于已完成的专注、模考与已保存随笔，对比前后等长周期，展示分析依据、趋势限制与未来三天建议；模考或随笔单独有记录也可生成。
+* **明确的失败反馈**：认证、额度、网络、超时和结果格式错误在页面显示；旧版聊天记录仍保留在本机数据库与备份中，升级不删除历史数据。
 
 ### 6. 数据备份与安全导出 (Backup & Restore)
 * **SAF 标准支持**：基于 Storage Access Framework (SAF) 进行全量 JSON 格式导出与校验导入。
@@ -95,7 +95,7 @@
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        UI Layer (Jetpack Compose)                      │
 │   ┌────────────────────────────────────────────────────────────────┐   │
-│   │ FocusScreen │ ExamScreen │ StatsScreen │ ChatScreen │ Note     │   │
+│   │ FocusScreen │ ExamScreen │ StatsScreen │ NoteScreen │ Profile  │   │
 │   └────────────────────────────────────────────────────────────────┘   │
 │          ▲                                                 │           │
 │    Immutable UiState                                 Intent / Action   │
@@ -109,7 +109,7 @@
 │                    Domain & Repository Layer (Pure Kotlin DI)          │
 │   ┌────────────────────────────────────────────────────────────────┐   │
 │   │                AppContainer (DefaultAppContainer)              │   │
-│   │   ├── YanjiRepository (TimerStore / ChatStore / NoteStore)     │   │
+│   │   ├── YanjiRepository (TimerStore / NoteStore / AI 分析)        │   │
 │   │   ├── StudyStatisticsRepository (Room StatsDao Pushdown)       │   │
 │   │   └── ActiveSessionCoordinator (Active State Concurrency Guard)│   │
 │   └────────────────────────────────────────────────────────────────┘   │
@@ -196,8 +196,7 @@ com.example.yanji
 ├── di/                                # 依赖注入核心层 (AppContainer, LocalAppContainer)
 ├── data/                              # 数据模型与仓储实现
 │   ├── ai/                            # AI 通信协议与类型化 AiFailure
-│   ├── chat/                          # 卷卷伴学 Store 与分页加载
-│   ├── db/                            # Room 数据库 v15 (Entities, Daos, YanjiDatabase)
+│   ├── db/                            # Room 数据库与旧版聊天记录保留结构
 │   ├── security/                      # SecretStore 零信任安全存储与 Keystore 加密
 │   ├── timer/                         # 计时引擎 (Coordinator, MonotonicClock, FilePersistence)
 │   └── StudyStatisticsRepository.kt   # 统计聚合下推仓储
@@ -209,7 +208,6 @@ com.example.yanji
 │   ├── exam/                          # 模拟考试模块
 │   ├── focus/                         # 专注心流模块
 │   ├── stats/                         # 统计与学情分析模块
-│   ├── chat/                          # 卷卷伴学对话模块
 │   ├── note/                          # 随笔 / 日记模块
 │   └── profile/                       # 个人资料、目标与备份模块
 └── YanjiApplication.kt                # 应用程序入口，持有 AppContainer
@@ -226,13 +224,12 @@ com.example.yanji
 * `ActiveSessionPersistenceTest`：针对进程崩溃恢复、时钟倒流保护、原子写入及会话互斥进行极端场景测试。
 * `StatsPerformanceTest`：注入 25,000 条真实记录进行基准压测，保障复杂聚合在 10ms 内完成。
 * `SecretStoreTest`：验证 Fail-Closed 机制、AES-GCM 加密强度与一次性迁移逻辑。
-* `ChatStoreTest`：测试类型化异常解析、错误幂等重试与游标分页边界。
+* `StudyDiagnosticsTest`：验证等长周期比较、模考独立数据源与草稿排除。
 * `NavigationRecreationTest`：验证 `rememberSaveable` 下子路由状态的保存与恢复。
 
 ### 2. Android 仪器测试与视觉矩阵 (`androidTest`)
 * `FocusScreenVisualMatrixTest`：在四种主流视口规格（360x800, 390x844, 412x915 及 390x844-1.3x 大字号无障碍）下自动化断言无截断、无重叠。
 * `NoteEditorScreenInstrumentedTest`：日记编辑器全流程交互与落库断言。
-* `AiChatScreenInstrumentedTest`：卷卷伴学问答与交互流断言。
 
 ### 3. CI 与发布矩阵
 * Push / PR：JVM 单测、Lint、Debug、未签名 Release、API 34 完整仪器测试。
@@ -282,7 +279,7 @@ cd yanji
 ## 📄 开源与免责声明
 
 * 本项目为考研备考与 Android 现代架构工程实践作品，供个人学习与交流使用。
-* 项目中涉及的 AI 伴学接口由使用者自行申请并配置 API Key，请严格遵守相关服务商的服务条款与法律法规。
+* 项目中涉及的 AI 分析接口由使用者自行申请并配置 API Key，请严格遵守相关服务商的服务条款与法律法规。
 
 <p align="center">
   <sub>Made with care for every dream that endures. 愿每一位默默努力的考研人，都能留下属于自己的研迹、见天地。</sub>

@@ -29,6 +29,7 @@ import com.example.yanji.ui.components.YanjiCardVariant
 fun ExamAiDiagnosisSection(
     analysis: AiAnalysis?,
     isAnalyzing: Boolean,
+    errorMessage: String? = null,
     onGenerate: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -42,7 +43,7 @@ fun ExamAiDiagnosisSection(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "AI 模考深度诊断报告",
+                            text = "AI 学情与模考分析",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -51,7 +52,7 @@ fun ExamAiDiagnosisSection(
                             text = if (analysis != null) {
                                 "${analysis.provider} · ${analysis.model} · ${analysis.periodStart} ~ ${analysis.periodEnd}"
                             } else {
-                                "基于你真实的专注、模考与日记记录生成"
+                                "基于已完成的专注、模考与已保存随笔"
                             },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -67,7 +68,7 @@ fun ExamAiDiagnosisSection(
                         if (isAnalyzing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(14.dp),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -84,6 +85,16 @@ fun ExamAiDiagnosisSection(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 if (analysis == null) {
                     Box(
                         modifier = Modifier
@@ -97,7 +108,7 @@ fun ExamAiDiagnosisSection(
                             text = if (isAnalyzing) {
                                 "正在生成诊断报告…"
                             } else {
-                                "尚未生成诊断报告。\n点击右上角「生成诊断」，${currentMascotTheme().name}会只依据你已有的真实记录给出结论；记录不足时会直接说明数据缺口，不会编造分数或趋势。"
+                                "尚未生成分析报告。保存专注、模考或随笔记录后，点击「生成诊断」查看分析与建议。"
                             },
                             fontSize = 12.sp,
                             color = YanjiColors.textTertiary,
@@ -122,6 +133,16 @@ fun ExamAiDiagnosisSection(
                             lineHeight = 20.sp
                         )
                     }
+                }
+
+                if (analysis.requestSnapshot.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "分析依据 · ${analysis.requestSnapshot}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
                 }
 
                 if (analysis.strengths.isNotEmpty()) {

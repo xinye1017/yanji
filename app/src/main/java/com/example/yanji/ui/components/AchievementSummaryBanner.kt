@@ -1,11 +1,10 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
@@ -19,9 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.fill.Trophy
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.achievement.AchievementsViewModel
@@ -61,7 +57,7 @@ fun AchievementSummaryBanner(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = PhosphorIcons.Fill.Trophy,
+                    imageVector = RemixIcons.TrophyFill,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(21.dp)
@@ -112,7 +108,7 @@ fun AchievementSummaryBanner(
             Spacer(modifier = Modifier.width(8.dp))
 
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = RemixIcons.ArrowRightSLine,
                 contentDescription = "查看全部成就",
                 tint = YanjiColors.textTertiary,
                 modifier = Modifier.size(18.dp)

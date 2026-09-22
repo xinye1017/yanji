@@ -1,5 +1,6 @@
 package com.example.yanji.ui.exam
 
+import com.example.yanji.ui.icons.RemixIcons
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -19,9 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.regular.Trash
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
@@ -235,7 +233,7 @@ fun ExamDetailScreen(
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
                 Icon(
-                    imageVector = PhosphorIcons.Regular.Trash,
+                    imageVector = RemixIcons.DeleteBinLine,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )

@@ -32,27 +32,25 @@ class NavigationRecreationTest {
             YanjiSubScreen.DailyStudyDetail(date = "2026-09-13"),
             YanjiSubScreen.SubjectStudyDetail(subjectId = "math_advanced"),
             YanjiSubScreen.NoteEditor(noteId = "j-123", date = "2026-09-13"),
-            YanjiSubScreen.AiChat,
             YanjiSubScreen.Achievements
         )
 
         // 模拟 onSaveInstanceState：通过 Saver 序列化
         val savedRepresentation = YanjiSubScreenStackSaver.saveValue(originalStack)
         org.junit.Assert.assertNotNull(savedRepresentation)
-        assertEquals(7, savedRepresentation!!.size)
+        assertEquals(6, savedRepresentation!!.size)
 
         // 模拟进程重建：通过 Saver 还原
         val restoredStack = YanjiSubScreenStackSaver.restore(savedRepresentation)
         org.junit.Assert.assertNotNull(restoredStack)
-        assertEquals(7, restoredStack!!.size)
+        assertEquals(6, restoredStack!!.size)
 
         assertEquals(YanjiSubScreen.ExamHistory, restoredStack[0])
         assertEquals(YanjiSubScreen.ExamDetail("exam-2026-09-13"), restoredStack[1])
         assertEquals(YanjiSubScreen.DailyStudyDetail("2026-09-13"), restoredStack[2])
         assertEquals(YanjiSubScreen.SubjectStudyDetail("math_advanced"), restoredStack[3])
         assertEquals(YanjiSubScreen.NoteEditor(noteId = "j-123", date = "2026-09-13"), restoredStack[4])
-        assertEquals(YanjiSubScreen.AiChat, restoredStack[5])
-        assertEquals(YanjiSubScreen.Achievements, restoredStack[6])
+        assertEquals(YanjiSubScreen.Achievements, restoredStack[5])
     }
 
     @Test
@@ -71,6 +69,7 @@ class NavigationRecreationTest {
     fun testCorruptedEntriesAreDroppedGracefullyWithoutCrashing() {
         val corruptedSavedList = arrayListOf(
             """{"type":"com.example.yanji.YanjiSubScreen.Achievements"}""",
+            """{"type":"com.example.yanji.YanjiSubScreen.AiChat"}""",
             """{corrupted-json-content}""",
             """{"type":"com.example.yanji.YanjiSubScreen.ExamHistory"}"""
         )

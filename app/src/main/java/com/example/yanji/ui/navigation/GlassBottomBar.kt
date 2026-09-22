@@ -34,8 +34,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -46,7 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
-import com.example.yanji.theme.YanjiDarkDockPanel
 import com.example.yanji.theme.YanjiLiquidGlass
 import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.GlassSurface
@@ -65,13 +64,8 @@ private val HorizontalMargin = 44.dp
 private val DockBottomGap = 8.dp
 
 /**
- * 响应式浮动液态玻璃导航栏（GlassBottomBar）：
- * 1. 同心圆几何美学：两端 Tab 的中心点严格对齐胶囊半圆端盖曲率中心（x = DockHeight / 2），使得滑块在最边缘选中时与导航栏端盖呈现完美的 8.dp 等宽同心圆环，杜绝边框挤压失调；
- * 2. 黄金宽度比例：左右边距优化为 44.dp，使得在常见手机屏幕上导航栏宽度达到舒适的 ~300dp..320dp，居中悬浮呼吸感更强；
- * 3. 真实液态玻璃模糊：通过 [GlassSurface] 与 [HazeState] 挂接底层实时内容，营造通透生动的亚克力/液态玻璃模糊感；
- * 4. 暗色模式高对比度：暗色下滑块底色采用轻量柔和的微光蓝容器（18%~10%），选中图标采用高亮天蓝，层级分明通透清晰；
- * 5. 硬件级柔和阴影：亮色模式柔和接地、暗色模式微泛幽蓝流光，悬浮自然；
- * 6. 灵动水滴滑块：指示器随切换弹性拉伸，提供细腻微反光边缘与平滑阻尼动效。
+ * 浮动玻璃导航栏：使用 Haze 模糊与原有的轻边缘，表面色与内容卡片保持区别。
+ * 指示器动画只在图层阶段读取位置，避免逐帧重新测量导航栏。
  */
 @Composable
 fun GlassBottomBar(
@@ -88,10 +82,11 @@ fun GlassBottomBar(
     val reduceMotion = com.example.yanji.theme.YanjiMotion.isReduceMotionEnabled()
     val isDark = yanjiIsDarkTheme()
     val glassTokens = YanjiLiquidGlass
+    val colors = MaterialTheme.colorScheme
     val dockSurfaceColor = if (isDark) {
-        YanjiDarkDockPanel
+        lerp(colors.surfaceContainerHigh, colors.primary, 0.07f).copy(alpha = 0.94f)
     } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+        lerp(colors.surfaceVariant, colors.primary, 0.12f).copy(alpha = 0.93f)
     }
 
     // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
@@ -164,7 +159,6 @@ fun GlassBottomBar(
             MaterialTheme.colorScheme.primary
         }
 
-        // 2. 玻璃微光边框：暗色模式彻底移除高反差白边，亮色模式保留通透反光
         val glassBorder: BorderStroke? = if (isDark) {
             null
         } else {
@@ -179,7 +173,7 @@ fun GlassBottomBar(
             )
         }
 
-        // 3. 滑块指示圆框底色：轻盈通透的柔和微光蓝容器
+        // 延续原有选中态圆片。
         val dropletBrush = if (isDark) {
             Brush.verticalGradient(
                 listOf(

@@ -1,5 +1,6 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,9 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Regular
-import com.adamglin.phosphoricons.regular.CaretRight
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
@@ -154,7 +152,7 @@ fun YanjiSettingsRow(
 
             if (showChevron && onClick != null) {
                 Icon(
-                    imageVector = PhosphorIcons.Regular.CaretRight,
+                    imageVector = RemixIcons.ArrowRightSLine,
                     contentDescription = null,
                     tint = YanjiColors.textTertiary,
                     modifier = Modifier.size(16.dp)

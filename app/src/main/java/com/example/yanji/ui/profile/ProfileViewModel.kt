@@ -6,7 +6,6 @@ import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.backup.BackupImportResult
-import com.example.yanji.data.study.StudyStats
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -16,7 +15,6 @@ import kotlinx.coroutines.launch
 /** 我的页不可变 UiState。 */
 data class ProfileUiState(
     val settings: UserSettings,
-    val todayStudySeconds: Long,
     val subjects: List<Subject> = emptyList()
 )
 
@@ -28,14 +26,9 @@ class ProfileViewModel(
     private val repo: YanjiRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<ProfileUiState> = combine(
-        repo.settings,
-        repo.observeTodayStudyDurationSeconds(),
-        repo.subjects
-    ) { settings, todaySeconds, subjects ->
+    val uiState: StateFlow<ProfileUiState> = combine(repo.settings, repo.subjects) { settings, subjects ->
         ProfileUiState(
             settings = settings,
-            todayStudySeconds = todaySeconds,
             subjects = subjects
         )
     }
@@ -44,7 +37,6 @@ class ProfileViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = ProfileUiState(
                 settings = repo.settings.value,
-                todayStudySeconds = repo.getTodayFocusDurationSeconds(),
                 subjects = repo.subjects.value
             )
         )

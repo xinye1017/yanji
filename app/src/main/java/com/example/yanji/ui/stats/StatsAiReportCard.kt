@@ -1,5 +1,6 @@
 package com.example.yanji.ui.stats
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,8 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.text.style.TextAlign
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
@@ -124,7 +123,7 @@ fun StatsAiReportCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "基于真实学习与日记数据深度分析",
+                            text = "依据本次学习记录与已保存随笔生成",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -170,7 +169,7 @@ fun StatsAiReportCard(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Info,
+                            imageVector = RemixIcons.InformationLine,
                             contentDescription = null,
                             tint = YanjiColors.warning,
                             modifier = Modifier.size(18.dp)
@@ -194,7 +193,7 @@ fun StatsAiReportCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "尚未生成学情诊断。\n配置 AI 并在本周期产生专注记录后，点击右上角「生成诊断」，${currentMascotTheme().name}将只依据你的真实记录进行深度分析，绝不伪造虚假数据。",
+                        text = "尚未生成学情诊断。\n保存专注、模考或随笔记录后，点击「生成诊断」查看分析与建议。首次使用会先打开 AI 设置。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -227,6 +226,15 @@ fun StatsAiReportCard(
                             color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp
                         )
+                        if (report.requestSnapshot.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "分析依据 · ${report.requestSnapshot}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 17.sp
+                            )
+                        }
 
                         if (report.strengths.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
@@ -249,7 +257,7 @@ fun StatsAiReportCard(
                         if (report.weaknesses.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "薄弱卡点",
+                                text = "待改进与数据缺口",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = YanjiColors.warning
@@ -262,6 +270,22 @@ fun StatsAiReportCard(
                                     lineHeight = 18.sp
                                 )
                             }
+                        }
+
+                        if (report.trendAnalysis.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "趋势判断",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = report.trendAnalysis,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 18.sp
+                            )
                         }
 
                         if (report.suggestions.isNotEmpty()) {

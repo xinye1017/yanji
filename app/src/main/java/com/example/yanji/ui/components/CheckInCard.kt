@@ -1,5 +1,6 @@
 package com.example.yanji.ui.components
 
+import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,8 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
@@ -23,10 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.adamglin.PhosphorIcons
-import com.adamglin.phosphoricons.Fill
-import com.adamglin.phosphoricons.fill.Fire
-import com.adamglin.phosphoricons.regular.Sparkle
 import com.example.yanji.data.CheckIn
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
@@ -59,7 +54,7 @@ fun CheckInCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = PhosphorIcons.Fill.Fire,
+                            imageVector = RemixIcons.FireFill,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
@@ -99,7 +94,7 @@ fun CheckInCard(
                     ) {
                         if (state.isCheckedInToday) {
                             Icon(
-                                imageVector = Icons.Default.Check,
+                                imageVector = RemixIcons.CheckLine,
                                 contentDescription = null,
                                 tint = YanjiColors.success,
                                 modifier = Modifier.size(12.dp)
@@ -167,7 +162,7 @@ fun CheckInCard(
                         ) {
                             if (dayStatus.isCheckedIn) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = RemixIcons.CheckLine,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
@@ -205,7 +200,7 @@ fun CheckInCard(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = RemixIcons.CheckLine,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
