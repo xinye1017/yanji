@@ -220,7 +220,7 @@ fun ProfileScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 ProfileSettingsItem(
-                    icon = RemixIcons.TimerLine,
+                    icon = RemixIcons.TimeLine,
                     title = "沉浸等待时长",
                     subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
                     onClick = { showTimeoutDialog = true }

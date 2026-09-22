@@ -397,6 +397,7 @@ private fun NoteSearchBar(
         showKeyboard()
     }
 
+    val isDark = yanjiIsDarkTheme()
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -407,7 +408,17 @@ private fun NoteSearchBar(
                 indication = null
             ) { focusSearch() },
         shape = RoundedCornerShape(YanjiRadius.Pill),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            width = if (isFocused) 1.dp else 0.8.dp,
+            color = if (isFocused) {
+                MaterialTheme.colorScheme.primary
+            } else if (isDark) {
+                MaterialTheme.colorScheme.outline
+            } else {
+                YanjiColors.opaqueSeparator
+            }
+        )
     ) {
         Box(
             modifier = Modifier

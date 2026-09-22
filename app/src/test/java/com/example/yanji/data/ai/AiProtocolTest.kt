@@ -120,6 +120,6 @@ class AiProtocolTest {
         )
         assertTrue(AiProtocol.describeHttpError(AiCallKind.DIAGNOSIS, 429, "").contains("额度已用尽"))
         // DIAGNOSIS：正文不进用户可见文案
-        assertEquals("AI 诊断接口返回 HTTP 500", AiProtocol.describeHttpError(AiCallKind.DIAGNOSIS, 500, "whatever"))
+        assertEquals("AI 分析接口返回 HTTP 500", AiProtocol.describeHttpError(AiCallKind.DIAGNOSIS, 500, "whatever"))
     }
 }

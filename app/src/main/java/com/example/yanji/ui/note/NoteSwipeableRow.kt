@@ -381,7 +381,7 @@ fun NoteRowDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier,
         thickness = 0.8.dp,
-        color = YanjiColors.separator
+        color = YanjiColors.quaternaryLabel.copy(alpha = 0.5f)
     )
 }
 

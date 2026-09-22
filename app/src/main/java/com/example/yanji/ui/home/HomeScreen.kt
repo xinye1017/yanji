@@ -277,7 +277,7 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             state.todaySummary.subjectDistribution.forEach { (subName, secs) ->
-                                // 学科颜色来自持久化 colorHex，不随伙伴主题或列表顺序改变。
+                                // 学科显示色由当前伙伴主题专属色阶体系与稳定槽位解析
                                 SubjectTimeChip(
                                     name = subName,
                                     time = DurationFormatter.formatHoursMinutes(secs),

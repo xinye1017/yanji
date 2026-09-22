@@ -47,14 +47,17 @@ fun SubjectDistributionCard(
 ) {
     val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
     val isDark = yanjiIsDarkTheme()
+    val mascotTheme = currentMascotTheme()
 
-    // 学科色直接来自持久化的 Subject.colorHex；换伙伴主题、增删或排序学科都不会改变颜色身份。
-    val subjectColors = remember(subjectDistribution, isDark) {
-        subjectDistribution.map { item -> resolveSubjectColor(item.subjectColor, isDark) }
+    // 学科色由当前伙伴主题专属色阶体系与稳定槽位解析，保证与全站视觉严格协调
+    val subjectColors = remember(subjectDistribution, isDark, mascotTheme) {
+        subjectDistribution.map { item -> yanjiSubjectColor(item.subjectId, mascotTheme, isDark) }
     }
 
     /** 取第 index 个学科的稳定显示色。 */
-    fun colorFor(index: Int): Color = subjectColors[index % subjectColors.size]
+    fun colorFor(index: Int): Color =
+        if (subjectColors.isEmpty()) yanjiSubjectColor("other", mascotTheme, isDark)
+        else subjectColors[index % subjectColors.size]
 
     YanjiCard(
         modifier = Modifier.fillMaxWidth(),
@@ -373,7 +376,7 @@ private fun SubjectDonutChart(
         contentAlignment = Alignment.Center
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant
-        // 颜色由调用方按 Subject.colorHex 传入；缺失时回落到“其他”的稳定学科色。
+        // 颜色由调用方按当前主题解析；缺失时回落到“其他”的主题学科色。
         val seriesColors = mutableMapOf<String, Color>()
         subjectDist.keys.forEach { name -> seriesColors[name] = subjectColors[name] ?: fallbackColor }
         Canvas(modifier = Modifier.size(150.dp)) {

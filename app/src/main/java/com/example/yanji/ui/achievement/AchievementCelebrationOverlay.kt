@@ -37,6 +37,7 @@ import com.example.yanji.theme.AchievementLegendary
 import com.example.yanji.theme.AchievementMythic
 import com.example.yanji.theme.AchievementRare
 import com.example.yanji.theme.AchievementUncommon
+import com.example.yanji.theme.YanjiColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
@@ -259,6 +260,7 @@ private fun AchievementBadgeAnimation(
     val checkmarkProgress = remember { Animatable(0f) }
     val diffusionProgress = remember { Animatable(0f) }
     val badgeScale = remember { Animatable(0.85f) }
+    val checkColor = YanjiColors.success
 
     LaunchedEffect(achievement.id) {
         // 重置所有动效状态
@@ -454,7 +456,7 @@ private fun AchievementBadgeAnimation(
 
             drawPath(
                 path = checkPath,
-                color = accentColor,
+                color = checkColor,
                 style = Stroke(
                     width = 3.6.dp.toPx(),
                     cap = StrokeCap.Round,

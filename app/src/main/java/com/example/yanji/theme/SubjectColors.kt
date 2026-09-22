@@ -15,10 +15,84 @@ private val SubjectLightBackground = Color(0xFFFFFFFF)
 private val SubjectDarkBackground = YanjiDarkSurface
 
 /**
- * 学科颜色只来源于 Subject.colorHex，与伙伴主题、列表位置和学科名称完全解耦。
+ * 根据学科 ID 或其分类推导稳定的色阶槽位（0..4）。
  *
- * Light/Dark 模式保持同一 hue identity；只有当原色在当前背景上的对比度不足时，
- * 才向黑/白轻微调整明度，避免浅色卡片或深色卡片上的低对比度。
+ * 核心原则：
+ * - 标准 5 大类严格对应固定槽位（数学 -> 0, 专业课 -> 1, 英语 -> 2, 政治 -> 3, 其他 -> 4）；
+ * - 子学科（如高等数学、数据结构）直接继承所属大类的槽位；
+ * - 自定义科目按其分类在目录中的顺序循环分配（catIndex % 5）；
+ * - 未知或临时科目按 ID 哈希稳定映射。
+ *
+ * 无论列表如何重排、按时长降序或过滤，同一学科计算出的槽位永不改变。
+ */
+fun subjectColorSlot(subjectId: String): Int {
+    val cleanId = subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX)
+    val categoryId = SubjectCatalog.categoryIdOf(cleanId)
+
+    val standardSlot = when (categoryId) {
+        "math" -> 0
+        "major" -> 1
+        "english" -> 2
+        "politics" -> 3
+        "other" -> 4
+        else -> null
+    }
+    if (standardSlot != null) return standardSlot
+
+    val categories = SubjectCatalog.categories
+    val catIndex = categories.indexOfFirst { it.id == categoryId }
+    if (catIndex >= 0) {
+        return catIndex % 5
+    }
+
+    return (cleanId.hashCode() and 0x7FFFFFFF) % 5
+}
+
+/**
+ * 非 Composable 取色方法：按学科槽位从对应伙伴主题中获取专属色阶。
+ */
+fun yanjiSubjectColor(
+    subjectId: String,
+    mascotTheme: MascotThemeSpec,
+    isDark: Boolean
+): Color {
+    val slot = subjectColorSlot(subjectId)
+    return mascotTheme.subjectPalette.colorAt(slot, isDark)
+}
+
+/**
+ * Composable 语法糖：读取当前 [currentMascotTheme] 与 [LocalYanjiDarkTheme] 取色。
+ */
+@Composable
+@ReadOnlyComposable
+fun yanjiSubjectColor(subjectId: String): Color {
+    return yanjiSubjectColor(
+        subjectId = subjectId,
+        mascotTheme = currentMascotTheme(),
+        isDark = LocalYanjiDarkTheme.current
+    )
+}
+
+/**
+ * 按学科展示名称取色。
+ */
+@Composable
+@ReadOnlyComposable
+fun yanjiSubjectColorOf(subjectName: String): Color {
+    val subjectId = SubjectCatalog.idForDisplayName(subjectName)
+    return if (subjectId != null) {
+        yanjiSubjectColor(subjectId)
+    } else {
+        val mascotTheme = currentMascotTheme()
+        val isDark = LocalYanjiDarkTheme.current
+        val slot = (subjectName.hashCode() and 0x7FFFFFFF) % 5
+        mascotTheme.subjectPalette.colorAt(slot, isDark)
+    }
+}
+
+/**
+ * 纯颜色十六进制解析与对比度保底校正（无破坏性 RGB 混色）。
+ * 用于自定义十六进制输入或测试场景。
  */
 fun resolveSubjectColor(colorHex: String, isDark: Boolean): Color {
     val base = parseSubjectColor(colorHex)
@@ -31,27 +105,6 @@ fun resolveSubjectColor(colorHex: String, isDark: Boolean): Color {
         if (contrastRatio(candidate, background) >= MIN_SUBJECT_CONTRAST) return candidate
     }
     return mix(base, target, 0.48f)
-}
-
-@Composable
-@ReadOnlyComposable
-fun yanjiSubjectColor(subjectId: String): Color {
-    val cleanId = subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX)
-    val colorHex = SubjectCatalog.find(cleanId)?.colorHex
-        ?: SubjectCatalog.categoryOf(subjectId)?.colorHex
-        ?: DEFAULT_SUBJECT_COLOR_HEX
-    return resolveSubjectColor(colorHex, LocalYanjiDarkTheme.current)
-}
-
-@Composable
-@ReadOnlyComposable
-fun yanjiSubjectColorOf(subjectName: String): Color {
-    val subjectId = SubjectCatalog.idForDisplayName(subjectName)
-    return if (subjectId != null) {
-        yanjiSubjectColor(subjectId)
-    } else {
-        resolveSubjectColor(DEFAULT_SUBJECT_COLOR_HEX, LocalYanjiDarkTheme.current)
-    }
 }
 
 private fun parseSubjectColor(colorHex: String): Color {

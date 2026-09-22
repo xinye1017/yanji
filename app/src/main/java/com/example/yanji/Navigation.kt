@@ -54,10 +54,10 @@ enum class YanjiTab(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    HOME("首页", RemixIcons.Home5Fill, RemixIcons.Home5Line),
-    FOCUS("专注", RemixIcons.TimerFill, RemixIcons.TimerLine),
+    HOME("首页", RemixIcons.HomeFill, RemixIcons.HomeLine),
+    FOCUS("专注", RemixIcons.TimeFill, RemixIcons.TimeLine),
     NOTE("随笔", RemixIcons.BookletFill, RemixIcons.BookletLine),
-    STATS("统计", RemixIcons.BarChartBoxFill, RemixIcons.BarChartBoxLine),
+    STATS("统计", RemixIcons.PieChartFill, RemixIcons.PieChartLine),
     PROFILE("我的", RemixIcons.User3Fill, RemixIcons.User3Line)
 }
 

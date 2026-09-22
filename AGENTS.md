@@ -58,6 +58,24 @@
 - **排查 2：手机是否息屏或切出了设置界面？**
   国产系统（OPPO ColorOS 等）为省电，息屏或退到桌面后可能将无线调试休眠。请提醒用户解锁手机并保持在「无线调试」设置页面。
 
+### 5. 【编译提速】Gradle 极速构建与避坑原则（30 秒 vs 2 分钟）
+
+- **痛点现象**：部分 Agent 或开发者构建耗时常常超过 2~3 分钟，甚至出现进程假死、超时无响应。
+- **根因与避坑铁律**：
+  1. **精准指定 Task，严禁盲目执行 `build`**：
+     - 日常推送只需生成 Debug 安装包，执行 `assembleDebug`。
+     - **严禁执行 `gradlew build`**：`build` 任务会触发完整的单元测试套件、全仓库 Lint 扫描、各构建变体校验，耗时漫长且容易因非阻塞性 warning 挂起或中断。
+  2. **严禁日常构建盲目 `clean`**：
+     - **切勿习惯性添加 `clean`**（如 `gradlew clean assembleDebug`）。
+     - `clean` 会暴力清空 Gradle Configuration Cache、Kotlin/KSP 增量缓存及 DEX 产物，导致原本 30 秒的增量编译（如 31/38 任务 `UP-TO-DATE`）变成 2~3 分钟的 100% 全量冷编译。
+     - 仅当修改了 Room Entity 实体需重新生成 Schema 或出现无法自愈的注解生成错乱时，才针对性 clean。
+  3. **利用常驻 Gradle Daemon 与 Configuration Cache**：
+     - 保留常驻 Gradle Daemon，**严禁添加 `--no-daemon`**。
+     - 本仓库已启用 Configuration Cache，预热后无需重复解析 Gradle 依赖配置。
+  4. **Windows 平台脚本后缀与执行方式**：
+     - Windows 无论在 PowerShell 还是 Git Bash 下，均必须显式调用 `gradlew.bat`（PowerShell 下 `.\gradlew.bat assembleDebug`，Git Bash 下 `./gradlew.bat assembleDebug`）。
+     - 若省略 `.bat` 直接调用无后缀的 `gradlew`，在 Windows 非 POSIX 环境下易被错误关联，甚至出现管道挂起假死。
+
 ---
 
 ## 三、Active Constraints（红线清单 · 一页速查）
@@ -147,11 +165,16 @@ Level 6  历史阶段性留档（仅供回溯，禁止作为改动依据）—�
 
 ### 第一步：编译构建 APK
 
-在项目根目录下执行（Git Bash 也请使用 `./gradlew.bat`；若遇 `ClassNotFoundException: GradleWrapperMain` 则改用 `.bat`）：
+**原则**：严禁 `clean`，严禁 `build`；只执行 `assembleDebug` 利用增量与配置缓存，30 秒内完成构建（详见 §二.5）。
 
-```bash
-./gradlew.bat assembleDebug
-```
+- **Bash (Git Bash，本仓库 Agent 默认)**：
+  ```bash
+  ./gradlew.bat assembleDebug
+  ```
+- **PowerShell (Windows 本机手动执行)**：
+  ```powershell
+  .\gradlew.bat assembleDebug
+  ```
 
 ### 第二步：一键真机推送安装与启动
 

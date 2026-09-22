@@ -519,7 +519,7 @@ private fun QuietCategoryStep(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = RemixIcons.TimerLine,
+                            imageVector = RemixIcons.TimeLine,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
