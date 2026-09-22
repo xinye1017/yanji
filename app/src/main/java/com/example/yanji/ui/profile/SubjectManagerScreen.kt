@@ -110,7 +110,7 @@ private fun SubjectManagerContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(YanjiColors.groupedBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         YanjiDetailTopBar(
             title = "学科管理",

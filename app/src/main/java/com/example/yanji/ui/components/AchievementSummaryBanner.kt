@@ -47,7 +47,7 @@ fun AchievementSummaryBanner(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = null
+        border = YanjiCardBorder.stroke()
     ) {
         Row(
             modifier = Modifier

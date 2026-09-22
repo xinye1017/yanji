@@ -8,7 +8,8 @@ val YanjiPrimaryStrong = Color(0xFF2453BF)
 val YanjiPrimarySoft = Color(0xFFEAF1FF)
 val YanjiOnPrimary = Color(0xFFFFFFFF)
 
-val YanjiBackground = Color(0xFFF7F9FC)
+/** App 页面背景（浅色）。刻意不是纯白，使白色卡片无需阴影/描边即可分辨。 */
+val YanjiBackground = Color(0xFFF2F4F7)
 val YanjiSurface = Color(0xFFFFFFFF)
 val YanjiSurfaceSoft = Color(0xFFF1F5FB)
 val YanjiSurfaceBlue = Color(0xFFF4F7FF)
@@ -18,7 +19,6 @@ val YanjiTextSecondary = Color(0xFF667085)
 val YanjiTextTertiary = Color(0xFF98A2B3)
 val YanjiQuaternaryLabel = Color(0xFFC4CBD6)
 
-val YanjiGroupedBackground = Color(0xFFF2F4F7)
 val YanjiElevatedSurface = Color(0xFFFFFFFF)
 
 val YanjiBorder = Color(0xFFE4EAF2)
@@ -94,9 +94,6 @@ val SubjectOtherSoft = YanjiSurfaceSoft   // #F1F5FB
 // --- 表面层级（Elevation by Surface Lightness）---
 /** 最底层：App 背景。深邃冷夜蓝，刻意避开纯黑。 */
 val YanjiDarkBackground = Color(0xFF0D111A)
-
-/** 沉浸式分组底色：比背景更深一档，用于 Grouped Table / List 背景。 */
-val YanjiDarkGroupedBackground = Color(0xFF080C14)
 
 /** 第一层：内容卡片。仅比背景亮约 5%，形成温和可见的层次。 */
 val YanjiDarkSurface = Color(0xFF151B28)

@@ -42,7 +42,8 @@ fun CheckInCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = YanjiCardBorder.stroke()
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // Header: Title & Streak Badge

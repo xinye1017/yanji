@@ -30,7 +30,6 @@ data class YanjiExtraColors(
     val lavenderDeep: Color,
     val surfaceBlue: Color,
     // --- iOS-inspired Semantic Roles ---
-    val groupedBackground: Color = YanjiGroupedBackground,
     val elevatedSurface: Color = YanjiElevatedSurface,
     val primaryLabel: Color = YanjiTextPrimary,
     val secondaryLabel: Color = YanjiTextSecondary,
@@ -50,7 +49,6 @@ internal val LightExtraColors = YanjiExtraColors(
     warningSoft = YanjiWarningSoft,
     lavenderDeep = YanjiLavenderDeep,
     surfaceBlue = YanjiSurfaceBlue,
-    groupedBackground = YanjiGroupedBackground,
     elevatedSurface = YanjiElevatedSurface,
     primaryLabel = YanjiTextPrimary,
     secondaryLabel = YanjiTextSecondary,
@@ -70,7 +68,6 @@ internal val DarkExtraColors = YanjiExtraColors(
     warningSoft = YanjiDarkWarningSoft,
     lavenderDeep = YanjiDarkLavenderDeep,
     surfaceBlue = YanjiDarkSurfaceBlue,
-    groupedBackground = YanjiDarkGroupedBackground,
     elevatedSurface = YanjiDarkSurfaceFloating,
     primaryLabel = YanjiDarkTextPrimary,
     secondaryLabel = YanjiDarkTextSecondary,
@@ -86,7 +83,7 @@ internal val DarkExtraColors = YanjiExtraColors(
 internal val LocalYanjiExtraColors = staticCompositionLocalOf { LightExtraColors }
 
 /**
- * 取用扩展调色板。用法：`YanjiColors.warning`、`YanjiColors.groupedBackground`。
+ * 取用扩展调色板。用法：`YanjiColors.warning`、`YanjiColors.elevatedSurface`。
  *
  * 刻意做成 `object` + `@Composable get()` 而不是 `CompositionLocal.current.xxx`，
  * 是为了让调用点保持 `YanjiColors.xxx` 这样短且可读的形态。
@@ -108,9 +105,6 @@ object YanjiColors {
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.surfaceBlue
 
     // --- iOS-inspired Semantic Roles ---
-    val groupedBackground: Color
-        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.groupedBackground
-
     val elevatedSurface: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.elevatedSurface
 

@@ -14,7 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.dp
+import com.example.yanji.theme.YanjiCardBorder
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.rememberPressScale
 
@@ -51,7 +51,7 @@ fun YanjiCard(
         contentColor = MaterialTheme.colorScheme.onSurface
     ),
     elevation: CardElevation = CardDefaults.cardElevation(),
-    border: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    border: BorderStroke? = YanjiCardBorder.stroke(),
     content: @Composable ColumnScope.() -> Unit
 ) {
     MaterialCard(
@@ -76,7 +76,7 @@ fun YanjiCard(
         contentColor = MaterialTheme.colorScheme.onSurface
     ),
     elevation: CardElevation = CardDefaults.cardElevation(),
-    border: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    border: BorderStroke? = YanjiCardBorder.stroke(),
     interactionSource: MutableInteractionSource? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {

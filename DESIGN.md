@@ -7,7 +7,7 @@ colors:
   primary-strong: "#2453BF"
   primary-soft: "#EAF1FF"
   on-primary: "#FFFFFF"
-  background: "#F7F9FC"
+  background: "#F2F4F7"
   surface: "#FFFFFF"
   surface-soft: "#F1F5FB"
   surface-blue: "#F4F7FF"
@@ -303,7 +303,7 @@ Use for:
 
 ### Background and surfaces
 
-**App Background — `#F7F9FC`**
+**App Background — `#F2F4F7`**
 
 This is the default page background. It is intentionally not pure white so white cards remain visible without heavy shadow or border.
 
@@ -606,7 +606,7 @@ Do not use dark gray outlines around cards, buttons or text fields.
 Preferred hierarchy:
 
 ```text
-#F7F9FC app background
+#F2F4F7 app background
     ↓
 #FFFFFF primary surface
     ↓

@@ -52,6 +52,7 @@ internal val DarkColorScheme = darkColorScheme(
     onTertiaryContainer = YanjiDarkSuccess,
     background = YanjiDarkBackground,
     onBackground = YanjiDarkTextPrimary,
+    // 深色卡片标准底色：#151B28（YanjiDarkSurface）。
     surface = YanjiDarkSurface,
     onSurface = YanjiDarkTextPrimary,
     surfaceVariant = YanjiDarkSurfaceSoft,
@@ -83,7 +84,9 @@ private fun MascotThemeSpec.lightScheme() = lightColorScheme(
     onTertiary = YanjiOnPrimary,
     tertiaryContainer = YanjiSuccessSoft,
     onTertiaryContainer = YanjiSuccess,
-    background = palette.lightBackground,
+    // 页面背景固定为中性色（只区分浅/深），不跟随吉祥物主题；
+    // 按钮、强调色等仍由 palette 驱动。
+    background = YanjiBackground,
     onBackground = YanjiTextPrimary,
     surface = YanjiSurface,
     onSurface = YanjiTextPrimary,
@@ -108,8 +111,10 @@ private fun MascotThemeSpec.darkScheme() = darkColorScheme(
     onTertiary = YanjiOnPrimary,
     tertiaryContainer = YanjiDarkSuccessSoft,
     onTertiaryContainer = YanjiDarkSuccess,
-    background = palette.darkBackground,
+    // 同 lightScheme：页面背景固定中性，不随吉祥物主题变色。
+    background = YanjiDarkBackground,
     onBackground = YanjiDarkTextPrimary,
+    // 同 DarkColorScheme：深色卡片标准底色为 #151B28。
     surface = YanjiDarkSurface,
     onSurface = YanjiDarkTextPrimary,
     surfaceVariant = YanjiDarkSurfaceSoft,
@@ -118,9 +123,9 @@ private fun MascotThemeSpec.darkScheme() = darkColorScheme(
     outlineVariant = YanjiDarkDivider,
     error = YanjiDarkDanger,
     errorContainer = YanjiDarkDangerSoft,
-    surfaceDim = palette.darkBackground,
+    surfaceDim = YanjiDarkBackground,
     surfaceBright = YanjiDarkSurfaceFloating,
-    surfaceContainerLowest = palette.darkBackground,
+    surfaceContainerLowest = YanjiDarkBackground,
     surfaceContainerLow = YanjiDarkSurface,
     surfaceContainer = YanjiDarkSurfaceSoft,
     surfaceContainerHigh = YanjiDarkSurfaceFloating,

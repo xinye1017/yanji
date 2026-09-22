@@ -36,7 +36,6 @@ data class MascotPalette(
     val lightSecondary: Color,
     val lightSecondaryStrong: Color,
     val lightSecondarySoft: Color,
-    val lightBackground: Color,
     val lightSurfaceBlue: Color,
     val darkPrimary: Color,
     val darkPrimaryStrong: Color,
@@ -44,7 +43,6 @@ data class MascotPalette(
     val darkSecondary: Color,
     val darkSecondaryStrong: Color,
     val darkSecondarySoft: Color,
-    val darkBackground: Color,
     val darkSurfaceBlue: Color
 )
 
@@ -70,7 +68,6 @@ object MascotThemes {
             lightSecondary = YanjiLavender,
             lightSecondaryStrong = YanjiLavenderDeep,
             lightSecondarySoft = YanjiLavenderSoft,
-            lightBackground = YanjiBackground,
             lightSurfaceBlue = YanjiSurfaceBlue,
             darkPrimary = YanjiDarkPrimary,
             darkPrimaryStrong = YanjiDarkPrimaryStrong,
@@ -78,7 +75,6 @@ object MascotThemes {
             darkSecondary = YanjiDarkLavender,
             darkSecondaryStrong = YanjiDarkLavenderDeep,
             darkSecondarySoft = YanjiDarkLavenderSoft,
-            darkBackground = YanjiDarkBackground,
             darkSurfaceBlue = YanjiDarkSurfaceBlue
         )
     )
@@ -95,7 +91,6 @@ object MascotThemes {
             lightSecondary = Color(0xFFC46FA8),
             lightSecondaryStrong = Color(0xFF8C4D78),
             lightSecondarySoft = Color(0xFFFFEDF7),
-            lightBackground = Color(0xFFFFF7FA),
             lightSurfaceBlue = Color(0xFFFFF1F6),
             darkPrimary = Color(0xFFE06B96),
             darkPrimaryStrong = Color(0xFFF39AB9),
@@ -103,7 +98,6 @@ object MascotThemes {
             darkSecondary = Color(0xFFD995C1),
             darkSecondaryStrong = Color(0xFFF0B7D8),
             darkSecondarySoft = Color(0x29D995C1),
-            darkBackground = Color(0xFF171014),
             darkSurfaceBlue = Color(0xFF251821)
         )
     )
@@ -120,7 +114,6 @@ object MascotThemes {
             lightSecondary = Color(0xFF4E9FBF),
             lightSecondaryStrong = Color(0xFF31728C),
             lightSecondarySoft = Color(0xFFE8F7FB),
-            lightBackground = Color(0xFFF4FAFD),
             lightSurfaceBlue = Color(0xFFEDF7FC),
             darkPrimary = Color(0xFF66A3D2),
             darkPrimaryStrong = Color(0xFF8EC3E6),
@@ -128,7 +121,6 @@ object MascotThemes {
             darkSecondary = Color(0xFF68B5CC),
             darkSecondaryStrong = Color(0xFF96D3E2),
             darkSecondarySoft = Color(0x2968B5CC),
-            darkBackground = Color(0xFF0D141A),
             darkSurfaceBlue = Color(0xFF15232C)
         )
     )
@@ -145,7 +137,6 @@ object MascotThemes {
             lightSecondary = Color(0xFFC58A3B),
             lightSecondaryStrong = Color(0xFF8F5E1E),
             lightSecondarySoft = Color(0xFFFFF0DC),
-            lightBackground = Color(0xFFFFF8F2),
             lightSurfaceBlue = Color(0xFFFFF2E6),
             darkPrimary = Color(0xFFDE8A49),
             darkPrimaryStrong = Color(0xFFF2AE72),
@@ -153,7 +144,6 @@ object MascotThemes {
             darkSecondary = Color(0xFFD7A154),
             darkSecondaryStrong = Color(0xFFEEC17C),
             darkSecondarySoft = Color(0x29D7A154),
-            darkBackground = Color(0xFF17110D),
             darkSurfaceBlue = Color(0xFF261B13)
         )
     )
@@ -170,7 +160,6 @@ object MascotThemes {
             lightSecondary = Color(0xFF65A36F),
             lightSecondaryStrong = Color(0xFF477A50),
             lightSecondarySoft = Color(0xFFECF8EE),
-            lightBackground = Color(0xFFF4FBF6),
             lightSurfaceBlue = Color(0xFFEDF8F0),
             darkPrimary = Color(0xFF5EB37B),
             darkPrimaryStrong = Color(0xFF86D29E),
@@ -178,7 +167,6 @@ object MascotThemes {
             darkSecondary = Color(0xFF82BE8B),
             darkSecondaryStrong = Color(0xFFA8D6AE),
             darkSecondarySoft = Color(0x2982BE8B),
-            darkBackground = Color(0xFF0E1611),
             darkSurfaceBlue = Color(0xFF17251B)
         )
     )
