@@ -43,8 +43,9 @@ import com.example.yanji.data.DayBarData
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.GlassSegmentedControl
-import com.example.yanji.ui.components.YanjiCard as Card
 
 enum class TrendMode(val label: String) {
     BAR("柱状"),
@@ -83,12 +84,9 @@ fun StatsTrendChart(
         else -> "每日学时分布"
     }
 
-    Card(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = YanjiCardBorder.stroke(),
-        colors = CardDefaults.cardColors(containerColor = YanjiColors.elevatedSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        variant = YanjiCardVariant.Grouped
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // Header: Title + Mode Toggle

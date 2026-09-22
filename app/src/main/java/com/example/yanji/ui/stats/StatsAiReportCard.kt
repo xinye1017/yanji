@@ -22,9 +22,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.text.style.TextAlign
 import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
-import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AiAvatar
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 
 @Composable
 fun MetricMiniCard(
@@ -37,14 +37,7 @@ fun MetricMiniCard(
     unit: String? = null,
     onClick: (() -> Unit)? = null
 ) {
-    Card(
-        modifier = modifier.then(
-            if (onClick != null) Modifier.clickable { onClick() } else Modifier
-        ),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    val cardContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -62,25 +55,44 @@ fun MetricMiniCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
-            Text(text = title, style = MaterialTheme.typography.labelMedium, color = YanjiColors.textTertiary)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (unit != null) {
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = unit,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
             }
         }
+    }
+
+    if (onClick != null) {
+        YanjiCard(
+            onClick = onClick,
+            modifier = modifier,
+            variant = YanjiCardVariant.Compact,
+            content = cardContent
+        )
+    } else {
+        YanjiCard(
+            modifier = modifier,
+            variant = YanjiCardVariant.Compact,
+            content = cardContent
+        )
     }
 }
 
@@ -91,11 +103,9 @@ fun StatsAiReportCard(
     errorMessage: String? = null,
     onGenerate: () -> Unit
 ) {
-    Card(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        variant = YanjiCardVariant.Standard
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(

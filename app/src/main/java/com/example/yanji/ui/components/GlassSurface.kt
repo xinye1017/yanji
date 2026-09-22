@@ -41,15 +41,20 @@ fun GlassSurface(
     val defaultSurface = MaterialTheme.colorScheme.surface
     val baseTint = fallbackColor ?: defaultSurface.copy(alpha = tokens.tintAlpha)
 
+    val isDark = yanjiIsDarkTheme()
     val effectiveBorder = border ?: run {
-        val borderBrush = Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = tokens.highlightAlpha),
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = tokens.borderAlpha),
-                Color.White.copy(alpha = tokens.borderAlpha * 0.5f)
+        if (isDark) {
+            null
+        } else {
+            val borderBrush = Brush.verticalGradient(
+                listOf(
+                    Color.White.copy(alpha = tokens.highlightAlpha),
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = tokens.borderAlpha),
+                    Color.White.copy(alpha = tokens.borderAlpha * 0.5f)
+                )
             )
-        )
-        BorderStroke(1.dp, borderBrush)
+            BorderStroke(1.dp, borderBrush)
+        }
     }
 
     val hazeModifier = if (hazeState != null && tokens.blurRadius > 0.dp) {
@@ -74,7 +79,7 @@ fun GlassSurface(
         modifier = modifier
             .clip(shape)
             .then(hazeModifier)
-            .border(effectiveBorder, shape),
+            .then(if (effectiveBorder != null) Modifier.border(effectiveBorder, shape) else Modifier),
         content = content
     )
 }

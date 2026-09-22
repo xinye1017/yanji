@@ -554,18 +554,14 @@ fun AchievementGridCard(
     val icon = if (isHiddenLocked) PhosphorIcons.Regular.Lock else getAchievementIcon(achievement.iconKey, isUnlocked)
     val rarityColor = rarityColor(achievement.rarity)
 
-    Card(
+    YanjiCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
+        variant = YanjiCardVariant.Grouped,
         border = CardDefaults.outlinedCardBorder().copy(
             width = if (isUnlocked && (achievement.rarity == AchievementRarity.MYTHIC || achievement.rarity == AchievementRarity.LEGENDARY)) 1.5.dp else 1.dp,
             brush = rarityBorderBrush(achievement.rarity, isUnlocked)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        )
     ) {
         Column(
             modifier = Modifier

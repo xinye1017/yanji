@@ -55,6 +55,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
@@ -94,6 +96,7 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.YanjiSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 import com.example.yanji.data.YanjiTime
 import kotlin.math.abs
 
@@ -467,14 +470,12 @@ private fun QuietCategoryStep(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             categories.forEach { category ->
-                Surface(
+                YanjiCard(
                     onClick = { onCategoryClick(category) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(76.dp),
-                    shape = QuietCardShape,
-                    border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
-                    color = com.example.yanji.theme.YanjiColors.elevatedSurface
+                    variant = YanjiCardVariant.Grouped
                 ) {
                     Box(
                         modifier = Modifier
@@ -500,14 +501,12 @@ private fun QuietCategoryStep(
         Spacer(modifier = Modifier.height(20.dp))
 
         // 模拟考试单独一行，不与学科并列
-        Surface(
+        YanjiCard(
             onClick = onNavigateToExam,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp),
-            shape = QuietCardShape,
-            border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
-            color = com.example.yanji.theme.YanjiColors.elevatedSurface
+            variant = YanjiCardVariant.Grouped
         ) {
             Row(
                 modifier = Modifier
@@ -572,14 +571,12 @@ private fun QuietModuleStep(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         modules.forEach { subject ->
-            Surface(
+            YanjiCard(
                 onClick = { onModuleClick(subject) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(76.dp),
-                shape = QuietCardShape,
-                border = androidx.compose.foundation.BorderStroke(0.8.dp, com.example.yanji.theme.YanjiColors.separator),
-                color = com.example.yanji.theme.YanjiColors.elevatedSurface
+                variant = YanjiCardVariant.Grouped
             ) {
                 Box(
                     modifier = Modifier
@@ -921,6 +918,7 @@ private fun QuietTimerSegmentedControl(
         onItemSelected = { index ->
             if (index == 0) onCountdownSelected() else onCountUpSelected()
         },
+        variant = YanjiSegmentedControlVariant.OnPage,
         modifier = Modifier.fillMaxWidth()
     )
 }

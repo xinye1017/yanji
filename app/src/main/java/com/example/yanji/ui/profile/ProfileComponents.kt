@@ -30,6 +30,9 @@ import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AiAvatar
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.YanjiSegmentedControl
 import java.util.Locale
 
 @Composable
@@ -38,13 +41,11 @@ fun ProfileIdentityCard(settings: UserSettings) {
         .substringBefore("-")
         .takeIf { it.length == 4 && it.all(Char::isDigit) }
 
-    Surface(
+    YanjiCard(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 128.dp),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = BorderStroke(0.8.dp, YanjiColors.separator),
-        color = YanjiColors.elevatedSurface
+        variant = YanjiCardVariant.Grouped
     ) {
         Row(
             modifier = Modifier
@@ -92,11 +93,9 @@ fun PreparationOverviewCard(
     val goalSeconds = settings.dailyGoalHours * 3_600f
     val progress = if (goalSeconds > 0f) (todayStudySeconds / goalSeconds).coerceIn(0f, 1f) else 0f
 
-    Surface(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = BorderStroke(0.8.dp, YanjiColors.separator),
-        color = YanjiColors.elevatedSurface
+        variant = YanjiCardVariant.Grouped
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -252,12 +251,10 @@ fun LocalDataStatus() {
 fun ProfileSettingsGroup(
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = BorderStroke(0.8.dp, YanjiColors.separator),
-        color = YanjiColors.elevatedSurface,
-        content = { Column(content = content) }
+        variant = YanjiCardVariant.Grouped,
+        content = content
     )
 }
 
@@ -431,49 +428,17 @@ fun ProfileThemeSelector(
             }
         }
 
-        Row(
+        YanjiSegmentedControl(
+            items = YanjiThemeMode.entries,
+            selectedIndex = YanjiThemeMode.entries.indexOf(selected).coerceAtLeast(0),
+            onItemSelected = { onSelect(YanjiThemeMode.entries[it]) },
             modifier = Modifier
                 .fillMaxWidth()
-                // 与上方标题列左对齐：16dp 行内边距 + 32dp 图标底座 + 14dp 间距
-                .padding(start = 62.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            YanjiThemeMode.entries.forEach { mode ->
-                val isSelected = mode == selected
-                val shape = RoundedCornerShape(YanjiRadius.ChipRadius)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(ProfileThemeTags.option(mode))
-                        .clip(shape)
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline,
-                            shape = shape
-                        )
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.RadioButton,
-                            onClick = { onSelect(mode) }
-                        )
-                        .padding(vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = mode.displayLabel(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
+                .padding(start = 46.dp),
+            height = 36.dp,
+            itemLabel = { it.displayLabel() },
+            itemModifier = { mode, _ -> Modifier.testTag(ProfileThemeTags.option(mode)) }
+        )
     }
 }
 

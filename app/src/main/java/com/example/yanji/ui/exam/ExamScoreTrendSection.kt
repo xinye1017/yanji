@@ -19,17 +19,16 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.ExamSession
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 
 @Composable
 fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Trend Summary Card
-        Card(
+        YanjiCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            variant = YanjiCardVariant.Standard
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
@@ -142,11 +141,9 @@ fun ExamScoreTrendSection(examSessions: List<ExamSession>) {
         )
 
         examSessions.forEach { session ->
-            Card(
+            YanjiCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                variant = YanjiCardVariant.Grouped
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(

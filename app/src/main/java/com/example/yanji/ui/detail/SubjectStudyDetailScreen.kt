@@ -29,6 +29,8 @@ import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
 import com.example.yanji.ui.components.YanjiPrimaryButton
+import com.example.yanji.ui.components.YanjiSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 
 @Composable
 fun SubjectStudyDetailScreen(
@@ -80,36 +82,17 @@ fun SubjectStudyDetailScreen(
         )
 
         // Time Range Filter Tabs
-        PrimaryTabRow(
-            selectedTabIndex = selectedRange.ordinal,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.primary,
+        YanjiSegmentedControl(
+            items = StudyTimeRange.entries,
+            selectedIndex = selectedRange.ordinal,
+            onItemSelected = { selectRange(StudyTimeRange.entries[it]) },
+            variant = YanjiSegmentedControlVariant.OnPage,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
-                .clip(RoundedCornerShape(YanjiRadius.Small)),
-            indicator = {}
-        ) {
-            StudyTimeRange.entries.forEach { range ->
-                val isSelected = selectedRange == range
-                Tab(
-                    selected = isSelected,
-                    onClick = { selectRange(range) },
-                    text = {
-                        Text(
-                            text = range.title,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                )
-            }
-        }
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
+            height = 36.dp,
+            itemLabel = { it.title }
+        )
 
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 

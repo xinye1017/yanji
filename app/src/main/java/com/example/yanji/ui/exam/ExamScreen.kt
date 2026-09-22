@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.yanji.ui.components.YanjiDetailTopBar
 import com.example.yanji.ui.components.YanjiPageHeader
+import com.example.yanji.ui.components.YanjiSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -134,35 +136,14 @@ fun ExamScreen(
             Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
             // Sub-tabs
-            PrimaryTabRow(
-                selectedTabIndex = currentSubTab,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(YanjiRadius.Small)),
-                indicator = {}
-            ) {
-                listOf("发起模考", "成绩走势", "AI深度诊断").forEachIndexed { index, title ->
-                    val isSelected = currentSubTab == index
-                    Tab(
-                        selected = isSelected,
-                        onClick = { currentSubTab = index },
-                        text = {
-                            Text(
-                                text = title,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                    )
-                }
-            }
+            YanjiSegmentedControl(
+                items = listOf("发起模考", "成绩走势", "AI深度诊断"),
+                selectedIndex = currentSubTab,
+                onItemSelected = { currentSubTab = it },
+                variant = YanjiSegmentedControlVariant.OnPage,
+                modifier = Modifier.fillMaxWidth(),
+                height = 40.dp
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
 

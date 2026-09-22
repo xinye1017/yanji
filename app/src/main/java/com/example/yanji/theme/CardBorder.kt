@@ -22,23 +22,23 @@ import androidx.compose.ui.unit.dp
 object YanjiCardBorder {
     val Width = 0.8.dp
 
-    /** 暗色描边不透明度：极淡，层次交给表面明度差。 */
-    private const val DarkAlpha = 0.12f
-
     /** 亮色描边不透明度：底色与白卡对比弱，需要更实的边。 */
     private const val LightAlpha = 0.45f
 
     /**
      * 取当前主题下的卡片边框。
      *
-     * 用法：`border = YanjiCardBorder.stroke()`，或直接作为组件默认参数值。
+     * 深色模式下返回 null：遵循 iOS HIG 与 Material 3 现代暗色规范——暗色卡片依靠表面明度递进
+     * （背景 #0D111A -> 卡片 #151B28）自然呈现层次，彻底消除生硬的白色线框感，保持与浅色模式一致的平滑无边界质感。
      */
     @Composable
     @ReadOnlyComposable
-    fun stroke(): BorderStroke = BorderStroke(
-        Width,
-        MaterialTheme.colorScheme.outlineVariant.copy(
-            alpha = if (yanjiIsDarkTheme()) DarkAlpha else LightAlpha
+    fun stroke(): BorderStroke? = if (yanjiIsDarkTheme()) {
+        null
+    } else {
+        BorderStroke(
+            Width,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = LightAlpha)
         )
-    )
+    }
 }

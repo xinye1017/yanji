@@ -34,7 +34,8 @@ import com.example.yanji.data.SubjectStatsLevel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.GlassSegmentedControl
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import kotlin.math.min
 
 @Composable
@@ -59,12 +60,9 @@ fun SubjectDistributionCard(
         )
     }
 
-    Card(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = YanjiCardBorder.stroke(),
-        colors = CardDefaults.cardColors(containerColor = YanjiColors.elevatedSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        variant = YanjiCardVariant.Grouped
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(

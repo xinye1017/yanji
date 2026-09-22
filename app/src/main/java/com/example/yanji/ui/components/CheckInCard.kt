@@ -12,7 +12,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,12 +39,9 @@ fun CheckInCard(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Card(
+    YanjiCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = YanjiCardBorder.stroke()
+        variant = YanjiCardVariant.Standard
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // Header: Title & Streak Badge

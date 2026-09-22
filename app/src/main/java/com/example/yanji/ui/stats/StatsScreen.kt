@@ -27,6 +27,7 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.YanjiPageHeader
 import com.example.yanji.ui.components.YanjiSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +67,7 @@ fun StatsScreen(
             items = listOf("本周", "本月", "全部累计"),
             selectedIndex = state.selectedTimeTab,
             onItemSelected = { viewModel.selectTimeTab(it) },
+            variant = YanjiSegmentedControlVariant.OnPage,
             modifier = Modifier.fillMaxWidth()
         )
 

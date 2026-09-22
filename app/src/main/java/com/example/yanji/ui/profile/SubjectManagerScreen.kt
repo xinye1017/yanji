@@ -43,6 +43,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.data.Subject
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.YanjiColors
@@ -227,13 +229,15 @@ private fun CategoryRow(
     onRename: (Subject) -> Unit,
     onDelete: (Subject) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(YanjiRadius.StandardCardRadius))
-            .background(YanjiColors.fill)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+    YanjiCard(
+        modifier = Modifier.fillMaxWidth(),
+        variant = YanjiCardVariant.Grouped
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -339,6 +343,7 @@ private fun CategoryRow(
             }
         }
     }
+}
 }
 
 @Composable

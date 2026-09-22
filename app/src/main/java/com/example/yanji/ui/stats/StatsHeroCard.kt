@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
-import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import java.util.Locale
 import kotlin.math.abs
 
@@ -40,11 +40,9 @@ fun StatsHeroCard(
     }
     val goalLabel = if (selectedTimeTab == 1) "月目标进度" else "周目标进度"
 
-    Card(
+    YanjiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        variant = YanjiCardVariant.Standard
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // 行 1：标签 + 有效天数 + 较上周对比

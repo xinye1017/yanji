@@ -7,14 +7,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -22,9 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiCardBorder
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
-import com.example.yanji.theme.yanjiIsDarkTheme
 
 /**
  * iOS-inspired Grouped Card (研迹分组卡片容器)
@@ -47,9 +42,6 @@ fun YanjiGroupedCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = yanjiIsDarkTheme()
-    val cardShape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
-
     Column(modifier = modifier.fillMaxWidth()) {
         if (!headerTitle.isNullOrBlank()) {
             Text(
@@ -64,38 +56,25 @@ fun YanjiGroupedCard(
         }
 
         if (onClick != null) {
-            Card(
+            YanjiCard(
                 onClick = onClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(cardModifier)
-                    .shadow(
-                        elevation = if (isDark) 0.dp else 1.5.dp,
-                        shape = cardShape,
-                        ambientColor = Color.Black.copy(alpha = 0.04f),
-                        spotColor = Color.Black.copy(alpha = 0.04f)
-                    ),
-                shape = cardShape,
+                    .then(cardModifier),
+                variant = YanjiCardVariant.Grouped,
                 colors = CardDefaults.cardColors(
                     containerColor = containerColor,
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 border = border,
                 content = content
             )
         } else {
-            Card(
+            YanjiCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(cardModifier)
-                    .shadow(
-                        elevation = if (isDark) 0.dp else 1.5.dp,
-                        shape = cardShape,
-                        ambientColor = Color.Black.copy(alpha = 0.04f),
-                        spotColor = Color.Black.copy(alpha = 0.04f)
-                    ),
-                shape = cardShape,
+                    .then(cardModifier),
+                variant = YanjiCardVariant.Grouped,
                 colors = CardDefaults.cardColors(
                     containerColor = containerColor,
                     contentColor = MaterialTheme.colorScheme.onSurface

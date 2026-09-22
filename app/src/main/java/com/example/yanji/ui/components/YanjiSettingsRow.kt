@@ -40,6 +40,7 @@ import com.adamglin.phosphoricons.regular.CaretRight
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
+import com.example.yanji.theme.yanjiIsDarkTheme
 
 /**
  * iOS-inspired SettingsRow (研迹标准设置与导航行组件)
@@ -162,10 +163,12 @@ fun YanjiSettingsRow(
         }
 
         if (showDivider) {
+            val isDark = yanjiIsDarkTheme()
             HorizontalDivider(
                 modifier = Modifier.padding(start = dividerInset),
                 thickness = 0.6.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                color = if (isDark) MaterialTheme.colorScheme.outlineVariant
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
         }
     }

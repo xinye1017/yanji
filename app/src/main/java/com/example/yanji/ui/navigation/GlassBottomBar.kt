@@ -164,19 +164,17 @@ fun GlassBottomBar(
             MaterialTheme.colorScheme.primary
         }
 
-        // 2. 玻璃微光边框：暗色低调收敛（杜绝高反差白边），亮色通透清晰
-        val glassBorderBrush = if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.12f),
-                    Color.White.copy(alpha = 0.05f)
-                )
-            )
+        // 2. 玻璃微光边框：暗色模式彻底移除高反差白边，亮色模式保留通透反光
+        val glassBorder: BorderStroke? = if (isDark) {
+            null
         } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.85f),
-                    outlineVariant.copy(alpha = 0.35f)
+            BorderStroke(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.85f),
+                        outlineVariant.copy(alpha = 0.35f)
+                    )
                 )
             )
         }
@@ -198,14 +196,18 @@ fun GlassBottomBar(
             )
         }
 
-        val dropletBorderBrush = if (isDark) {
-            SolidColor(primaryColor.copy(alpha = 0.32f))
+        val dropletBorderModifier = if (isDark) {
+            Modifier
         } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.60f),
-                    primaryColor.copy(alpha = 0.12f)
-                )
+            Modifier.border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.60f),
+                        primaryColor.copy(alpha = 0.12f)
+                    )
+                ),
+                CircleShape
             )
         }
 
@@ -222,7 +224,7 @@ fun GlassBottomBar(
             hazeState = hazeState,
             shape = CircleShape,
             fallbackColor = dockSurfaceColor,
-            border = BorderStroke(1.dp, glassBorderBrush)
+            border = glassBorder
         ) {
             // 滑动指示器（按同心圆几何中心与动态拉伸渲染）
             Box(
@@ -240,7 +242,7 @@ fun GlassBottomBar(
                     }
                     .clip(CircleShape)
                     .background(dropletBrush)
-                    .border(1.dp, dropletBorderBrush, CircleShape)
+                    .then(dropletBorderModifier)
             )
 
             // Tab 触控交互项：各 Tab 的中心点与同心圆中心严格重合，触控区域无缝衔接

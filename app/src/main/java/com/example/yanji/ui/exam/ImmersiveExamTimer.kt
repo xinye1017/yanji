@@ -20,7 +20,8 @@ import androidx.compose.ui.unit.sp
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import java.util.Locale
 
 import androidx.compose.runtime.State
@@ -168,13 +169,11 @@ private fun ExamCountdownCenter(
     // DESIGN.md: 倒计时禁红（红仅用于破坏性操作）；临界（剩余<15分钟）最多 subtle amber，且不闪烁
     val isCritical = remaining < 900
 
-    Card(
+    YanjiCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp),
-        shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        variant = YanjiCardVariant.Hero
     ) {
         Column(
             modifier = Modifier.padding(32.dp),

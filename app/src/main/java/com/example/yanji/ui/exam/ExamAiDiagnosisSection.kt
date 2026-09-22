@@ -18,7 +18,8 @@ import com.example.yanji.data.AiAnalysis
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AiAvatar
-import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 
 /**
  * 模考页的「AI 深度诊断」。
@@ -31,11 +32,9 @@ fun ExamAiDiagnosisSection(
     onGenerate: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Card(
+        YanjiCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(YanjiRadius.StandardCardRadius),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            variant = YanjiCardVariant.Standard
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
