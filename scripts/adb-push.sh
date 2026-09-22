@@ -28,7 +28,21 @@ echo "--- clear logcat buffer ---"
 "$ADB_BIN" -s "$DEV" logcat -c
 
 echo "--- install ---"
-"$ADB_BIN" -s "$DEV" install -r "$APK" 2>&1
+# Git Bash 里 adb.exe 无法 stat `/d/AI项目/...` 这种 POSIX 绝对路径（第 3 行的
+# MSYS_NO_PATHCONV=1 关掉了自动转换），旧实现又不检查退出码 —— 结果是手机上装的还是旧包，
+# 脚本却照样打印 DONE。故：优先传相对仓库根的路径，其次退回 cygpath 转换，且必须看到 Success。
+cd "$ROOT" || { echo "RESULT: BAD_ROOT ($ROOT)"; exit 1; }
+APK_ARG="${APK#"$ROOT"/}"
+if [ "$APK_ARG" = "$APK" ] && command -v cygpath >/dev/null 2>&1; then
+  APK_ARG="$(cygpath -w "$APK")"
+fi
+[ -f "$APK" ] || { echo "RESULT: APK_NOT_FOUND ($APK)"; exit 1; }
+INSTALL_OUT="$("$ADB_BIN" -s "$DEV" install -r -d "$APK_ARG" 2>&1)"
+echo "$INSTALL_OUT"
+case "$INSTALL_OUT" in
+  *Success*) echo "install: OK (arg=$APK_ARG)" ;;
+  *) echo "RESULT: INSTALL_FAILED"; exit 1 ;;
+esac
 
 echo "--- launch ---"
 "$ADB_BIN" -s "$DEV" shell am start -n "$PKG/.MainActivity" 2>&1
