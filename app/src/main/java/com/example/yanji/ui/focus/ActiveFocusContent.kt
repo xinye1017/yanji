@@ -1,6 +1,7 @@
 package com.example.yanji.ui.focus
 
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -131,6 +132,24 @@ fun ActiveFocusContent(
         }
     }
 
+    val handleCancelRequest = {
+        if (elapsedSeconds.value < 60L) {
+            onCancel()
+        } else {
+            showCancelDialog = true
+        }
+    }
+
+    BackHandler(enabled = true) {
+        if (isPowerSavingMode) {
+            isPowerSavingMode = false
+        } else if (showCancelDialog) {
+            showCancelDialog = false
+        } else {
+            handleCancelRequest()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -183,7 +202,7 @@ fun ActiveFocusContent(
                     }
                     FocusControls(
                         onFinish = onFinish,
-                        onCancel = { showCancelDialog = true }
+                        onCancel = handleCancelRequest
                     )
                 }
             ) { measurables, constraints ->
@@ -236,8 +255,14 @@ fun ActiveFocusContent(
 
     if (showCancelDialog) {
         FocusCancelDialog(
+            session = session,
+            elapsedSeconds = elapsedSeconds.value,
             onDismiss = { showCancelDialog = false },
-            onConfirm = {
+            onSaveAndFinish = {
+                showCancelDialog = false
+                onFinish()
+            },
+            onConfirmDiscard = {
                 showCancelDialog = false
                 onCancel()
             }
@@ -616,18 +641,130 @@ private fun FocusControls(
 
 
 @Composable
-private fun FocusCancelDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun FocusCancelDialog(
+    session: FocusSession,
+    elapsedSeconds: Long,
+    onDismiss: () -> Unit,
+    onSaveAndFinish: () -> Unit,
+    onConfirmDiscard: () -> Unit
+) {
+    val durationText = formatFocusClock(elapsedSeconds)
+    val totalMinutes = elapsedSeconds / 60
+    val durationSummary = if (totalMinutes >= 60) {
+        val h = totalMinutes / 60
+        val m = totalMinutes % 60
+        "${h}小时 ${m}分钟"
+    } else {
+        "${totalMinutes}分钟"
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("放弃本次专注？", fontWeight = FontWeight.SemiBold) },
-        text = { Text("放弃后，本次计时时长将不予保存。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        title = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Pause,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "放弃本次专注？",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = session.subjectName,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = durationText,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "已专注 $durationSummary",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Text(
+                    text = "如需保留当前已专注时长，请点击「保存并结束」；若直接放弃，本次计时将不予保存。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+            }
+        },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("确认放弃", color = MaterialTheme.colorScheme.error) }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                YanjiPrimaryButton(
+                    text = "保存并结束",
+                    onClick = onSaveAndFinish,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                YanjiSecondaryButton(
+                    text = "继续专注",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                TextButton(
+                    onClick = onConfirmDiscard,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 40.dp)
+                ) {
+                    Text(
+                        text = "放弃不保存",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("保留记录", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
         containerColor = MaterialTheme.colorScheme.surface
     )
 }

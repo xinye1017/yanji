@@ -70,8 +70,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -112,10 +112,9 @@ private const val QuietDurationMinMinutes = 25
 private const val QuietDurationMaxMinutes = 100
 private const val QuietDurationStepMinutes = 5
 
-// 滚轮刻度：所有行统一长度/粗细，选中态由居中的固定指针表达，而非行内刻度变化。
-private val QuietTickLength = 44.dp
-private val QuietTickThickness = 2.dp
-private val QuietPointerLength = 72.dp
+// 滚轮中心双侧光感指示线（左右对称，靠近内部处实体，向外侧羽化渐变透明）
+private val QuietPointerLength = 68.dp
+private val QuietPointerInnerGap = 48.dp
 private val QuietPointerThickness = 3.dp
 
 private val QuietDurationOptions =
@@ -772,13 +771,12 @@ private fun QuietDurationWheel(
         val bandTopPx = with(LocalDensity.current) { ((maxHeight - bandHeight) / 2).toPx() }
         val bandBottomPx = with(LocalDensity.current) { ((maxHeight + bandHeight) / 2).toPx() }
 
-        // 固定的左右中心指针：直接画在 LazyColumn 的绘制层里，与列表内容共享
+        // 固定的左右中心双侧光感指示线：直接画在 LazyColumn 的绘制层里，与列表内容共享
         // 同一套坐标，因此必然与选中行严格同线。
         val pointerLengthPx = with(LocalDensity.current) { QuietPointerLength.toPx() }
+        val innerGapPx = with(LocalDensity.current) { QuietPointerInnerGap.toPx() }
         val pointerThicknessPx = with(LocalDensity.current) { QuietPointerThickness.toPx() }
         val pointerCenterX = with(LocalDensity.current) { maxWidth.toPx() / 2f }
-        val pointerGapPx = with(LocalDensity.current) { 18.dp.toPx() }
-        val pointerTextWidthPx = with(LocalDensity.current) { 104.dp.toPx() }
         // 指针的 y 必须和「选中行」在同一条线上：行中心 = centerPadding + itemHeight/2。
         // 不能直接用 size.height/2，因为绘制高度和 contentPadding 依据的高度可能差几 px。
         val pointerCenterY = with(LocalDensity.current) {
@@ -795,21 +793,34 @@ private fun QuietDurationWheel(
                     clipRect(top = bandTopPx, bottom = bandBottomPx) {
                         this@drawWithContent.drawContent()
                     }
-                    // 指针绘制在裁剪带之外单独画，永不会被列表内容遮住。
                     val cy = pointerCenterY
-                    val leftEnd = pointerCenterX - pointerTextWidthPx / 2f - pointerGapPx
-                    val rightStart = pointerCenterX + pointerTextWidthPx / 2f + pointerGapPx
+                    val leftInnerX = pointerCenterX - innerGapPx
+                    val leftOuterX = leftInnerX - pointerLengthPx
+                    val rightInnerX = pointerCenterX + innerGapPx
+                    val rightOuterX = rightInnerX + pointerLengthPx
+
+                    // 左侧羽化指示线：靠近内部实体 -> 外侧渐变透明
                     drawLine(
-                        color = pointerColor,
-                        start = Offset(leftEnd - pointerLengthPx, cy),
-                        end = Offset(leftEnd, cy),
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(pointerColor.copy(alpha = 0f), pointerColor),
+                            startX = leftOuterX,
+                            endX = leftInnerX
+                        ),
+                        start = Offset(leftOuterX, cy),
+                        end = Offset(leftInnerX, cy),
                         strokeWidth = pointerThicknessPx,
                         cap = StrokeCap.Round
                     )
+
+                    // 右侧羽化指示线：靠近内部实体 -> 外侧渐变透明
                     drawLine(
-                        color = pointerColor,
-                        start = Offset(rightStart, cy),
-                        end = Offset(rightStart + pointerLengthPx, cy),
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(pointerColor, pointerColor.copy(alpha = 0f)),
+                            startX = rightInnerX,
+                            endX = rightOuterX
+                        ),
+                        start = Offset(rightInnerX, cy),
+                        end = Offset(rightOuterX, cy),
                         strokeWidth = pointerThicknessPx,
                         cap = StrokeCap.Round
                     )
@@ -836,14 +847,8 @@ private fun QuietDurationWheel(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
-                val baseTickColor = if (isCentered) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
                 // 各行透明度上限（沿用旧视觉：选中最亮，越远越淡）。
                 val textAlphaMax = if (isCentered) 1f else 0.82f
-                val tickAlphaMax = if (isCentered) 0f else if (isMajorTick) 0.58f else 0.34f
                 val baseFontSizeSp = 16f
                 val sizeBoost = if (isMajorTick && !isCentered) 1.08f else 1f
 
@@ -858,19 +863,10 @@ private fun QuietDurationWheel(
                             indication = null,
                             role = Role.RadioButton,
                             onClick = { onDurationSelected(option) }
-                        )
-                        .padding(horizontal = 18.dp),
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    QuietDurationTick(
-                        width = QuietTickLength,
-                        height = QuietTickThickness,
-                        color = baseTickColor,
-                        // 透明度在绘制期按偏移计算：只重绘、不重组。
-                        alphaProvider = { fadeAt(index) * tickAlphaMax }
-                    )
-                    Spacer(modifier = Modifier.width(18.dp))
                     Row(
                         modifier = Modifier.width(104.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -881,8 +877,6 @@ private fun QuietDurationWheel(
                         // （不会与「分钟」重叠），实际大小由 graphicsLayer 在绘制期缩小。
                         // 这样滚动时完全跳过重组与重新排版 —— 这是滚轮顺滑的关键。
                         val maxFontSizeSp = 32f
-                        val baseFontSizeSp = 16f
-                        val sizeBoost = if (isMajorTick && !isCentered) 1.08f else 1f
                         Text(
                             text = "${option.minutes}",
                             style = MaterialTheme.typography.titleLarge.copy(
@@ -909,41 +903,10 @@ private fun QuietDurationWheel(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(18.dp))
-                    QuietDurationTick(
-                        width = QuietTickLength,
-                        height = QuietTickThickness,
-                        color = baseTickColor,
-                        alphaProvider = { fadeAt(index) * tickAlphaMax }
-                    )
                 }
             }
         }
     }
-}
-
-@Composable
-private fun QuietDurationTick(
-    width: androidx.compose.ui.unit.Dp,
-    height: androidx.compose.ui.unit.Dp,
-    color: Color,
-    alphaProvider: (() -> Float)? = null
-) {
-    Box(
-        modifier = Modifier
-            .width(width)
-            .height(height)
-            .clip(CircleShape)
-            .then(
-                if (alphaProvider != null) {
-                    // 透明度在绘制期读取，避免滚动时驱动重组。
-                    Modifier.graphicsLayer { alpha = alphaProvider().coerceIn(0f, 1f) }
-                } else {
-                    Modifier
-                }
-            )
-            .background(color)
-    )
 }
 
 @Composable
