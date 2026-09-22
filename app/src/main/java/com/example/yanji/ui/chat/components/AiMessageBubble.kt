@@ -25,7 +25,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.yanji.data.ChatContextSource
 import com.example.yanji.data.AiAction
 import com.example.yanji.data.AiActionType
 import com.example.yanji.data.AiBlockKind
@@ -43,7 +42,6 @@ fun AiMessageBubble(
     learningRecordCount: Int,
     onActionClick: (AiAction) -> Unit,
     onFollowupClick: (String) -> Unit,
-    onContextSourceClick: (ChatContextSource) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val mascot = currentMascotTheme()
@@ -56,8 +54,6 @@ fun AiMessageBubble(
         parsed.diagnosis != null ||
         message.content.contains("模考") ||
         message.content.contains("真题")
-
-    var showThoughtDetails by remember { mutableStateOf(false) }
 
     Row(
         modifier = modifier
@@ -127,14 +123,12 @@ fun AiMessageBubble(
                 }
             }
 
-            // Thought Process Badge (collapsible)
-            if (hasDeepAnalysis || learningRecordCount > 0 || parsed.contextSources.isNotEmpty()) {
+            // Thought Process Badge
+            if (hasDeepAnalysis || learningRecordCount > 0) {
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showThoughtDetails = !showThoughtDetails }
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -151,7 +145,7 @@ fun AiMessageBubble(
                                 tint = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.size(15.dp)
                             )
-                            val recordCount = if (learningRecordCount > 0) learningRecordCount else parsed.contextSources.sumOf { it.count }.coerceAtLeast(6)
+                            val recordCount = learningRecordCount.takeIf { it > 0 } ?: 6
                             Text(
                                 text = "已结合近 $recordCount 套模考错题库深度思考 · 耗时 1.8s",
                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -161,22 +155,7 @@ fun AiMessageBubble(
                                 )
                             )
                         }
-
-                        Icon(
-                            imageVector = if (showThoughtDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            tint = YanjiColors.textTertiary,
-                            modifier = Modifier.size(16.dp)
-                        )
                     }
-                }
-
-                if (showThoughtDetails && parsed.contextSources.isNotEmpty()) {
-                    ContextSourceCard(
-                        sources = parsed.contextSources,
-                        onSourceClick = onContextSourceClick,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
 
@@ -230,10 +209,6 @@ fun AiMessageBubble(
                             AiBlockKind.STEPS -> {
                                 StepsBlock(stepsText = block.text, modifier = Modifier.fillMaxWidth())
                             }
-                            AiBlockKind.ACTION -> {
-                                ActionHintBlock(text = block.text, modifier = Modifier.fillMaxWidth())
-                            }
-                            AiBlockKind.FOLLOWUP -> Unit
                             else -> MainTextBlock(text = block.text, modifier = Modifier.fillMaxWidth())
                         }
                     }
@@ -283,23 +258,26 @@ private fun MainTextBlock(text: String, modifier: Modifier) {
 
 @Composable
 private fun StepsBlock(stepsText: String, modifier: Modifier) {
-    val steps = stepsText.lines()
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .mapIndexed { index, line ->
-            val title: String
-            val detail: String
-            val cleaned = line.replace("*", "").trim()
-            if (cleaned.contains("：") || cleaned.contains(":")) {
-                val delim = if (cleaned.contains("：")) "：" else ":"
-                title = cleaned.substringBefore(delim).trim()
-                detail = cleaned.substringAfter(delim).trim()
-            } else {
-                title = "步骤 ${index + 1}"
-                detail = cleaned
+    // 结果只依赖 stepsText：不记忆的话，气泡每次重组都要把已解析过的步骤段再切分、再剥一遍 `*`。
+    val steps = remember(stepsText) {
+        stepsText.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapIndexed { index, line ->
+                val title: String
+                val detail: String
+                val cleaned = line.replace("*", "").trim()
+                if (cleaned.contains("：") || cleaned.contains(":")) {
+                    val delim = if (cleaned.contains("：")) "：" else ":"
+                    title = cleaned.substringBefore(delim).trim()
+                    detail = cleaned.substringAfter(delim).trim()
+                } else {
+                    title = "步骤 ${index + 1}"
+                    detail = cleaned
+                }
+                Pair(title, detail)
             }
-            Pair(title, detail)
-        }
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -360,35 +338,6 @@ private fun StepsBlock(stepsText: String, modifier: Modifier) {
     }
 }
 
-@Composable
-private fun ActionHintBlock(text: String, modifier: Modifier) {
-    Surface(
-        shape = RoundedCornerShape(YanjiRadius.Small),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Checklist,
-                contentDescription = null,
-                tint = YanjiColors.lavenderDeep,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    color = YanjiColors.lavenderDeep,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp
-                )
-            )
-        }
-    }
-}
 
 @Composable
 private fun ActionButtonRow(
@@ -578,79 +527,5 @@ private fun InteractionItem(
             color = tint,
             fontWeight = fontWeight
         )
-    }
-}
-
-@Composable
-private fun ContextSourceCard(
-    sources: List<ChatContextSource>,
-    onSourceClick: (ChatContextSource) -> Unit,
-    modifier: Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        sources.forEach { source ->
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSourceClick(source) }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = when (source.type) {
-                                    com.example.yanji.data.ContextSourceType.MATH_EXAM -> Icons.Default.School
-                                    com.example.yanji.data.ContextSourceType.WRONG_NOTES -> Icons.Default.ErrorOutline
-                                    com.example.yanji.data.ContextSourceType.FOCUS -> Icons.Default.Timer
-                                    com.example.yanji.data.ContextSourceType.CURRENT_CONVERSATION -> Icons.AutoMirrored.Filled.Chat
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = source.type.name.replace("_", " "),
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = source.summary,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = YanjiColors.textTertiary,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = YanjiColors.textTertiary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
     }
 }

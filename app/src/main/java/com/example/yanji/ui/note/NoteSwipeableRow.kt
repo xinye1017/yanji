@@ -320,18 +320,40 @@ private fun NoteRowContent(
         }
 
         // (b) 中：内容
+        // 摘要走 stripNoteMarkdown：`**` / `##` / `———` 是样式标记，不该在列表里露出来
+        // （旧卡片一直是剥过的，卡片→行重设计时把这一步漏掉了）。整篇只有标记时剥完为空，
+        // 此时退回原文，避免该行看起来是空白。
+        val snippet = remember(entry.content) { noteListSnippet(entry.content) }
         Column(modifier = Modifier.weight(1f)) {
             if (entry.content.isNotBlank()) {
-                Text(
-                    text = entry.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (entry.isDraft) {
+                        Surface(
+                            shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Text(
+                                text = "草稿",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = snippet,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
             } else {
                 // 空稿（标题已从列表移除）：给个占位，避免整行看起来像空白。
                 Text(
-                    text = "（空）",
+                    text = if (entry.isDraft) "（草稿）" else "（空）",
                     style = MaterialTheme.typography.bodyMedium,
                     color = YanjiColors.textTertiary,
                     maxLines = 1

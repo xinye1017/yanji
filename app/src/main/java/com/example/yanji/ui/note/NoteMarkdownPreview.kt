@@ -255,13 +255,11 @@ private fun SpringTaskCheckbox(
     }
 }
 
+private val CompletedTaskLinePrefix = Regex("""^\s*[-*+•]\s+\[[xX]\]\s+""")
+
 private fun isCompletedTaskLineAtOffset(content: String, offset: Int): Boolean {
     if (content.isEmpty()) return false
-    val safeOffset = offset.coerceIn(0, content.length)
-    val lineStart = content.lastIndexOf('\n', (safeOffset - 1).coerceAtLeast(0))
-        .let { if (it < 0) 0 else it + 1 }
-    val lineEnd = content.indexOf('\n', safeOffset)
-        .let { if (it < 0) content.length else it }
+    val (lineStart, lineEnd) = lineBoundsOf(content, offset)
     val line = content.substring(lineStart, lineEnd)
-    return Regex("""^\s*[-*+•]\s+\[[xX]\]\s+""").containsMatchIn(line)
+    return CompletedTaskLinePrefix.containsMatchIn(line)
 }

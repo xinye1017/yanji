@@ -16,8 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,6 +28,7 @@ import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.chat.components.*
 import com.example.yanji.ui.components.AiConfigDialog
+import com.example.yanji.ui.components.TopFadeScrim
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -81,6 +80,8 @@ fun AiChatScreen(
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val isKeyboardOpen = imeBottom > 0.dp
+
+
 
     // Auto-scroll when message changes or keyboard opens
     LaunchedEffect(messages.lastOrNull()?.id, isAiReplying) {
@@ -174,9 +175,6 @@ fun AiChatScreen(
                         },
                         onFollowupClick = { followup ->
                             viewModel.sendChatMessage(followup, model = selectedModel)
-                        },
-                        onContextSourceClick = { source ->
-                            Toast.makeText(context, "查看 ${source.type.name.replace("_", " ")}", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
@@ -236,24 +234,11 @@ fun AiChatScreen(
             }
         }
 
-        // Top Gradient Blur Overlay
-        Box(
+        // 顶部渐隐遮罩：多段平滑背景渐变，与随笔编辑页共用，内容向上滚动时自然羽化消融在背景中。
+        TopFadeScrim(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(statusBarHeight + 56.dp)
                 .align(Alignment.TopCenter)
                 .zIndex(5f)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.12f),
-                            Color.Transparent
-                        )
-                    )
-                )
         )
 
         // Floating Top Bar

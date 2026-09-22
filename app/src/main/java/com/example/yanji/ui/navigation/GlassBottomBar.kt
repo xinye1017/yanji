@@ -1,7 +1,7 @@
 package com.example.yanji.ui.navigation
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -35,14 +35,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiDarkDockPanel
@@ -150,9 +151,7 @@ fun GlassBottomBar(
         val totalSpan = lastTabCenter - firstTabCenter
         val step = totalSpan / (tabs.size - 1).toFloat()
 
-        val remainingDistance = abs(selectedIndex - indicatorPosition.value).coerceIn(0f, 1f)
-        val indicatorWidth = if (reduceMotion) DockIndicatorSize else DockIndicatorSize + DockIndicatorMaxStretch * remainingDistance
-        val indicatorCenter = firstTabCenter + step * indicatorPosition.value
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
         val primaryColor = MaterialTheme.colorScheme.primary
         val onSurfaceColor = MaterialTheme.colorScheme.onSurface
@@ -163,23 +162,6 @@ fun GlassBottomBar(
             MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             MaterialTheme.colorScheme.primary
-        }
-
-        // 1. 玻璃面板底色：通透微渐变，纯净自然
-        val glassBodyBrush = if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    YanjiDarkDockPanel.copy(alpha = 0.88f),
-                    YanjiDarkDockPanel.copy(alpha = 0.78f)
-                )
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.92f),
-                    Color.White.copy(alpha = 0.82f)
-                )
-            )
         }
 
         // 2. 玻璃微光边框：暗色低调收敛（杜绝高反差白边），亮色通透清晰
@@ -246,9 +228,16 @@ fun GlassBottomBar(
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .offset(x = indicatorCenter - indicatorWidth / 2f)
-                    .width(indicatorWidth)
-                    .height(DockIndicatorSize)
+                    .size(DockIndicatorSize)
+                    // Animation reads stay in the layer phase: no per-frame composition/measurement.
+                    .graphicsLayer {
+                        val position = indicatorPosition.value
+                        val distance = abs(selectedIndex - position).coerceIn(0f, 1f)
+                        val offset = (firstTabCenter + step * position - DockIndicatorSize / 2f).toPx()
+                        translationX = if (isRtl) -offset else offset
+                        scaleX = if (reduceMotion) 1f else
+                            1f + DockIndicatorMaxStretch / DockIndicatorSize * distance
+                    }
                     .clip(CircleShape)
                     .background(dropletBrush)
                     .border(1.dp, dropletBorderBrush, CircleShape)
@@ -256,14 +245,12 @@ fun GlassBottomBar(
 
             // Tab 触控交互项：各 Tab 的中心点与同心圆中心严格重合，触控区域无缝衔接
             tabs.forEachIndexed { index, tab ->
-                val selectionProgress =
-                    (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f)
                 val tabCenter = firstTabCenter + step * index
 
                 DockBarItem(
                     tab = tab,
                     isSelected = tab == currentTab,
-                    selectionProgress = selectionProgress,
+                    selectionProgress = { (1f - abs(indicatorPosition.value - index)).coerceIn(0f, 1f) },
                     selectedColor = selectedColor,
                     onTabSelected = onTabSelected,
                     modifier = Modifier
@@ -281,7 +268,7 @@ fun GlassBottomBar(
 private fun DockBarItem(
     tab: YanjiTab,
     isSelected: Boolean,
-    selectionProgress: Float,
+    selectionProgress: () -> Float,
     selectedColor: Color,
     onTabSelected: (YanjiTab) -> Unit,
     modifier: Modifier = Modifier
@@ -292,29 +279,11 @@ private fun DockBarItem(
 
     // 未选中态更克制单色，选中态使用清晰 Accent
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-    val tint = lerp(unselectedColor, selectedColor, selectionProgress)
-
-    val iconSize by animateDpAsState(
-        targetValue = when {
-            reduceMotion -> 24.dp
-            isPressed -> 22.dp
-            else -> (23.5f + selectionProgress * 0.5f).dp
-        },
-        animationSpec = if (reduceMotion) {
-            tween(100)
-        } else {
-            spring(dampingRatio = 0.82f, stiffness = 550f)
-        },
-        label = "dockBarItemIconSize"
-    )
-    val iconOffset by animateDpAsState(
-        targetValue = if (isPressed || reduceMotion) 0.dp else (-0.5f * selectionProgress).dp,
-        animationSpec = if (reduceMotion) {
-            tween(100)
-        } else {
-            spring(dampingRatio = 0.85f, stiffness = 500f)
-        },
-        label = "dockBarItemIconOffset"
+    // Only a press changes the spring target; selection follows the shared position directly.
+    val pressScale = animateFloatAsState(
+        targetValue = if (isPressed && !reduceMotion) 22f / 24f else 1f,
+        animationSpec = if (reduceMotion) tween(0) else spring(dampingRatio = 0.82f, stiffness = 550f),
+        label = "dockBarItemPressScale"
     )
 
     Box(
@@ -337,22 +306,31 @@ private fun DockBarItem(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.graphicsLayer {
+                val progress = selectionProgress()
+                val selectionScale = if (reduceMotion) 1f else (23.5f + progress * 0.5f) / 24f
+                scaleX = selectionScale * pressScale.value
+                scaleY = scaleX
+                translationY = if (isPressed || reduceMotion) 0f else (-0.5f * progress).dp.toPx()
+            }
+        ) {
             Icon(
                 imageVector = tab.unselectedIcon,
                 contentDescription = tab.title,
-                tint = tint.copy(alpha = 1f - selectionProgress),
+                tint = unselectedColor,
                 modifier = Modifier
-                    .offset { IntOffset(0, iconOffset.roundToPx()) }
-                    .size(iconSize)
+                    .size(24.dp)
+                    .graphicsLayer { alpha = 1f - selectionProgress() }
             )
             Icon(
                 imageVector = tab.selectedIcon,
                 contentDescription = null,
-                tint = tint.copy(alpha = selectionProgress),
+                tint = selectedColor,
                 modifier = Modifier
-                    .offset { IntOffset(0, iconOffset.roundToPx()) }
-                    .size(iconSize)
+                    .size(24.dp)
+                    .graphicsLayer { alpha = selectionProgress() }
             )
         }
     }

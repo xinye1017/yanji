@@ -133,7 +133,8 @@ data class NoteEntryEntity(
     val tags: String, // Comma separated
     val createdAt: Long,
     val updatedAt: Long,
-    val isFavorite: Int = 0 // v15 新增：0/1，随笔收藏标记
+    val isFavorite: Int = 0, // v15 新增：0/1，随笔收藏标记
+    val isDraft: Int = 0 // v16 新增：0/1，随笔草稿标记（0=已保存，1=草稿）
 ) {
     fun toDomainModel(): NoteEntry {
         return NoteEntry(
@@ -149,7 +150,8 @@ data class NoteEntryEntity(
             tags = if (tags.isBlank()) emptyList() else tags.split(",").map { it.trim() },
             createdAt = createdAt,
             updatedAt = updatedAt,
-            isFavorite = isFavorite != 0
+            isFavorite = isFavorite != 0,
+            isDraft = isDraft != 0
         )
     }
 
@@ -168,7 +170,8 @@ data class NoteEntryEntity(
                 tags = model.tags.joinToString(","),
                 createdAt = model.createdAt,
                 updatedAt = model.updatedAt,
-                isFavorite = if (model.isFavorite) 1 else 0
+                isFavorite = if (model.isFavorite) 1 else 0,
+                isDraft = if (model.isDraft) 1 else 0
             )
         }
     }

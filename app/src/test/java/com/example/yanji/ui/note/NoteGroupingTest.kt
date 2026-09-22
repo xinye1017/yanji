@@ -167,4 +167,47 @@ class NoteGroupingTest {
         assertEquals("2026-09-21", groups[0].date)
         assertEquals(listOf("m1", "m2"), groups[0].entries.map { it.id }.sorted())
     }
+
+    @Test
+    fun prebuiltIndexMatchesDirectFilteringForEveryQueryShape() {
+        val all = listOf(
+            NoteEntry(
+                id = "a",
+                date = "2026-09-21",
+                title = "数学复盘",
+                content = "**深** 定理",
+                tags = listOf("HighP")
+            ),
+            NoteEntry(
+                id = "b",
+                date = "2026-09-20",
+                title = "english",
+                content = "DEEPSEEK 用法",
+                tags = emptyList()
+            )
+        )
+        val index = searchableNotes(all)
+        val queries = listOf(
+            "", "   ", "定理", "deepseek", "HIGHp", "DEEP", "复盘",
+            "9月21日", "09-20", "2026-09", "不存在的词", "*深*"
+        )
+        queries.forEach { query ->
+            assertEquals(
+                "查询「$query」下索引路径与直算路径结果必须一致",
+                filterNotes(all, query),
+                filterSearchable(index, query)
+            )
+        }
+    }
+
+    @Test
+    fun searchMatchesDisplayTextRatherThanMarkup() {
+        val all = listOf(
+            NoteEntry(id = "s1", date = "2026-09-21", content = "今天完成 **数学复盘** 与 _英语_")
+        )
+
+        assertEquals(listOf("s1"), filterNotes(all, "数学复盘").map { it.id })
+        assertTrue("markdown 标记本身不应成为可搜内容", filterNotes(all, "**").isEmpty())
+        assertTrue("按原文带标记的查询词不应命中", filterNotes(all, "**数学**").isEmpty())
+    }
 }

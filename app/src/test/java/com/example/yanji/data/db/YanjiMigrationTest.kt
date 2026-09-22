@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 15
+    private val CURRENT_VERSION = 16
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -183,7 +183,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_11_12,
         YanjiDatabase.MIGRATION_12_13,
         YanjiDatabase.MIGRATION_13_14,
-        YanjiDatabase.MIGRATION_14_15
+        YanjiDatabase.MIGRATION_14_15,
+        YanjiDatabase.MIGRATION_15_16
     )
 
     /**
@@ -644,6 +645,33 @@ class YanjiMigrationTest {
         assertEquals("旧随笔", db.textValue("SELECT title FROM journal_entries WHERE id='legacy-j'"))
         assertEquals(111L, db.longValue("SELECT createdAt FROM journal_entries WHERE id='legacy-j'"))
         assertEquals(0, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='legacy-j'"))
+        assertEquals("存量随笔迁移到最新版默认非草稿", 0, db.intValue("SELECT isDraft FROM journal_entries WHERE id='legacy-j'"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 15 -> 16 草稿标记
+
+    @Test
+    fun migrate15To16_addsIsDraftColumnWithDefaultZero() {
+        val db15 = helper.createDatabase(15)
+        db15.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite) VALUES " +
+                "('legacy-15','2026-09-21','已保存随笔','正文内容',5,5,5,'','','标签',100,200,1)"
+        ).use { it.step() }
+        db15.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(15))
+
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals("已保存随笔", db.textValue("SELECT title FROM journal_entries WHERE id='legacy-15'"))
+        assertEquals(1, db.intValue("SELECT isFavorite FROM journal_entries WHERE id='legacy-15'"))
+        assertEquals(0, db.intValue("SELECT isDraft FROM journal_entries WHERE id='legacy-15'"))
+
+        // 草稿记录可写入 1
+        insertNoteRow(db, "draft-1", "2026-09-21", "草稿篇", 300L, isDraft = 1)
+        assertEquals(1, db.intValue("SELECT isDraft FROM journal_entries WHERE id='draft-1'"))
         db.close()
     }
 
@@ -734,19 +762,21 @@ class YanjiMigrationTest {
         id: String,
         date: String,
         title: String,
-        createdAt: Long
+        createdAt: Long,
+        isDraft: Int = 0
     ) {
         db.prepare(
             "INSERT INTO journal_entries " +
                 "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
-                "tomorrowPlan, blockers, tags, createdAt, updatedAt) VALUES " +
-                "(?, ?, ?, '', 3, 3, 3, '', '', '', ?, ?)"
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft) VALUES " +
+                "(?, ?, ?, '', 3, 3, 3, '', '', '', ?, ?, 0, ?)"
         ).use { statement ->
             statement.bindText(1, id)
             statement.bindText(2, date)
             statement.bindText(3, title)
             statement.bindLong(4, createdAt)
             statement.bindLong(5, createdAt)
+            statement.bindLong(6, isDraft.toLong())
             statement.step()
         }
     }

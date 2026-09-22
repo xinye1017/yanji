@@ -1,8 +1,6 @@
 package com.example.yanji.ui.note
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.ui.components.YanjiPeekRating
+import com.example.yanji.ui.icons.RemixIcons
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -62,19 +61,18 @@ fun NoteEditorHeaderBar(
         // 记录时间与状态同行，靠右对齐；纯文本展示，不做成假按钮。
         Spacer(modifier = Modifier.weight(1f))
         HeaderMetaCell(
-            icon = Icons.Outlined.AccessTime,
+            icon = RemixIcons.TimeLine,
             value = "$formattedTime 记录"
         )
     }
 }
 
-/** 状态行的固定高度。按状态行内容的实际高度（星星 22dp + 文字行高 + 少量留白）取值。 */
-internal val HeaderRowHeight = 40.dp
+/** 状态行的固定高度。按状态行内容的实际高度（星星 22dp + 文字行高 + 少量留白）紧凑取值。 */
+internal val HeaderRowHeight = 28.dp
 
 /**
  * 状态行与正文之间的固定间距。
- * 单独抽出而不是并进 [HeaderRowHeight]：它不属于状态行本身的高度，
- * 折叠时与状态行一起收掉，正文让位/顶栏高度都以「行高 + 间距」为准。
+ * 调整为 14dp，使状态行上下间距平衡适中，同时保持正文整体位置稳定。
  */
 internal val HeaderRowGap = 14.dp
 

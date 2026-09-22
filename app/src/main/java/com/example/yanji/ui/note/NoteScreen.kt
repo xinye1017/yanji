@@ -1,5 +1,8 @@
 package com.example.yanji.ui.note
 
+import android.app.Activity
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -41,10 +44,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -88,8 +94,10 @@ fun NoteScreen(
 
     // 搜索：关键词（标题/正文/标签）或日期（如「9月21日」「09-21」「2026-09-21」）。
     var query by rememberSaveable { mutableStateOf("") }
-    val filteredGroups = remember(state.notes, query) {
-        filterNotes(state.notes, query)
+    // 小写索引只随笔记集合变化重建一次，避免每个按键重抄一遍全部正文。
+    val searchIndex = remember(state.notes) { searchableNotes(state.notes) }
+    val filteredGroups = remember(searchIndex, query) {
+        filterSearchable(searchIndex, query)
             .let { NoteViewModel.groupsOf(it).groups }
     }
 
@@ -202,20 +210,21 @@ fun NoteScreen(
                     // 同一天的多篇随笔之间、日期头与当日随笔之间均不再画线。
                     filteredGroups.forEachIndexed { groupIndex, group ->
                         if (groupIndex > 0) {
-                            item(key = "divider-${group.date}") {
+                            item(key = "divider-${group.date}", contentType = "note-divider") {
                                 NoteRowDivider()
                             }
                         }
-                        item(key = "header-${group.date}") {
-                            NoteDayHeader(
+                        item(key = "header-${group.date}", contentType = "note-header") {
+                            NoteDayHeaderItem(
+                                viewModel = viewModel,
                                 date = group.date,
-                                studyDurationSeconds = viewModel.dailySummaryFor(group.date).totalDurationSeconds,
                                 onStudyDurationClick = { onNavigateToDailyDetail(group.date) }
                             )
                         }
                         items(
                             count = group.entries.size,
-                            key = { index -> group.entries[index].id }
+                            key = { index -> group.entries[index].id },
+                            contentType = { "note-row" }
                         ) { index ->
                             val entry = group.entries[index]
                             NoteSwipeableRow(
@@ -279,18 +288,46 @@ fun NoteScreen(
  * **日期**（匹配 `2026-09-21`、`09-21`、`9月21日`、`9/21` 等写法）过滤。
  * 纯函数，便于单测。
  */
-internal fun filterNotes(entries: List<NoteEntry>, query: String): List<NoteEntry> {
+/**
+ * 搜索用的预小写视图：每篇笔记持有一份「标题 + 正文纯文本 + 标签」的小写副本。
+ *
+ * 正文先经 [noteListSnippet] 剥掉 markdown 标记，与列表展示看到的是同一份文本：
+ * 否则搜「数学」会命中 `**数学**` 的星号、搜星号也能命中正文，检索语义与展示语义相反。
+ * 副本只在笔记集合变化时重建，避免搜索框每个按键都重抄一遍全部正文。
+ */
+internal data class SearchableNote(
+    val entry: NoteEntry,
+    val lowerTitle: String,
+    val lowerContent: String,
+    val lowerTags: List<String>
+)
+
+internal fun searchableNotes(entries: List<NoteEntry>): List<SearchableNote> =
+    entries.map {
+        SearchableNote(
+            entry = it,
+            lowerTitle = it.title.lowercase(),
+            lowerContent = noteListSnippet(it.content).lowercase(),
+            lowerTags = it.tags.map { tag -> tag.lowercase() }
+        )
+    }
+
+internal fun filterNotes(entries: List<NoteEntry>, query: String): List<NoteEntry> =
+    filterSearchable(searchableNotes(entries), query)
+
+internal fun filterSearchable(index: List<SearchableNote>, query: String): List<NoteEntry> {
     val q = query.trim()
-    if (q.isEmpty()) return entries
+    if (q.isEmpty()) return index.map { it.entry }
 
     val lower = q.lowercase()
     // 抽出查询里所有数字：既支持「2026-09-21」全写，也支持「9月21日」「09-21」「9/21」。
     val digits = q.filter { it.isDigit() }
 
-    return entries.filter { entry ->
-        val inText = entry.title.lowercase().contains(lower) ||
-            entry.content.lowercase().contains(lower) ||
-            entry.tags.any { it.lowercase().contains(lower) }
+    return index.filter { note ->
+        val entry = note.entry
+        val inText = note.lowerTitle.contains(lower) ||
+            note.lowerContent.contains(lower) ||
+            note.lowerTags.any { it.contains(lower) }
 
         // 日期匹配：把日期压成 yyyyMMdd，再拿查询里的数字串去比。
         val iso = entry.date.replace("-", "") // yyyyMMdd
@@ -303,7 +340,7 @@ internal fun filterNotes(entries: List<NoteEntry>, query: String): List<NoteEntr
                 ))
 
         inText || inDate
-    }
+    }.map { it.entry }
 }
 
 /** 搜索框：大圆角、浅底。未聚焦且无输入时图标与占位词居中；聚焦后图标移至左侧、光标在左侧且去掉占位词。 */
@@ -318,7 +355,21 @@ private fun NoteSearchBar(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val showCenteredPlaceholder = query.isEmpty() && !isFocused
+
+    fun showKeyboard() {
+        coroutineScope.launch {
+            yield()
+            keyboardController?.show()
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            val view = (context as? Activity)?.currentFocus ?: (context as? Activity)?.window?.decorView
+            if (view != null) {
+                imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
 
     // 聚焦过渡进度：0 = 居中占位态，1 = 左侧输入态。
     // 放大镜图标据此做水平平移（居中图标向左淡出、左侧图标自右滑入），
@@ -345,12 +396,9 @@ private fun NoteSearchBar(
         keyboardController?.hide()
     }
 
-    // 点击这一帧直接把焦点交给输入框：焦点到位后由系统自动弹出输入法
-    // （真机实测：显式 show() 会先被上报为「请求可见类型」再取消，反而是多余的；
-    //  仅 requestFocus 就足以稳定唤起键盘，和编辑页 BasicTextField 的原生行为一致）。
-    // 不依赖状态回流后的异步 requestFocus，否则父容器同帧的清焦点手势会把它抢走。
     val focusSearch = {
         focusRequester.requestFocus()
+        showKeyboard()
     }
 
     Surface(
@@ -431,14 +479,12 @@ private fun NoteSearchBar(
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester)
-                        // 未聚焦时字段是 alpha=0 但可命中；点到它也要请求焦点，
-                        // 与点到胶囊空白走同一路径，避免漏掉聚焦。
-                        .pointerInput(isFocused) {
-                            if (!isFocused) {
-                                detectTapGestures { focusSearch() }
+                        .onFocusChanged { state ->
+                            onFocusChange(state.isFocused)
+                            if (state.isFocused) {
+                                showKeyboard()
                             }
                         }
-                        .onFocusChanged { state -> onFocusChange(state.isFocused) }
                         .testTag(NoteScreenTags.SearchInput)
                 )
 
@@ -493,6 +539,23 @@ private fun NoteNoResultState(query: String) {
 }
 
 /** 日期分组头：左侧「9月21日」，右侧该日真实学习时长 chip。 */
+/**
+ * 日期头：学时从 [NoteViewModel.dailySummaryFlow] 取，避免在组合过程中做全量会话扫描。
+ */
+@Composable
+private fun NoteDayHeaderItem(
+    viewModel: NoteViewModel,
+    date: String,
+    onStudyDurationClick: () -> Unit
+) {
+    val summary by viewModel.dailySummaryFlow(date).collectAsStateWithLifecycle()
+    NoteDayHeader(
+        date = date,
+        studyDurationSeconds = summary.totalDurationSeconds,
+        onStudyDurationClick = onStudyDurationClick
+    )
+}
+
 @Composable
 private fun NoteDayHeader(
     date: String,
@@ -610,121 +673,6 @@ private fun NoteEmptyState(
                 },
                 contentPadding = PaddingValues(horizontal = 32.dp, vertical = 12.dp)
             )
-        }
-    }
-}
-
-@Composable
-fun NoteCard(
-    entry: NoteEntry,
-    onClick: () -> Unit,
-    onStudyDurationClick: () -> Unit,
-    studyDurationSeconds: Long
-) {
-    // 单一事实来源：该日期真实的学习时长聚合（FocusSession + ExamSession），
-    // 由 ViewModel 计算后以纯值传入，本组件不再持有仓库依赖。
-    val durationSecs = studyDurationSeconds
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = BorderStroke(0.8.dp, YanjiColors.separator),
-        colors = CardDefaults.cardColors(containerColor = YanjiColors.elevatedSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = entry.date,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Clickable study duration chip linking to DailyStudyDetail
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .clickable { onStudyDurationClick() }
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = DurationFormatter.formatHoursMinutes(durationSecs),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-
-                // Star rating（与编辑页 / 历史行同一套星形资源）
-                Row {
-                    repeat(entry.moodScore) {
-                        Icon(
-                            painter = painterResource(R.drawable.star),
-                            contentDescription = null,
-                            tint = YanjiColors.warning,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Title
-            Text(
-                text = entry.title.ifEmpty { "学习随记与复盘" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Content snippet
-            // 摘要走 stripNoteMarkup：正文里 `**` / `_` 是样式标记，不该在卡片上露出来。
-            Text(
-                text = stripNoteMarkup(entry.content),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3
-            )
-
-            if (entry.tomorrowPlan.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            text = "明日计划: ",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            text = entry.tomorrowPlan,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 2
-                        )
-                    }
-                }
-            }
         }
     }
 }

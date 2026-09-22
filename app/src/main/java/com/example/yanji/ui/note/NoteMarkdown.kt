@@ -24,6 +24,49 @@ import androidx.compose.ui.unit.sp
  *  3. 编辑器快捷 Markdown 格式操作。
  */
 
+/** 行内相对坐标的一条样式，供 [MarkdownSyntaxTransformation] 按行缓存复用。 */
+internal class NoteInlineSpan(val style: SpanStyle, val start: Int, val end: Int)
+
+/**
+ * 随笔 Markdown 语法模式常量。
+ *
+ * 高亮器由 `VisualTransformation.filter` 在**每次文本变更**时调用，原先每次调用、甚至每行都重新
+ * 构造 `Regex`（一次按键要编译上百个模式）。`Regex` 不可变，提升为文件级常量即可安全共享复用。
+ */
+internal object NoteMarkdownPattern {
+    // 行级（块）语法
+    val TaskLine = Regex("""^[-*+•]\s+\[([ xX])\].*""")
+    val BulletLine = Regex("""^[•\-*+]\s+.*""")
+    val NumberedLine = Regex("""^\d+\.\s+.*""")
+    val ListPrefix = Regex("""^([•\-*+]|\d+\.)\s+.*""")
+    val DividerLine = Regex("""^(—{3,}|-{3,}|\*{3,}|_{3,})$""")
+
+    // 行内语法：对整篇文档扫描，字符类排除换行以免跨行匹配
+    val InlineCode = Regex("""`([^`\n]+)`""")
+    val BoldItalic = Regex("""(?<!\*)\*\*\*([^*\n]+)\*\*\*(?!\*)""")
+    val Bold = Regex("""\*\*([^*\n]+)\*\*""")
+    val Underline = Regex("""__([^_\n]+)__""")
+    val Strike = Regex("""~~([^~\n]+)~~""")
+    val ItalicStar = Regex("""(?<!\*)\*([^*\n]+)\*(?!\*)""")
+    val ItalicUnderscore = Regex("""(?<!_)_([^_\n]+)_(?!_)""")
+    val Link = Regex("""\[([^\]\n]+)\]\(([^)\n]+)\)""")
+
+    // 纯文本摘要剥离用：逐行处理，故无需排除换行
+    val StripHeading = Regex("""^#{1,6}\s+""")
+    val StripQuote = Regex("""^>\s?""")
+    val StripTask = Regex("""^[-*+•]\s+\[([ xX])\]\s+""")
+    val StripListPrefix = Regex("""^([•\-*+]|\d+\.)\s+""")
+    val StripBoldItalic = Regex("""\*\*\*([^*]+)\*\*\*""")
+    val StripBold = Regex("""\*\*([^*]+)\*\*""")
+    val StripUnderline = Regex("""__([^_]+)__""")
+    val StripStrike = Regex("""~~([^~]+)~~""")
+    val StripItalicStar = Regex("""(?<!\*)\*([^*]+)\*(?!\*)""")
+    val StripItalicUnderscore = Regex("""(?<!_)_([^_]+)_(?!_)""")
+    val StripInlineCode = Regex("""`([^`]+)`""")
+    val StripLink = Regex("""\[([^\]]+)\]\([^)]+\)""")
+}
+
+
 // ============================================================================
 // 一、实时语法高亮（VisualTransformation）
 // ============================================================================
@@ -38,13 +81,43 @@ class MarkdownSyntaxTransformation(
     private val colorScheme: ColorScheme
 ) : VisualTransformation {
 
+    // 同一段文本在一次输入里会被多次取用（文本布局 + 屏幕体二次重组），
+    // 单条目记忆让重复调用直接复用已构建好的 AnnotatedString；它不可变，可安全共享。
+    // 实例由 `remember(colorScheme)` 持有，换配色即新建实例，故无需把配色纳入键。
+    private var cachedSource: String? = null
+    private var cachedHighlighted: AnnotatedString? = null
+
+    // 行级样式缓存：一次按键通常只改动一两行，其余行的行内正则匹配结果可原样复用，
+    // 于是每键成本从「全文档 × 8 次扫描」降到「被改动的行 × 8 次扫描 + 其余行的哈希查表」。
+    // 实例由 `remember(colorScheme)` 持有，换配色即新建实例，故键无需带配色。
+    private val lineCache = mutableMapOf<String, List<NoteInlineSpan>>()
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val highlighted = highlightMarkdown(text.text, colorScheme)
+        val source = text.text
+        val cached = cachedHighlighted
+        val highlighted = if (cached != null && cachedSource == source) {
+            cached
+        } else {
+            highlightMarkdown(source, colorScheme, lineCache).also {
+                cachedSource = source
+                cachedHighlighted = it
+            }
+        }
         return TransformedText(highlighted, OffsetMapping.Identity)
     }
 
     companion object {
-        fun highlightMarkdown(source: String, colorScheme: ColorScheme): AnnotatedString {
+        /** 行缓存条数上限：超限直接清空重建，避免长文档长会话下无界增长。 */
+        private const val MaxCachedLines = 2048
+
+        fun highlightMarkdown(source: String, colorScheme: ColorScheme): AnnotatedString =
+            highlightMarkdown(source, colorScheme, null)
+
+        internal fun highlightMarkdown(
+            source: String,
+            colorScheme: ColorScheme,
+            lineCache: MutableMap<String, List<NoteInlineSpan>>?
+        ): AnnotatedString {
             if (source.isEmpty()) return AnnotatedString("")
 
             val lines = source.split('\n')
@@ -93,7 +166,7 @@ class MarkdownSyntaxTransformation(
                             markerEnd,
                             lineEndOffset
                         )
-                    } else if (line.matches(Regex("""^[-*+•]\s+\[([ xX])\].*"""))) {
+                    } else if (line.matches(NoteMarkdownPattern.TaskLine)) {
                         // 3. 待办清单 (- [ ] / - [x])
                         val isDone = line.contains("[x]") || line.contains("[X]")
                         val prefixEnd = (lineStartOffset + line.indexOf(']') + 2).coerceAtMost(lineEndOffset)
@@ -112,7 +185,7 @@ class MarkdownSyntaxTransformation(
                                 lineEndOffset
                             )
                         }
-                    } else if (line.matches(Regex("""^([•\-*+]|\d+\.)\s+.*"""))) {
+                    } else if (line.matches(NoteMarkdownPattern.ListPrefix)) {
                         // 4. 列表前缀
                         val spaceIdx = line.indexOf(' ')
                         if (spaceIdx > 0) {
@@ -122,7 +195,7 @@ class MarkdownSyntaxTransformation(
                                 lineStartOffset + spaceIdx + 1
                             )
                         }
-                    } else if (line.trim().matches(Regex("""^(—{3,}|-{3,}|\*{3,}|_{3,})$"""))) {
+                    } else if (line.trim().matches(NoteMarkdownPattern.DividerLine)) {
                         // 5. 分割线
                         addStyle(
                             SpanStyle(color = colorScheme.outline.copy(alpha = 0.6f), fontWeight = FontWeight.Bold),
@@ -131,20 +204,32 @@ class MarkdownSyntaxTransformation(
                         )
                     }
 
+                    // 6. 行内样式高亮（粗体、斜体、下划线、删除线、代码、链接）
+                    //    按行计算并可缓存：8 个行内模式的字符类都排除换行，行首 `(?<!\*)` 在整篇
+                    //    扫描里看到的前一字符恒为 '\n'，故逐行结果与整篇扫描逐字符等价。
+                    var inlineSpans = lineCache?.get(line)
+                    if (inlineSpans == null) {
+                        if (lineCache != null && lineCache.size >= MaxCachedLines) lineCache.clear()
+                        inlineSpans = inlineSpansFor(line, colorScheme)
+                        lineCache?.put(line, inlineSpans)
+                    }
+                    inlineSpans.forEach { addStyle(it.style, lineStartOffset + it.start, lineStartOffset + it.end) }
+
                     lineStartOffset = lineEndOffset + 1
                 }
-
-                // 6. 行内样式高亮（粗体、斜体、下划线、删除线、代码、链接）
-                highlightInlines(source, colorScheme)
             }
         }
 
-        private fun AnnotatedString.Builder.highlightInlines(source: String, colorScheme: ColorScheme) {
+        private fun inlineSpansFor(line: String, colorScheme: ColorScheme): List<NoteInlineSpan> {
+            val out = mutableListOf<NoteInlineSpan>()
+            // 局部同名 helper：让下面 8 段匹配逻辑与整篇扫描版逐字保持一致，只改数据去向。
+            fun addStyle(style: SpanStyle, start: Int, end: Int) { out.add(NoteInlineSpan(style, start, end)) }
+
             val subtleToken = SpanStyle(color = colorScheme.onSurfaceVariant.copy(alpha = 0.42f))
 
             // 行内代码 `...`
-            val codeRegex = Regex("""`([^`\n]+)`""")
-            codeRegex.findAll(source).forEach { match ->
+            val codeRegex = NoteMarkdownPattern.InlineCode
+            codeRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(SpanStyle(color = colorScheme.primary.copy(alpha = 0.5f)), range.first, range.first + 1)
                 addStyle(
@@ -160,8 +245,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 粗斜体 ***...***
-            val boldItalicRegex = Regex("""(?<!\*)\*\*\*([^*\n]+)\*\*\*(?!\*)""")
-            boldItalicRegex.findAll(source).forEach { match ->
+            val boldItalicRegex = NoteMarkdownPattern.BoldItalic
+            boldItalicRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 3)
                 addStyle(
@@ -177,8 +262,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 粗体 **...**
-            val boldRegex = Regex("""\*\*([^*\n]+)\*\*""")
-            boldRegex.findAll(source).forEach { match ->
+            val boldRegex = NoteMarkdownPattern.Bold
+            boldRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 2)
                 addStyle(
@@ -190,8 +275,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 下划线 __...__
-            val underlineRegex = Regex("""__([^_\n]+)__""")
-            underlineRegex.findAll(source).forEach { match ->
+            val underlineRegex = NoteMarkdownPattern.Underline
+            underlineRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 2)
                 addStyle(
@@ -203,8 +288,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 删除线 ~~...~~
-            val strikeRegex = Regex("""~~([^~\n]+)~~""")
-            strikeRegex.findAll(source).forEach { match ->
+            val strikeRegex = NoteMarkdownPattern.Strike
+            strikeRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 2)
                 addStyle(
@@ -216,8 +301,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 单星斜体 *...*（排除双星）
-            val italicStarRegex = Regex("""(?<!\*)\*([^*\n]+)\*(?!\*)""")
-            italicStarRegex.findAll(source).forEach { match ->
+            val italicStarRegex = NoteMarkdownPattern.ItalicStar
+            italicStarRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 1)
                 addStyle(SpanStyle(fontStyle = FontStyle.Italic), range.first + 1, range.last)
@@ -225,8 +310,8 @@ class MarkdownSyntaxTransformation(
             }
 
             // 单下划线斜体 _..._（排除双下划线）
-            val italicUnderscoreRegex = Regex("""(?<!_)_([^_\n]+)_(?!_)""")
-            italicUnderscoreRegex.findAll(source).forEach { match ->
+            val italicUnderscoreRegex = NoteMarkdownPattern.ItalicUnderscore
+            italicUnderscoreRegex.findAll(line).forEach { match ->
                 val range = match.range
                 addStyle(subtleToken, range.first, range.first + 1)
                 addStyle(SpanStyle(fontStyle = FontStyle.Italic), range.first + 1, range.last)
@@ -234,18 +319,24 @@ class MarkdownSyntaxTransformation(
             }
 
             // 链接 [title](url)
-            val linkRegex = Regex("""\[([^\]\n]+)\]\(([^)\n]+)\)""")
-            linkRegex.findAll(source).forEach { match ->
+            val linkRegex = NoteMarkdownPattern.Link
+            linkRegex.findAll(line).forEach { match ->
                 val titleGroup = match.groups[1] ?: return@forEach
                 val urlGroup = match.groups[2] ?: return@forEach
-                addStyle(SpanStyle(color = colorScheme.primary.copy(alpha = 0.6f)), match.range.first, titleGroup.range.first)
+                val left = match.range.first
+                val right = match.range.last + 1
+                val titleStart = titleGroup.range.first
+                val titleEnd = titleGroup.range.last + 1
+                val urlStart = urlGroup.range.first - 1
+                addStyle(SpanStyle(color = colorScheme.primary.copy(alpha = 0.6f)), left, titleStart)
                 addStyle(
                     SpanStyle(color = colorScheme.primary, textDecoration = TextDecoration.Underline),
-                    titleGroup.range.first,
-                    titleGroup.range.last + 1
+                    titleStart,
+                    titleEnd
                 )
-                addStyle(SpanStyle(color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)), urlGroup.range.first - 1, match.range.last + 1)
+                addStyle(SpanStyle(color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)), urlStart, right)
             }
+            return out
         }
     }
 }
@@ -264,29 +355,46 @@ fun stripNoteMarkdown(content: String): String {
         .map { line ->
             var l = line.trim()
             // 忽略纯分割线
-            if (l.matches(Regex("""^(—{3,}|-{3,}|\*{3,}|_{3,})$"""))) return@map ""
+            if (l.matches(NoteMarkdownPattern.DividerLine)) return@map ""
             // 去除标题前缀
-            l = l.replace(Regex("""^#{1,6}\s+"""), "")
+            l = l.replace(NoteMarkdownPattern.StripHeading, "")
             // 去除引用前缀
-            l = l.replace(Regex("""^>\s?"""), "")
+            l = l.replace(NoteMarkdownPattern.StripQuote, "")
             // 去除待办前缀
-            l = l.replace(Regex("""^[-*+•]\s+\[([ xX])\]\s+"""), "")
+            l = l.replace(NoteMarkdownPattern.StripTask, "")
             // 去除列表前缀
-            l = l.replace(Regex("""^([•\-*+]|\d+\.)\s+"""), "")
+            l = l.replace(NoteMarkdownPattern.StripListPrefix, "")
             // 去除行内标记
-            l = l.replace(Regex("""\*\*\*([^*]+)\*\*\*"""), "$1")
-            l = l.replace(Regex("""\*\*([^*]+)\*\*"""), "$1")
-            l = l.replace(Regex("""__([^_]+)__"""), "$1")
-            l = l.replace(Regex("""~~([^~]+)~~"""), "$1")
-            l = l.replace(Regex("""(?<!\*)\*([^*]+)\*(?!\*)"""), "$1")
-            l = l.replace(Regex("""(?<!_)_([^_]+)_(?!_)"""), "$1")
-            l = l.replace(Regex("""`([^`]+)`"""), "$1")
-            l = l.replace(Regex("""\[([^\]]+)\]\([^)]+\)"""), "$1")
+            l = l.replace(NoteMarkdownPattern.StripBoldItalic, "$1")
+            l = l.replace(NoteMarkdownPattern.StripBold, "$1")
+            l = l.replace(NoteMarkdownPattern.StripUnderline, "$1")
+            l = l.replace(NoteMarkdownPattern.StripStrike, "$1")
+            l = l.replace(NoteMarkdownPattern.StripItalicStar, "$1")
+            l = l.replace(NoteMarkdownPattern.StripItalicUnderscore, "$1")
+            l = l.replace(NoteMarkdownPattern.StripInlineCode, "$1")
+            l = l.replace(NoteMarkdownPattern.StripLink, "$1")
             l
         }
         .filter { it.isNotBlank() }
         .joinToString("\n")
 }
+
+/**
+ * 返回 [offset] 所在行的起止区间（`end` 指向该行末尾换行符，即不含换行符）。
+ * 编辑器快捷操作与预览共用这一份行边界口径。
+ */
+internal fun lineBoundsOf(text: String, offset: Int): Pair<Int, Int> {
+    val safe = offset.coerceIn(0, text.length)
+    val start = text.lastIndexOf('\n', (safe - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+    val end = text.indexOf('\n', safe).let { if (it < 0) text.length else it }
+    return start to end
+}
+
+/**
+ * 随笔列表摘要：剥掉 markdown 样式标记后展示。整篇只剩标记（如只有一条分割线）时剥完为空，
+ * 此时退回原文，避免列表里出现一行看起来完全空白的条目。
+ */
+fun noteListSnippet(content: String): String = stripNoteMarkdown(content).ifBlank { content }
 
 // ============================================================================
 // 三、Markdown 编辑器快捷输入与格式操作助手
@@ -414,8 +522,7 @@ object MarkdownEditorOps {
      */
     fun cycleHeading(text: String, selection: TextRange): Pair<String, TextRange> {
         val min = selection.min.coerceIn(0, text.length)
-        val lineStart = text.lastIndexOf('\n', (min - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', min).let { if (it < 0) text.length else it }
+        val (lineStart, lineEnd) = lineBoundsOf(text, min)
         val currentLine = text.substring(lineStart, lineEnd)
 
         val nextLine = when {
@@ -441,8 +548,7 @@ object MarkdownEditorOps {
         altPrefixes: List<String> = emptyList()
     ): Pair<String, TextRange> {
         val min = selection.min.coerceIn(0, text.length)
-        val lineStart = text.lastIndexOf('\n', (min - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', min).let { if (it < 0) text.length else it }
+        val (lineStart, lineEnd) = lineBoundsOf(text, min)
         val currentLine = text.substring(lineStart, lineEnd)
 
         val allPrefixes = listOf(prefix) + altPrefixes
@@ -465,8 +571,7 @@ object MarkdownEditorOps {
      */
     fun insertDivider(text: String, selection: TextRange): Pair<String, TextRange> {
         val min = selection.min.coerceIn(0, text.length)
-        val lineStart = text.lastIndexOf('\n', (min - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', min).let { if (it < 0) text.length else it }
+        val (lineStart, lineEnd) = lineBoundsOf(text, min)
         val currentLine = text.substring(lineStart, lineEnd)
 
         return if (currentLine.isBlank()) {
@@ -520,28 +625,31 @@ object MarkdownEditorOps {
 
     /**
      * 在预览模式下点击切换特定行的待办勾选状态 (- [ ] <-> - [x])。
+     *
+     * [TaskBullets] × [TaskMarks] 的遍历顺序即旧实现 12 组 `contains`/`replaceFirst` 分支的
+     * 书写顺序：同一行含多个标记时，仍按符号优先级 `- * + •` 与勾选态优先级 `空格 x X`
+     * 命中第一处，因此行为与逐条硬编码时完全一致。
      */
     fun toggleTaskItemAtLine(source: String, targetLineIndex: Int): String {
         val lines = source.lines().toMutableList()
         if (targetLineIndex !in lines.indices) return source
 
         val target = lines[targetLineIndex]
-        val replaced = when {
-            target.contains("- [ ] ") -> target.replaceFirst("- [ ] ", "- [x] ")
-            target.contains("- [x] ") -> target.replaceFirst("- [x] ", "- [ ] ")
-            target.contains("- [X] ") -> target.replaceFirst("- [X] ", "- [ ] ")
-            target.contains("* [ ] ") -> target.replaceFirst("* [ ] ", "* [x] ")
-            target.contains("* [x] ") -> target.replaceFirst("* [x] ", "* [ ] ")
-            target.contains("* [X] ") -> target.replaceFirst("* [X] ", "* [ ] ")
-            target.contains("+ [ ] ") -> target.replaceFirst("+ [ ] ", "+ [x] ")
-            target.contains("+ [x] ") -> target.replaceFirst("+ [x] ", "+ [ ] ")
-            target.contains("+ [X] ") -> target.replaceFirst("+ [X] ", "+ [ ] ")
-            target.contains("• [ ] ") -> target.replaceFirst("• [ ] ", "• [x] ")
-            target.contains("• [x] ") -> target.replaceFirst("• [x] ", "• [ ] ")
-            target.contains("• [X] ") -> target.replaceFirst("• [X] ", "• [ ] ")
-            else -> target
+        var replaced = target
+        outer@ for (bullet in TaskBullets) {
+            for (mark in TaskMarks) {
+                val from = "$bullet [$mark] "
+                if (replaced.contains(from)) {
+                    val to = if (mark == ' ') "$bullet [x] " else "$bullet [ ] "
+                    replaced = replaced.replaceFirst(from, to)
+                    break@outer
+                }
+            }
         }
         lines[targetLineIndex] = replaced
         return lines.joinToString("\n")
     }
+
+    private val TaskBullets = charArrayOf('-', '*', '+', '•')
+    private val TaskMarks = charArrayOf(' ', 'x', 'X')
 }

@@ -27,8 +27,6 @@ class AiResponseParserTest {
 
         assertNotNull(parsed.diagnosis)
         assertEquals("过程性失分", parsed.diagnosis)
-        assertNotNull(parsed.evidence)
-        assertTrue(parsed.evidence!!.contains("根据你最近 8 套模考"))
         // 步骤合并为单个 STEPS 块（UI StepsBlock 按行拆分渲染）
         assertEquals(1, parsed.blocks.filter { it.kind == AiBlockKind.STEPS }.size)
         val stepsText = parsed.blocks.find { it.kind == AiBlockKind.STEPS }!!.text
@@ -85,10 +83,41 @@ class AiResponseParserTest {
     }
 
     @Test
+    fun `lines already shown by a dedicated block are not duplicated into main text`() {
+        val content = """
+            【诊断】：过程性失分
+            【证据】：根据你最近 8 套模考
+            原因：草稿区没有分区
+            要将『草稿纸四分区』加为明早计划吗？
+            抱抱你，别自责！
+            这是真正的正文。
+        """.trimIndent()
+
+        val parsed = AiResponseParser.parse(content)
+
+        assertEquals("过程性失分", parsed.diagnosis)
+        assertEquals(1, parsed.actions.size)
+        assertEquals(AiActionType.CREATE_PLAN, parsed.actions[0].type)
+
+        // 【诊断】由横幅渲染、询问计划由按钮行渲染、安抚语进横幅 —— 都不该再出现在正文里。
+        // 【证据】与原因行没有独立渲染位（evidence 无人读取），仍须保留在正文中。
+        // 【证据】/原因 无独立渲染位、安抚行因横幅已被【诊断】占用而不再现身横幅，
+        // 三者都必须留在正文里；被横幅或按钮接管的两行才排除在外。
+        assertEquals(
+            listOf(
+                "【证据】：根据你最近 8 套模考",
+                "原因：草稿区没有分区",
+                "抱抱你，别自责！",
+                "这是真正的正文。"
+            ),
+            parsed.blocks.filter { it.kind == AiBlockKind.MAIN }.map { it.text }
+        )
+    }
+
+    @Test
     fun `empty content returns empty response`() {
         val parsed = AiResponseParser.parse("")
         assertNull(parsed.diagnosis)
-        assertNull(parsed.evidence)
         assertTrue(parsed.blocks.isEmpty())
         assertTrue(parsed.actions.isEmpty())
         assertTrue(parsed.followups.isEmpty())
@@ -122,5 +151,38 @@ class AiResponseParserTest {
         assertTrue(stepsBlock!!.text.contains("步骤一"))
         assertTrue(stepsBlock.text.contains("步骤二"))
         assertTrue(stepsBlock.text.contains("步骤三"))
+    }
+
+    @Test
+    fun empathyLineStaysVisibleWhenDiagnosisAlreadyPresent() {
+        val content = """
+            【诊断】：过程性失分
+            抱抱你，别自责！
+            正常正文。
+        """.trimIndent()
+
+        val parsed = AiResponseParser.parse(content)
+
+        assertEquals("过程性失分", parsed.diagnosis)
+        assertTrue(
+            "横幅已被【诊断】占用，安抚行若不落进正文就会凭空消失",
+            parsed.blocks.any { it.kind == AiBlockKind.MAIN && it.text.contains("抱抱你") }
+        )
+    }
+
+    @Test
+    fun empathyLineBecomesDiagnosisAndIsNotDuplicatedWhenBannerEmpty() {
+        val content = """
+            抱抱你，别自责！
+            正常正文。
+        """.trimIndent()
+
+        val parsed = AiResponseParser.parse(content)
+
+        assertEquals("抱抱你，别自责！", parsed.diagnosis)
+        assertTrue(
+            "横幅确实显示了它，正文不该再出现第二遍",
+            parsed.blocks.none { it.kind == AiBlockKind.MAIN && it.text.contains("抱抱你") }
+        )
     }
 }

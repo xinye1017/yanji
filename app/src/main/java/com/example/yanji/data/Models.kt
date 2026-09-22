@@ -245,7 +245,9 @@ data class NoteEntry(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     /** 收藏标记（v15 新增）。历史页向右滑即可切换。 */
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    /** 草稿标记（v16 新增）。已保存随笔为 false，暂存草稿为 true。 */
+    val isDraft: Boolean = false
 )
 
 @Serializable
@@ -391,12 +393,8 @@ data class AiResponseBlock(
 )
 
 enum class AiBlockKind {
-    DIAGNOSIS,
-    EVIDENCE,
     MAIN,
-    STEPS,
-    ACTION,
-    FOLLOWUP
+    STEPS
 }
 
 /**
@@ -406,11 +404,9 @@ enum class AiBlockKind {
 @Serializable
 data class AiResponse(
     val diagnosis: String? = null,
-    val evidence: String? = null,
     val blocks: List<AiResponseBlock> = emptyList(),
     val actions: List<AiAction> = emptyList(),
-    val followups: List<String> = emptyList(),
-    val contextSources: List<ChatContextSource> = emptyList()
+    val followups: List<String> = emptyList()
 )
 
 enum class AchievementRarity(

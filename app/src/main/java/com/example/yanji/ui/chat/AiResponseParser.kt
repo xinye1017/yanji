@@ -64,7 +64,6 @@ object AiResponseParser {
 
     private fun structuredParse(lines: List<String>): AiResponse {
         var diagnosis: String? = null
-        var evidence: String? = null
         val steps = mutableListOf<String>()
         val actions = mutableListOf<AiAction>()
         val followups = mutableListOf<String>()
@@ -72,20 +71,12 @@ object AiResponseParser {
 
         for (raw in lines) {
             // 1. 【诊断】xxx
-            DIAGNOSIS_HEADER.matchEntire(raw)?.let {
-                diagnosis = it.groupValues[1].trim()
-                return@let
-            }
-            // 2. 【证据】xxx
-            EVIDENCE_HEADER.matchEntire(raw)?.let {
-                evidence = it.groupValues[1].trim()
-                return@let
-            }
-            // 3. 原因：xxx（追加到证据链，不覆盖【证据】内容）
-            CAUSE_LINE.matchEntire(raw)?.let {
-                val cause = it.groupValues[1].trim()
-                evidence = evidence?.let { prev -> "$prev\n原因：$cause" } ?: cause
-                return@let
+            //    以下专用块分支命中后必须 continue 跳过本行：`return@let` 只退出 let 闭包，
+            //    语句会继续走到文末的 MAIN 追加，同一条内容因此在气泡里显示两遍。
+            val diagnosisMatch = DIAGNOSIS_HEADER.matchEntire(raw)
+            if (diagnosisMatch != null) {
+                diagnosis = diagnosisMatch.groupValues[1].trim()
+                continue
             }
             // 4. 动作 token：行内任意位置可出现多次
             val actionMatches = ACTION_TOKEN.findAll(raw).toList()
@@ -119,18 +110,22 @@ object AiResponseParser {
                 continue
             }
             // 7. 询问计划
-            ASK_PLAN_LINE.matchEntire(raw)?.let {
+            val askPlanMatch = ASK_PLAN_LINE.matchEntire(raw)
+            if (askPlanMatch != null) {
                 actions += AiAction(
                     id = UUID.randomUUID().toString(),
                     type = AiActionType.CREATE_PLAN,
-                    label = it.groupValues[1].trim()
+                    label = askPlanMatch.groupValues[1].trim()
                 )
-                return@let
+                continue
             }
-            // 8. 拥抱安抚
-            EMPATHY_LINE.matchEntire(raw)?.let {
-                if (diagnosis == null) diagnosis = it.groupValues[1].trim()
-                return@let
+            // 8. 拥抱安抚：只有真的拿到横幅位置时才跳过本行。
+            //    若【诊断】已占横幅，`diagnosis` 不会再收留这行文本，此时必须照常落进正文，
+            //    否则「抱抱你」这类安抚语会从气泡里凭空消失（内容丢失，而非去重）。
+            val empathyMatch = EMPATHY_LINE.matchEntire(raw)
+            if (empathyMatch != null && diagnosis == null) {
+                diagnosis = empathyMatch.groupValues[1].trim()
+                continue
             }
             // 其余正文
             mainBlocks += AiResponseBlock(AiBlockKind.MAIN, stripBold(raw))
@@ -146,7 +141,6 @@ object AiResponseParser {
 
         return AiResponse(
             diagnosis = diagnosis,
-            evidence = evidence,
             blocks = blocks,
             actions = actions,
             followups = followups.distinct()
@@ -218,7 +212,6 @@ object AiResponseParser {
         }.orEmpty()
         return AiResponse(
             diagnosis = empathy,
-            evidence = calloutBox,
             blocks = blocks,
             actions = actions
         )

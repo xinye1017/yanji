@@ -22,7 +22,7 @@ import java.io.File
         QuickStartPresetEntity::class,
         SubjectEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -508,6 +508,20 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v15 → v16:
+         * 为随笔表 `journal_entries` 新增 `isDraft` 列（INTEGER NOT NULL DEFAULT 0）。
+         * 存量随笔默认为 0（已保存随笔），暂存草稿为 1。
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "ALTER TABLE journal_entries " +
+                        "ADD COLUMN isDraft INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -528,7 +542,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
-            MIGRATION_14_15
+            MIGRATION_14_15,
+            MIGRATION_15_16
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

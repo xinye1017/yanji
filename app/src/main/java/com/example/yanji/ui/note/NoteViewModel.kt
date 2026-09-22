@@ -36,13 +36,18 @@ open class NoteViewModel(
     private val statsRepo: StudyStatisticsRepository
 ) : ViewModel() {
 
-    /** 声明为 `open` 便于插桩测试注入固定列表（如「当天已有随笔」的只读场景），避免打真实库。 */
+    /**
+     * 声明为 `open` 便于插桩测试注入固定列表（如「当天已有随笔」的只读场景），避免打真实库。
+     *
+     * 这里只做透传，不预分组：分组结果 `groups` 在本页无消费者（列表自行按筛选结果分组），
+     * 放在这条热 Flow 上会让每次笔记表写入都白跑一遍 groupBy + 两次排序。
+     */
     open val uiState: StateFlow<NoteUiState> = repo.noteEntries
-        .map { groupsOf(it) }
+        .map { NoteUiState(notes = it) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = groupsOf(repo.noteEntries.value)
+            initialValue = NoteUiState(notes = repo.noteEntries.value)
         )
 
     /**
@@ -63,6 +68,22 @@ open class NoteViewModel(
 
     /** 该日期真实学习时长（单一事实来源：FocusSession + ExamSession 聚合）。 */
     fun dailySummaryFor(date: String): DailyStudySummary = statsRepo.getDailyStudySummary(date)
+
+    private val dailySummaryFlows = mutableMapOf<String, StateFlow<DailyStudySummary>>()
+
+    /**
+     * 日期头学时的响应式来源：走按日区间下推的查询，每个日期只建一条共享 Flow。
+     * 列表此前在组合函数内直接调 [dailySummaryFor]，那会全量扫描内存中的会话列表。
+     * 与 DailyStudyDetailViewModel 用的是同一条数据通路。
+     */
+    fun dailySummaryFlow(date: String): StateFlow<DailyStudySummary> =
+        dailySummaryFlows.getOrPut(date) {
+            statsRepo.getDailyStudySummaryFlow(date).stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = statsRepo.getDailyStudySummary(date)
+            )
+        }
 
     companion object {
         /**

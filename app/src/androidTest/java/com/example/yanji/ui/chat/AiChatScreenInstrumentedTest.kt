@@ -110,8 +110,7 @@ class AiChatScreenInstrumentedTest {
                         message = aiMessage(),
                         learningRecordCount = 5,
                         onActionClick = {},
-                        onFollowupClick = {},
-                        onContextSourceClick = {}
+                        onFollowupClick = {}
                     )
                 }
             }
