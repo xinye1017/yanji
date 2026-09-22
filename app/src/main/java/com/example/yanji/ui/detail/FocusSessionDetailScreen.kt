@@ -73,15 +73,8 @@ fun FocusSessionDetailScreen(
         return
     }
 
-    val subjectColor = remember(session.subjectId) {
-        when (SubjectCatalog.categoryIdOf(session.subjectId)) {
-            "math" -> SubjectMath
-            "major" -> SubjectMajor
-            "english" -> SubjectEnglish
-            "politics" -> SubjectPolitics
-            else -> SubjectOther
-        }
-    }
+    // 颜色按学科在目录中的顺序取主题色阶，不做学科名判断（学科可自定义）。
+    val subjectColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(session.subjectId))
 
     Column(
         modifier = modifier

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.yanji.data.DurationFormatter
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.SubjectDistributionItem
 import com.example.yanji.data.SubjectStatsLevel
 import com.example.yanji.theme.*
@@ -49,16 +50,18 @@ fun SubjectDistributionCard(
     val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
     val mascotTheme = currentMascotTheme()
     val isDark = yanjiIsDarkTheme()
-    val isSubcategory = subjectStatsLevel == SubjectStatsLevel.SUBCATEGORY
 
-    val subjectColors = remember(subjectDistribution, mascotTheme, isDark, isSubcategory) {
-        resolveSubjectChartColors(
-            items = subjectDistribution.map { it.subjectId to it.subjectName },
-            palette = mascotTheme.chartPalette,
-            isDark = isDark,
-            isSubcategory = isSubcategory
-        )
+    // 颜色一律由 SubjectCatalog 的稳定顺序索引决定，与学科名无关：
+    // 大类/子类都可由用户自定义，任何按名字选色的映射都会让自定义科目退化成同一个兜底色。
+    // 用 colorIndexOf + 主题色板而非「显示列表下标」，是为了让同一学科在统计卡、详情页、
+    // 模考卡片等所有语境下都拿到同一个颜色，避免同一科目在不同页面显示成不同色。
+    val subjectColors = remember(subjectDistribution, mascotTheme, isDark) {
+        val steps = mascotTheme.chartPalette.steps(isDark)
+        subjectDistribution.map { item -> steps[SubjectCatalog.colorIndexOf(item.subjectId) % steps.size] }
     }
+
+    /** 取第 index 个学科在本主题下的显示色（顺序映射，与学科名无关）。 */
+    fun colorFor(index: Int): Color = subjectColors[index % subjectColors.size]
 
     YanjiCard(
         modifier = Modifier.fillMaxWidth(),
@@ -103,7 +106,7 @@ fun SubjectDistributionCard(
                 // 单学科多态：显示 100% 紧凑信息条，不绘制巨大单色圆环
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 val singleSub = subjectDistribution.first()
-                val color = subjectColors[singleSub.subjectName] ?: subjectChartColor(singleSub.subjectName, singleSub.subjectId)
+                val color = colorFor(0)
                 val durationText = DurationFormatter.formatHoursMinutes(singleSub.durationSeconds)
 
                 Column(
@@ -169,14 +172,16 @@ fun SubjectDistributionCard(
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
                 SubjectDonutChart(
                     subjectDist = subjectDist,
-                    subjectColors = subjectColors,
+                    subjectColors = subjectDistribution.mapIndexed { index, sub ->
+                        sub.subjectName to colorFor(index)
+                    }.toMap(),
                     totalLabel = timeRangeTitle
                 )
 
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 subjectDistribution.forEachIndexed { index, sub ->
-                    val color = subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)
+                    val color = colorFor(index)
                     val subSecs = sub.durationSeconds
                     val totalSecs = maxOf(1L, subjectDist.values.sum())
                     val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
@@ -207,15 +212,15 @@ fun SubjectDistributionCard(
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 SubjectDistributionBar(
-                    segments = subjectDistribution.map { sub ->
-                        (subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)) to sub.durationSeconds.toFloat()
+                    segments = subjectDistribution.mapIndexed { index, sub ->
+                        colorFor(index) to sub.durationSeconds.toFloat()
                     }
                 )
 
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
 
                 subjectDistribution.forEachIndexed { index, sub ->
-                    val color = subjectColors[sub.subjectName] ?: subjectChartColor(sub.subjectName, sub.subjectId)
+                    val color = colorFor(index)
                     val subSecs = sub.durationSeconds
                     val totalSecs = maxOf(1L, subjectDist.values.sum())
                     val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
@@ -321,24 +326,6 @@ private fun SubjectDistributionBar(segments: List<Pair<Color, Float>>) {
 }
 
 /**
- * 单条学科分布的显示色：优先当前主题的图表调色方案。
- */
-@Composable
-@ReadOnlyComposable
-private fun subjectDisplayColor(sub: SubjectDistributionItem): Color {
-    return com.example.yanji.theme.subjectChartColor(sub.subjectName, sub.subjectId)
-}
-
-/**
- * 学科序列色。
- */
-@Composable
-@ReadOnlyComposable
-fun subjectChartColor(name: String, id: String = ""): Color {
-    return com.example.yanji.theme.subjectChartColor(name, id)
-}
-
-/**
  * 环形图单段的几何参数（弧度制），供 [annulusSegmentPath] 生成带平齐切口的路径。
  */
 private data class AnnulusSegmentMeta(
@@ -420,14 +407,17 @@ private fun SubjectDonutChart(
         animationSpec = tween(durationMillis = 280),
         label = "subjectDonutReveal"
     )
+    // 调用方始终会为每个扇区传入颜色；此处仅作兜底，在 Composable 作用域内解析一次。
+    val fallbackColor = yanjiSeriesColorAt(0)
 
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant
+        // 颜色由调用方按学科顺序传入（缺失时回落到主题色阶首色，不再按学科名猜色）。
         val seriesColors = mutableMapOf<String, Color>()
-        subjectDist.keys.forEach { name -> seriesColors[name] = subjectColors[name] ?: subjectChartColor(name) }
+        subjectDist.keys.forEach { name -> seriesColors[name] = subjectColors[name] ?: fallbackColor }
         Canvas(modifier = Modifier.size(150.dp)) {
             if (total > 0) {
                 val strokeW = 24.dp.toPx()

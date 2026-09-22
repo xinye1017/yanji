@@ -46,4 +46,58 @@ class StudyDiagnosticsTest {
         assertEquals("数学一（综合/未细分）", SubjectCatalog.displayName("math__unclassified"))
         assertEquals("major", SubjectCatalog.inferCategoryId("custom", "408 全真模拟"))
     }
+
+    /**
+     * 图表取色索引（`colorIndexOf`）必须保证：
+     * 1. 大类视图下 5 个大类落在互不相同的色阶；
+     * 2. 子类视图下同一父大类的子类落在互不相同的色阶；
+     * 3. 不同父大类的子类不共享色阶（否则两个不同科目的子类会显示成同色）。
+     */
+    @Test
+    fun colorIndexAssignsDistinctPaletteSlotsPerView() {
+        val paletteSize = 5
+
+        // 1. 大类视图：5 个大类 → 5 个不同色阶
+        val categorySteps = SubjectCatalog.categories.map { SubjectCatalog.colorIndexOf(it.id) % paletteSize }
+        assertEquals("category view must use $paletteSize distinct steps", paletteSize, categorySteps.toSet().size)
+
+        // 2. 子类视图：每个大类的所有子类 → 同父内互不相同
+        for (category in SubjectCatalog.categories) {
+            val children = SubjectCatalog.childrenOf(category.id)
+            if (children.size < 2) continue
+            val steps = children.map { SubjectCatalog.colorIndexOf(it.id) % paletteSize }
+            assertEquals(
+                "children of ${category.id} must not collide: ${children.map { it.name }}",
+                children.size,
+                steps.toSet().size
+            )
+        }
+
+        // 3. 不同父大类的子类不得共享色阶
+        val allChildSteps = SubjectCatalog.all
+            .filter { it.parentId != null }
+            .map { SubjectCatalog.colorIndexOf(it.id) }
+        assertEquals(
+            "subcategories across different categories must occupy distinct slots",
+            allChildSteps.size,
+            allChildSteps.toSet().size
+        )
+    }
+
+    @Test
+    fun colorIndexIsStableAndNeverNegative() {
+        // 稳定：同一 id 多次调用结果一致（渲染层依赖它在重组间保持恒定）
+        for (subject in SubjectCatalog.all) {
+            val first = SubjectCatalog.colorIndexOf(subject.id)
+            assertEquals(first, SubjectCatalog.colorIndexOf(subject.id))
+            assertTrue("colorIndexOf must not be negative for ${subject.id}", first >= 0)
+        }
+        // 未知学科：安全回落到 0，不抛异常、不返回负数
+        assertEquals(0, SubjectCatalog.colorIndexOf("完全不存在的自定义学科"))
+        // 未细分桶（__unclassified）也应与父大类取同一槽位
+        assertEquals(
+            SubjectCatalog.colorIndexOf("math"),
+            SubjectCatalog.colorIndexOf("math${SubjectCatalog.UNCLASSIFIED_SUFFIX}")
+        )
+    }
 }

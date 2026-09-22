@@ -64,20 +64,10 @@ val YanjiDangerSoft = Color(0xFFFDECEC)
 val YanjiError = YanjiDanger
 val YanjiBorderSoft = Color(0xFFF2F4F7)
 
-// Subject Colors (DESIGN.md chart series)
-val SubjectMath = Color(0xFF356AE6)       // Mathematics 数学 - 主蓝
-val SubjectMajor = Color(0xFF6F91EA)      // Major/408 专业课 - 亮蓝
-val SubjectEnglish = Color(0xFF8B7CF6)    // English 英语 - 薰衣草紫
-val SubjectPolitics = Color(0xFF7CB6D9)   // Politics 政治 - 天蓝
-val SubjectOther = Color(0xFFB8C6DF)      // Other 其他 - 雾蓝
-
-// Subject Soft —— 与上列分类色配对的极浅容器，用于图标底 / 分类 chip 背景。
-// 与分类色一一对应，不要在 Screen 内联推导。
-val SubjectMathSoft = YanjiPrimarySoft    // #EAF1FF
-val SubjectMajorSoft = Color(0xFFEEF3FF)
-val SubjectEnglishSoft = YanjiLavenderSoftDeep
-val SubjectPoliticsSoft = Color(0xFFEDF6FA)
-val SubjectOtherSoft = YanjiSurfaceSoft   // #F1F5FB
+// 注意：这里不再定义「学科语义色」（原 SubjectMath / SubjectEnglish …）。
+// 学科大类与子类均可由用户自由增删改名，任何「某个名字对应某个颜色」的常量都会让自定义科目
+// 退化到兜底色。学科色现由每套伙伴主题的 5 阶色板按**顺序索引**提供，
+// 见 MascotChartTheme.kt 的 MascotChartPalette 与 yanjiSeriesColorAt()。
 
 // ===========================================================================
 // Yanji Dark Palette —— 严格对齐 design_dark.md「Midnight Blue」
@@ -173,15 +163,6 @@ val YanjiDarkDockPill = Color(0x384F7DF3)
 
 /** 亮色底栏面板：保持不透明纯白（不改动亮色既有视觉）。 */
 val YanjiDockPanel = YanjiSurface
-
-// --- 学科序列色（design_dark.md §3.4；亮色序列色见文件上方 Subject*）---
-val SubjectMathDark = Color(0xFF4F7DF3)
-val SubjectMajorDark = Color(0xFF818CF8)
-val SubjectEnglishDark = Color(0xFFA78BFA)
-val SubjectPoliticsDark = Color(0xFF38BDF8)
-
-/** 「其他」：规范未给暗色值，取与 text-secondary 同值的雾蓝灰，保证与主蓝区分度。 */
-val SubjectOtherDark = Color(0xFF94A3B8)
 
 // ---------------------------------------------------------------------------
 // Achievement rarity tokens（成就稀有度）

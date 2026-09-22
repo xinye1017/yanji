@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard
@@ -24,12 +25,13 @@ fun ExamPresetsList(
     onStartExam: (subjectId: String, name: String, durationSecs: Long) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 预设卡片对应固定的 5 个内置大类，按其在学科目录中的顺序取主题色阶。
         ExamCard(
             title = "数学一 全真模拟套卷",
             durationMins = 180,
             fullScore = 150,
             recommendedTime = "08:30 - 11:30",
-            accentColor = SubjectMath,
+            accentColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf("math")),
             onStart = { onStartExam("math", "数学一 全真模拟", 10800L) }
         )
 
@@ -38,7 +40,7 @@ fun ExamPresetsList(
             durationMins = 180,
             fullScore = 150,
             recommendedTime = "14:00 - 17:00",
-            accentColor = SubjectMajor,
+            accentColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf("major")),
             onStart = { onStartExam("major", "408专业课 全真模拟", 10800L) }
         )
 
@@ -47,7 +49,7 @@ fun ExamPresetsList(
             durationMins = 180,
             fullScore = 100,
             recommendedTime = "14:00 - 17:00",
-            accentColor = SubjectEnglish,
+            accentColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf("english")),
             onStart = { onStartExam("english", "英语一 模拟考试", 10800L) }
         )
 
@@ -56,7 +58,7 @@ fun ExamPresetsList(
             durationMins = 180,
             fullScore = 100,
             recommendedTime = "08:30 - 11:30",
-            accentColor = SubjectPolitics,
+            accentColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf("politics")),
             onStart = { onStartExam("politics", "思想政治理论 模考", 10800L) }
         )
 

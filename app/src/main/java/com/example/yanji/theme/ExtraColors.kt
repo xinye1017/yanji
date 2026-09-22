@@ -137,67 +137,24 @@ object YanjiColors {
 }
 
 // ---------------------------------------------------------------------------
-// 学科序列色（design_dark.md §3.4）
+// 学科序列色（按顺序索引分配，不做学科语义绑定）
 // ---------------------------------------------------------------------------
 
 /**
- * 亮色序列色 hex → 暗色序列色。
+ * 按**学科顺序索引**取当前伙伴主题下的显示色。
  *
- * 为什么在这里做映射：学科色的**唯一事实来源是数据层**（`SubjectCatalog.colorHex`，
- * 一个 hex 字符串，落库、进统计、进备份）。让数据层感知主题是错的架构方向，
- * 所以在**渲染层**做一次「亮色 hex → 当前主题色」的翻译：暗色下按 design_dark.md
- * §3.4 升调，未登记的色值原样返回（自定义科目不丢色）。
- */
-internal val DarkSeriesColors: Map<String, Color> = mapOf(
-    "356AE6" to SubjectMathDark,      // 数学一
-    "6F91EA" to SubjectMajorDark,     // 408 专业课
-    "8B7CF6" to SubjectEnglishDark,   // 英语一
-    "7CB6D9" to SubjectPoliticsDark,  // 思想政治
-    "B8C6DF" to SubjectOtherDark      // 其他
-)
-
-/**
- * 把（来自数据层的）学科色 hex 解析成当前主题下应显示的颜色。
+ * 历史背景：这里原本是「亮色 hex → 主题色」的查表翻译（`356AE6` 一定是数学、`8B7CF6` 一定是英语）。
+ * 但学科大类/子类都可由用户自由增删改名，查表会让所有自定义科目落进同一个兜底分支、显示成同色。
+ * 因此改为**纯顺序映射**：第 i 个学科取主题色阶的第 i 个颜色，与学科叫什么名字无关。
  *
- * @param hex 形如 `#356AE6` / `356AE6`；未登记或解析失败时返回 [fallback]。
+ * 调用方需传入该学科在**同一展示列表中的稳定顺序**（通常来自 `SubjectCatalog` 的 sortOrder 排序）。
+ *
+ * @param index 学科在展示列表中的顺序（0 起）；超出 5 时按 [MascotChartPalette] 循环取色
  */
 @Composable
 @ReadOnlyComposable
-fun yanjiSeriesColor(hex: String, fallback: Color): Color {
+fun yanjiSeriesColorAt(index: Int): Color {
     val mascot = LocalMascotTheme.current
     val isDark = LocalYanjiDarkTheme.current
-    val palette = mascot.chartPalette
-    val cleanHex = hex.removePrefix("#").trim().uppercase()
-    return when (cleanHex) {
-        "356AE6" -> palette.math(isDark)
-        "6F91EA" -> palette.major(isDark)
-        "8B7CF6" -> palette.english(isDark)
-        "7CB6D9", "E67E22" -> palette.politics(isDark)
-        "B8C6DF", "667085" -> palette.other(isDark)
-        else -> if (!isDark) fallback else DarkSeriesColors[cleanHex] ?: fallback
-    }
+    return mascot.chartPalette.colorAt(index, isDark)
 }
-
-/** 亮色序列色 token → 当前伙伴主题序列色 token，供直接使用 token 的调用点取色。 */
-@Composable
-@ReadOnlyComposable
-fun yanjiSeriesToken(light: Color): Color {
-    val mascot = LocalMascotTheme.current
-    val isDark = LocalYanjiDarkTheme.current
-    val palette = mascot.chartPalette
-    return when (light) {
-        SubjectMath -> palette.math(isDark)
-        SubjectMajor -> palette.major(isDark)
-        SubjectEnglish -> palette.english(isDark)
-        SubjectPolitics -> palette.politics(isDark)
-        SubjectOther -> palette.other(isDark)
-        else -> if (!isDark) light else DarkSeriesColors[light.toHexKey()] ?: light
-    }
-}
-
-private fun Color.toHexKey(): String =
-    "%02X%02X%02X".format(
-        (red * 255f + 0.5f).toInt(),
-        (green * 255f + 0.5f).toInt(),
-        (blue * 255f + 0.5f).toInt()
-    )

@@ -17,12 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.*
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
-import com.example.yanji.theme.yanjiSeriesColor
 import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
@@ -130,16 +128,9 @@ fun DailyStudyDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                summary.subjectDistribution.forEach { (subName, secs) ->
-                                    val chipColor = when {
-                                        subName.contains("数学") || subName.contains("线性代数") || subName.contains("概率论") -> SubjectMath
-                                        subName.contains("408") || subName.contains("专业课") ||
-                                            subName.contains("数据结构") || subName.contains("计算机组成") ||
-                                            subName.contains("计算机网络") || subName.contains("操作系统") -> SubjectMajor
-                                        subName.contains("英语") -> SubjectEnglish
-                                        subName.contains("政治") -> SubjectPolitics
-                                        else -> SubjectOther
-                                    }
+                                summary.subjectDistribution.entries.forEachIndexed { index, (subName, secs) ->
+                                    // 按学科顺序取主题色阶，不做学科名判断（学科可自定义）。
+                                    val chipColor = com.example.yanji.theme.yanjiSeriesColorAt(index)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
@@ -267,12 +258,8 @@ fun DailySessionRowCard(
     item: DailySessionItem,
     onClick: () -> Unit
 ) {
-    val seriesFallback = MaterialTheme.colorScheme.primary
-    val rawSeriesColor = remember(item.subjectColor, seriesFallback) {
-        runCatching { Color(item.subjectColor.toColorInt()) }.getOrDefault(seriesFallback)
-    }
-    // 学科色的事实来源在数据层（hex 字符串），这里按当前主题做一次翻译：暗色下换成升调序列色。
-    val tagColor = yanjiSeriesColor(item.subjectColor, rawSeriesColor)
+    // 颜色来自当前主题色阶，按该学科在学科目录中的稳定顺序取色（与学科名无关）。
+    val tagColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(item.subjectId))
 
     YanjiCard(
         onClick = onClick,

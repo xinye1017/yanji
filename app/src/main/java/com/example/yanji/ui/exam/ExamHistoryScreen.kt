@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.ExamSession
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.AiAvatar
@@ -101,13 +102,8 @@ fun ExamHistoryCard(
     exam: ExamSession,
     onClick: () -> Unit
 ) {
-    val subjectColor = when {
-        exam.subjectName.contains("数学") || exam.subjectId.startsWith("math") -> SubjectMath
-        exam.subjectName.contains("408") || exam.subjectId.startsWith("major") -> SubjectMajor
-        exam.subjectName.contains("英语") || exam.subjectId == "english" -> SubjectEnglish
-        exam.subjectName.contains("政治") || exam.subjectId == "politics" -> SubjectPolitics
-        else -> SubjectOther
-    }
+    // 颜色按学科在目录中的顺序取主题色阶，不做学科名判断（学科可自定义）。
+    val subjectColor = yanjiSeriesColorAt(SubjectCatalog.colorIndexOf(exam.subjectId))
 
     YanjiCard(
         onClick = onClick,
