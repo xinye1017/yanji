@@ -72,7 +72,6 @@ object YanjiRadius {
     val SheetRadius = 28.dp
     val ChipRadius = 999.dp
     val Pill = 999.dp
-    val PillRadius = 999.dp
     val ItemRadius = 8.dp
 }
 

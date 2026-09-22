@@ -39,20 +39,6 @@ val YanjiLavenderSoft = Color(0xFFF0EDFF)
  */
 val YanjiLavenderDeep = Color(0xFF5C4BC3)
 
-/**
- * 薰衣草系柔和容器阶 —— 与 [YanjiLavenderSoft] 同色相、更浅的一档。
- *
- * 用于「需要浅紫底但不能再吃满 lavender-soft」的场景：
- * 成就徽章的径向渐变收尾色，以及英语分类的图标底色。
- */
-val YanjiLavenderSoftDeep = Color(0xFFF2F0FF)
-
-/**
- * 主蓝系柔和容器阶 —— [YanjiPrimarySoft] 之外更浅的一档，
- * 仅作渐变收尾色使用，避免在 Screen 内联硬编码渐变端点。
- */
-val YanjiPrimaryGradientSoft = Color(0xFFE8EEFF)
-
 val YanjiSuccess = Color(0xFF2F9E6D)
 val YanjiSuccessSoft = Color(0xFFE8F7F0)
 
@@ -61,8 +47,6 @@ val YanjiWarningSoft = Color(0xFFFFF5E3)
 
 val YanjiDanger = Color(0xFFD94B4B)
 val YanjiDangerSoft = Color(0xFFFDECEC)
-val YanjiError = YanjiDanger
-val YanjiBorderSoft = Color(0xFFF2F4F7)
 
 // 学科色不属于 App Theme：它是 Subject.colorHex 的持久化内容数据。
 // 统一解析与亮/暗对比度处理见 SubjectColors.kt；伙伴主题只负责 UI Accent。
@@ -109,9 +93,6 @@ val YanjiDarkBorder = Color(0x14FFFFFF)
 /** rgba(255,255,255,0.05)：极弱分割线，存在而不喧宾夺主。 */
 val YanjiDarkDivider = Color(0x0DFFFFFF)
 
-/** rgba(255,255,255,0.06)：比 divider 略强一点点的次级边框。 */
-val YanjiDarkBorderSoft = Color(0x0FFFFFFF)
-
 // --- 主色（升调）---
 /** 高透心流蓝：暗底上的主 CTA、进度环、高亮标记。 */
 val YanjiDarkPrimary = Color(0xFF4F7DF3)
@@ -122,15 +103,6 @@ val YanjiDarkPrimaryStrong = Color(0xFF7197F7)
 /** rgba(79,125,243,0.16)：半透明柔和容器 —— 选中胶囊 / Tab 高亮 / 图标浅底。 */
 val YanjiDarkPrimarySoft = Color(0x294F7DF3)
 
-/** rgba(79,125,243,0.40)：选中态细腻微发光边缘。 */
-val YanjiDarkPrimaryEdge = Color(0x664F7DF3)
-
-/** rgba(79,125,243,0.35)：专注圆环的夜间自发光呼吸微感。 */
-val YanjiDarkPrimaryGlow = Color(0x594F7DF3)
-
-/** rgba(255,255,255,0.06)：专注进度底轨。 */
-val YanjiDarkTrack = Color(0x0FFFFFFF)
-
 // --- 品牌紫（卷卷 / AI 复盘）---
 val YanjiDarkLavender = Color(0xFFA78BFA)
 
@@ -140,9 +112,6 @@ val YanjiDarkLavenderDeep = Color(0xFFC4B5FD)
 /** rgba(167,139,250,0.16)：卷卷 AI 洞察气泡 / 反思建议的轻盈底。 */
 val YanjiDarkLavenderSoft = Color(0x29A78BFA)
 
-/** rgba(167,139,250,0.10)：AI 深度复盘卡片的极弱紫雾底。 */
-val YanjiDarkLavenderSoftDeep = Color(0x1AA78BFA)
-
 // --- 语义色 ---
 val YanjiDarkSuccess = Color(0xFF34D399)
 val YanjiDarkSuccessSoft = Color(0x2634D399)
@@ -150,17 +119,7 @@ val YanjiDarkWarning = Color(0xFFFBBF24)
 val YanjiDarkWarningSoft = Color(0x26FBBF24)
 val YanjiDarkDanger = Color(0xFFF87171)
 val YanjiDarkDangerSoft = Color(0x26F87171)
-val YanjiDarkError = YanjiDarkDanger
 
-// --- 浮动液态玻璃底栏（design_dark.md §3.2）---
-/** rgba(21,27,40,0.78)：半透明玻璃面板，让底栏与滚动内容自然叠合。 */
-val YanjiDarkDockPanel = Color(0xC7151B28)
-
-/** rgba(79,125,243,0.22)：激活态胶囊底色。 */
-val YanjiDarkDockPill = Color(0x384F7DF3)
-
-/** 亮色底栏面板：保持不透明纯白（不改动亮色既有视觉）。 */
-val YanjiDockPanel = YanjiSurface
 
 // ---------------------------------------------------------------------------
 // Achievement rarity tokens（成就稀有度）

@@ -54,7 +54,6 @@ import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -133,16 +132,6 @@ private fun normalizeQuietDuration(minutes: Int): Int {
     val steps = ((clamped - QuietDurationMinMinutes) + QuietDurationStepMinutes / 2) / QuietDurationStepMinutes
     return QuietDurationMinMinutes + steps * QuietDurationStepMinutes
 }
-
-private val QuietCardShape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
-private val QuietControlShape = RoundedCornerShape(YanjiRadius.RowRadius)
-
-/**
- * 选中态容器 —— 复用 theme 的淡蓝强调色，不再在 Screen 内联。
- * 与 DESIGN.md「chip-blue / nav-active」的 `primary-soft` 同一语义。
- */
-private val QuietSelectedSurface: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.primaryContainer
 
 /**
  * The restrained focus-preparation flow. It deliberately keeps one visual focus per step:
@@ -721,8 +710,7 @@ private fun QuietDurationWheel(
             }
         }
 
-        // 字号缓动：1 = 选中（32sp），0 = 差一项及以上（16sp）。
-        // 与旧实现一致（旧实现按索引距离线性插值）。
+        // 字号缓动：中心项为 32sp，距离中心一项及以上为 16sp。
         val sizeEaseAt: (Int) -> Float = remember(listState) {
             { index -> (1f - distanceInItemsAt(index)).coerceIn(0f, 1f) }
         }

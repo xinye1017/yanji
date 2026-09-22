@@ -92,22 +92,3 @@ fun YanjiPageHeader(
         }
     }
 }
-
-/**
- * 专供一级 Tab 页面使用的 iOS Large Title 标题栏
- */
-@Composable
-fun YanjiLargeTitleHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    trailing: (@Composable () -> Unit)? = null
-) {
-    YanjiPageHeader(
-        title = title,
-        modifier = modifier,
-        subtitle = subtitle,
-        largeTitle = true,
-        trailing = trailing
-    )
-}

@@ -184,8 +184,6 @@
 * **`YanjiCard`**：统一定义高品质圆角、描边、表面投影与毛玻璃底色容器。
 * **`YanjiButtons`**：包含主操作按钮 `YanjiPrimaryButton` 与次级幽灵按钮 `YanjiSecondaryButton`。
 * **`YanjiTextField`**：统一轮廓、字符计数与焦点反馈的输入组件。
-* **`YanjiMetric`**：专为学习时长、连续天数设计的量化看板组件。
-* **`YanjiChip`**：用于学科过滤与分类选择的交互胶囊组件。
 
 ---
 

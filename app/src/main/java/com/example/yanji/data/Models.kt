@@ -27,9 +27,6 @@ object FocusModes {
             val minutes = Regex("""(\d+)\s*分钟""").find(mode)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
             minutes * 60L
         }
-        mode == "45分钟番茄" -> 2700L
-        mode == "60分钟深度" -> 3600L
-        mode == "90分钟大题" -> 5400L
         mode == COUNT_UP -> 0L
         else -> 0L
     }
@@ -55,9 +52,6 @@ data class QuickStartPreset(
     val createdAt: Long = System.currentTimeMillis(),
     val sortOrder: Int = 0
 ) {
-    val isBuiltin: Boolean get() = type != TYPE_CUSTOM
-    val targetSeconds: Long get() = FocusModes.targetSeconds(mode)
-
     companion object {
         const val TYPE_START_FOCUS = "start_focus"
         const val TYPE_EXAM = "exam"
@@ -314,16 +308,14 @@ data class CheckIn(
 )
 
 enum class AchievementRarity(
-    val title: String,
-    val englishName: String,
-    val order: Int
+    val title: String
 ) {
-    COMMON("普通", "Common", 1),
-    UNCOMMON("优秀", "Uncommon", 2),
-    RARE("稀有", "Rare", 3),
-    EPIC("史诗", "Epic", 4),
-    LEGENDARY("传说", "Legendary", 5),
-    MYTHIC("神话", "Mythic", 6)
+    COMMON("普通"),
+    UNCOMMON("优秀"),
+    RARE("稀有"),
+    EPIC("史诗"),
+    LEGENDARY("传说"),
+    MYTHIC("神话")
 }
 
 enum class AchievementCategory(val title: String) {

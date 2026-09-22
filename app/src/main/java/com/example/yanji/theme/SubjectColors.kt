@@ -8,7 +8,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-private const val DEFAULT_SUBJECT_COLOR_HEX = "#667085"
 private const val MIN_SUBJECT_CONTRAST = 3.0
 
 private val SubjectLightBackground = Color(0xFFFFFFFF)

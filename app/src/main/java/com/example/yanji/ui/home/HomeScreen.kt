@@ -45,7 +45,6 @@ import com.example.yanji.ui.components.YanjiGroupedCard
 import com.example.yanji.ui.components.YanjiSection
 import com.example.yanji.ui.components.YanjiSettingsRow
 import com.example.yanji.ui.components.YanjiProgressBar
-import java.util.*
 
 @Composable
 fun HomeScreen(

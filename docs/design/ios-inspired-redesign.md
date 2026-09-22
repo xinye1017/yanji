@@ -159,7 +159,7 @@ flowchart TD
 
 - **Level 1 (Root Tabs)**:
   - Persistent bottom navigation (`GlassBottomBar`).
-  - Page header uses `YanjiLargeTitleHeader` (34sp Bold title with optional action buttons).
+  - Page header uses `YanjiPageHeader(largeTitle = true)` (34sp Bold title with optional action buttons).
   - List content includes content padding for bottom navigation bar so no content is obscured.
 - **Level 2 (Detail Screens)**:
   - Bottom navigation bar is hidden.
