@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +32,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -244,8 +248,9 @@ fun HomeScreen(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         Row(verticalAlignment = Alignment.Bottom) {
+                            val durationText = if (todayHours > 0) "${todayHours}h ${todayMins}m" else "${todayMins}m"
                             RollingNumber(
-                                text = "${todayHours}h ${todayMins}m",
+                                text = durationText,
                                 style = com.example.yanji.theme.YanjiTypography.title1,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -274,17 +279,32 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Progress bar
-                    LinearProgressIndicator(
-                        progress = { progress },
+                    val goalTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    val goalProgressColor = if (progress >= 1f && settings.dailyGoalHours > 0f) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                    Canvas(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(10.dp)
-                            .clip(RoundedCornerShape(YanjiRadius.ButtonRadius)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primaryContainer,
-                        gapSize = 0.dp,
-                        drawStopIndicator = {}
-                    )
+                            .height(8.dp)
+                    ) {
+                        val radius = size.height / 2f
+                        val corner = CornerRadius(radius, radius)
+
+                        drawRoundRect(color = goalTrackColor, cornerRadius = corner)
+
+                        val filledWidth = size.width * progress.coerceIn(0f, 1f)
+                        if (filledWidth > 0f) {
+                            val filledRadius = min(radius, filledWidth / 2f)
+                            drawRoundRect(
+                                color = goalProgressColor,
+                                size = Size(filledWidth, size.height),
+                                cornerRadius = CornerRadius(filledRadius, filledRadius)
+                            )
+                        }
+                    }
 
                     if (state.todaySummary.subjectDistribution.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(18.dp))
@@ -304,20 +324,13 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            state.todaySummary.subjectDistribution.forEach { (subName, secs) ->
-                                val color = when {
-                                    subName.contains("数学") || subName.contains("线性代数") || subName.contains("概率论") -> SubjectMath
-                                    subName.contains("408") || subName.contains("专业课") ||
-                                        subName.contains("数据结构") || subName.contains("计算机组成") ||
-                                        subName.contains("计算机网络") || subName.contains("操作系统") -> SubjectMajor
-                                    subName.contains("英语") -> SubjectEnglish
-                                    subName.contains("政治") -> SubjectPolitics
-                                    else -> SubjectOther
-                                }
+                            state.todaySummary.subjectDistribution.entries.forEachIndexed { index, (subName, secs) ->
+                                // 颜色按学科顺序分配，不按名字判断：大类/子类都可由用户自定义，
+                                // 任何按名取色的分支都会让自定义科目全部落进同一个兜底色。
                                 SubjectTimeChip(
                                     name = subName,
                                     time = DurationFormatter.formatHoursMinutes(secs),
-                                    color = com.example.yanji.theme.yanjiSeriesToken(color),
+                                    color = com.example.yanji.theme.yanjiSeriesColorAt(index),
                                     modifier = Modifier.clickable { onNavigateToSubjectDetail(subName) }
                                 )
                             }

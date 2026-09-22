@@ -82,9 +82,16 @@ fun CheckInCard(
                 }
 
                 // Status Tag
+                val todayCheckIn = state.todayCheckIn
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = if (state.isCheckedInToday) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer
+                    color = if (state.isCheckedInToday) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer,
+                    onClick = {
+                        if (state.isCheckedInToday && todayCheckIn != null) {
+                            onCheckInSuccess(todayCheckIn)
+                        }
+                    },
+                    enabled = state.isCheckedInToday && todayCheckIn != null
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -178,59 +185,9 @@ fun CheckInCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Action / State Area
-            // 局部捕获：state 是委托属性，块内多次访问无法 smart cast
-            val todayCheckIn = state.todayCheckIn
-            if (state.isCheckedInToday && todayCheckIn != null) {
-                // Today Checked-In Info: Clean, unnested clickable row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(YanjiRadius.Small))
-                        .clickable { onCheckInSuccess(todayCheckIn) }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "已连续打卡 ",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            RollingNumber(
-                                text = "${todayCheckIn.streak}",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = " 天",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = todayCheckIn.note.ifBlank { "稳扎稳打，静待花开。" },
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = "查看 >",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            } else {
-                // Check-in Action: Direct Button
+            if (!state.isCheckedInToday) {
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
                         val checkIn = viewModel.checkInToday(
