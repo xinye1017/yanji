@@ -76,7 +76,7 @@ class SessionDaoQueriesTest {
         allStmt.close()
         assertEquals(listOf("f3", "f2", "f1"), allIds)
 
-        // Test getRecentSessions(limit = 2): SELECT * FROM focus_sessions ORDER BY startTime DESC LIMIT 2
+        // 最近 N 条：SELECT * FROM focus_sessions ORDER BY startTime DESC LIMIT 2
         val recentStmt = db.prepare("SELECT id FROM focus_sessions ORDER BY startTime DESC LIMIT 2")
         val recentIds = mutableListOf<String>()
         while (recentStmt.step()) {

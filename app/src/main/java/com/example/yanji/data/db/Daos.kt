@@ -31,13 +31,6 @@ interface FocusSessionDao {
     fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<FocusSessionEntity>>
 
     @Query(
-        "SELECT * FROM focus_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "ORDER BY startTime DESC"
-    )
-    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
-
-    @Query(
         "SELECT subjectId, subjectName, " +
             "COALESCE(SUM(durationSeconds), 0) AS durationSeconds, " +
             "COUNT(*) AS sessionCount, COALESCE(MAX(durationSeconds), 0) AS longestSessionSeconds " +
@@ -62,14 +55,8 @@ interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
     suspend fun getAllOnce(): List<FocusSessionEntity>
 
-    @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC LIMIT :limit")
-    suspend fun getRecentSessions(limit: Int): List<FocusSessionEntity>
-
     @Query("SELECT * FROM focus_sessions WHERE startTime >= :sinceEpochMs ORDER BY startTime DESC")
     suspend fun getSessionsSince(sinceEpochMs: Long): List<FocusSessionEntity>
-
-    @Query("SELECT COALESCE(SUM(durationSeconds), 0) FROM focus_sessions WHERE status = 'COMPLETED'")
-    suspend fun getTotalCompletedDuration(): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(session: FocusSessionEntity)
@@ -107,13 +94,6 @@ interface ExamSessionDao {
     fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<ExamSessionEntity>>
 
     @Query(
-        "SELECT * FROM exam_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "ORDER BY startTime DESC"
-    )
-    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<ExamSessionEntity>
-
-    @Query(
         "SELECT subjectId, subjectName, " +
             "COALESCE(SUM(actualDurationSeconds), 0) AS durationSeconds, " +
             "COUNT(*) AS sessionCount, COALESCE(MAX(actualDurationSeconds), 0) AS longestSessionSeconds " +
@@ -138,14 +118,8 @@ interface ExamSessionDao {
     @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC")
     suspend fun getAllOnce(): List<ExamSessionEntity>
 
-    @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC LIMIT :limit")
-    suspend fun getRecentSessions(limit: Int): List<ExamSessionEntity>
-
     @Query("SELECT * FROM exam_sessions WHERE startTime >= :sinceEpochMs ORDER BY startTime DESC")
     suspend fun getSessionsSince(sinceEpochMs: Long): List<ExamSessionEntity>
-
-    @Query("SELECT COALESCE(SUM(actualDurationSeconds), 0) FROM exam_sessions WHERE status = 'COMPLETED'")
-    suspend fun getTotalCompletedDuration(): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(session: ExamSessionEntity)
@@ -174,9 +148,6 @@ interface NoteEntryDao {
 
     @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
     suspend fun getByDate(date: String): NoteEntryEntity?
-
-    @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
-    fun getByDateFlow(date: String): Flow<NoteEntryEntity?>
 
     @Query("SELECT COUNT(*) FROM journal_entries")
     suspend fun count(): Int
@@ -291,12 +262,6 @@ interface CheckInDao {
 
     @Query("SELECT * FROM check_ins ORDER BY date DESC")
     suspend fun getAllOnce(): List<CheckInEntity>
-
-    @Query("SELECT * FROM check_ins WHERE date = :date LIMIT 1")
-    suspend fun getByDate(date: String): CheckInEntity?
-
-    @Query("SELECT * FROM check_ins ORDER BY date DESC LIMIT 1")
-    suspend fun getLatest(): CheckInEntity?
 
     @Query("SELECT COUNT(*) FROM check_ins")
     suspend fun count(): Int
