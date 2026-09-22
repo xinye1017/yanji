@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -13,6 +14,7 @@ import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.YanjiTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -179,8 +181,44 @@ class NoteEditorScreenInstrumentedTest {
         }
 
         // 空白稿：写作区不继承当天已存在随笔的正文。
-        composeRule.onNodeWithTag(NoteEditorTags.ContentInput)
-            .assertTextEquals("")
+        // 只能读 EditableText：该节点 MergeDescendants=true，placeholder 会并进 Text，
+        // 所以 assertTextEquals("") 永远会被提示语打红；输入框真实内容由 EditableText 承载，
+        // 一旦新建稿误继承当天已有随笔，这里就会变成那篇的正文而变红。
+        assertEquals(
+            "新建稿的输入框必须为空，不得继承当天已存在随笔的正文",
+            "",
+            contentInputEditableText()
+        )
+    }
+
+    /**
+     * 反向对照：证明上一条用例的探针**读得到**正文。
+     * 若 EditableText 恒为空，「新建进空白稿」就成了永真的空断言。
+     */
+    @Test
+    fun editableTextProbeReadsTypedContent() {
+        setEditorContent()
+
+        composeRule.onNodeWithTag(NoteEditorTags.ContentInput).performTextInput("探针六个字呀")
+
+        assertEquals(
+            "EditableText 必须跟随输入内容，否则空白稿用例是空断言",
+            "探针六个字呀",
+            contentInputEditableText()
+        )
+    }
+
+    /** 写作区真实输入值；`null` 表示语义节点缺失该属性（用例应据此变红而非空过）。 */
+    private fun contentInputEditableText(): String? {
+        val config = composeRule.onNodeWithTag(NoteEditorTags.ContentInput)
+            .fetchSemanticsNode()
+            .config
+        return if (config.contains(SemanticsProperties.EditableText)) {
+            // 本 Compose 版本里 EditableText 承载的是 AnnotatedString，取 .text 才是原始输入值。
+            config[SemanticsProperties.EditableText]?.text
+        } else {
+            null
+        }
     }
 
     companion object {
