@@ -132,7 +132,7 @@ fun ExamDetailScreen(
                                 color = YanjiColors.success
                             )
                             Text(
-                                text = " / ${exam.maxScore?.toInt() ?: 150} 分",
+                                text = " / ${exam.maxScore.toInt()} 分",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 6.dp)
@@ -214,9 +214,9 @@ fun ExamDetailScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = if (!exam.note.isNullOrBlank()) exam.note!! else "未录入考后复盘笔记",
+                        text = if (exam.note.isNotBlank()) exam.note else "未录入考后复盘笔记",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (!exam.note.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = if (exam.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
             }

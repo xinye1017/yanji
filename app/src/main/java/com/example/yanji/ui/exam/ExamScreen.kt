@@ -94,7 +94,7 @@ fun ExamScreen(
     if (isExamRunning && activeExamName != null) {
         // Immersive Exam Countdown Screen（叶子节点局部重组，外层零重组）
         ImmersiveExamTimer(
-            examName = activeExamName!!,
+            examName = activeExamName,
             remainingSeconds = remainingSecondsState,
             totalSeconds = activeExamDurationSecs,
             startTime = activeExamStartTime,

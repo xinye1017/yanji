@@ -35,6 +35,7 @@ class DailyStudyDetailViewModel(
 }
 
 /** 科目明细：内含时间范围选择态。 */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SubjectStudyDetailViewModel(
     private val statsRepo: StudyStatisticsRepository,
     private val subjectId: String

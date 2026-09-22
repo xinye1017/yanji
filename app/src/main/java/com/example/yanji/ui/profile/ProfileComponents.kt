@@ -151,9 +151,9 @@ fun ProfileSettingsGroup(
 @Composable
 fun ProfileSettingsIcon(
     icon: ImageVector,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    contentDescription: String? = null,
-    modifier: Modifier = Modifier
+    contentDescription: String? = null
 ) {
     Box(
         modifier = modifier
