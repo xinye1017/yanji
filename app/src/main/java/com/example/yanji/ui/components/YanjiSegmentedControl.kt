@@ -36,7 +36,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.yanji.theme.YanjiDarkSegmentPillOnPage
+import com.example.yanji.theme.YanjiDarkSegmentTrackOnPage
 import com.example.yanji.theme.YanjiMotion
+import com.example.yanji.theme.YanjiSegmentTrackOnPage
 import com.example.yanji.theme.yanjiIsDarkTheme
 
 /**
@@ -92,11 +95,8 @@ fun <T> YanjiSegmentedControl(
             }
         }
         YanjiSegmentedControlVariant.OnPage -> {
-            if (isDark) {
-                Color(0xFF1A2333) // 独立于页面夜幕深黑底 #0D111A 的清晰次表面深蓝轨
-            } else {
-                Color(0xFFE2E7EE) // 独立于页面浅灰底 #F2F4F7 的清晰凹槽灰轨
-            }
+            if (isDark) YanjiDarkSegmentTrackOnPage
+            else YanjiSegmentTrackOnPage
         }
     }
 
@@ -128,11 +128,8 @@ fun <T> YanjiSegmentedControl(
             }
         }
         YanjiSegmentedControlVariant.OnPage -> {
-            if (isDark) {
-                Color(0xFF2A374F) // 浮于 #1A2333 轨道上的提亮药丸，与主题蓝字 #4F7DF3 对比鲜明
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
+            if (isDark) YanjiDarkSegmentPillOnPage
+            else MaterialTheme.colorScheme.surface
         }
     }
 

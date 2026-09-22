@@ -158,6 +158,19 @@ val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)
  */
 val YanjiSegmentTrack = Color(0xFFECEFF5)
 
+/**
+ * 分段导航栏「贴页面底色」变体（OnPage）的轨道与药丸色。
+ *
+ * 单列的原因：该变体直接压在页面背景上，需要比 `YanjiSegmentTrack` 更重的凹槽对比，
+ * 又不能复用 `surfaceVariant` —— 亮色下它会和页面浅灰底糊在一起，暗色下又压不出层次。
+ * UI 层只能引用这三个 token，不得内联字面量。
+ */
+val YanjiSegmentTrackOnPage = Color(0xFFE2E7EE)
+val YanjiDarkSegmentTrackOnPage = Color(0xFF1A2333)
+
+/** OnPage 变体暗色的选中药丸：浮于暗轨之上，需与主蓝文字拉开对比。 */
+val YanjiDarkSegmentPillOnPage = Color(0xFF2A374F)
+
 // ---------------------------------------------------------------------------
 // Power Saving Mode tokens（专注计时省电模式）
 //
