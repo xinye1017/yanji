@@ -130,9 +130,11 @@ fun NoteSwipeableRow(
         settleTo(if (isOpen) side else Reveal.NONE)
     }
 
-    val offsetPx = offsetAnim.value
-    // 露出进度：操作块图标随滑开距离淡入。
-    val revealProgress = (abs(offsetPx) / actionWidthPx).coerceIn(0f, 1f)
+    // 露出进度：作为 State 传给操作块，只在图标的 graphicsLayer 里读。
+    // 若在组合期读成 Float，拖动会逐帧重组整行、重排两个面板与正文。
+    val revealProgress = remember(actionWidthPx) {
+        derivedStateOf { (abs(offsetAnim.value) / actionWidthPx).coerceIn(0f, 1f) }
+    }
 
     Box(
         modifier = modifier
@@ -179,7 +181,7 @@ fun NoteSwipeableRow(
         // ---- 行内容：整体平移，露出一侧固定宽度的操作块 ----
         Box(
             modifier = Modifier
-                .offset { IntOffset(offsetPx.roundToInt(), 0) }
+                .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
                 .pointerInput(actionWidthPx, overDragMaxPx, flingVelocityPx) {
@@ -254,7 +256,7 @@ private fun SquareActionPanel(
     tint: Color,
     icon: ImageVector,
     contentDescription: String,
-    revealProgress: Float,
+    revealProgress: State<Float>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -272,7 +274,7 @@ private fun SquareActionPanel(
             tint = tint,
             modifier = Modifier
                 .size(20.dp)
-                .graphicsLayer { alpha = revealProgress }
+                .graphicsLayer { alpha = revealProgress.value }
         )
     }
 }

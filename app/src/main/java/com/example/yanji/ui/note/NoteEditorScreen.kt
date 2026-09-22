@@ -1288,7 +1288,7 @@ private fun FrostedTopBarButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale = rememberPressScale(interactionSource, targetScale = 0.92f)
-    val pressAlpha by animateFloatAsState(
+    val pressAlpha = animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
         animationSpec = tween(durationMillis = 100),
         label = "frostedButtonPressAlpha"
@@ -1308,9 +1308,9 @@ private fun FrostedTopBarButton(
     Box(
         modifier = modifier
             .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-                alpha = pressAlpha
+                scaleX = pressScale.value
+                scaleY = pressScale.value
+                alpha = pressAlpha.value
             }
             .size(36.dp)
             .clip(CircleShape)

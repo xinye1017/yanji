@@ -34,13 +34,13 @@ fun YanjiPrimaryButton(
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource)
+    val scaleState = rememberPressScale(interactionSource)
     Button(
         onClick = onClick,
         modifier = modifier
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scaleState.value
+                scaleY = scaleState.value
             }
             .heightIn(min = 48.dp),
         enabled = enabled,
@@ -80,13 +80,13 @@ fun YanjiSecondaryButton(
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource)
+    val scaleState = rememberPressScale(interactionSource)
     Button(
         onClick = onClick,
         modifier = modifier
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scaleState.value
+                scaleY = scaleState.value
             }
             .heightIn(min = 48.dp),
         enabled = enabled,
@@ -127,13 +127,13 @@ fun YanjiDangerButton(
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource)
+    val scaleState = rememberPressScale(interactionSource)
     Button(
         onClick = onClick,
         modifier = modifier
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scaleState.value
+                scaleY = scaleState.value
             }
             .heightIn(min = 48.dp),
         enabled = enabled,

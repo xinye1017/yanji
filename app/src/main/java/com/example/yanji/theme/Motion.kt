@@ -5,12 +5,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalContext
 
 /**
@@ -32,18 +32,6 @@ object YanjiMotion {
         dampingRatio = 0.86f,
         stiffness = 420f
     )
-
-    /** 轻柔平滑弹簧（数字滚动、图表状态切换） */
-    val GentleSpring = spring<Float>(
-        dampingRatio = 0.90f,
-        stiffness = 380f
-    )
-
-    /** 无障碍减少动态（Reduce Motion）下的无回弹快速过渡 */
-    val ReducedSpec = tween<Float>(durationMillis = 100)
-
-    const val CrossfadeMs = 180
-    const val DataRevealMs = 280
 
     /**
      * 检查系统是否开启了“减少动态效果”或将系统动画时长调整为 0。
@@ -81,20 +69,20 @@ object YanjiMotion {
 /**
  * 统一的按压轻微弹性缩放动效（默认 0.97f），用于卡片与控制器的即时触觉反馈。
  * 当系统开启 Reduce Motion 时，自动禁用缩放位移以避免诱发眩晕。
+ *
+ * 返回 [State] 而不是裸 Float：调用方只在 `graphicsLayer { }` 里读 `.value`，
+ * 弹簧的逐帧变化就只走绘制阶段。若在组合期读成 Float，每帧都会让整棵内容子树重组。
  */
 @Composable
 fun rememberPressScale(
     interactionSource: MutableInteractionSource,
     targetScale: Float = 0.97f
-): Float {
+): State<Float> {
     val reduceMotion = YanjiMotion.isReduceMotionEnabled()
-    if (reduceMotion) return 1f
-
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) targetScale else 1f,
+    return animateFloatAsState(
+        targetValue = if (!reduceMotion && isPressed) targetScale else 1f,
         animationSpec = YanjiMotion.ControlSpring,
         label = "pressScale"
     )
-    return scale
 }

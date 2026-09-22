@@ -384,7 +384,7 @@ private fun CountdownFocusBody(
         label = "focusCountdownProgress"
     )
     val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource, targetScale = 0.96f)
+    val scaleState = rememberPressScale(interactionSource, targetScale = 0.96f)
 
     // 底轨颜色：浅色下为 10% 主蓝，深色下为 8% 白，保证在两种背景上都真正看得见。
     val trackRingColor = yanjiThemeColor(
@@ -402,8 +402,8 @@ private fun CountdownFocusBody(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = scaleState.value
+                    scaleY = scaleState.value
                 }
                 .clip(CircleShape)
                 .clickable(
@@ -467,7 +467,7 @@ private fun FlowFocusBody(
     onTogglePauseResume: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource, targetScale = 0.96f)
+    val scaleState = rememberPressScale(interactionSource, targetScale = 0.96f)
 
     Box(
         modifier = Modifier
@@ -475,8 +475,8 @@ private fun FlowFocusBody(
             .fillMaxWidth()
             .aspectRatio(1f)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scaleState.value
+                scaleY = scaleState.value
             }
             .clip(CircleShape)
             .clickable(

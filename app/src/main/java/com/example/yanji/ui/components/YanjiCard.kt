@@ -85,12 +85,12 @@ fun YanjiCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val currentInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
-    val scale = rememberPressScale(currentInteractionSource)
+    val scaleState = rememberPressScale(currentInteractionSource)
     MaterialCard(
         onClick = onClick,
         modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+            scaleX = scaleState.value
+            scaleY = scaleState.value
         },
         enabled = enabled,
         shape = shape,
