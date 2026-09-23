@@ -44,6 +44,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -82,6 +85,10 @@ import kotlinx.coroutines.isActive
  *
  * Presentation only: all timer and persistence actions remain with FocusScreen.
  */
+
+/** 点圆环切换暂停/继续是这里唯一的主控制；测试按此 tag 定位，避免绑死会变的文案。 */
+internal const val FOCUS_TIMER_TOGGLE_TAG = "focus-timer-toggle"
+
 @Composable
 fun ActiveFocusContent(
     session: FocusSession,
@@ -405,6 +412,8 @@ private fun CountdownFocusBody(
                     scaleX = scaleState.value
                     scaleY = scaleState.value
                 }
+                .testTag(FOCUS_TIMER_TOGGLE_TAG)
+                .semantics { stateDescription = if (isPaused) "已暂停" else "专注进行中" }
                 .clip(CircleShape)
                 .clickable(
                     interactionSource = interactionSource,
@@ -478,6 +487,8 @@ private fun FlowFocusBody(
                 scaleX = scaleState.value
                 scaleY = scaleState.value
             }
+            .testTag(FOCUS_TIMER_TOGGLE_TAG)
+            .semantics { stateDescription = if (isPaused) "已暂停" else "专注进行中" }
             .clip(CircleShape)
             .clickable(
                 interactionSource = interactionSource,

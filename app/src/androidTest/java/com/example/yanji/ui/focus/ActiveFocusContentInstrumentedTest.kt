@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -70,12 +71,12 @@ class ActiveFocusContentInstrumentedTest {
         }
 
         capture("focus-flow.png")
-        // 暂停是可见的 primary 控件（不再藏在「点击圆环」里）。
-        composeRule.onNodeWithText("暂停").performScrollTo().performClick()
-        composeRule.onNodeWithText("继续专注").assertExists()
+        // 暂停/继续的唯一入口是点圆环；圆环无文字，测试按 testTag 定位，暂停态用可见文案佐证。
+        composeRule.onNodeWithTag(FOCUS_TIMER_TOGGLE_TAG).performScrollTo().performClick()
+        composeRule.onNodeWithText("已暂停 · 点击继续").assertIsDisplayed()
         capture("focus-paused.png")
-        composeRule.onNodeWithText("继续专注").performScrollTo().performClick()
-        composeRule.onNodeWithText("暂停").assertExists()
+        composeRule.onNodeWithTag(FOCUS_TIMER_TOGGLE_TAG).performScrollTo().performClick()
+        composeRule.onNodeWithText("持续专注中").assertIsDisplayed()
         composeRule.onNodeWithText("完成").performScrollTo().performClick()
         composeRule.runOnIdle {
             assertEquals(1, pauses)
@@ -215,8 +216,9 @@ class ActiveFocusContentInstrumentedTest {
         }
 
         capture("focus-large-font.png")
-        composeRule.onNodeWithText("暂停").performScrollTo().assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("继续专注").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag(FOCUS_TIMER_TOGGLE_TAG).performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("已暂停 · 点击继续").assertIsDisplayed()
+        composeRule.onNodeWithTag(FOCUS_TIMER_TOGGLE_TAG).performScrollTo().assertIsDisplayed().performClick()
         composeRule.onNodeWithText("完成").performScrollTo().assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, finishes) }
         composeRule.onNodeWithText("放弃").performScrollTo().assertIsDisplayed().performClick()

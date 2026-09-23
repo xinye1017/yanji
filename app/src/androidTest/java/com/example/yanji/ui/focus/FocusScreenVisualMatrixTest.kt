@@ -9,6 +9,7 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
@@ -75,7 +76,7 @@ class FocusScreenVisualMatrixTest {
         composeRule.onNodeWithText("高等数学").assertIsDisplayed()
         composeRule.onNodeWithText("持续专注中").assertIsDisplayed()
         composeRule.onNodeWithText("30:00").assertIsDisplayed()
-        composeRule.onNodeWithText("暂停").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag(FOCUS_TIMER_TOGGLE_TAG).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("放弃").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("完成").performScrollTo().assertIsDisplayed()
     }
