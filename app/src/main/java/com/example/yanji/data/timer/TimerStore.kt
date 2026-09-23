@@ -43,6 +43,13 @@ internal class TimerStore(
     companion object {
         /** 最短可记录时长：与 UI 的「不足 1 分钟不予保存」提示保持同一条业务规则。 */
         private const val MIN_RECORDED_FOCUS_SECONDS = 60L
+
+        /**
+         * 本次专注是否值得落库。旧版靠「完成」按钮禁用 + 提示文案在 UI 层拦，
+         * 现在这条规则只在落库出口生效一处，UI 不再预判（见 persistCompletedFocus）。
+         */
+        internal fun isRecordableFocus(actualSeconds: Long): Boolean =
+            actualSeconds >= MIN_RECORDED_FOCUS_SECONDS
     }
 
     private val _focusSessions = MutableStateFlow<List<FocusSession>>(emptyList())
@@ -270,7 +277,7 @@ internal class TimerStore(
         pauseCount: Int,
         endEpochMs: Long
     ) {
-        if (actualSeconds < MIN_RECORDED_FOCUS_SECONDS) {
+        if (!isRecordableFocus(actualSeconds)) {
             _activeFocus.value = null
             return
         }

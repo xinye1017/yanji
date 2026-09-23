@@ -10,8 +10,6 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -87,10 +85,12 @@ class ActiveFocusContentInstrumentedTest {
     }
 
     @Test
-    fun finishIsDisabledUntilOneMinuteSoItNeverSilentlyDiscards() {
-        // 不足 1 分钟：完成必须被禁用并给出原因，绝不能点下去才静默丢弃。
+    fun abandoningUnderOneMinuteDiscardsWithoutConfirmation() {
+        // 不足 1 分钟的专注本来就不会落库（规则见 TimerStore.isRecordableFocus），
+        // 因此此时放弃无需确认；满 1 分钟的确认路径由
+        // abandoningRequiresConfirmationAndCanBeDismissed 覆盖。
         val elapsed = mutableStateOf(30L)
-        var finishes = 0
+        var cancels = 0
         composeRule.setContent {
             YanjiTheme {
                 ActiveFocusContent(
@@ -98,19 +98,15 @@ class ActiveFocusContentInstrumentedTest {
                     elapsedSeconds = elapsed,
                     onPause = {},
                     onResume = {},
-                    onFinish = { finishes++ },
-                    onCancel = {}
+                    onFinish = {},
+                    onCancel = { cancels++ }
                 )
             }
         }
 
-        composeRule.onNodeWithText("已专注不足 1 分钟，完成后不会生成记录").assertExists()
-        composeRule.onNodeWithText("完成").performScrollTo().assertIsNotEnabled()
-        composeRule.runOnIdle { assertEquals(0, finishes) }
-
-        composeRule.runOnIdle { elapsed.value = 60L }
-        composeRule.onNodeWithText("完成").performScrollTo().assertIsEnabled().performClick()
-        composeRule.runOnIdle { assertEquals(1, finishes) }
+        composeRule.onNodeWithText("放弃").performScrollTo().performClick()
+        composeRule.onNodeWithText("放弃本次专注？").assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals(1, cancels) }
     }
 
     @Test
@@ -133,12 +129,12 @@ class ActiveFocusContentInstrumentedTest {
         composeRule.onNodeWithText("放弃").performScrollTo().performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, cancels) }
-        composeRule.onNodeWithText("保留记录").performClick()
+        composeRule.onNodeWithText("继续专注").performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertDoesNotExist()
         composeRule.runOnIdle { assertEquals(0, cancels) }
 
         composeRule.onNodeWithText("放弃").performScrollTo().performClick()
-        composeRule.onNodeWithText("确认放弃").performClick()
+        composeRule.onNodeWithText("放弃不保存").performClick()
         composeRule.runOnIdle { assertEquals(1, cancels) }
     }
 
@@ -181,7 +177,7 @@ class ActiveFocusContentInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("倒计时 · 25 分钟").assertExists()
+        composeRule.onNodeWithText("高等数学").assertExists()
         composeRule.onNodeWithText("剩余时间").assertExists()
         composeRule.onNodeWithText("00:01").assertExists()
         capture("focus-countdown.png")
@@ -222,7 +218,7 @@ class ActiveFocusContentInstrumentedTest {
         composeRule.onNodeWithText("完成").performScrollTo().assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, finishes) }
         composeRule.onNodeWithText("放弃").performScrollTo().assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("保留记录").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("继续专注").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("放弃本次专注？").assertDoesNotExist()
     }
 
