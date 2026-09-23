@@ -8,9 +8,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.*
 import com.example.yanji.theme.currentMascotTheme
 import com.example.yanji.ui.components.YanjiCard
@@ -260,33 +269,64 @@ fun AchievementsScreen(
             }
 
             groups.forEach { (category, itemsInCategory) ->
-                item(key = "header_${category.name}") {
-                    Column(Modifier.padding(top = 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${itemsInCategory.count { it.isUnlocked }} / ${itemsInCategory.size}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                item(key = "header_${category.name}", contentType = "category_header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${itemsInCategory.count { it.isUnlocked }} / ${itemsInCategory.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                itemsIndexed(
+                    items = itemsInCategory,
+                    key = { _, achievement -> achievement.id },
+                    contentType = { _, _ -> "achievement_row" }
+                ) { index, achievement ->
+                    val isFirst = index == 0
+                    val isLast = index == itemsInCategory.lastIndex
+                    val shape = when {
+                        isFirst && isLast -> RoundedCornerShape(YanjiRadius.GroupedCardRadius)
+                        isFirst -> RoundedCornerShape(
+                            topStart = YanjiRadius.GroupedCardRadius,
+                            topEnd = YanjiRadius.GroupedCardRadius
+                        )
+                        isLast -> RoundedCornerShape(
+                            bottomStart = YanjiRadius.GroupedCardRadius,
+                            bottomEnd = YanjiRadius.GroupedCardRadius
+                        )
+                        else -> androidx.compose.ui.graphics.RectangleShape
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(shape)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .groupedCardBorder(
+                                isFirst = isFirst,
+                                isLast = isLast,
+                                stroke = YanjiCardBorder.stroke(),
+                                radius = YanjiRadius.GroupedCardRadius
                             )
-                        }
-                        YanjiCard(modifier = Modifier.fillMaxWidth(), variant = YanjiCardVariant.Grouped) {
-                            itemsInCategory.forEachIndexed { index, achievement ->
-                                AchievementListRow(
-                                    achievement = achievement,
-                                    onClick = { viewingAchievement = achievement }
-                                )
-                                if (index < itemsInCategory.lastIndex) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(start = 69.dp),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    )
-                                }
-                            }
+                    ) {
+                        AchievementListRow(
+                            achievement = achievement,
+                            onClick = { viewingAchievement = achievement }
+                        )
+                        if (!isLast) {
+                            HorizontalDivider(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(start = 69.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
                         }
                     }
                 }
@@ -471,3 +511,74 @@ fun AchievementDetailDialog(
         }
     }
 }
+
+/**
+ * 为分组卡片的各个独立 Item 绘制连续的外轮廓描边。
+ * 暗色模式下 stroke 为 null，零开销直接跳过绘制。
+ */
+private fun Modifier.groupedCardBorder(
+    isFirst: Boolean,
+    isLast: Boolean,
+    stroke: BorderStroke?,
+    radius: Dp
+): Modifier = if (stroke == null) this else this.drawBehind {
+    val strokePx = stroke.width.toPx()
+    val halfStroke = strokePx / 2f
+    val rPx = radius.toPx()
+    val w = size.width
+    val h = size.height
+
+    if (isFirst && isLast) {
+        drawRoundRect(
+            brush = stroke.brush,
+            topLeft = Offset(halfStroke, halfStroke),
+            size = Size(w - strokePx, h - strokePx),
+            cornerRadius = CornerRadius(rPx, rPx),
+            style = Stroke(width = strokePx)
+        )
+    } else if (isFirst) {
+        val path = Path().apply {
+            moveTo(halfStroke, h)
+            lineTo(halfStroke, rPx)
+            arcTo(
+                rect = Rect(halfStroke, halfStroke, 2 * rPx - halfStroke, 2 * rPx - halfStroke),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(w - rPx, halfStroke)
+            arcTo(
+                rect = Rect(w - 2 * rPx + halfStroke, halfStroke, w - halfStroke, 2 * rPx - halfStroke),
+                startAngleDegrees = 270f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(w - halfStroke, h)
+        }
+        drawPath(path, brush = stroke.brush, style = Stroke(width = strokePx))
+    } else if (isLast) {
+        val path = Path().apply {
+            moveTo(halfStroke, 0f)
+            lineTo(halfStroke, h - rPx)
+            arcTo(
+                rect = Rect(halfStroke, h - 2 * rPx + halfStroke, 2 * rPx - halfStroke, h - halfStroke),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = -90f,
+                forceMoveTo = false
+            )
+            lineTo(w - rPx, h - halfStroke)
+            arcTo(
+                rect = Rect(w - 2 * rPx + halfStroke, h - 2 * rPx + halfStroke, w - halfStroke, h - halfStroke),
+                startAngleDegrees = 90f,
+                sweepAngleDegrees = -90f,
+                forceMoveTo = false
+            )
+            lineTo(w - halfStroke, 0f)
+        }
+        drawPath(path, brush = stroke.brush, style = Stroke(width = strokePx))
+    } else {
+        drawLine(stroke.brush, Offset(halfStroke, 0f), Offset(halfStroke, h), strokeWidth = strokePx)
+        drawLine(stroke.brush, Offset(w - halfStroke, 0f), Offset(w - halfStroke, h), strokeWidth = strokePx)
+    }
+}
+

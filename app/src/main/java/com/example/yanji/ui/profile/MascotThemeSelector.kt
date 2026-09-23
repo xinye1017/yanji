@@ -121,16 +121,17 @@ fun MascotThemeBottomSheet(
                 beyondViewportPageCount = 0
             ) { page ->
                 val spec = themes[page]
-                val offset = (
-                    (pagerState.currentPage - page) +
-                        pagerState.currentPageOffsetFraction
-                    )
-                    .absoluteValue
-                    .coerceIn(0f, 1f)
-
                 MascotPickerPage(
                     spec = spec,
-                    focusedFraction = 1f - offset,
+                    focusedFractionProvider = {
+                        val offset = (
+                            (pagerState.currentPage - page) +
+                                pagerState.currentPageOffsetFraction
+                            )
+                            .absoluteValue
+                            .coerceIn(0f, 1f)
+                        1f - offset
+                    },
                     modifier = Modifier.testTag("mascot_theme_${spec.id.name.lowercase()}")
                 )
             }
@@ -172,12 +173,9 @@ fun MascotThemeBottomSheet(
 @Composable
 private fun MascotPickerPage(
     spec: MascotThemeSpec,
-    focusedFraction: Float,
+    focusedFractionProvider: () -> Float,
     modifier: Modifier = Modifier
 ) {
-    val focusScale = 0.94f + 0.06f * focusedFraction
-    val focusAlpha = 0.62f + 0.38f * focusedFraction
-
     Column(
         modifier = modifier.height(292.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -187,6 +185,9 @@ private fun MascotPickerPage(
             modifier = Modifier
                 .size(228.dp)
                 .graphicsLayer {
+                    val focusedFraction = focusedFractionProvider()
+                    val focusScale = 0.94f + 0.06f * focusedFraction
+                    val focusAlpha = 0.62f + 0.38f * focusedFraction
                     scaleX = focusScale
                     scaleY = focusScale
                     alpha = focusAlpha
@@ -207,9 +208,11 @@ private fun MascotPickerPage(
             text = spec.name,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.graphicsLayer {
+                val focusedFraction = focusedFractionProvider()
                 alpha = 0.62f + 0.38f * focusedFraction
-            )
+            }
         )
     }
 }
