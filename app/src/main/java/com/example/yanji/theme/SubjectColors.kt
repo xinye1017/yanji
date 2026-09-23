@@ -49,14 +49,73 @@ fun subjectColorSlot(subjectId: String): Int {
 
 /**
  * 非 Composable 取色方法：按学科槽位从对应伙伴主题中获取专属色阶。
+ * 子学科（带有 parentId）会在父级槽位基色上进行色阶/明度分化（Tonal Variation），
+ * 确保同一父类下的不同子学科在图表与列表中拥有清晰、高辨识度的不同色调。
  */
 fun yanjiSubjectColor(
     subjectId: String,
     mascotTheme: MascotThemeSpec,
     isDark: Boolean
 ): Color {
+    val cleanId = subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX)
+    val subject = SubjectCatalog.find(cleanId)
+
+    // 子学科（有明确 parentId 且不是未分类兜底）：基于父类色阶产生同色系不同明度/色调
+    if (subject != null && subject.parentId != null) {
+        val parentSlot = subjectColorSlot(subject.parentId)
+        val parentBaseColor = mascotTheme.subjectPalette.colorAt(parentSlot, isDark)
+        val siblings = SubjectCatalog.childrenOf(subject.parentId)
+        val siblingIndex = siblings.indexOfFirst { it.id == cleanId }.let {
+            if (it >= 0) it else (cleanId.hashCode() and 0x7FFFFFFF) % 5
+        }
+        return modulateSubSubjectTone(parentBaseColor, siblingIndex, isDark)
+    }
+
     val slot = subjectColorSlot(subjectId)
     return mascotTheme.subjectPalette.colorAt(slot, isDark)
+}
+
+/**
+ * 为同一类别下的子学科生成高辨识度的同色系明度/饱和度差值。
+ * 奇偶交错变化，确保相邻子学科（例如第2个与第3个子类）之间具有显著的视觉区分度。
+ */
+fun modulateSubSubjectTone(baseColor: Color, siblingIndex: Int, isDark: Boolean): Color {
+    val cycleIndex = ((siblingIndex % 5) + 5) % 5
+    if (cycleIndex == 0) return baseColor
+
+    val background = if (isDark) SubjectDarkBackground else SubjectLightBackground
+
+    val candidate = if (isDark) {
+        // 暗色模式下：背景为深蓝 #151B28，适度提亮与收紧加深
+        when (cycleIndex) {
+            1 -> mix(baseColor, Color.White, 0.32f) // 显著提亮，明亮轻透
+            2 -> mix(baseColor, Color.Black, 0.18f) // 轻度加深，稳重深邃
+            3 -> mix(baseColor, Color.White, 0.52f) // 高亮霜白
+            4 -> mix(baseColor, Color.Black, 0.28f) // 深调
+            else -> baseColor
+        }
+    } else {
+        // 浅色模式下：背景为纯白 #FFFFFF，加深与提亮交替产生大反差
+        when (cycleIndex) {
+            1 -> mix(baseColor, Color.White, 0.30f) // 提亮粉彩
+            2 -> mix(baseColor, Color.Black, 0.25f) // 加深深邃
+            3 -> mix(baseColor, Color.White, 0.50f) // 浅淡柔和
+            4 -> mix(baseColor, Color.Black, 0.40f) // 浓郁深色
+            else -> baseColor
+        }
+    }
+
+    val minContrast = if (isDark) 2.2 else 2.8
+    if (contrastRatio(candidate, background) >= minContrast) {
+        return candidate
+    }
+
+    val target = if (isDark) Color.White else Color.Black
+    for (step in 1..4) {
+        val adjusted = mix(candidate, target, step * 0.10f)
+        if (contrastRatio(adjusted, background) >= minContrast) return adjusted
+    }
+    return candidate
 }
 
 /**

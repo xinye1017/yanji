@@ -164,6 +164,35 @@ class SubjectColorsTest {
         assertEquals(storedHex, SubjectCatalog.find("math")!!.colorHex)
     }
 
+    @Test
+    fun subSubjectsUnderSameCategoryHaveDistinctColorsInAllThemes() {
+        for (theme in MascotThemes.all) {
+            for (isDark in listOf(false, true)) {
+                // 验证数学类下的三个子学科两两颜色各不相同
+                val mathAdv = yanjiSubjectColor("math_advanced", theme, isDark)
+                val mathLin = yanjiSubjectColor("math_linear", theme, isDark)
+                val mathProb = yanjiSubjectColor("math_probability", theme, isDark)
+
+                assertNotEquals("${theme.name} isDark=$isDark mathAdv != mathLin", mathAdv, mathLin)
+                assertNotEquals("${theme.name} isDark=$isDark mathLin != mathProb", mathLin, mathProb)
+                assertNotEquals("${theme.name} isDark=$isDark mathAdv != mathProb", mathAdv, mathProb)
+
+                // 验证专业课下的子学科两两颜色各不相同（重点验证第2个与第3个子类）
+                val majorOrg = yanjiSubjectColor("major_organization", theme, isDark)
+                val majorDs = yanjiSubjectColor("major_data_structure", theme, isDark)
+                val majorNet = yanjiSubjectColor("major_network", theme, isDark)
+                val majorOs = yanjiSubjectColor("major_os", theme, isDark)
+
+                assertNotEquals("${theme.name} isDark=$isDark majorOrg != majorDs", majorOrg, majorDs)
+                assertNotEquals("${theme.name} isDark=$isDark majorDs != majorNet", majorDs, majorNet)
+                assertNotEquals("${theme.name} isDark=$isDark majorNet != majorOs", majorNet, majorOs)
+                assertNotEquals("${theme.name} isDark=$isDark majorOrg != majorNet", majorOrg, majorNet)
+                assertNotEquals("${theme.name} isDark=$isDark majorOrg != majorOs", majorOrg, majorOs)
+                assertNotEquals("${theme.name} isDark=$isDark majorDs != majorOs", majorDs, majorOs)
+            }
+        }
+    }
+
     private fun contrast(a: Color, b: Color): Double {
         val l1 = luminance(a)
         val l2 = luminance(b)
