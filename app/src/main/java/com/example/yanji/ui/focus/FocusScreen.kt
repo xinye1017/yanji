@@ -23,6 +23,7 @@ import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.Subject
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.timer.ActiveFocusState
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.service.FocusTimerService
@@ -68,7 +69,7 @@ fun FocusScreen(
         ?: subjects.firstOrNull { it.id == "math_advanced" }
         ?: subjects.firstOrNull { it.parentId != null }
         ?: subjects.firstOrNull()
-        ?: Subject("math_advanced", "高等数学", "#356AE6", parentId = "math")
+        ?: (SubjectCatalog.find("math_advanced") ?: SubjectCatalog.defaults.first())
     var selectedMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var noteText by rememberSaveable { mutableStateOf("") }
     var showSummaryDialog by remember { mutableStateOf(false) }
@@ -115,7 +116,7 @@ fun FocusScreen(
             ?: Subject(
                 id = subjectId,
                 name = pendingFocusSubjectName.orEmpty().ifBlank { subjectId },
-                colorHex = "#356AE6"
+                colorHex = SubjectCatalog.find(subjectId)?.colorHex ?: SubjectCatalog.DEFAULT_PRIMARY_COLOR
             )
         doLaunchFocus(subject, pendingFocusMode, pendingFocusNote)
         clearPendingFocusLaunch()

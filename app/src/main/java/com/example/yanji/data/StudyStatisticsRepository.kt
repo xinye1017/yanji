@@ -143,31 +143,12 @@ object DurationFormatter {
 class StudyStatisticsRepository(
     private val repo: YanjiRepository
 ) {
-    /**
-     * @Deprecated 遗留的进程级单例入口，仅保留给尚未接入 [com.example.yanji.di.AppContainer]
-     * 的少量测试调用点。生产代码必须由 AppContainer 显式构造注入。不得新增调用方。
-     */
-    companion object {
-        @Volatile
-        private var instance: StudyStatisticsRepository? = null
-
-        @Deprecated(
-            message = "请改用 AppContainer 注入的 StudyStatisticsRepository；此入口仅兼容遗留测试",
-            level = DeprecationLevel.WARNING
-        )
-        fun getInstance(): StudyStatisticsRepository {
-            return instance ?: synchronized(this) {
-                instance ?: StudyStatisticsRepository(YanjiRepository.getInstance()).also { instance = it }
-            }
-        }
-    }
-
     private fun getSubjectColor(subjectId: String, subjectName: String): String {
         val found = SubjectCatalog.find(subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
             ?: repo.subjects.value.find { it.id == subjectId || it.name == subjectName }
         if (found != null) return found.colorHex
         return SubjectCatalog.find(SubjectCatalog.inferCategoryId(subjectId, subjectName))?.colorHex
-            ?: "#667085"
+            ?: SubjectCatalog.DEFAULT_FALLBACK_COLOR
     }
 
     private fun focusToSessionItem(fs: FocusSession): DailySessionItem {

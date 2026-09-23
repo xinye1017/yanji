@@ -1,5 +1,8 @@
 package com.example.yanji.data
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -9,7 +12,10 @@ import java.time.ZoneId
 
 class AchievementRepositoryTest {
 
-    private val repo = AchievementRepository.getInstance()
+    private val repo = AchievementRepository(
+        YanjiRepository.getInstance(),
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    )
 
     @Test
     fun testTotalAchievementCountIs59() {

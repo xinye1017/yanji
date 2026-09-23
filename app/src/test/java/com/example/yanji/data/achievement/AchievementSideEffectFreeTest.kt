@@ -6,7 +6,11 @@ import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.data.YanjiRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -19,7 +23,10 @@ class AchievementSideEffectFreeTest {
 
     @Test
     fun testProjectionIsPureWithoutSideEffects() {
-        val repo = AchievementRepository.getInstance()
+        val repo = AchievementRepository(
+            YanjiRepository.getInstance(),
+            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        )
         val definitions = repo.definitions
 
         assertEquals(59, definitions.size)

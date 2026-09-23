@@ -44,9 +44,10 @@ class NoteEditorScreenInstrumentedTest {
     })
 
     private fun setEditorContent(onSaveSuccess: () -> Unit = {}) {
+        val repo = YanjiRepository.getInstance()
         val viewModel = NoopSaveNoteViewModel(
-            YanjiRepository.getInstance(),
-            StudyStatisticsRepository.getInstance()
+            repo,
+            StudyStatisticsRepository(repo)
         )
         composeRule.setContent {
             YanjiTheme {
@@ -160,9 +161,10 @@ class NoteEditorScreenInstrumentedTest {
             createdAt = 1_000L,
             updatedAt = 1_000L
         )
+        val repo = YanjiRepository.getInstance()
         val viewModel = SeededNoopSaveNoteViewModel(
-            YanjiRepository.getInstance(),
-            StudyStatisticsRepository.getInstance(),
+            repo,
+            StudyStatisticsRepository(repo),
             seed = listOf(existing)
         )
 

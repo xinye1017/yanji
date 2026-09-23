@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.Subject
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
 import java.time.LocalDate
@@ -66,7 +67,7 @@ fun ManualFocusLogDialog(
     val effectiveSubject = remember(subjects, selectedSubjectId, selectedCategoryId) {
         subjects.firstOrNull { it.id == selectedSubjectId }
             ?: subjects.firstOrNull { it.id == selectedCategoryId }
-            ?: Subject("math_advanced", "高等数学", "#356AE6")
+            ?: (SubjectCatalog.find("math_advanced") ?: SubjectCatalog.defaults.first())
     }
 
     // 日期选择：今天 / 昨天 / 传入日期

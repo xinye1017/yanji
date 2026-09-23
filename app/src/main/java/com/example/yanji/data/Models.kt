@@ -85,6 +85,18 @@ data class Subject(
 object SubjectCatalog {
     const val UNCLASSIFIED_SUFFIX = "__unclassified"
 
+    /** 默认主学科主色（数学一等默认首选学科色）。 */
+    const val DEFAULT_PRIMARY_COLOR = "#356AE6"
+
+    /** 统计/反查未命中时的兜底中性灰色彩。 */
+    const val DEFAULT_FALLBACK_COLOR = "#667085"
+
+    /** 顶级学科创建时的候选调色板（按次序分配，避免相邻学科重色）。 */
+    val CATEGORY_PALETTE: List<String> = listOf(
+        "#356AE6", "#8B7CF6", "#2F9E6D", "#E67E22",
+        "#B8426B", "#3B78B8", "#A95822", "#2F7F55"
+    )
+
     /** 新装 / 迁移时写入的默认学科，同时也是「恢复默认」的数据源。 */
     val defaults: List<Subject> = listOf(
         Subject("math", "数学一", "#356AE6", 1),

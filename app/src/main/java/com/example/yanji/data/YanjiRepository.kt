@@ -154,10 +154,7 @@ class YanjiRepository private constructor() {
     }
 
     private fun nextSubjectColor(): String {
-        val palette = listOf(
-            "#356AE6", "#8B7CF6", "#2F9E6D", "#E67E22",
-            "#B8426B", "#3B78B8", "#A95822", "#2F7F55"
-        )
+        val palette = SubjectCatalog.CATEGORY_PALETTE
         val used = _subjects.value.filter { it.isCategory }.map { it.colorHex }.toSet()
         return palette.firstOrNull { it !in used } ?: palette[_subjects.value.size % palette.size]
     }
@@ -254,11 +251,6 @@ class YanjiRepository private constructor() {
         if (database != null) return
         database = db
 
-        // 升级路径上从 v7 抢救出来的明文 API Key → Keystore 加密存储，随后删除明文文件。
-        // 必须在任何 settings 读取之前执行。
-        secretStore?.migrateLegacyApiKeyIfPresent()
-        cachedAiApiKey = secretStore?.readAiApiKey().orEmpty()
-
         // 活动会话持久化：使用 context.noBackupFilesDir，不进入云备份
         val ctx = appContext
         if (ctx != null) {
@@ -272,6 +264,15 @@ class YanjiRepository private constructor() {
         }
 
         repoScope.launch {
+            // 升级路径上从 v7 抢救出来的明文 API Key → Keystore 加密存储，随后删除明文文件。
+            // 移入后台 IO 协程执行，避免在冷启动主线程阻塞读取 Keystore 与磁盘。
+            val apiKey = withContext(Dispatchers.IO) {
+                secretStore?.migrateLegacyApiKeyIfPresent()
+                secretStore?.readAiApiKey().orEmpty()
+            }
+            cachedAiApiKey = apiKey
+            _settings.update { it.copy(aiApiKey = apiKey) }
+
             // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
             // 「没有学习记录」是合法业务状态，不能与「首次安装」混为一谈。
             AppInitializer(db.userSettingsDao()).initialize()
