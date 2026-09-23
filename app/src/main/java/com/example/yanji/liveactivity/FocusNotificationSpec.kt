@@ -44,7 +44,7 @@ enum class FocusKind {
  *  - [StandardNotificationController] 负责把它翻译成 `NotificationCompat.Builder` 调用。
  *
  * 普通通知、Android 16 Live Update、ColorOS 流体云共用同一份文案与动作语义，
- * 不允许任何一方私自改文案（规范 §33）。
+ * 不允许任何一方私自改文案，保持全局语义一致。
  */
 data class FocusNotificationSpec(
     val notificationId: Int,
@@ -85,7 +85,7 @@ data class FocusNotificationSpec(
  * 状态 → 通知描述。纯函数。
  *
  * 这里不存在「每秒重新构建」的路径：同一语义状态下本函数返回恒等结果，
- * 因此调用方只在语义转换时调用它（规范 §19）。
+ * 因此调用方只在语义转换时调用它。
  */
 object FocusNotificationSpecs {
 

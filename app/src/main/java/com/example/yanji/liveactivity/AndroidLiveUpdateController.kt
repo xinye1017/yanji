@@ -8,7 +8,7 @@ import androidx.core.app.NotificationCompat
 /**
  * Android 16 Live Update（Promoted Ongoing Notification）适配层。
  *
- * 全部基于官方 API，**不使用自定义 RemoteViews**（规范 §21/§39）：
+ * 全部基于官方 API，**不使用自定义 RemoteViews**（保持官方原生适配与系统级稳定性）：
  *  - `NotificationCompat.Builder.setRequestPromotedOngoing(true)`
  *    —— 实测实现只是往 extras 写 `android.requestPromotedOngoing`，不调用 framework 方法，
  *    因此在任何 API 级别调用都不会崩，老系统直接忽略该 extra。

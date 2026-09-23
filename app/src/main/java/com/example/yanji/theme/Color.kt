@@ -28,13 +28,12 @@ val YanjiLavender = Color(0xFF8B7CF6)
 val YanjiLavenderSoft = Color(0xFFF0EDFF)
 
 /**
- * 卷卷 AI「深度解析」Brand Tone。
+ * 卷卷品牌色强化色阶。
  *
- * 比 [YanjiLavender] 更深、饱和度更高，专用于 AI 深度解析场景的**文字与图标前景**：
+ * 比 [YanjiLavender] 更深、饱和度更高，专用于卷卷伙伴主题的经典辅色强化色阶（[MascotTheme.kt] 的 lightSecondaryStrong）：
  * 浅紫容器 `YanjiLavenderSoft` 需要与之配对以达到正文对比度要求，
  * 而 `YanjiLavender` 铺在浅紫上对比不足。
  *
- * 该色只在 Chat 的品牌化区域（深度解析徽章、思考链提示、行动按钮）出现，
  * 不参与主 CTA，也不得替换 [YanjiPrimary]。
  */
 val YanjiLavenderDeep = Color(0xFF5C4BC3)
@@ -52,9 +51,9 @@ val YanjiDangerSoft = Color(0xFFFDECEC)
 // 统一解析与亮/暗对比度处理见 SubjectColors.kt；伙伴主题只负责 UI Accent。
 
 // ===========================================================================
-// Yanji Dark Palette —— 严格对齐 design_dark.md「Midnight Blue」
+// Yanji Dark Palette —— 严格对齐「Midnight Blue」规范（AGENTS.md §三.6）
 //
-// 三条不可违背的约束（design_dark.md §1.2）：
+// 三条不可违背的约束（AGENTS.md §三.6 UI 设计红线）：
 //  1. **禁止纯黑 #000000**：底色是富含冷蓝因子的深邃灰蓝，避免卤化效应与刺眼光感；
 //  2. **用「表面明度递进」而非阴影表达层级**：背景 → 卡片 → 控件 → 浮层 逐级提亮；
 //  3. **主色升调**：亮色主蓝 #356AE6 在暗底反差不足，暗色升为 #4F7DF3，强调文字 #7197F7。

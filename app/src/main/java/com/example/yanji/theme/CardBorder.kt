@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
  *
  * 取值来源：iOS Grouped Inset List 的「超细低对比度描边」。
  *
- * 为什么带 alpha 衰减：`DESIGN.md` / `design_dark.md` 规定暗色不靠描边表达层次，
+ * 为什么带 alpha 衰减：`AGENTS.md §三.6（UI 设计红线）` 规定暗色不靠描边表达层次，
  * 而靠表面明度递进（背景 #0D111A → 卡片 #222C40）。因此暗色只留 12% 描边，
  * 亮色底卡对比弱，需要 45% 才够清晰。
  */

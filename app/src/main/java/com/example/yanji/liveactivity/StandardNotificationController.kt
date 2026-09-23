@@ -18,7 +18,7 @@ import com.example.yanji.service.FocusTimerService
  * 这一层只做「平台调用」，不含任何业务判断——所有文案与动作语义都来自 spec，
  * 因此普通通知 / Live Update / 流体云三方看到的内容天然一致。
  *
- * 关键点（规范 §15 / §19）：
+ * 关键点（遵循 AGENTS.md §三.7）：
  *  - 时间数字由**系统 Chronometer** 渲染，Service 不再每秒 `notify()`；
  *  - small icon 使用单色 `ic_stat_focus`，不拿 Launcher 图标凑数，也不用 LargeIcon；
  *  - 锁屏可见性沿用项目既有的隐私决定（渠道 VISIBILITY_PRIVATE），

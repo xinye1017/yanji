@@ -111,7 +111,7 @@ enum class YanjiThemeMode {
 /**
  * 当前是否处于暗色主题。
  *
- * 为什么需要它：M3 的 `ColorScheme` 只覆盖语义色槽，而 design_dark.md 还规定了一批
+ * 为什么需要它：M3 的 `ColorScheme` 只覆盖语义色槽，而暗色设计规范（AGENTS.md §三.6）还规定了一批
  * **暗色专属值**（液态玻璃底栏面板、专注圆环自发光、学科序列色、AI 紫雾卡）。
  * 这些值无法塞进 ColorScheme，统一通过本 CompositionLocal 判定后再取色，
  * 保证「亮色视觉 100% 不变、暗色按规范单独呈现」。

@@ -11,7 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 /**
  * 设备在「常驻活动展示」上**真实具备**的能力。
  *
- * 判定原则（规范 §26）：
+ * 判定原则：
  *  - 以运行时 API 探测为准（[NotificationManagerCompat.canPostPromotedNotifications]），
  *    它已经把「系统是否支持 + 用户是否授权 + 用户是否在设置里关掉」合并成一个结论；
  *  - `Build.MANUFACTURER` **只作为辅助信息**，绝不作为唯一判据；
@@ -39,7 +39,7 @@ data class LiveActivityCapability(
             brand.equals("realme", ignoreCase = true)
 
     /**
-     * 最终生效的展示层级。三级降级，越靠前越优先（规范 §34）。
+     * 最终生效的展示层级。三级降级，越靠前越优先。
      *
      * 注意 [Tier.COLOR_OS_FLUID_CLOUD] 并不代表本应用调用了任何 OPPO 私有接口——
      * 它表示「ColorOS 系 ROM + 标准 Promoted Ongoing 可用」，即由系统侧把标准

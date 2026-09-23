@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * 前台计时服务。
  *
- * 职责边界（刻意收窄，规范 §32）：
+ * 职责边界（刻意收窄）：
  *  - Service 生命周期、前台化、WakeLock；
  *  - 调 [TimerMachine] 取时间事实，调 [ActiveSessionCoordinator] 落库；
  *  - 语义转换时调 [FocusLiveActivityController] 刷新常驻展示。
@@ -36,7 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * 关于每秒 tick：循环仍然存在，但只做两件事——推进 UI 展示镜像、检测倒计时归零。
  * 它**不再碰 NotificationManager**：运行期间 `44:59 → 44:58 → 44:57` 由系统
- * Chronometer 渲染，不再每秒走一次 Binder（规范 §15/§19）。
+ * Chronometer 渲染，不再每秒走一次 Binder（遵循 AGENTS.md §三.7 常驻通知 Chronometer 驱动）。
  *
  * 「结束」语义：
  *  - 倒计时归零 → 正常完成（COMPLETED，记录计划时长）
@@ -73,7 +73,7 @@ class FocusTimerService : Service() {
 
         /**
          * 统一语义状态。只在 START / PAUSE / RESUME / FINISH / DISCARD 时发射，
-         * 是 App UI、通知、Live Update、流体云共同消费的那一份状态（规范 §2）。
+         * 是 App UI、通知、Live Update、流体云共同消费的那一份单一真实状态源。
          */
         val liveState: StateFlow<FocusLiveState> = _liveState.asStateFlow()
 
@@ -83,7 +83,7 @@ class FocusTimerService : Service() {
          * 每秒推进的展示镜像，**只给 App UI 用**，任何通知/流体云控制器都不消费它。
          *
          * 它和 [liveState] 同源于 [TimerMachine]，不是第二套计时器——只是把「单调时钟差值
-         * 在每个整秒上的取值」暴露给 Compose，让只有真正需要变化的文本节点重组（规范 §37）。
+         * 在每个整秒上的取值」暴露给 Compose，让只有真正需要变化的文本节点重组（避免页面顶层全屏重组）。
          */
         val elapsedSecondsForUi: StateFlow<Long> = _elapsedSecondsForUi.asStateFlow()
 
@@ -93,7 +93,7 @@ class FocusTimerService : Service() {
          * 倒计时/模考每秒推进的剩余秒数展示镜像，**只给 App UI 用**。
          *
          * 供 [ExamScreen] / [ImmersiveExamTimer] 以 State 消费，
-         * 避免倒计时每秒触发模考页顶层全屏重组（规范 §37）。
+         * 避免倒计时每秒触发模考页顶层全屏重组。
          */
         val remainingSecondsForUi: StateFlow<Long> = _remainingSecondsForUi.asStateFlow()
 

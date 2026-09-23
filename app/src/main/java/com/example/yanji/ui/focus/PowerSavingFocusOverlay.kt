@@ -42,7 +42,7 @@ import com.example.yanji.theme.YanjiPowerSavingTrack
  * 2. 隐藏系统栏：通过 [WindowInsetsControllerCompat] 隐藏状态栏与导航栏，避免烧屏并增强沉浸感；
  * 3. 屏幕常亮：维持 [android.view.View.setKeepScreenOn] 为 true，便于置于桌面自习时作为极简时钟随时查阅；
  * 4. 触碰唤醒：整屏消费任意点击手势，轻触即刻退出省电模式，避免误触底层按钮；
- * 5. 性能隔离（规范 §37）：[elapsedSeconds] 只在 [PowerSavingTimeText] 与 [PowerSavingProgressBar] 叶子节点解包，
+ * 5. 性能隔离：[elapsedSeconds] 只在 [PowerSavingTimeText] 与 [PowerSavingProgressBar] 叶子节点解包，
  *    整屏容器与动画结构每秒零重组。
  */
 @Composable

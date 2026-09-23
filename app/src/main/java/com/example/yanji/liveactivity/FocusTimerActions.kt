@@ -4,8 +4,8 @@ package com.example.yanji.liveactivity
  * 通知栏 Action 的**唯一**契约。
  *
  * App UI、系统通知、Android Live Update、ColorOS 流体云最终都走这几个字符串进入同一个
- * `FocusTimerService`，不允许出现 `pauseFromNotification()` / `pauseFromApp()` 两套业务路径
- * （规范 §33）。常量放在 liveactivity 层而不是 Service 里，是为了让控制器无需反向依赖 Service。
+ * `FocusTimerService`，不允许出现 `pauseFromNotification()` / `pauseFromApp()` 两套业务路径。
+ * 常量放在 liveactivity 层而不是 Service 里，是为了让控制器无需反向依赖 Service。
  */
 object FocusTimerActions {
     const val ACTION_START_FOCUS = "com.example.yanji.ACTION_START_FOCUS"

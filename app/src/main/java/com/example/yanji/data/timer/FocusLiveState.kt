@@ -171,7 +171,7 @@ fun focusLiveStateOf(
  * 计时展示格式，全局唯一实现。
  *
  * 1 小时以内 `mm:ss`（18:42），超过 1 小时 `h:mm:ss`（1:18:42）——
- * 不强制补成 `00:18:42`，避免工业仪表感（设计规范 §8）。
+ * 不强制补成 `00:18:42`，保持视觉轻盈感，避免工业仪表感。
  */
 fun formatFocusClock(seconds: Long): String {
     val safe = seconds.coerceAtLeast(0L)

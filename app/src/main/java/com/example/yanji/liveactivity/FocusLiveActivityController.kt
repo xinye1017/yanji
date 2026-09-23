@@ -12,9 +12,9 @@ import com.example.yanji.liveactivity.coloros.ColorOsFluidCloudController
  * 常驻展示层的**唯一入口**。
  *
  * `FocusTimerService` 只跟它打交道，不关心 ColorOS SDK、Android 版本判断、
- * 通知模板细节或能力探测（规范 §32）。
+ * 通知模板细节或能力探测。
  *
- * 三级降级（规范 §34），任何一级失败都不影响计时准确性与落库：
+ * 三级降级策略，任何一级失败都不影响计时准确性与落库：
  * ```
  * ColorOS 系 + Promoted Ongoing 可用 → 标准 Live Update（由系统映射为流体云，待真机确认）
  *              Android 16 + 可用     → 标准 Live Update
@@ -22,7 +22,7 @@ import com.example.yanji.liveactivity.coloros.ColorOsFluidCloudController
  * ```
  *
  * **只在语义转换时被调用**（START / PAUSE / RESUME / FINISH / DISCARD）。
- * 运行期间的每秒推进由系统 Chronometer 负责，这里没有 tick 路径（规范 §19）。
+ * 运行期间的每秒推进由系统 Chronometer 负责，这里没有 tick 路径（遵循 AGENTS.md §三.7）。
  */
 class FocusLiveActivityController(private val context: Context) {
 
@@ -80,7 +80,7 @@ class FocusLiveActivityController(private val context: Context) {
 
     /**
      * 结束：**立刻**撤掉 ongoing Live Update，再按需发一条普通完成通知。
-     * 顺序不能反——否则会出现「完成通知已到、常驻胶囊还挂着」的假状态（规范 §22）。
+     * 顺序不能反——否则会出现「完成通知已到、常驻胶囊还挂着」的假状态。
      */
     fun finish(state: FocusLiveState, kind: FocusKind = FocusKind.FOCUS) {
         cancelOngoing()

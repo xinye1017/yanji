@@ -65,7 +65,7 @@ internal val LightExtraColors = YanjiExtraColors(
     accent = YanjiPrimary
 )
 
-/** 暗色实例：design_dark.md §colors 的对应值。 */
+/** 暗色实例：对齐暗色语义 Token 规范（AGENTS.md §三.6）。 */
 internal val DarkExtraColors = YanjiExtraColors(
     textTertiary = YanjiDarkTextTertiary,
     success = YanjiDarkSuccess,

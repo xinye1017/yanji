@@ -77,7 +77,7 @@ import kotlinx.coroutines.isActive
 /**
  * 专注环境全屏页。
  *
- * 性能约定（规范 §37）：每秒推进的秒数通过 [State] 传入，**在本函数体内不读取**，
+ * 性能约定：每秒推进的秒数通过 [State] 传入，**在本函数体内不读取**，
  * 只在真正要显示数字的叶子节点（倒计时体 / 正向计时体）里读 `.value`。
  * 这样每秒只会重组那两个小分支，Header、Controls、自定义 Layout 的构图逻辑不会被牵连。
  * 若在这里直接 `elapsedSeconds.value`，整页（含 `BoxWithConstraints` 与手工定位的

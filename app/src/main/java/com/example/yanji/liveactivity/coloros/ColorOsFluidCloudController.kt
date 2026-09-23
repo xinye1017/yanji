@@ -20,7 +20,7 @@ import com.example.yanji.liveactivity.LiveActivityCapability
  *
  * 因此本控制器：
  *  - 只做能力探测与降级决策，不做任何私有接口调用；
- *  - 不使用 Hidden API、不 Reflection 调用流体云私有方法、不 Hook SystemUI（规范 §25/§39）；
+ *  - 不使用 Hidden API、不 Reflection 调用流体云私有方法、不 Hook SystemUI（保持平台兼容与系统稳定性）；
  *  - 把「标准 Android 16 Live Update」作为通往流体云的**官方支持路径**——
  *    ColorOS 16 公开宣称已完整接入原生 Android 16 Live Updates API，
  *    应用遵循该规范即可适配流体云。是否真的呈现为流体云**必须真机确认**。

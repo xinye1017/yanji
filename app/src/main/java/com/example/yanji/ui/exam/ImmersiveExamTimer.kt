@@ -7,7 +7,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,13 +24,10 @@ import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiProgressBar
 import java.util.Locale
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.rememberUpdatedState
-
 /**
  * 考研全真模拟沉浸式倒计时页面。
  *
- * 性能约定（规范 §37）：每秒推进的秒数通过 [State] 传入，并在子组件 [ExamCountdownCenter]
+ * 性能约定：每秒推进的秒数通过 [State] 传入，并在子组件 [ExamCountdownCenter]
  * 叶子节点内读取，避免长达 3 小时的模考过程中每秒引起外层 Header、Card 容器及底部按钮的整页重组。
  */
 @Composable

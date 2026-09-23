@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  通知状态栏 small icon（规范 §14）。
+  通知状态栏 small icon。
 
   约束：单色、无背景、24dp 下仍清晰；普通通知与 Live Update 胶囊共用。
   不使用 Launcher 图标，也不在通知里加 LargeIcon（不占通知中心空间）。
