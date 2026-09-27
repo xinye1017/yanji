@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -13,7 +14,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.YanjiTime
@@ -185,13 +189,41 @@ private fun ExamCountdownCenter(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = timeFormatted,
+            val baseStyle = LocalTextStyle.current.copy(
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isCritical) YanjiColors.warning else MaterialTheme.colorScheme.primary,
                 letterSpacing = (-1).sp
             )
+            val measurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // 与专注计时同源：按稳定数字模板测宽，大字号系统字体下倒计时不会溢出卡片。
+                val template = timeFormatted.map { if (it.isDigit()) '8' else it }.joinToString("")
+                val countdownFontSize = remember(template, maxWidth, density, baseStyle) {
+                    val naturalWidth = measurer.measure(
+                        text = template,
+                        style = baseStyle,
+                        maxLines = 1,
+                        softWrap = false
+                    ).size.width.toFloat()
+                    val availableWidth = with(density) { maxWidth.toPx() }
+                    48f * minOf(1f, availableWidth / naturalWidth.coerceAtLeast(1f))
+                }
+                Text(
+                    text = timeFormatted,
+                    style = baseStyle.copy(
+                        fontSize = countdownFontSize.sp,
+                        lineHeight = (countdownFontSize * 1.2f).sp
+                    ),
+                    color = if (isCritical) YanjiColors.warning else MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
 
             if (isCritical) {
                 Spacer(modifier = Modifier.height(10.dp))

@@ -45,6 +45,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -68,7 +70,6 @@ import com.example.yanji.ui.components.TopFadeScrim
 import com.example.yanji.ui.components.WarmTooltip
 import com.example.yanji.ui.components.WarmTooltipGroup
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlin.math.roundToInt
@@ -108,8 +109,8 @@ object NoteEditorTags {
     const val DiscardDraftButton = "note_dialog_draft"
 }
 
-/** 底部格式栏高度 + 与正文区的留白，作为正文区底部内边距，避免最后几行被遮挡。 */
-private val EditorToolbarHeight = 60.dp
+/** 底部格式栏高度 + 与正文区的留白，作为正文区底部内边距，避免最后几行被遮挡。首帧后由实测值替换。 */
+private val EditorToolbarHeight = 64.dp
 
 enum class NoteEditorMode {
     Edit,
@@ -637,7 +638,9 @@ fun NoteEditorScreen(
                                             showKeyboard()
                                         }
                                     }
-                                    .testTag(NoteEditorTags.ContentInput),
+                                    .testTag(NoteEditorTags.ContentInput)
+                                    // BasicTextField 没有 label，读屏只会念出正文本身，得给出字段名。
+                                    .semantics { contentDescription = "随笔正文" },
                                 textStyle = TextStyle(
                                     fontSize = 17.sp,
                                     lineHeight = 28.sp,
@@ -736,13 +739,14 @@ fun NoteEditorScreen(
         )
 
         // 顶部操作栏：无边框且半透明磨砂玻璃按钮，实时虚化穿透的滚动文字与底色。
+        // 按钮触控槽已扩为 48dp，故留白收到 14dp：玻璃圆的落点与整栏高度（48dp）保持原样。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .zIndex(10f)
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -767,7 +771,8 @@ fun NoteEditorScreen(
                 label = "modeButtonOffsetX"
             )
             val topBarRightWidth by animateDpAsState(
-                targetValue = if (isEdit) 80.dp else 36.dp,
+                // 96dp = 两个 48dp 触控槽，不留重叠；此前 92dp 会让「模式」与「保存」互相压住 4dp。
+                targetValue = if (isEdit) 96.dp else 48.dp,
                 animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
                 label = "topBarRightWidth"
             )
@@ -785,7 +790,7 @@ fun NoteEditorScreen(
             Box(
                 modifier = Modifier
                     .width(topBarRightWidth)
-                    .height(36.dp),
+                    .height(48.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 // 编辑 / 预览模式切换（在预览模式下自动平滑移位至右上角）

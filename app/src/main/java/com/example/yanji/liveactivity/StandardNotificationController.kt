@@ -71,6 +71,7 @@ class StandardNotificationController(private val context: Context) {
             .setContentIntent(openAppIntent())
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NOTIFICATION_VISIBILITY)
+            .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
 
         spec.subText?.let { builder.setSubText(it) }
 
@@ -86,20 +87,40 @@ class StandardNotificationController(private val context: Context) {
         }
 
         if (spec.showProgress) {
-            builder.setProgress(100, spec.progressPercent, false)
+            if (spec.isProgressIndeterminate) {
+                builder.setProgress(0, 0, true)
+            } else {
+                builder.setProgress(100, spec.progressPercent, false)
+            }
+        } else {
+            builder.setProgress(0, 0, false)
         }
 
         spec.primaryAction?.let { action ->
-            builder.addAction(0, spec.primaryActionLabel ?: labelOf(action), serviceAction(REQUEST_CODE_TOGGLE, action))
+            builder.addAction(
+                iconOf(action),
+                spec.primaryActionLabel ?: labelOf(action),
+                serviceAction(REQUEST_CODE_TOGGLE, action)
+            )
         }
         spec.secondaryAction?.let { action ->
-            builder.addAction(0, spec.secondaryActionLabel ?: labelOf(action), serviceAction(REQUEST_CODE_COMPLETE, action))
+            builder.addAction(
+                iconOf(action),
+                spec.secondaryActionLabel ?: labelOf(action),
+                serviceAction(REQUEST_CODE_COMPLETE, action)
+            )
         }
 
         return builder
     }
 
     fun build(spec: FocusNotificationSpec): Notification = builderFor(spec).build()
+
+    private fun iconOf(action: FocusNotificationAction): Int = when (action) {
+        FocusNotificationAction.PAUSE -> R.drawable.ic_pause
+        FocusNotificationAction.RESUME -> R.drawable.ic_play_arrow
+        FocusNotificationAction.COMPLETE -> R.drawable.ic_close
+    }
 
     private fun labelOf(action: FocusNotificationAction): String = when (action) {
         FocusNotificationAction.PAUSE -> "暂停"

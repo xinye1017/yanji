@@ -43,7 +43,7 @@ fun ExamAiDiagnosisSection(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "AI 学情与模考分析",
+                            text = "${currentMascotTheme().name} · 学情与模考分析",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -118,7 +118,13 @@ fun ExamAiDiagnosisSection(
                     return@Column
                 }
 
-                if (analysis.overview.isNotBlank()) {
+                val cleanOverview = analysis.overview.trim().takeIf {
+                    it.length >= 3 &&
+                        it.count { ch -> ch.isLetterOrDigit() } >= 2 &&
+                        !it.equals("null", ignoreCase = true) &&
+                        !it.equals("undefined", ignoreCase = true)
+                }
+                if (!cleanOverview.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -127,7 +133,7 @@ fun ExamAiDiagnosisSection(
                             .padding(14.dp)
                     ) {
                         Text(
-                            text = "【综合概览】${analysis.overview}",
+                            text = "【综合概览】$cleanOverview",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp
@@ -145,33 +151,54 @@ fun ExamAiDiagnosisSection(
                     )
                 }
 
-                if (analysis.strengths.isNotEmpty()) {
+                val cleanStrengths = analysis.strengths.filter {
+                    val t = it.trim()
+                    t.length >= 2 && t.count { ch -> ch.isLetterOrDigit() } >= 2 &&
+                        !t.equals("null", ignoreCase = true) && !t.equals("undefined", ignoreCase = true)
+                }
+                if (cleanStrengths.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("已确认的优势", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    analysis.strengths.forEach { item ->
+                    cleanStrengths.forEach { item ->
                         BulletLine(text = item, color = YanjiColors.success)
                     }
                 }
 
-                if (analysis.weaknesses.isNotEmpty()) {
+                val cleanWeaknesses = analysis.weaknesses.filter {
+                    val t = it.trim()
+                    t.length >= 2 && t.count { ch -> ch.isLetterOrDigit() } >= 2 &&
+                        !t.equals("null", ignoreCase = true) && !t.equals("undefined", ignoreCase = true)
+                }
+                if (cleanWeaknesses.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Text("待改进 / 数据缺口", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    analysis.weaknesses.forEach { item ->
+                    cleanWeaknesses.forEach { item ->
                         BulletLine(text = item, color = YanjiColors.warning)
                     }
                 }
 
-                if (analysis.trendAnalysis.isNotBlank()) {
+                val cleanTrend = analysis.trendAnalysis.trim().takeIf {
+                    it.length >= 3 &&
+                        it.count { ch -> ch.isLetterOrDigit() } >= 2 &&
+                        !it.equals("null", ignoreCase = true) &&
+                        !it.equals("undefined", ignoreCase = true)
+                }
+                if (!cleanTrend.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Text("趋势判断", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(analysis.trendAnalysis, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+                    Text(cleanTrend, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
                 }
 
-                if (analysis.suggestions.isNotEmpty()) {
+                val cleanSuggestions = analysis.suggestions.filter {
+                    val t = it.trim()
+                    t.length >= 2 && t.count { ch -> ch.isLetterOrDigit() } >= 2 &&
+                        !t.equals("null", ignoreCase = true) && !t.equals("undefined", ignoreCase = true)
+                }
+                if (cleanSuggestions.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Text("未来 3 天计划", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    analysis.suggestions.forEachIndexed { index, item ->
+                    cleanSuggestions.forEachIndexed { index, item ->
                         DiagnosisItem(
                             tag = "第 ${index + 1} 天",
                             title = "行动建议",

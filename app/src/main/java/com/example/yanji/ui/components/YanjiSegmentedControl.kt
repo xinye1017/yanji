@@ -2,6 +2,7 @@ package com.example.yanji.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,12 +78,15 @@ fun <T> YanjiSegmentedControl(
     if (items.isEmpty()) return
 
     val isDark = yanjiIsDarkTheme()
+    val reduceMotion = YanjiMotion.isReduceMotionEnabled()
     val animatedPosition = remember { Animatable(selectedIndex.toFloat()) }
 
     LaunchedEffect(selectedIndex) {
         animatedPosition.animateTo(
             targetValue = selectedIndex.toFloat(),
-            animationSpec = YanjiMotion.NavigationSpring
+            // 滑块位移是真正的「运动」，而弹簧不吃系统动画时长缩放 → 关闭动画时瞬切到位。
+            // 文字颜色过渡不是位移，保留原样。
+            animationSpec = if (reduceMotion) snap() else YanjiMotion.NavigationSpring
         )
     }
 
@@ -100,24 +104,10 @@ fun <T> YanjiSegmentedControl(
         }
     }
 
-    val trackBorderModifier = when (variant) {
-        YanjiSegmentedControlVariant.InCard -> {
-            if (isDark) Modifier
-            else Modifier.border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f),
-                shape
-            )
-        }
-        YanjiSegmentedControlVariant.OnPage -> {
-            if (isDark) Modifier
-            else Modifier.border(
-                1.dp,
-                Color.Black.copy(alpha = 0.05f),
-                shape
-            )
-        }
-    }
+    // 轨道描边：分段控件是一个「控件组」，其凹槽边界属于 WCAG 1.4.11 要求可辨识的组件边界，
+    // 因此亮暗两态统一走 colorScheme.outline（专职控件边界，≥3:1）。
+    // 轨道**填充**保持原有的浅色不变 —— 层级靠描边表达，不靠把凹槽压深。
+    val trackBorderModifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, shape)
 
     val pillBackground = when (variant) {
         YanjiSegmentedControlVariant.InCard -> {

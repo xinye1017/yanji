@@ -84,7 +84,7 @@ fun SubjectStudyDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
-            height = 36.dp,
+            height = 48.dp,
             itemLabel = { it.title }
         )
 

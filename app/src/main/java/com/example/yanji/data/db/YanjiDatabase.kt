@@ -22,7 +22,7 @@ import java.io.File
         QuickStartPresetEntity::class,
         SubjectEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -522,6 +522,20 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v16 -> v17:
+         * 为用户设置表 `user_settings` 增加 `aiProtocol` 协议格式字段，TEXT NOT NULL DEFAULT 'OPENAI_CHAT'。
+         * 允许用户在 OpenAI Chat Completions、OpenAI Response、Anthropic Messages 之间切换。
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "ALTER TABLE user_settings " +
+                        "ADD COLUMN aiProtocol TEXT NOT NULL DEFAULT 'OPENAI_CHAT'"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -543,7 +557,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
-            MIGRATION_15_16
+            MIGRATION_15_16,
+            MIGRATION_16_17
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

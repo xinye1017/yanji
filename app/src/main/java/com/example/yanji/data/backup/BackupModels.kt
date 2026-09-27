@@ -32,6 +32,7 @@ data class UserSettingsBackup(
     val aiProvider: String,
     val aiBaseUrl: String,
     val aiModel: String,
+    val aiProtocol: String = "OPENAI_CHAT",
     /**
      * 外观偏好。**必须带默认值**：v1 及更早导出的备份里没有这个字段，
      * 缺省值让它们仍能正常反序列化（导入后回落到跟随系统）。
@@ -53,6 +54,7 @@ data class UserSettingsBackup(
         aiBaseUrl = aiBaseUrl,
         aiApiKey = "",
         aiModel = aiModel,
+        aiProtocol = aiProtocol,
         themeMode = themeMode,
         mascotTheme = mascotTheme
     )
@@ -70,6 +72,7 @@ data class UserSettingsBackup(
             aiProvider = settings.aiProvider,
             aiBaseUrl = settings.aiBaseUrl,
             aiModel = settings.aiModel,
+            aiProtocol = settings.aiProtocol,
             themeMode = settings.themeMode,
             mascotTheme = settings.mascotTheme
         )

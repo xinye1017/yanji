@@ -22,6 +22,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -29,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.R
 import com.example.yanji.theme.YanjiColors
+import com.example.yanji.theme.YanjiMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -51,7 +59,9 @@ fun YanjiPeekRating(
     count: Int = 5,
     labels: List<String> = listOf("状态欠佳", "勉强跟上", "循序渐进", "渐入佳境", "状态极佳"),
     activeColor: Color = YanjiColors.warning,
-    idleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+    // 空星是评分控件的「轨道」，属 WCAG 1.4.11 须可辨识的组件边界 → 走专职控件边界色（≥3:1），
+    // 不再用 0.35 alpha 稀释（白底上只有 1.9:1）。
+    idleColor: Color = MaterialTheme.colorScheme.outline,
     tipColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     tipTextColor: Color = MaterialTheme.colorScheme.onSurface,
     size: Dp = 26.dp,
@@ -79,13 +89,19 @@ fun YanjiPeekRating(
     }
 
     val currentEffectiveRating = hoverIndex?.let { it + 1 } ?: value
+    // commit() 不是 composable，所以弹簧规格在组合期解析一次；
+    // accessibleSpring 会在系统关闭动画时返回 snap()，否则弹簧不受动画时长缩放影响、照旧会弹。
+    val popSpring = YanjiMotion.accessibleSpring<Float>(
+        dampingRatio = 0.5f,
+        stiffness = Spring.StiffnessMedium
+    )
 
     // 气泡水平位移动画
     val targetTipSlot = hoverIndex ?: (if (value > 0) (value - 1).coerceIn(0, count - 1) else 0)
     val slotWidthPx = if (rowWidthPx > 0f) rowWidthPx / count else with(density) { (size + 6.dp).toPx() }
     val animatedTipOffsetXPx by animateFloatAsState(
         targetValue = slotWidthPx * (targetTipSlot + 0.5f),
-        animationSpec = spring(
+        animationSpec = YanjiMotion.accessibleSpring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
@@ -99,13 +115,7 @@ fun YanjiPeekRating(
             coroutineScope.launch {
                 val anim = popAnimatables[next - 1]
                 anim.snapTo(popScale)
-                anim.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = 0.5f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                )
+                anim.animateTo(targetValue = 1f, animationSpec = popSpring)
             }
         }
         // 提交后让气泡短暂停留后淡出
@@ -212,6 +222,26 @@ fun YanjiPeekRating(
                 .onGloballyPositioned { coordinates ->
                     rowWidthPx = coordinates.size.width.toFloat()
                 }
+                // 星星行原本只认裸指针手势：挂上可调值语义，TalkBack 双击加一分、上下滑动精确设值，无需拖拽。
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "状态打分"
+                    stateDescription = if (value > 0) "已评 $value 分，共 $count 分" else "未评分，共 $count 分"
+                    if (!readOnly) {
+                        onClick("增加一分") {
+                            commit(if (value >= count) 1 else value + 1)
+                            true
+                        }
+                        progressBarRangeInfo =
+                            ProgressBarRangeInfo(value.toFloat(), 0f..count.toFloat(), count - 1)
+                        setProgress("评分") { target ->
+                            val next = target.roundToInt().coerceIn(0, count)
+                            if (next == value) false else {
+                                onValueChange(next)
+                                true
+                            }
+                        }
+                    }
+                }
                 .then(gestureModifier),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -224,7 +254,7 @@ fun YanjiPeekRating(
                 // 上浮动效
                 val animatedLiftY by animateDpAsState(
                     targetValue = if (isLifted) -lift else 0.dp,
-                    animationSpec = spring(
+                    animationSpec = YanjiMotion.accessibleSpring(
                         dampingRatio = Spring.DampingRatioLowBouncy,
                         stiffness = Spring.StiffnessMedium
                     ),
@@ -234,7 +264,7 @@ fun YanjiPeekRating(
                 // 触摸放大动效
                 val animatedMagnify by animateFloatAsState(
                     targetValue = if (isHovered) magnify else 1f,
-                    animationSpec = spring(
+                    animationSpec = YanjiMotion.accessibleSpring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
                     ),
@@ -256,7 +286,8 @@ fun YanjiPeekRating(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.star),
-                        contentDescription = "评星 ${i + 1}",
+                        // 整行已在语义树上报评分，单颗星再挂名字会让读屏念出 5 个不可用的节点。
+                        contentDescription = null,
                         tint = if (isLit) activeColor else idleColor,
                         modifier = Modifier.size(size)
                     )

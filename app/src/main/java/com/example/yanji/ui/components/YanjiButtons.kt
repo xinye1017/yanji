@@ -22,7 +22,8 @@ import com.example.yanji.theme.rememberPressScale
 
 /**
  * 研迹主要行动按钮（Primary Button）。
- * 蓝底白字、圆角 12dp (YanjiRadius.ButtonRadius)，挂载 0.97x 触觉弹性缩放动效。
+ * 主色容器底 + `onPrimary` 前景（亮色主题为白字，暗色主题为深墨字，两者均实测 ≥4.5:1）、
+ * 圆角 12dp (YanjiRadius.ButtonRadius)，挂载 0.97x 触觉弹性缩放动效。
  */
 @Composable
 fun YanjiPrimaryButton(
@@ -98,7 +99,9 @@ fun YanjiSecondaryButton(
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        // 次要按钮的描边是「可点的边界」，属 WCAG 1.4.11 须可辨识的组件边界 → 用控件边界专职色
+        // （outlineVariant 在白卡上只有 1.13:1，视觉上等于没有边界）。
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         contentPadding = contentPadding
     ) {
         if (icon != null) {

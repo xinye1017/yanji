@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -249,9 +251,19 @@ fun AchievementsScreen(
                     val categories = listOf<AchievementCategory?>(null) + AchievementCategory.entries.filter { it != AchievementCategory.ALL }
                     categories.forEach { category ->
                         val selected = selectedCategory == category
+                        val chipShape = RoundedCornerShape(YanjiRadius.Small)
                         Surface(
-                            onClick = { selectedCategory = category },
-                            shape = RoundedCornerShape(YanjiRadius.Small),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .clip(chipShape)
+                                .selectable(
+                                    selected = selected,
+                                    interactionSource = null,
+                                    indication = ripple(),
+                                    role = Role.RadioButton,
+                                    onClick = { selectedCategory = category }
+                                ),
+                            shape = chipShape,
                             color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                             border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {

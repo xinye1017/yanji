@@ -38,12 +38,25 @@ class AiConfigViewModel(
             initialValue = AiConfigUiState(repo.settings.value)
         )
 
-    suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> {
-        val result = repo.fetchAvailableModels(baseUrl, apiKey)
+    suspend fun fetchAvailableModels(
+        baseUrl: String,
+        apiKey: String,
+        protocol: com.example.yanji.data.ai.AiProtocolType = com.example.yanji.data.ai.AiProtocolType.OPENAI_CHAT
+    ): Result<List<String>> {
+        val result = repo.fetchAvailableModels(baseUrl, apiKey, protocol)
         result.onSuccess { models ->
             repo.setAvailableAiModels(models)
         }
         return result
+    }
+
+    suspend fun testModelConnection(
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        protocol: com.example.yanji.data.ai.AiProtocolType = com.example.yanji.data.ai.AiProtocolType.OPENAI_CHAT
+    ): Result<String> {
+        return repo.testModelConnection(baseUrl, apiKey, model, protocol)
     }
 
     /** Returns false when Android Keystore could not durably save the key. */

@@ -144,7 +144,7 @@ fun ExamScreen(
                 onItemSelected = { currentSubTab = it },
                 variant = YanjiSegmentedControlVariant.OnPage,
                 modifier = Modifier.fillMaxWidth(),
-                height = 40.dp
+                height = 48.dp
             )
 
             Spacer(modifier = Modifier.height(32.dp))

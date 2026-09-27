@@ -49,10 +49,13 @@ class AndroidLiveUpdateController(private val context: Context) {
         builder.setRequestPromotedOngoing(true)
 
         if (spec.showProgress) {
-            builder.setStyle(
-                NotificationCompat.ProgressStyle()
-                    .setProgress(spec.progressPercent.coerceIn(0, 100))
-            )
+            val progressStyle = NotificationCompat.ProgressStyle()
+            if (spec.isProgressIndeterminate) {
+                progressStyle.setProgressIndeterminate(true)
+            } else {
+                progressStyle.setProgress(spec.progressPercent.coerceIn(0, 100))
+            }
+            builder.setStyle(progressStyle)
         }
 
         spec.shortCriticalText?.let { builder.setShortCriticalText(it) }

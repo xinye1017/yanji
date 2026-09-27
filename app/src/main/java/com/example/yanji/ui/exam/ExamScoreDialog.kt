@@ -2,12 +2,17 @@ package com.example.yanji.ui.exam
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.ExamSession
@@ -22,12 +27,14 @@ fun ExamScoreDialog(
 ) {
     var scoreInput by rememberSaveable(session.id) { mutableStateOf("") }
     var noteInput by rememberSaveable(session.id) { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             Button(
                 onClick = {
+                    keyboardController?.hide()
                     val scoreVal = scoreInput.toDoubleOrNull()
                     onConfirm(scoreVal, noteInput)
                 },
@@ -65,6 +72,13 @@ fun ExamScoreDialog(
                     onValueChange = { scoreInput = it },
                     label = { Text("卷面得分 (满分 150/100)") },
                     placeholder = { Text("例如 128") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(YanjiRadius.Small),
                     singleLine = true

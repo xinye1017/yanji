@@ -4,9 +4,11 @@ import com.example.yanji.ui.icons.RemixIcons
 import android.view.ViewConfiguration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,10 +23,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.yanji.R
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.YanjiTime
@@ -32,13 +38,15 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.example.yanji.theme.YanjiMotion
 import kotlinx.coroutines.launch
 
 /** 滑开侧。NONE = 已收起。 */
 private enum class Reveal { NONE, FAVORITE, DELETE }
 
 /** 吸附动画：接近无回弹的平滑收敛，可被下一次手势随时打断。 */
-private val RowSettleSpec = spring<Float>(
+@Composable
+private fun rememberRowSettleSpec(): AnimationSpec<Float> = YanjiMotion.accessibleSpring(
     dampingRatio = 0.9f,
     stiffness = Spring.StiffnessMediumLow,
     visibilityThreshold = 1f
@@ -77,6 +85,8 @@ private fun applyRubberBand(value: Float, limit: Float, max: Float): Float = whe
  *  - 拖动越过操作块宽度后进入**橡皮筋阻尼**，再拖有渐进阻力而非死限位。
  *  - 滑开后点击内容区 = 收起（iOS 习惯）；点击操作块才触发动作，触发后自动收起。
  *  - 列表滚动、点击页面空白处同样会收起滑开行。
+ *  - **长按 = 滑动的单指针替代路径**：WCAG 2.2 要求作者自定义拖拽必须有按钮 / 菜单等价物，
+ *    否则读屏与运动障碍用户完全够不到「收藏 / 删除」。长按弹出的菜单复用同一对回调。
  *
  * 样式：操作块是**直角方形**，且与整行等高、紧贴边缘 —— 不是浮在行内的圆角胶囊。
  * 方块之外的区域仍是页面底色，条目内容整体平移让位。
@@ -104,9 +114,13 @@ fun NoteSwipeableRow(
     // 本地露出侧真相；「是否滑开」由宿主全局裁决，保证同时只有一行可滑开。
     var side by remember { mutableStateOf(Reveal.NONE) }
     var dragging by remember { mutableStateOf(false) }
+
+    // 长按菜单展开态。与滑开态分开：滑开露出的是「行内快捷块」，长按是「行级操作表」。
+    var menuOpen by remember { mutableStateOf(false) }
     // 唯一的位移驱动：拖动时 snapTo、吸附时 animateTo。
     // 吸附起点恒等于松手瞬间的手指位置，避免 animateDpAsState 从旧值补间造成的跳变。
     val offsetAnim = remember { Animatable(0f) }
+    val rowSettleSpec = rememberRowSettleSpec()
 
     /** 收敛到目标露出侧，并同步宿主持有的「当前滑开行」。 */
     fun settleTo(target: Reveal) {
@@ -119,13 +133,15 @@ fun NoteSwipeableRow(
                     Reveal.DELETE -> -actionWidthPx
                     Reveal.NONE -> 0f
                 },
-                animationSpec = RowSettleSpec
+                animationSpec = rowSettleSpec
             )
         }
     }
 
     // 宿主状态变化（别的行抢占、滚动/点空白收起、状态恢复）时，本地动画跟随归位。
     LaunchedEffect(isOpen) {
+        // 手动滑开任意一侧时收起长按菜单：两个浮层同时挂着会互相遮挡。
+        if (isOpen) menuOpen = false
         if (dragging) return@LaunchedEffect
         settleTo(if (isOpen) side else Reveal.NONE)
     }
@@ -239,7 +255,33 @@ fun NoteSwipeableRow(
         ) {
             NoteRowContent(
                 entry = entry,
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = { menuOpen = true }
+            )
+        }
+
+        // ---- 长按菜单：滑动的单指针替代路径（WCAG 2.2 AA）----
+        // 复用滑动操作块背后的同一对 onToggleFavorite / onDelete，两条路径不会行为分叉。
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (entry.isFavorite) "取消收藏" else "收藏") },
+                leadingIcon = { Icon(RemixIcons.BookmarkFill, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onToggleFavorite()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("删除") },
+                leadingIcon = { Icon(RemixIcons.DeleteBinLine, contentDescription = null) },
+                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error),
+                onClick = {
+                    menuOpen = false
+                    onDelete()
+                }
             )
         }
     }
@@ -265,125 +307,184 @@ private fun SquareActionPanel(
             .width(width)
             .fillMaxHeight()
             .background(container)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            // 名称必须挂在**可点节点自己**身上：只写在 Icon 上时，clickable 仍是一个无名按钮，
+            // TalkBack 会先念一个空「按钮」、再单独念一次图标名，焦点被拆成两跳。
+            // mergeDescendants 把图标并进来，焦点落成「收藏 按钮」这一个节点。
+            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = tint,
             modifier = Modifier
                 .size(20.dp)
                 .graphicsLayer { alpha = revealProgress.value }
         )
     }
-}
+    }
 
 /**
  * 条目正文，布局对齐聊天列表：
  *  - 左列：时间（无头像设置, 用时间占位）；收藏随笔在时间与内容之间显示书签符号
  *  - 中列：内容
  *  - 右列：状态打分（星级）
+ *
+ * 若沿用容器的 [Alignment.Top]，字框顶对齐会让首行基线互相错开约 3dp，
+ * 肉眼表现为时间「浮」在摘要上方。
+ *
+ * 为什么不用 alignByFirstBaseline：Compose 1.12 的 RowScope 只剩 alignBy / alignByBaseline，
+ * 而 alignByBaseline 对齐的是**末**行基线 —— 摘要折成两行时会把单行的时间拽到第二行去。
+ * 这里改用「等高居中」达到同样的首行对齐：时间列高度取自 bodyMedium 的 lineHeight，
+ * 内部垂直居中，Type.kt 改字号时自动跟随，不写死 dp。
  */
 @Composable
 private fun NoteRowContent(
     entry: NoteEntry,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
+    // 时间列的「一行高」：直接取 bodyMedium 的 lineHeight（TextUnit→Dp 会带上当前 fontScale），
+    // 不写死 22.dp —— Type.kt 调整字号体系时这一行自动跟随。
+    val bodyLineHeight = with(LocalDensity.current) {
+        MaterialTheme.typography.bodyMedium.lineHeight.toDp()
+    }
+
+    // 星级跟随系统 Dynamic Type 缩放：写成固定 dp 时，2× 字号下相邻正文撑开、
+    // 星级却纹丝不动，评分会被文字淹没。用 sp 表达基准尺寸，toDp() 会带上当前 fontScale。
+    val starSize = with(LocalDensity.current) { 11.sp.toDp() }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // 长按 = 滑动的单指针替代路径。onLongClickLabel 让读屏念「更多操作」而不是「长按」。
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = "更多操作"
+            )
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // (a) 左：时间（无头像设置，用时间占位）
-        Text(
-            text = YanjiTime.formatTime(entry.createdAt),
-            style = MaterialTheme.typography.labelMedium,
-            color = YanjiColors.textTertiary,
-            modifier = Modifier.width(48.dp)
-        )
+        // 中列：时间 / 收藏书签（左）与草稿徽标 / 摘要（右）
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.Top
+        ) {
+            // (a) 左：时间（无头像设置，用时间占位）+ 收藏书签
+            // 高度 = 摘要一行、内部居中 → 无论摘要是一行还是两行，时间都坐在首行上。
+            // 宽度取「至少 48dp」而非固定 48dp：大字号下 "14:30" 自然向右生长，
+            // 固定宽度会把它挤成 "14:" / "30" 两行，把整行节奏撑坏。
+            Row(
+                modifier = Modifier.heightIn(min = bodyLineHeight),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = YanjiTime.formatTime(entry.createdAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = YanjiColors.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(min = 48.dp)
+                )
 
-        Spacer(modifier = Modifier.width(8.dp))
+                // (a.5) 收藏书签：只显示一个书签符号（不显示「已收藏」文字），
+                // 加粗实心、主题色，位置在时间与随记内容之间。
+                if (entry.isFavorite) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = RemixIcons.BookmarkFill,
+                        contentDescription = "已收藏",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
 
-        // (a.5) 收藏书签：只显示一个书签符号（不显示「已收藏」文字），
-        // 加粗实心、主题色，位置在时间与随记内容之间。
-        if (entry.isFavorite) {
-            Icon(
-                imageVector = RemixIcons.BookmarkFill,
-                contentDescription = "已收藏",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(13.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-        }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
 
-        // (b) 中：内容
-        // 摘要走 stripNoteMarkdown：`**` / `##` / `———` 是样式标记，不该在列表里露出来
-        // （旧卡片一直是剥过的，卡片→行重设计时把这一步漏掉了）。整篇只有标记时剥完为空，
-        // 此时退回原文，避免该行看起来是空白。
-        val snippet = remember(entry.content) { noteListSnippet(entry.content) }
-        Column(modifier = Modifier.weight(1f)) {
-            if (entry.content.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (entry.isDraft) {
-                        Surface(
-                            shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                            modifier = Modifier.padding(end = 6.dp)
-                        ) {
-                            Text(
-                                text = "草稿",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
+            // (b) 内容
+            // 摘要走 stripNoteMarkdown：`**` / `##` / `———` 是样式标记，不该在列表里露出来
+            // （旧卡片一直是剥过的，卡片→行重设计时把这一步漏掉了）。整篇只有标记时剥完为空，
+            // 此时退回原文，避免该行看起来是空白。
+            val snippet = remember(entry.content) { noteListSnippet(entry.content) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (entry.isDraft) {
+                    Surface(
+                        shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        Text(
+                            text = "草稿",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
                     }
+                }
+                if (entry.content.isNotBlank()) {
                     Text(
                         text = snippet,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
+                } else {
+                    // 空稿（标题已从列表移除）：给个占位，避免整行看起来像空白。
+                    // 左侧「草稿」徽标继续显示身份，这里只补「空」这个状态：
+                    // 旧实现写的是「（草稿）」，和徽标连着念两遍「草稿」。
+                    Text(
+                        text = if (entry.isDraft) "（已空）" else "（空）",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = YanjiColors.textTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-            } else {
-                // 空稿（标题已从列表移除）：给个占位，避免整行看起来像空白。
-                Text(
-                    text = if (entry.isDraft) "（草稿）" else "（空）",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiColors.textTertiary,
-                    maxLines = 1
-                )
             }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
 
         // (c) 右：状态打分（与编辑页同一套星形资源）
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // 星形本身是装饰（contentDescription = null），分数只有这条语义上报读得出。
+        // 星级不参与首行对齐：它是整块图形，右对齐到行顶即可。
+        Row(
+            modifier = Modifier.semantics {
+                contentDescription = "心情评分 ${entry.moodScore.coerceIn(0, 5)} / 5"
+            },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             repeat(entry.moodScore.coerceIn(0, 5)) {
                 Icon(
                     painter = painterResource(R.drawable.star),
                     contentDescription = null,
                     tint = YanjiColors.warning,
-                    modifier = Modifier.size(11.dp)
+                    modifier = Modifier.size(starSize)
                 )
             }
         }
     }
 }
 
-/** 条目之间的分隔线（非卡片式列表的唯一边界）。 */
+/**
+ * 条目之间的分隔线（跨日期分组的**唯一**边界 —— 同日多篇之间不画线）。
+ *
+ * 用 [YanjiColors.listSeparator]（亮 1.92:1 / 暗 1.59:1），不再把 quaternaryLabel
+ * 稀释到 50% 凑出 1.48:1：非卡片列表没有卡片边界兜底，这条线本身就是分组线索，
+ * 1.48:1 实测近乎不可见。语义与强度都由 token 一次定死，调用点不再 `copy(alpha = )`。
+ */
 @Composable
 fun NoteRowDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier,
         thickness = 0.8.dp,
-        color = YanjiColors.quaternaryLabel.copy(alpha = 0.5f)
+        color = YanjiColors.listSeparator
     )
 }
 

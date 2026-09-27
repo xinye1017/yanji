@@ -5,12 +5,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.UserSettings
 import com.example.yanji.theme.*
@@ -29,12 +35,15 @@ fun ExamTargetDialog(
         mutableFloatStateOf(settings.dailyGoalHours.takeIf { it in 0f..16f } ?: 0f)
     }
     var showExamDatePicker by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             Button(
                 onClick = {
+                    keyboardController?.hide()
                     onSave(
                         settings.copy(
                             targetSchool = school.trim(),
@@ -73,6 +82,10 @@ fun ExamTargetDialog(
                     value = school,
                     onValueChange = { school = it },
                     label = { Text("目标院校") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Next) }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(YanjiRadius.InputRadius),
                     singleLine = true
@@ -81,6 +94,10 @@ fun ExamTargetDialog(
                     value = major,
                     onValueChange = { major = it },
                     label = { Text("目标专业") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = { keyboardController?.hide() }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(YanjiRadius.InputRadius),
                     singleLine = true

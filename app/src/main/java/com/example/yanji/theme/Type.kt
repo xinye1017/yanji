@@ -176,35 +176,11 @@ object YanjiTypography {
         letterSpacing = (-0.01).em
     )
 
-    val title3 = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp,
-        lineHeight = 25.sp,
-        letterSpacing = 0.sp
-    )
-
-    val headline = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        letterSpacing = (-0.01).em
-    )
-
     val body = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 17.sp,
         lineHeight = 23.sp,
-        letterSpacing = 0.sp
-    )
-
-    val callout = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 21.sp,
         letterSpacing = 0.sp
     )
 
@@ -224,30 +200,7 @@ object YanjiTypography {
         letterSpacing = 0.sp
     )
 
-    val caption = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.sp
-    )
-
-    val caption2 = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 0.sp
-    )
-
     // --- Metric Tokens（大型计数与统计专用，预留独立字偶间距）---
-    val metricXl = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 52.sp,
-        lineHeight = 60.sp,
-        letterSpacing = (-0.03).em
-    )
 
     val metricL = TextStyle(
         fontFamily = FontFamily.Default,
@@ -257,12 +210,5 @@ object YanjiTypography {
         letterSpacing = (-0.02).em
     )
 
-    val metricM = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.015).em
-    )
 }
 

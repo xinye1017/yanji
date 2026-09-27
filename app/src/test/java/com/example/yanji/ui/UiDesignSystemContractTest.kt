@@ -31,7 +31,7 @@ class UiDesignSystemContractTest {
         assertEquals("HeroCardRadius must be 28.dp per DESIGN.md", 28.dp, YanjiRadius.HeroCardRadius)
         assertEquals("CompactCardRadius must be 16.dp", 16.dp, YanjiRadius.CompactCardRadius)
         assertEquals("ButtonRadius must be 12.dp per YanjiButtons", 12.dp, YanjiRadius.ButtonRadius)
-        assertEquals("InputRadius must be 16.dp per YanjiTextField", 16.dp, YanjiRadius.InputRadius)
+        assertEquals("InputRadius must be 16.dp (OutlinedTextField 容器圆角)", 16.dp, YanjiRadius.InputRadius)
         assertEquals("Small radius must be 12.dp", 12.dp, YanjiRadius.Small)
     }
 
@@ -120,12 +120,12 @@ class UiDesignSystemContractTest {
         )
         assertTrue(
             "Dock and backdrop must share the same liquid-glass blur token",
-            content.contains("blurRadius = glassTokens.blurRadius") &&
-                content.contains("hazeState = hazeState")
+            content.contains("blurRadius(glassTokens.blurRadius)") &&
+                content.contains("HazeInput.Sources(hazeState)")
         )
         assertTrue(
-            "Every hazeEffect must provide an explicit background color to prevent device crashes",
-            content.contains("backgroundColor = Color.Transparent")
+            "Every hazeBlur must provide an explicit background color to prevent device crashes",
+            content.contains("backgroundColor(Color.Transparent)")
         )
     }
 
@@ -150,21 +150,21 @@ class UiDesignSystemContractTest {
         assertTrue("GlassSurface must support HazeState", glassSurfaceContent.contains("hazeState: HazeState?"))
         assertTrue("GlassSurface must support fallback without blur", glassSurfaceContent.contains("fallbackColor"))
 
-        val segmentedFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/GlassSegmentedControl.kt")
-        assertTrue("GlassSegmentedControl.kt must exist", segmentedFile.exists())
-        val segmentedContent = segmentedFile.readText()
-        assertTrue("GlassSegmentedControl must use Role.Tab for a11y", segmentedContent.contains("Role.Tab"))
-
         val yanjiSegmentedFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/YanjiSegmentedControl.kt")
         assertTrue("YanjiSegmentedControl.kt must exist", yanjiSegmentedFile.exists())
-        val yanjiSegmentedContent = yanjiSegmentedFile.readText()
-        assertTrue("YanjiSegmentedControl must use Role.Tab for a11y", yanjiSegmentedContent.contains("Role.Tab"))
+        // 语义契约必须匹配**代码**而不是 KDoc：此前它匹配到的是 GlassSegmentedControl 注释里的
+        // 一句「完整适配 Role.Tab」，函数体其实只是逐参数转发的别名，断言在注释上就变绿了。
+        val yanjiSegmentedContent = codeOf(yanjiSegmentedFile)
+        assertTrue("YanjiSegmentedControl must use selectable(role = Role.Tab)",
+            yanjiSegmentedContent.contains("selectable(") && yanjiSegmentedContent.contains("Role.Tab"))
+
+        val rollingContent = codeOf(File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/RollingNumber.kt"))
+        assertTrue("RollingNumber must merge its per-digit Text nodes into one semantic unit",
+            rollingContent.contains("mergeDescendants = true"))
 
         val rollingFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/RollingNumber.kt")
         assertTrue("RollingNumber.kt must exist", rollingFile.exists())
 
-        val sectionFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/components/YanjiSection.kt")
-        assertTrue("YanjiSection.kt must exist", sectionFile.exists())
     }
 
     @Test
@@ -181,10 +181,40 @@ class UiDesignSystemContractTest {
             assertTrue("File must exist: $relPath", file.exists())
             val content = file.readText()
             assertTrue(
-                "$relPath must NOT directly invoke hazeEffect; 80% content layer must remain quiet per 80/20 rule",
-                !content.contains(".hazeEffect(")
+                "$relPath must NOT directly invoke hazeEffect/hazeBlur; 80% content layer must remain quiet per 80/20 rule",
+                !content.contains(".hazeEffect(") && !content.contains(".hazeBlur(")
             )
         }
+    }
+
+    /** 读源码并剥掉 KDoc 与行注释，供「必须使用某 API」这类断言匹配真实代码。 */
+    /**
+     * 读源码并剥掉 KDoc 与行注释。
+     *
+     * 语义类契约（Role / selectable / mergeDescendants）必须断言**代码**：
+     * 直接 readText() 会让断言命中 KDoc 里的一句话，在注释上就变绿了。
+     */
+    private fun codeOf(file: File): String {
+        val out = StringBuilder()
+        var inBlockComment = false
+        for (rawLine in file.readText().lineSequence()) {
+            var line = rawLine
+            if (inBlockComment) {
+                val end = line.indexOf("*/")
+                if (end < 0) continue
+                inBlockComment = false
+                line = line.substring(end + 2)
+            }
+            val blockStart = line.indexOf("/*")
+            if (blockStart >= 0) {
+                inBlockComment = true
+                line = line.substring(0, blockStart)
+            }
+            val lineComment = line.indexOf("//")
+            if (lineComment >= 0) line = line.substring(0, lineComment)
+            out.append(line).append('\n')
+        }
+        return out.toString()
     }
 
     private fun findProjectRoot(): File {

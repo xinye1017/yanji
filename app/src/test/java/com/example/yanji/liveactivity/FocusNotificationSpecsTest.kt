@@ -38,8 +38,9 @@ class FocusNotificationSpecsTest {
         assertEquals("高等数学", spec.title)
         // 运行中不得下发静态时间：那会显示一个不走的假数字。
         assertNull(spec.shortCriticalText)
-        assertTrue(spec.showProgress)
-        assertEquals(4, spec.progressPercent) // 125 / 2700 ≈ 4%
+        // 进度条在 Android 通知中无法随物理时钟平滑自增，为避免在 ColorOS 流体云中卡死，统一关闭静态进度条
+        assertFalse(spec.showProgress)
+        assertEquals(0, spec.progressPercent)
         assertEquals(FocusNotificationAction.PAUSE, spec.primaryAction)
         assertEquals(FocusNotificationAction.COMPLETE, spec.secondaryAction)
         assertTrue(spec.requestPromoted)
@@ -54,8 +55,9 @@ class FocusNotificationSpecsTest {
         assertFalse(spec.chronometerCountDown)
         // 基准 = 现在 - 已专注 1122s
         assertEquals(now - 1122L * 1000L, spec.referenceWallClockMs)
-        // 正向计时没有目标，不该出现进度条。
         assertFalse(spec.showProgress)
+        assertFalse(spec.isProgressIndeterminate)
+        assertEquals(0, spec.progressPercent)
         assertEquals("概率论", spec.title)
     }
 
@@ -67,7 +69,9 @@ class FocusNotificationSpecsTest {
         // 关键不变量：暂停必须关掉 Chronometer，改由静态文本承载冻结的数字。
         assertFalse(spec.usesChronometer)
         assertFalse(spec.showWhen)
-        assertEquals("20:18 · 已暂停", spec.contentText)
+        assertEquals("高等数学  20:18", spec.title)
+        assertEquals("已暂停", spec.contentText)
+        assertNull(spec.subText)
         // 冻结的数字是真实的，可以安全下发给状态栏胶囊。
         assertEquals("20:18", spec.shortCriticalText)
         assertEquals(FocusNotificationAction.RESUME, spec.primaryAction)
@@ -78,7 +82,9 @@ class FocusNotificationSpecsTest {
     fun pausedCountUpShowsElapsedInsteadOfRemaining() {
         val state = CountUpPaused("sid", "概率论", now, elapsedSeconds = 1938L)
         val spec = FocusNotificationSpecs.ongoing(state, now)!!
-        assertEquals("32:18 · 已暂停", spec.contentText)
+        assertEquals("概率论  32:18", spec.title)
+        assertEquals("已暂停", spec.contentText)
+        assertNull(spec.subText)
         assertFalse(spec.showProgress)
     }
 
@@ -140,12 +146,11 @@ class FocusNotificationSpecsTest {
     }
 
     @Test
-    fun progressPercentIsClampedToTheHundredScale() {
-        // ProgressStyle 的进度上限是 100，越界值会被系统拒绝。
+    fun ongoingNotificationsDoNotExposeStaticProgressBars() {
         val overrun = CountdownRunning("sid", "数学", now, elapsedSeconds = 3000L, targetSeconds = 2700L)
-        assertEquals(100, FocusNotificationSpecs.ongoing(overrun, now)!!.progressPercent)
+        assertFalse(FocusNotificationSpecs.ongoing(overrun, now)!!.showProgress)
 
         val atStart = CountdownRunning("sid", "数学", now, elapsedSeconds = 0L, targetSeconds = 2700L)
-        assertEquals(0, FocusNotificationSpecs.ongoing(atStart, now)!!.progressPercent)
+        assertFalse(FocusNotificationSpecs.ongoing(atStart, now)!!.showProgress)
     }
 }

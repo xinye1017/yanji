@@ -45,7 +45,7 @@ import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.*
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
-import com.example.yanji.ui.components.GlassSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControl
 
 enum class TrendMode(val label: String) {
     BAR("柱状"),
@@ -102,7 +102,7 @@ fun StatsTrendChart(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                GlassSegmentedControl(
+                YanjiSegmentedControl(
                     items = availableModes,
                     selectedIndex = currentModeIndex,
                     onItemSelected = { onSelectTrendMode(availableModes[it]) },

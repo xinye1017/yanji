@@ -31,3 +31,5 @@ plugins {
 
 rootProject.name = "Yanji"
 include(":app")
+include(":macrobenchmark")
+include(":baselineprofile")

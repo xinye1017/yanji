@@ -13,10 +13,8 @@ import androidx.compose.ui.unit.dp
  *   - [MessageRadius]     单条消息外层气泡
  *   - [ContentBlockRadius]消息内的内容子块（诊断、证据、步骤、引用）
  *   - [ButtonRadius]      行动按钮 / 主操作
- *   - [ChipRadius]        pill 形 chip / tag
  */
 object YanjiRadius {
-    val PageRadius = 24.dp
 
     /**
      * Hero card radius — DESIGN.md「Shapes」: large hero card = 24–28px。
@@ -47,7 +45,6 @@ object YanjiRadius {
      */
     val RowRadius = 12.dp
 
-    val MessageRadius = 20.dp
     val ContentBlockRadius = 16.dp
 
     /**
@@ -64,13 +61,12 @@ object YanjiRadius {
     val ButtonRadius = 12.dp
 
     /**
-     * 输入框圆角 — 16dp，保持与 [com.example.yanji.ui.components.YanjiTextField] 一致。
+     * 输入框圆角 — 16dp：OutlinedTextField 的容器形状统一取此值。
      */
     val InputRadius = 16.dp
 
     val DialogRadius = 24.dp
     val SheetRadius = 28.dp
-    val ChipRadius = 999.dp
     val Pill = 999.dp
     val ItemRadius = 8.dp
 }

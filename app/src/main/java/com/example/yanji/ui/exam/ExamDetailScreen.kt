@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDangerButton
@@ -216,7 +217,7 @@ fun ExamDetailScreen(
                     Text(
                         text = if (exam.note.isNotBlank()) exam.note else "未录入考后复盘笔记",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (exam.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = if (exam.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
                     )
                 }
             }

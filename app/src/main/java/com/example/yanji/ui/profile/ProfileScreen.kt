@@ -151,61 +151,46 @@ fun ProfileScreen(
             onClick = { showExamTargetDialog = true }
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         ProfileSectionHeader(title = "研途成就")
         Spacer(modifier = Modifier.height(8.dp))
         AchievementSummaryBanner(onClick = onNavigateToAchievements)
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         ProfileSectionHeader(title = "AI 与智能")
         Spacer(modifier = Modifier.height(8.dp))
-        ProfileSettingsGroup {
-            ProfileSettingsItem(
-                icon = RemixIcons.BrainLine,
-                title = "AI API 配置",
-                subtitle = "兼容 OpenAI API",
-                onClick = { showAiConfigDialog = true }
-            )
-        }
+        ProfileAiCard(
+            settings = settings,
+            onClick = { showAiConfigDialog = true }
+        )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        ProfileSectionHeader(title = "偏好")
+        ProfileSectionHeader(title = "偏好与功能")
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
                 icon = RemixIcons.BearSmileLine,
                 title = "学习伙伴",
-                subtitle = "当前：${mascot.name}",
+                subtitle = "随行助学吉祥物",
+                trailingText = mascot.name,
                 onClick = { showMascotPicker = true }
             )
-            HorizontalDivider(
-                color = YanjiColors.separator,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            ProfileSettingsDivider()
             ProfileThemeSelector(
                 selected = YanjiThemeMode.fromStorage(settings.themeMode),
                 onSelect = { mode -> viewModel.updateSettings(settings.copy(themeMode = mode.name)) }
             )
-            HorizontalDivider(
-                color = YanjiColors.separator,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            ProfileSettingsDivider()
             ProfileSettingsItem(
                 icon = RemixIcons.Apps2Line,
                 title = "学科管理",
-                subtitle = "自定义学科类别与子学科",
+                subtitle = "自定义科目与子学科",
                 onClick = onNavigateToSubjectManager
             )
-            HorizontalDivider(
-                color = YanjiColors.separator,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            ProfileSettingsDivider()
             ProfileSettingsSwitchItem(
                 icon = RemixIcons.SunLine,
                 title = "自动沉浸省电",
@@ -214,21 +199,18 @@ fun ProfileScreen(
                 onCheckedChange = { focusPrefs.setAutoPowerSavingEnabled(it) }
             )
             if (autoPowerSavingEnabled) {
-                HorizontalDivider(
-                    color = YanjiColors.separator,
-                    thickness = 0.8.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+                ProfileSettingsDivider()
                 ProfileSettingsItem(
                     icon = RemixIcons.TimeLine,
                     title = "沉浸等待时长",
                     subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
+                    trailingText = "${timeoutSeconds}秒",
                     onClick = { showTimeoutDialog = true }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         ProfileSectionHeader(
             title = "数据与隐私",
@@ -242,16 +224,12 @@ fun ProfileScreen(
                 subtitle = if (isExporting) {
                     "正在导出…"
                 } else {
-                    "专注、模考、日记与设置，不包含 AI Key"
+                    "专注、模考、日记与设置，不含 AI Key"
                 },
                 enabled = !isExporting,
                 onClick = { startExport() }
             )
-            HorizontalDivider(
-                color = YanjiColors.separator,
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(start = 52.dp, end = 16.dp)
-            )
+            ProfileSettingsDivider()
             ProfileSettingsItem(
                 icon = RemixIcons.UploadCloudLine,
                 title = "导入恢复",
@@ -265,15 +243,16 @@ fun ProfileScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        ProfileSectionHeader(title = "更多")
+        ProfileSectionHeader(title = "关于与支持")
         Spacer(modifier = Modifier.height(8.dp))
         ProfileSettingsGroup {
             ProfileSettingsItem(
                 icon = RemixIcons.InformationLine,
                 title = "关于研迹与${mascot.name}",
                 subtitle = "v1.0 · 记录、专注、积累、复盘",
+                trailingText = "v1.0",
                 onClick = { showAboutDialog = true }
             )
         }
@@ -399,6 +378,7 @@ private fun PowerSavingTimeoutDialog(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
                             .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
                             .clickable {
                                 onSelect(seconds)
@@ -410,7 +390,7 @@ private fun PowerSavingTimeoutDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {

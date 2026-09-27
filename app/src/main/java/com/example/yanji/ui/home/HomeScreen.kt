@@ -36,13 +36,13 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiSpacing
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.CheckInCard
 import com.example.yanji.ui.components.CheckInCelebrationDialog
 import com.example.yanji.ui.components.AiEncouragementBanner
 import com.example.yanji.ui.components.RollingNumber
 import com.example.yanji.ui.components.YanjiGroupedCard
-import com.example.yanji.ui.components.YanjiSection
 import com.example.yanji.ui.components.YanjiSettingsRow
 import com.example.yanji.ui.components.YanjiProgressBar
 
@@ -131,7 +131,7 @@ fun HomeScreen(
                         Text(
                             text = settings.targetExamDate.ifBlank { "未设置" },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            color = YanjiColors.textTertiary
                         )
                     }
 
@@ -363,7 +363,7 @@ fun SubjectTimeChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = modifier
-            .heightIn(min = 36.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(YanjiRadius.Small))
             .background(color.copy(alpha = 0.12f))
             .padding(horizontal = 10.dp, vertical = 6.dp)

@@ -275,6 +275,7 @@ data class UserSettings(
     val aiBaseUrl: String = "",
     val aiApiKey: String = "",
     val aiModel: String = "",
+    val aiProtocol: String = "OPENAI_CHAT",
     /**
      * 外观（主题）偏好，存 [com.example.yanji.theme.YanjiThemeMode] 的 `name`。
      * 用 String 而不是枚举，是为了让 Room 迁移、旧备份导入、以及未来新增模式都能安全降级

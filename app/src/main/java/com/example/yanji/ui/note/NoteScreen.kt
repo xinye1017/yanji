@@ -45,12 +45,15 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -114,6 +117,14 @@ fun NoteScreen(
         keyboardController?.hide()
     }
 
+    // 返回键分层消费：先收起滑开的行，再退搜索（清词 + 收焦点 + 收键盘）。
+    // 这层必须挂在 NoteScreen 顶层而不是搜索框内部 —— 原来的 BackHandler 只看
+    // isFocused / query，滑开某行但没聚焦搜索时它处于禁用态，按返回会直接退出页面，
+    // 把滑开的行留在原地。cancelSearchAndClearFocus 已含 openRowId = null，两层一次清完。
+    BackHandler(enabled = openRowId != null || isSearchFocused || query.isNotEmpty()) {
+        cancelSearchAndClearFocus()
+    }
+
     // 列表滚动就收起滑开行与软键盘（保留已输入查询，方便滚动浏览结果）。
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -127,6 +138,34 @@ fun NoteScreen(
     }
     // 搜索词变化后列表结构改变，顺手收起，避免滑开行错位到别的日期分组。
     LaunchedEffect(query) { openRowId = null }
+
+    // 收藏没有二次确认，也没有撤销：横向滑错一次就静默改了状态，还没有任何反馈。
+    // 删除本来就有二次确认对话框，收藏这条路径原本是整个页面唯一「点了就生效且无法回退」的操作。
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
+
+    /**
+     * 切换收藏并给一条可撤销的提示。
+     *
+     * 撤销把该篇**切回本次切换之前**的状态（[entry] 是切换前的快照）。
+     * 即使同一条随笔在提示消失前被再次切换，撤销也只是把它写回一个曾经真实存在过的值，
+     * 不会破坏别的随笔，因此不需要额外的「是否为最新一次切换」判断。
+     */
+    fun toggleFavoriteWithUndo(entry: NoteEntry) {
+        val next = !entry.isFavorite
+        viewModel.setFavorite(entry.id, next)
+        snackbarScope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = if (next) "已收藏这篇随笔" else "已取消收藏",
+                actionLabel = "撤销",
+                withDismissAction = false,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.setFavorite(entry.id, entry.isFavorite)
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -157,6 +196,9 @@ fun NoteScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
+                        // 声明为标题节点：读屏用户可以用「按标题跳转」在页面间移动，
+                        // 否则这一屏没有任何可跳转的层级锚点。
+                        .semantics { heading() }
                 )
 
                 // 页眉「随笔」与下方分隔线：保持贴身，收紧垂直间距。
@@ -174,7 +216,9 @@ fun NoteScreen(
                 onQueryChange = { query = it },
                 isFocused = isSearchFocused,
                 onFocusChange = { isSearchFocused = it },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                // vertical 10 → 8：回到 4/8 节奏。改后搜索框上下留白各 16dp
+                //（上方 8 分隔线 + 8 内边距，下方 8 内边距 + 8 日头上边距），对称。
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
 
             // ---- 列表：整幅通铺到屏幕边缘，滑块从屏幕边缘滑出；点击列表空白处收起滑开行与取消搜索 ----
@@ -191,13 +235,24 @@ fun NoteScreen(
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 if (filteredGroups.isEmpty()) {
-                    item {
-                        if (state.notes.isEmpty()) {
-                            NoteEmptyState(
-                                onStartRecording = { onNavigateToNoteEditor(null, todayStr) }
-                            )
-                        } else {
-                            NoteNoResultState(query = query)
+                    item(key = "note-empty", contentType = "note-empty") {
+                        // 空态 / 无结果态是「这一屏只有它」的状态，必须占满可视区并垂直居中。
+                        // 原来只给 top padding，卡片贴在搜索框下方、下面留出大半屏空白
+                        //（1256×2760 上尤其明显），构图头重脚轻。0.85 而不是 1.0：
+                        // 给底部栏与搜索框让一点余量，视觉重心略高于正中。
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .fillParentMaxHeight(0.85f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (state.notes.isEmpty()) {
+                                NoteEmptyState(
+                                    onStartRecording = { onNavigateToNoteEditor(null, todayStr) }
+                                )
+                            } else {
+                                NoteNoResultState(query = query)
+                            }
                         }
                     }
                 } else {
@@ -234,7 +289,7 @@ fun NoteScreen(
                                     if (openRowId != null) openRowId = null
                                     else onNavigateToNoteEditor(entry.id, entry.date)
                                 },
-                                onToggleFavorite = { viewModel.setFavorite(entry.id, !entry.isFavorite) },
+                                onToggleFavorite = { toggleFavoriteWithUndo(entry) },
                                 onDelete = { pendingDelete = entry }
                             )
                         }
@@ -260,12 +315,23 @@ fun NoteScreen(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = RemixIcons.AddLine,
-                    contentDescription = "记今天",
+                    contentDescription = "写随笔",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(26.dp)
                 )
             }
         }
+
+        // ---- 收藏撤销提示 ----
+        // 落在「列表底部留白」这条带子里（BottomBarPadding + 76dp，与 LazyColumn 的
+        // contentPadding 同一个值）：刚好卡在 FAB 顶边之上，既不压住 FAB，也不遮住最后一行随笔。
+        // 只给 BottomBarPadding 的话 snackbar 会和右下角 FAB 在 y 方向重叠。
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = AppContentInsets.BottomBarPadding + 76.dp)
+        )
     }
 
     pendingDelete?.let { target ->
@@ -385,13 +451,6 @@ private fun NoteSearchBar(
     // 左侧图标自右滑入的距离：未聚焦时右移 14dp，聚焦后归位到 0。
     val leadingIconShift = with(LocalDensity.current) { (14.dp * (1f - focusProgress)).toPx() }
 
-    BackHandler(enabled = isFocused || query.isNotEmpty()) {
-        onQueryChange("")
-        onFocusChange(false)
-        focusManager.clearFocus()
-        keyboardController?.hide()
-    }
-
     val focusSearch = {
         focusRequester.requestFocus()
         showKeyboard()
@@ -411,19 +470,26 @@ private fun NoteSearchBar(
         color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             width = if (isFocused) 1.dp else 0.8.dp,
+            // 未聚焦一律用 `outline`（专职字段边界，亮 #7E8DA1 白底 3.38:1 / 暗 3.52:1）。
+            // 亮色原本走 `opaqueSeparator`，那是装饰性描边 token，白底只有 1.21:1；
+            // 而搜索框是**输入控件边界**，WCAG 1.4.11 要求 ≥3:1（Color.kt 的
+            // YanjiFieldBorder 注释早就预警过这个坑）。两支塌缩成一支后，
+            // 亮暗也终于一致——暗色原本就是对的。
             color = if (isFocused) {
                 MaterialTheme.colorScheme.primary
-            } else if (isDark) {
-                MaterialTheme.colorScheme.outline
             } else {
-                YanjiColors.opaqueSeparator
+                MaterialTheme.colorScheme.outline
             }
         )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .padding(horizontal = 18.dp)
+                // 下限 48dp 而非固定 48dp：原注释的意图（清除键的 48dp 触控槽不会在输入时
+                // 把搜索栏顶高）被完整保留 —— 槽本身就是 48dp，min = 48 时不会长高；
+                // 但大字号下占位词需要更多高度时仍能向上生长，不会被裁掉。
+                .heightIn(min = 48.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             // 未聚焦且无输入：图标与占位词居中展示（常驻，仅淡出）。
@@ -447,7 +513,11 @@ private fun NoteSearchBar(
                 Text(
                     text = "搜索关键词或日期",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = YanjiColors.textTertiary
+                    color = YanjiColors.textTertiary,
+                    // 大字号下 7 个汉字放不进一行，必须显式收成单行省略：
+                    // 不加 maxLines 时它会折行，把整条占位行撑破搜索栏高度。
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -499,18 +569,19 @@ private fun NoteSearchBar(
                     Spacer(modifier = Modifier.width(4.dp))
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(48.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onQueryChange("") },
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.CenterEnd
                     ) {
                         Icon(
                             imageVector = RemixIcons.CloseLine,
                             contentDescription = "清除",
                             tint = YanjiColors.textTertiary,
-                            modifier = Modifier.size(18.dp)
+                            // 槽位扩到 48dp 后右贴边内缩 5dp，X 的落点与原来逐像素一致。
+                            modifier = Modifier.padding(end = 5.dp).size(18.dp)
                         )
                     }
                 }
@@ -525,8 +596,7 @@ private fun NoteNoResultState(query: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 48.dp),
+            .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
@@ -573,7 +643,11 @@ private fun NoteDayHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .padding(top = 20.dp, bottom = 6.dp),
+            // top 由 20 收到 8：下面的 chip 命中区已撑到 48dp，日期文案在 48dp 高的行里
+            // 垂直居中，字顶正好落在 8 + 12 = 20dp —— 与改动前「分割线到日期 20dp」完全一致。
+            // 代价是日期头整块由 50dp 变 64dp，换来的是 chip 命中区达标。
+            // bottom 6 → 8：回到 4/8 节奏。
+            .padding(top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -584,19 +658,30 @@ private fun NoteDayHeader(
             color = YanjiColors.primaryLabel
         )
 
+        // 命中区与视觉分离：外层只负责 ≥48dp 的触控目标（Android 最小触控尺寸，
+        // ux-guidelines 的 Touch Target Size 条目），内层才是那枚紧凑的时长药丸。
+        // 原先药丸本身 12sp 行高 + 2dp×2 内边距只有 22dp 高，不到要求的一半；
+        // 直接把 padding 撑大又会连带动摇日期头的垂直节奏。
+        // 药丸内边距 2 → 4：回到 4/8 节奏，药丸由 22dp 变 26dp，仍在 48dp 命中区内。
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(YanjiRadius.Small))
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .clickable(onClick = onStudyDurationClick)
-                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .heightIn(min = 48.dp)
+                .clickable(onClick = onStudyDurationClick),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = DurationFormatter.formatHoursMinutes(studyDurationSeconds),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(YanjiRadius.Small))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = DurationFormatter.formatHoursMinutes(studyDurationSeconds),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
     }
 }
@@ -618,10 +703,12 @@ private fun NoteEmptyState(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 16.dp),
+            .padding(horizontal = 20.dp),
         shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        border = BorderStroke(0.8.dp, YanjiColors.separator),
+        // 全站卡片边框的唯一入口（CardBorder.kt：2026-09 已把四种写法收敛为一条规则）。
+        // 原先这里手搓 BorderStroke(0.8.dp, separator) 是漏网的第四种写法；
+        // stroke() 在暗色返回 null —— 暗色卡片靠表面明度递进表达层次，不描边。
+        border = YanjiCardBorder.stroke(),
         color = YanjiColors.elevatedSurface
     ) {
         Column(
@@ -669,7 +756,9 @@ private fun NoteEmptyState(
             Spacer(modifier = Modifier.height(24.dp))
 
             YanjiPrimaryButton(
-                text = "开始记录",
+                // 与右下角 FAB 的 contentDescription 统一为「写随笔」：
+                // 两条入口做的是同一件事（新建一篇），不能一个叫「记今天」一个叫「开始记录」。
+                text = "写随笔",
                 onClick = onStartRecording,
                 icon = {
                     Icon(

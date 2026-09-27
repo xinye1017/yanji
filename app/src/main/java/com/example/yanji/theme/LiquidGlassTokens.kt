@@ -33,8 +33,8 @@ val LightGlassTokens = LiquidGlassTokens(
 val DarkGlassTokens = LiquidGlassTokens(
     blurRadius = 28.dp,
     tintAlpha = 0.68f,
-    borderAlpha = 0.0f,
-    highlightAlpha = 0.0f,
+    borderAlpha = 0.15f,
+    highlightAlpha = 0.22f,
     noiseFactor = 0.05f,
 )
 

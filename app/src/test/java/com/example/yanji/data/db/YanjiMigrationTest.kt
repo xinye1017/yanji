@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 16
+    private val CURRENT_VERSION = 17
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -184,7 +184,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_12_13,
         YanjiDatabase.MIGRATION_13_14,
         YanjiDatabase.MIGRATION_14_15,
-        YanjiDatabase.MIGRATION_15_16
+        YanjiDatabase.MIGRATION_15_16,
+        YanjiDatabase.MIGRATION_16_17
     )
 
     /**
@@ -672,6 +673,26 @@ class YanjiMigrationTest {
         // 草稿记录可写入 1
         insertNoteRow(db, "draft-1", "2026-09-21", "草稿篇", 300L, isDraft = 1)
         assertEquals(1, db.intValue("SELECT isDraft FROM journal_entries WHERE id='draft-1'"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 16 -> 17 AI 协议字段
+
+    @Test
+    fun migrate16To17_addsAiProtocolColumnWithDefaultOpenAiChat() {
+        val db16 = helper.createDatabase(16)
+        db16.prepare(
+            "INSERT INTO user_settings " +
+                "(id, targetExamDate, targetSchool, targetMajor, dailyGoalHours, " +
+                "validStudyThresholdMinutes, defaultSubjectId, soundEnabled, " +
+                "vibrationEnabled, aiProvider, aiBaseUrl, aiModel, themeMode, mascotTheme) VALUES " +
+                "(1, '2026-12-26', '北大', '计算机', 4.0, 30, 'math', 1, 1, 'DeepSeek', 'https://api.deepseek.com/v1', 'deepseek-chat', 'SYSTEM', 'CLOUD')"
+        ).use { it.step() }
+        db16.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(16))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM user_settings"))
+        assertEquals("OPENAI_CHAT", db.textValue("SELECT aiProtocol FROM user_settings WHERE id=1"))
         db.close()
     }
 

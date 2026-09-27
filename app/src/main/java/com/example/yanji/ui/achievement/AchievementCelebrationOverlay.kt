@@ -32,6 +32,7 @@ import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.AchievementCommon
+import com.example.yanji.theme.YanjiMotion
 import com.example.yanji.theme.AchievementEpic
 import com.example.yanji.theme.AchievementLegendary
 import com.example.yanji.theme.AchievementMythic
@@ -83,23 +84,35 @@ fun AchievementCelebrationOverlay(
         }
     }
 
+    // 入场位移与庆祝编排是本应用最大面积的运动；弹簧不吃系统动画时长缩放，
+    // 所以「关闭动画」必须在这里显式生效，只靠系统设置不会停下。
+    val reduceMotion = YanjiMotion.isReduceMotionEnabled()
+
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
         AnimatedVisibility(
             visible = currentAchievement != null,
-            enter = slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeIn(animationSpec = tween(300)),
-            exit = slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = tween(300, easing = FastOutLinearInEasing)
-            ) + fadeOut(animationSpec = tween(250))
+            enter = if (reduceMotion) {
+                fadeIn(animationSpec = tween(120))
+            } else {
+                slideInVertically(
+                    initialOffsetY = { -it },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exit = if (reduceMotion) {
+                fadeOut(animationSpec = tween(120))
+            } else {
+                slideOutVertically(
+                    targetOffsetY = { -it },
+                    animationSpec = tween(300, easing = FastOutLinearInEasing)
+                ) + fadeOut(animationSpec = tween(250))
+            }
         ) {
             currentAchievement?.let { def ->
                 AchievementCelebrationCard(
@@ -261,8 +274,17 @@ private fun AchievementBadgeAnimation(
     val diffusionProgress = remember { Animatable(0f) }
     val badgeScale = remember { Animatable(0.85f) }
     val checkColor = YanjiColors.success
+    val reduceMotion = YanjiMotion.isReduceMotionEnabled()
 
-    LaunchedEffect(achievement.id) {
+    LaunchedEffect(achievement.id, reduceMotion) {
+        if (reduceMotion) {
+            // 直接落到终态：徽章完整显示、对勾画满、无缩放与光晕扩散。
+            badgeScale.snapTo(1f)
+            ringProgress.snapTo(1f)
+            checkmarkProgress.snapTo(1f)
+            diffusionProgress.snapTo(0f)
+            return@LaunchedEffect
+        }
         // 重置所有动效状态
         ringProgress.snapTo(0f)
         checkmarkProgress.snapTo(0f)

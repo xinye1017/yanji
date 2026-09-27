@@ -61,6 +61,7 @@ data class FocusNotificationSpec(
     /** 0..100，仅在 [showProgress] 为 true 时使用。 */
     val progressPercent: Int,
     val showProgress: Boolean,
+    val isProgressIndeterminate: Boolean = false,
     /** 是否请求提升为 Android 16 Live Update（promoted ongoing）。 */
     val requestPromoted: Boolean,
     /**
@@ -127,19 +128,21 @@ object FocusNotificationSpecs {
             // 暂停：必须冻结数字。Chronometer 是系统驱动的，暂停时绝不能继续走，
             // 否则用户看到的计时会比真实有效时长多出整个暂停区间。
             val frozen = if (countdown) state.remainingSeconds else state.elapsedSeconds
+            val displaySubject = state.subject.ifBlank { if (kind == FocusKind.EXAM) "模考" else "专注" }
             FocusNotificationSpec(
                 notificationId = ONGOING_NOTIFICATION_ID,
-                title = state.subject,
-                contentText = "${formatFocusClock(frozen)} · 已暂停",
-                subText = "已暂停",
+                title = "$displaySubject  ${formatFocusClock(frozen)}",
+                contentText = "已暂停",
+                subText = null,
                 ongoing = true,
                 autoCancel = false,
                 usesChronometer = false,
                 chronometerCountDown = false,
                 referenceWallClockMs = nowWallClockMs,
                 showWhen = false,
-                progressPercent = progressPercent,
-                showProgress = countdown,
+                progressPercent = 0,
+                showProgress = false,
+                isProgressIndeterminate = false,
                 requestPromoted = true,
                 shortCriticalText = formatFocusClock(frozen),
                 primaryAction = FocusNotificationAction.RESUME,
@@ -163,8 +166,9 @@ object FocusNotificationSpecs {
                 chronometerCountDown = countdown,
                 referenceWallClockMs = referenceWallClockMs,
                 showWhen = true,
-                progressPercent = progressPercent,
-                showProgress = countdown,
+                progressPercent = 0,
+                showProgress = false,
+                isProgressIndeterminate = false,
                 requestPromoted = true,
                 shortCriticalText = null,
                 primaryAction = FocusNotificationAction.PAUSE,

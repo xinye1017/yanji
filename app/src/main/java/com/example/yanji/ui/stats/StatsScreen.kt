@@ -67,6 +67,7 @@ fun StatsScreen(
             selectedIndex = state.selectedTimeTab,
             onItemSelected = { viewModel.selectTimeTab(it) },
             variant = YanjiSegmentedControlVariant.OnPage,
+            height = 48.dp,
             modifier = Modifier.fillMaxWidth()
         )
 

@@ -107,8 +107,8 @@ class LiveActivityCapabilityInstrumentedTest {
 
         // 暂停态必须把「冻结的时间」交给静态文本承载。若这里还依赖 Chronometer，
         // 系统会继续走数字，用户看到的时长会比真实有效专注时长多出整个暂停区间。
-        val pausedText = pausedNotification.extras.getString(Notification.EXTRA_TEXT).orEmpty()
-        assertTrue("暂停通知必须显示冻结的剩余时间，实际为：$pausedText", pausedText.contains("20:18"))
+        val pausedTitle = pausedNotification.extras.getString(Notification.EXTRA_TITLE).orEmpty()
+        assertTrue("暂停通知标题必须显示冻结的剩余时间，实际为：$pausedTitle", pausedTitle.contains("20:18"))
 
         // 运行态则相反：正文里不允许出现静态时间，否则会出现一个不走的假数字。
         val runningText = countdownNotification.extras.getString(Notification.EXTRA_TEXT).orEmpty()

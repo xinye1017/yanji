@@ -50,6 +50,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.Composable
@@ -312,15 +313,16 @@ private fun QuietFocusHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp),
+                .height(48.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (onBack != null) {
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
-                        .size(40.dp)
-                        .offset(x = (-8).dp)
+                        .size(48.dp)
+                        // 触控盒由 40dp 扩到 48dp，偏移量同步 -4dp 以保持箭头绘制位置不变
+                        .offset(x = (-12).dp)
                 ) {
                     Icon(
                         imageVector = RemixIcons.ArrowLeftLine,
@@ -347,6 +349,7 @@ private fun QuietFocusHeader(
                 ) {
                     Row(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onManualLogClick)
                             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
@@ -370,6 +373,7 @@ private fun QuietFocusHeader(
 
                     Row(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onTodayClick)
                             .padding(horizontal = 6.dp, vertical = 6.dp),

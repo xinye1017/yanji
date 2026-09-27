@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.YanjiRepository
+import com.example.yanji.theme.YanjiMotion
 import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.theme.YanjiThemeMode
 import com.example.yanji.theme.MascotThemes
@@ -38,7 +39,12 @@ class MainActivity : ComponentActivity() {
       androidx.compose.runtime.CompositionLocalProvider(
         com.example.yanji.di.LocalAppContainer provides container
       ) {
-        YanjiTheme(darkTheme = darkTheme, mascotTheme = mascotTheme) {
+        YanjiTheme(
+            darkTheme = darkTheme,
+            // 系统级「降低透明度」直通到主题档位：不传的话 ReducedGlassTokens 永远不会被取用。
+            reduceTransparency = YanjiMotion.isReduceTransparencyEnabled(),
+            mascotTheme = mascotTheme
+        ) {
           // 系统栏图标明暗必须跟随「应用主题」：enableEdgeToEdge() 的默认判定只看系统
           // uiMode，用户显式选择的 LIGHT / DARK 与系统不一致时状态栏会与底色同色而看不见。
           SystemBarAppearance(darkTheme = darkTheme)

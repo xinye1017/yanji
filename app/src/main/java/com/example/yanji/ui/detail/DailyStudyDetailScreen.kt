@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.*
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
@@ -137,6 +138,7 @@ fun DailyStudyDetailScreen(
                                             .clip(RoundedCornerShape(YanjiRadius.Small))
                                             .background(chipColor.copy(alpha = 0.08f))
                                             .clickable { onNavigateToSubjectDetail(subName) }
+                                            .heightIn(min = 48.dp)
                                             .padding(horizontal = 8.dp, vertical = 5.dp)
                                     ) {
                                         Box(
@@ -287,7 +289,7 @@ fun DailySessionRowCard(
                     Text(
                         text = DurationFormatter.formatTimeRange(item.startTime, item.endTime),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = YanjiColors.textTertiary,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -336,7 +338,7 @@ fun DailySessionRowCard(
                     Text(
                         text = "暂停 ${item.pauseCount} 次",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = YanjiColors.textTertiary
                     )
                 }
             }

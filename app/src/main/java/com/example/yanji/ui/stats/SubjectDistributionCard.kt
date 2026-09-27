@@ -31,11 +31,12 @@ import com.example.yanji.data.SubjectDistributionItem
 import com.example.yanji.data.SubjectStatsLevel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
-import com.example.yanji.ui.components.GlassSegmentedControl
+import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiProgressBar
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 @Composable
 fun SubjectDistributionCard(
@@ -75,7 +76,7 @@ fun SubjectDistributionCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                GlassSegmentedControl(
+                YanjiSegmentedControl(
                     items = listOf(SubjectStatsLevel.CATEGORY, SubjectStatsLevel.SUBCATEGORY),
                     selectedIndex = if (subjectStatsLevel == SubjectStatsLevel.CATEGORY) 0 else 1,
                     onItemSelected = {
@@ -371,8 +372,20 @@ private fun SubjectDonutChart(
     // 调用方始终会为每个扇区传入颜色；此处仅作兜底，在 Composable 作用域内解析一次。
     val fallbackColor = yanjiSubjectColor("other")
 
+    // 圆环仅靠颜色区分扇区，读屏需要一份与图例同源的文本汇总。
+    val distributionDescription = remember(subjectDist, total) {
+        if (total <= 0L) "各科目时长占比圆环图，暂无数据"
+        else subjectDist.entries.joinToString(separator = "；") { (name, secs) ->
+            "$name ${DurationFormatter.formatHoursMinutes(secs)} 占 ${(secs.toFloat() / total * 100).roundToInt()}%"
+        }
+    }
+
     Box(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = distributionDescription
+            },
         contentAlignment = Alignment.Center
     ) {
         val donutTrackColor = MaterialTheme.colorScheme.surfaceVariant

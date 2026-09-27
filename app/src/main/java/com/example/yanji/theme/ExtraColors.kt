@@ -29,7 +29,6 @@ data class YanjiExtraColors(
     val successSoft: Color,
     val warning: Color,
     val warningSoft: Color,
-    val lavenderDeep: Color,
     val surfaceBlue: Color,
     // --- iOS-inspired Semantic Roles ---
     val elevatedSurface: Color = YanjiElevatedSurface,
@@ -38,10 +37,13 @@ data class YanjiExtraColors(
     val tertiaryLabel: Color = YanjiTextTertiary,
     val quaternaryLabel: Color = YanjiQuaternaryLabel,
     val separator: Color = YanjiDivider,
+    /**
+     * 列表行分割线。非卡片列表唯一的分组线索，因此强度高于 [separator]；
+     * 见 [YanjiListSeparator] 的取值理由。
+     */
+    val listSeparator: Color = YanjiListSeparator,
     val opaqueSeparator: Color = YanjiBorder,
     val fill: Color = YanjiSurfaceSoft,
-    val secondaryFill: Color = YanjiPrimarySoft,
-    val accent: Color = YanjiPrimary
 )
 
 /** 亮色实例：与既有 `YanjiTextTertiary` / `YanjiWarning` 等**逐值相同**。 */
@@ -51,7 +53,6 @@ internal val LightExtraColors = YanjiExtraColors(
     successSoft = YanjiSuccessSoft,
     warning = YanjiWarning,
     warningSoft = YanjiWarningSoft,
-    lavenderDeep = YanjiLavenderDeep,
     surfaceBlue = YanjiSurfaceBlue,
     elevatedSurface = YanjiElevatedSurface,
     primaryLabel = YanjiTextPrimary,
@@ -59,10 +60,9 @@ internal val LightExtraColors = YanjiExtraColors(
     tertiaryLabel = YanjiTextTertiary,
     quaternaryLabel = YanjiQuaternaryLabel,
     separator = YanjiDivider,
+    listSeparator = YanjiListSeparator,
     opaqueSeparator = YanjiBorder,
     fill = YanjiSurfaceSoft,
-    secondaryFill = YanjiPrimarySoft,
-    accent = YanjiPrimary
 )
 
 /** 暗色实例：对齐暗色语义 Token 规范（AGENTS.md §三.6）。 */
@@ -72,7 +72,6 @@ internal val DarkExtraColors = YanjiExtraColors(
     successSoft = YanjiDarkSuccessSoft,
     warning = YanjiDarkWarning,
     warningSoft = YanjiDarkWarningSoft,
-    lavenderDeep = YanjiDarkLavenderDeep,
     surfaceBlue = YanjiDarkSurfaceBlue,
     elevatedSurface = YanjiDarkSurface,
     primaryLabel = YanjiDarkTextPrimary,
@@ -80,10 +79,9 @@ internal val DarkExtraColors = YanjiExtraColors(
     tertiaryLabel = YanjiDarkTextTertiary,
     quaternaryLabel = YanjiDarkQuaternaryLabel,
     separator = YanjiDarkDivider,
+    listSeparator = YanjiDarkListSeparator,
     opaqueSeparator = YanjiDarkBorder,
     fill = YanjiDarkSurfaceSoft,
-    secondaryFill = YanjiDarkPrimarySoft,
-    accent = YanjiDarkPrimary
 )
 
 internal val LocalYanjiExtraColors = staticCompositionLocalOf { LightExtraColors }
@@ -110,9 +108,6 @@ object YanjiColors {
     val warningSoft: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.warningSoft
 
-    val lavenderDeep: Color
-        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.lavenderDeep
-
     val surfaceBlue: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.surfaceBlue
 
@@ -135,15 +130,12 @@ object YanjiColors {
     val separator: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.separator
 
+    val listSeparator: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.listSeparator
+
     val opaqueSeparator: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.opaqueSeparator
 
     val fill: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.fill
-
-    val secondaryFill: Color
-        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.secondaryFill
-
-    val accent: Color
-        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.accent
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -176,13 +182,24 @@ fun ManualFocusLogDialog(
                 ) {
                     topCategories.forEach { category ->
                         val isCatSelected = category.id == selectedCategoryId
+                        val chipShape = RoundedCornerShape(YanjiRadius.Small)
                         Surface(
-                            onClick = {
-                                selectedCategoryId = category.id
-                                val children = subjects.filter { it.parentId == category.id && it.enabled }
-                                selectedSubjectId = children.firstOrNull()?.id ?: category.id
-                            },
-                            shape = RoundedCornerShape(YanjiRadius.Small),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .clip(chipShape)
+                                .semantics { selected = isCatSelected }
+                                .clickable(
+                                    interactionSource = null,
+                                    indication = ripple(),
+                                    onClickLabel = "选择学科",
+                                    role = Role.RadioButton,
+                                    onClick = {
+                                        selectedCategoryId = category.id
+                                        val children = subjects.filter { it.parentId == category.id && it.enabled }
+                                        selectedSubjectId = children.firstOrNull()?.id ?: category.id
+                                    }
+                                ),
+                            shape = chipShape,
                             color = if (isCatSelected) MaterialTheme.colorScheme.primaryContainer else YanjiColors.elevatedSurface,
                             border = BorderStroke(
                                 if (isCatSelected) 1.5.dp else 0.8.dp,
@@ -210,9 +227,20 @@ fun ManualFocusLogDialog(
                     ) {
                         currentSubcategories.forEach { sub ->
                             val isSubSelected = sub.id == selectedSubjectId
+                            val chipShape = RoundedCornerShape(12.dp)
                             Surface(
-                                onClick = { selectedSubjectId = sub.id },
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .clip(chipShape)
+                                    .semantics { selected = isSubSelected }
+                                    .clickable(
+                                        interactionSource = null,
+                                        indication = ripple(),
+                                        onClickLabel = "选择学科",
+                                        role = Role.RadioButton,
+                                        onClick = { selectedSubjectId = sub.id }
+                                    ),
+                                shape = chipShape,
                                 color = if (isSubSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
                                 border = BorderStroke(
                                     0.8.dp,
@@ -251,15 +279,26 @@ fun ManualFocusLogDialog(
                     )
                     dateOptions.forEach { (label, dateVal) ->
                         val isDateSelected = selectedDate == dateVal
+                        val chipShape = RoundedCornerShape(YanjiRadius.Small)
                         Surface(
-                            onClick = { selectedDate = dateVal },
-                            shape = RoundedCornerShape(YanjiRadius.Small),
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(chipShape)
+                                .semantics { selected = isDateSelected }
+                                .clickable(
+                                    interactionSource = null,
+                                    indication = ripple(),
+                                    onClickLabel = "选择日期",
+                                    role = Role.RadioButton,
+                                    onClick = { selectedDate = dateVal }
+                                ),
+                            shape = chipShape,
                             color = if (isDateSelected) MaterialTheme.colorScheme.primaryContainer else YanjiColors.elevatedSurface,
                             border = BorderStroke(
                                 if (isDateSelected) 1.5.dp else 0.8.dp,
                                 if (isDateSelected) MaterialTheme.colorScheme.primary else YanjiColors.separator
-                            ),
-                            modifier = Modifier.weight(1f)
+                            )
                         ) {
                             Text(
                                 text = "$label (${dateVal.format(DateTimeFormatter.ofPattern("M/d"))})",
@@ -302,15 +341,25 @@ fun ManualFocusLogDialog(
                 ) {
                     DURATION_PRESETS.forEach { mins ->
                         val isPreset = durationMinutes == mins
+                        val chipShape = RoundedCornerShape(8.dp)
                         Surface(
-                            onClick = { durationMinutes = mins },
-                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(chipShape)
+                                .selectable(
+                                    selected = isPreset,
+                                    interactionSource = null,
+                                    indication = ripple(),
+                                    role = Role.RadioButton,
+                                    onClick = { durationMinutes = mins }
+                                ),
+                            shape = chipShape,
                             color = if (isPreset) MaterialTheme.colorScheme.primary else YanjiColors.elevatedSurface,
                             border = BorderStroke(
                                 0.8.dp,
                                 if (isPreset) MaterialTheme.colorScheme.primary else YanjiColors.separator
-                            ),
-                            modifier = Modifier.weight(1f)
+                            )
                         ) {
                             Text(
                                 text = "${mins}m",
@@ -366,16 +415,10 @@ fun ManualFocusLogDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // 4. 专注备注
-                Text(
-                    text = "学习心得 / 备注（可选）",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
+                    label = { Text("学习心得 / 备注（可选）") },
                     placeholder = { Text("例如：复习操作系统死锁检测、真题大题订正", fontSize = 13.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(YanjiRadius.Small),
@@ -386,14 +429,18 @@ fun ManualFocusLogDialog(
                     )
                 )
 
-                // 错误提示（若有时钟非法情况）
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = errorMessage.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                // 错误提示（若有时钟非法情况）：区域常驻，TalkBack 才能作为实时区域播报
+                Box(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) {
+                    if (errorMessage != null) {
+                        Column {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = errorMessage.orEmpty(),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))

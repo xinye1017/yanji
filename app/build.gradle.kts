@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.ksp)
+  alias(libs.plugins.androidx.baselineprofile)
 }
 
 // 编译期 Compose 度量：每次重组/跳过情况写到 build/compose_compiler（HTML + .metrics.txt），
@@ -77,6 +78,12 @@ android {
             // supplies the production signing identity through ephemeral environment variables.
             signingConfig = signingConfigs.findByName("production")
         }
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -105,6 +112,10 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
     }
+}
+
+baselineProfile {
+    automaticGenerationDuringBuild = false
 }
 
 
@@ -136,6 +147,7 @@ configurations.configureEach {
 }
 
 dependencies {
+  baselineProfile(project(":baselineprofile"))
   coreLibraryDesugaring(libs.desugar.jdk.libs)
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -145,6 +157,7 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.profileinstaller)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
@@ -156,6 +169,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
   implementation(libs.haze)
+  implementation(libs.haze.blur)
   // Markdown：源码编辑由本项目负责，预览交给成熟的 Compose/GFM 渲染器。
   implementation(libs.markdown.renderer)
   implementation(libs.markdown.renderer.m3)

@@ -19,6 +19,7 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.ExamSession
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AiAvatar
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
@@ -172,7 +173,7 @@ fun ExamHistoryCard(
                 Text(
                     text = exam.note,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    color = YanjiColors.textTertiary,
                     maxLines = 1
                 )
             }

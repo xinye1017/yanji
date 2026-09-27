@@ -110,7 +110,7 @@ fun YanjiExamDatePickerDialog(
                     IconButton(
                         onClick = { moveMonth(-1) },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
@@ -124,7 +124,7 @@ fun YanjiExamDatePickerDialog(
                     IconButton(
                         onClick = { moveMonth(1) },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {

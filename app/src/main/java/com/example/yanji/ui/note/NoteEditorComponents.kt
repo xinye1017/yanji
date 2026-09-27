@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,9 +38,11 @@ import com.example.yanji.theme.rememberPressScale
 import com.example.yanji.ui.components.WarmTooltip
 import com.example.yanji.ui.components.WarmTooltipGroup
 import com.example.yanji.ui.icons.RemixIcons
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 
 /**
  * 未点「完成」直接返回时的确认卡片：
@@ -180,7 +184,7 @@ fun NoteFormatToolbar(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .height(48.dp),
                 shape = RoundedCornerShape(YanjiRadius.Small),
                 color = surfaceColor,
                 shadowElevation = 3.dp,
@@ -190,7 +194,7 @@ fun NoteFormatToolbar(
                     Row(
                         modifier = Modifier
                             .horizontalScroll(scrollState)
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                            .padding(horizontal = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(1.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -366,16 +370,22 @@ private fun FormatButton(
     activeIcon: ImageVector = icon,
     label: String,
     tag: String,
-    active: Boolean = false,
+    active: Boolean? = null,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val isActive = active == true
+    val stateLabel = active?.let { if (it) "已开启" else "已关闭" }
     WarmTooltip(content = label) {
         Box(
             modifier = Modifier
                 .testTag(tag)
-                .size(36.dp)
+                .size(48.dp)
                 .clip(CircleShape)
+                .semantics {
+                    // 激活态此前只由换图标 + 着色表达，读屏取不到任何状态；48dp 槽位不改变 19dp 图标的可见尺寸。
+                    stateLabel?.let { stateDescription = it }
+                }
                 .then(
                     if (enabled) Modifier.clickable(onClick = onClick)
                     else Modifier
@@ -385,11 +395,11 @@ private fun FormatButton(
         ) {
             val tint = when {
                 !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.32f)
-                active -> MaterialTheme.colorScheme.primary
+                isActive -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             Icon(
-                imageVector = if (active) activeIcon else icon,
+                imageVector = if (isActive) activeIcon else icon,
                 contentDescription = label,
                 tint = tint,
                 modifier = Modifier.size(19.dp)
@@ -424,26 +434,23 @@ fun FrostedTopBarButton(
     )
 
     val hazeModifier = if (hazeState != null && tokens.blurRadius > 0.dp) {
-        Modifier.hazeEffect(state = hazeState) {
-            blurRadius = tokens.blurRadius
-            tints = listOf(HazeTint(tintColor))
-            noiseFactor = 0.08f
-            backgroundColor = Color.Transparent
-        }
+        Modifier.hazeBlur(
+            input = HazeInput.Sources(hazeState),
+            style = HazeBlurStyle {
+                blurRadius(tokens.blurRadius)
+                colorEffects(listOf(HazeColorEffect.tint(tintColor)))
+                noiseFactor(0.08f)
+                backgroundColor(Color.Transparent)
+            }
+        )
     } else {
         Modifier.background(tintColor)
     }
 
     Box(
+        // 外层 48dp 只做触控；玻璃圆仍在内层按 36dp 绘制，可见尺寸与位置不变。
         modifier = modifier
-            .graphicsLayer {
-                scaleX = pressScale.value
-                scaleY = pressScale.value
-                alpha = pressAlpha.value
-            }
-            .size(36.dp)
-            .clip(CircleShape)
-            .then(hazeModifier)
+            .size(48.dp)
             .then(
                 if (enabled) {
                     Modifier.clickable(
@@ -455,7 +462,20 @@ fun FrostedTopBarButton(
                     Modifier
                 }
             ),
-        contentAlignment = Alignment.Center,
-        content = content
-    )
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = pressScale.value
+                    scaleY = pressScale.value
+                    alpha = pressAlpha.value
+                }
+                .size(36.dp)
+                .clip(CircleShape)
+                .then(hazeModifier),
+            contentAlignment = Alignment.Center,
+            content = content
+        )
+    }
 }

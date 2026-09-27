@@ -196,6 +196,7 @@ data class UserSettingsEntity(
     val aiProvider: String,
     val aiBaseUrl: String,
     val aiModel: String,
+    val aiProtocol: String = "OPENAI_CHAT",
     val themeMode: String,
     val mascotTheme: String
 ) {
@@ -213,6 +214,7 @@ data class UserSettingsEntity(
             aiBaseUrl = aiBaseUrl,
             aiApiKey = "",
             aiModel = aiModel,
+            aiProtocol = aiProtocol,
             themeMode = themeMode,
             mascotTheme = mascotTheme
         )
@@ -233,6 +235,7 @@ data class UserSettingsEntity(
                 aiProvider = model.aiProvider,
                 aiBaseUrl = model.aiBaseUrl,
                 aiModel = model.aiModel,
+                aiProtocol = model.aiProtocol,
                 themeMode = model.themeMode,
                 mascotTheme = model.mascotTheme
             )

@@ -14,15 +14,51 @@ val YanjiSurface = Color(0xFFFFFFFF)
 val YanjiSurfaceSoft = Color(0xFFF1F5FB)
 val YanjiSurfaceBlue = Color(0xFFF4F7FF)
 
+/**
+ * 亮色文字灰阶：四级里前三级必须全部承载信息（WCAG 1.4.3 的 4.5:1）。
+ *
+ * 约束（实测，取最坏配对「白卡 / 页面底 / surfaceSoft / surfaceBlue / primarySoft」的最小值）：
+ *  - [YanjiTextSecondary] #5A6473 → 5.99 / 5.44 / 5.48 / 5.59 / 5.28
+ *  - [YanjiTextTertiary]  #606A7C → 5.45 / 4.95 / 4.99 / 5.09 / 4.81
+ *  - [YanjiQuaternaryLabel] 是旧 tertiary 值，**仅供禁用态与纯装饰**（规范豁免），不得用于任何可读信息。
+ *
+ * 为什么三级要压到 #606A7C 这么深：亮色底（#F2F4F7）之上，比 #667085 更浅的中性灰
+ * 不存在仍 ≥4.5:1 的取值，即「比二级更淡、却仍达标」的第三级在数学上不可能存在。
+ * 因此本系统把层级差转移到字号与字重，而不是继续用明度表达层级。
+ * 同理：**不得在调用点用 `copy(alpha = )` 稀释前三级文字** —— 0.7 alpha 会把 5.99 打到 3.13。
+ */
 val YanjiTextPrimary = Color(0xFF172033)
-val YanjiTextSecondary = Color(0xFF667085)
-val YanjiTextTertiary = Color(0xFF98A2B3)
-val YanjiQuaternaryLabel = Color(0xFFC4CBD6)
+val YanjiTextSecondary = Color(0xFF5A6473)
+val YanjiTextTertiary = Color(0xFF606A7C)
+val YanjiQuaternaryLabel = Color(0xFF98A2B3)
 
 val YanjiElevatedSurface = Color(0xFFFFFFFF)
 
 val YanjiBorder = Color(0xFFE4EAF2)
 val YanjiDivider = Color(0xFFEDF1F6)
+
+/**
+ * 列表行分割线：非卡片式列表的行边界（随笔历史页的跨日期分组线等）。
+ *
+ * 为什么不能直接用 [YanjiDivider]（1.03:1）或 [YanjiBorder]（1.10:1）：
+ * 卡片列表有卡片自身的边界兜底，分割线只是装饰；但**非卡片列表没有这层兜底**——
+ * 分割线本身就是唯一的分组线索，1.0:1 级等于没有线，跨日期分组会糊成一片。
+ * 随笔历史页正是这种结构：同日多篇之间不画线，只有跨日期才画（见 NoteScreen 的分组循环）。
+ *
+ * 取 #AAB3C0 而非更深的值：这是列表节奏线，目标是「看得见分组」而不是「抢主体」，
+ * 且不承载任何信息，不受 WCAG 1.4.11 的 3:1 约束（那条只管控件边界，见 [YanjiFieldBorder]）。
+ * 实测：#AAB3C0 在页面底 #F2F4F7 上 1.92:1。
+ */
+val YanjiListSeparator = Color(0xFFAAB3C0)
+
+/**
+ * 表单 / 控件边界的专职色（WCAG 1.4.11 要求「可辨识组件边界」≥3:1）。
+ *
+ * 与 [YanjiBorder] 分开定义的原因：后者承担卡片描边、分隔线等**装饰性**边界，
+ * 1.10:1 是刻意的轻；用它同时做输入框描边会让输入框要么过重、要么不达标。
+ * 实测 #7E8DA1：白 3.38 / 页面底 3.07 / surfaceSoft 3.09 / surfaceBlue 3.15。
+ */
+val YanjiFieldBorder = Color(0xFF7E8DA1)
 
 val YanjiLavender = Color(0xFF8B7CF6)
 val YanjiLavenderSoft = Color(0xFFF0EDFF)
@@ -38,13 +74,24 @@ val YanjiLavenderSoft = Color(0xFFF0EDFF)
  */
 val YanjiLavenderDeep = Color(0xFF5C4BC3)
 
-val YanjiSuccess = Color(0xFF2F9E6D)
+/**
+ * 语义色「文字档」：这三个值会被直接当作文字与图标前景使用，因此按 ≥4.5:1 定值。
+ *
+ * 实测（白卡 / 页面底 / surfaceSoft / 各自 Soft 容器）：
+ *  - [YanjiSuccess] #17784F → 5.47 / 4.97 / 5.00 / 4.95（旧 #2F9E6D 只有 3.37 / 3.06 / 3.08 / 3.05）
+ *  - [YanjiWarning] #9A6100 → 5.14 / 4.67 / 4.70 / 4.76（旧 #D99024 只有 2.64 / 2.39 / 2.41 / 2.44）
+ *  - [YanjiDanger]  #BE3232 → 5.69 / 5.16 / 5.20 / 4.98，白字压此底亦 5.69（旧 #D94B4B 为 4.15）
+ *
+ * 三个 `...Soft` 容器值**刻意不变**：它们只做底色、不做文字。
+ * 「文字档加深 + Soft 容器不变」让整体调性几乎不动，同时把 6 个失败配对一次修完。
+ */
+val YanjiSuccess = Color(0xFF17784F)
 val YanjiSuccessSoft = Color(0xFFE8F7F0)
 
-val YanjiWarning = Color(0xFFD99024)
+val YanjiWarning = Color(0xFF9A6100)
 val YanjiWarningSoft = Color(0xFFFFF5E3)
 
-val YanjiDanger = Color(0xFFD94B4B)
+val YanjiDanger = Color(0xFFBE3232)
 val YanjiDangerSoft = Color(0xFFFDECEC)
 
 // 学科色不属于 App Theme：它是 Subject.colorHex 的持久化内容数据。
@@ -82,8 +129,19 @@ val YanjiDarkSurfaceFloating = Color(0xFF222C40)
 /** 柔白冷灰：杜绝纯白 #FFF 的刺眼与晕光，但字形依然饱满。 */
 val YanjiDarkTextPrimary = Color(0xFFF0F4FC)
 val YanjiDarkTextSecondary = Color(0xFF94A3B8)
-val YanjiDarkTextTertiary = Color(0xFF64748B)
+
+/**
+ * 暗色三级文字 #8797AC：从 #64748B 提亮一档，使四种落点全部 ≥4.5:1
+ * （暗卡 5.78 / 页面底 6.34 / 次级卡 5.15 / 浮层 4.69；旧值为 3.62 / 3.97 / 3.22 / 2.94）。
+ * 暗色底有明度空间，所以暗色能保住四级灰阶，亮色不能（见上方亮色灰阶说明）。
+ */
+val YanjiDarkTextTertiary = Color(0xFF8797AC)
+
+/** 四级：与亮色同义 —— 只用于禁用态与装饰，不承载信息。 */
 val YanjiDarkQuaternaryLabel = Color(0xFF475569)
+
+/** 暗色控件边界专职色，与 [YanjiFieldBorder] 同职（实测：暗卡 3.95 / 浮层 3.21）。 */
+val YanjiDarkFieldBorder = Color(0xFF6B7A91)
 
 // --- 描边与分割线（暗色用 8% / 5% 白替代阴影定义边界）---
 /** rgba(255,255,255,0.08)：精细高质感 1px 描边，替代阴影定义卡片边缘。 */
@@ -92,9 +150,21 @@ val YanjiDarkBorder = Color(0x14FFFFFF)
 /** rgba(255,255,255,0.05)：极弱分割线，存在而不喧宾夺主。 */
 val YanjiDarkDivider = Color(0x0DFFFFFF)
 
+/** rgba(255,255,255,0.16)：列表行分割线，合成后 #34373F 在 #0D111A 上 1.59:1。与亮色 1.92:1 视重量级对齐。 */
+val YanjiDarkListSeparator = Color(0x29FFFFFF)
+
 // --- 主色（升调）---
 /** 高透心流蓝：暗底上的主 CTA、进度环、高亮标记。 */
 val YanjiDarkPrimary = Color(0xFF4F7DF3)
+
+/**
+ * 暗色主色上的前景（主按钮文字、FAB 图标、选中药丸文字）。
+ *
+ * 不能沿用亮色的白字：暗色 `primary` 刻意升调成较亮的蓝/粉/橙/绿以保证在深底上可读，
+ * 白字压上去反而只有 2.56–3.78:1（五套吉祥物主题实测），主 CTA 直接违反 1.4.3。
+ * 用背景级深墨后：5.00 / 6.04 / 6.95 / 7.05 / 7.38 —— 与 M3 暗色「亮主色 + 暗前景」的惯例一致。
+ */
+val YanjiDarkOnPrimary = Color(0xFF0D111A)
 
 /** 柔亮天蓝：暗底上的选中文字与高对比强调标签。 */
 val YanjiDarkPrimaryStrong = Color(0xFF7197F7)
@@ -148,14 +218,6 @@ val AchievementRareGradientEnd = Color(0xFF93C5FD)
 val AchievementEpicGradientEnd = Color(0xFFC4B5FD)
 val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)
 
-/**
- * 分段导航栏（YanjiSegmentedControl）未选中轨道的亮色实色背景。
- *
- * 单列的原因：该控件要求「纯实色、无半透明透出」，与其他容器语义不同；
- * 暗色分支复用 `MaterialTheme.colorScheme.surfaceVariant`，故这里只定义亮色值。
- * UI 层只能引用本 token，不得内联 `Color(0xFFECEFF5)`。
- */
-val YanjiSegmentTrack = Color(0xFFECEFF5)
 
 /**
  * 分段导航栏「贴页面底色」变体（OnPage）的轨道与药丸色。

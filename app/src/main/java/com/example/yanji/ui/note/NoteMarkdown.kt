@@ -179,7 +179,7 @@ class MarkdownSyntaxTransformation(
                             addStyle(
                                 SpanStyle(
                                     textDecoration = TextDecoration.LineThrough,
-                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                                    color = colorScheme.onSurfaceVariant
                                 ),
                                 prefixEnd,
                                 lineEndOffset
@@ -334,7 +334,7 @@ class MarkdownSyntaxTransformation(
                     titleStart,
                     titleEnd
                 )
-                addStyle(SpanStyle(color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)), urlStart, right)
+                addStyle(SpanStyle(color = colorScheme.onSurfaceVariant), urlStart, right)
             }
             return out
         }

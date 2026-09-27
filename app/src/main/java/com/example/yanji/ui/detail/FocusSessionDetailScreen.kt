@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDangerButton
@@ -225,6 +226,7 @@ fun FocusSessionDetailScreen(
                             value = noteInput,
                             onValueChange = { noteInput = it },
                             modifier = Modifier.fillMaxWidth(),
+                            label = { Text("学习备注") },
                             placeholder = { Text("记录本次专注的内容、章节或感悟") },
                             shape = RoundedCornerShape(YanjiRadius.InputRadius),
                             minLines = 3
@@ -254,7 +256,7 @@ fun FocusSessionDetailScreen(
                         Text(
                             text = session.note.ifBlank { "未填写备注" },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (session.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            color = if (session.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary
                         )
                     }
                 }
