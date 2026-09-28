@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -78,6 +80,8 @@ private fun AiDropdownField(
     onDismissRequest: () -> Unit,
     onOptionSelected: (String) -> Unit
 ) {
+    var fieldWidthPx by remember { mutableIntStateOf(0) }
+    val fieldWidth = with(LocalDensity.current) { fieldWidthPx.toDp() }
     Column(verticalArrangement = Arrangement.spacedBy(YanjiSpacing.TightGap)) {
         YanjiFormFieldLabel(label)
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -85,6 +89,7 @@ private fun AiDropdownField(
                 onClick = onExpand,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { fieldWidthPx = it.width }
                     .testTag(fieldTestTag)
                     .semantics {
                         contentDescription = description
@@ -115,7 +120,7 @@ private fun AiDropdownField(
             AiDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = onDismissRequest,
-                modifier = Modifier.fillMaxWidth(0.9f)
+                modifier = Modifier.width(fieldWidth)
             ) {
                 options.forEach { option ->
                     AiDropdownMenuItem(
@@ -147,10 +152,7 @@ private fun AiDropdownMenu(
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
         shadowElevation = 8.dp,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-        ),
+        border = null,
         content = content
     )
 }
@@ -247,6 +249,8 @@ fun AiConfigDialog(
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var protocolDropdownExpanded by remember { mutableStateOf(false) }
     var modelDropdownExpanded by remember { mutableStateOf(false) }
+    var modelFieldWidthPx by remember { mutableIntStateOf(0) }
+    val modelFieldWidth = with(LocalDensity.current) { modelFieldWidthPx.toDp() }
 
     fun selectProvider(preset: ProviderPreset) {
         if (selectedProvider != preset.name) {
@@ -533,6 +537,7 @@ fun AiConfigDialog(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onSizeChanged { modelFieldWidthPx = it.width }
                             .semantics { contentDescription = "模型名称" },
                         shape = RoundedCornerShape(YanjiRadius.InputRadius),
                         colors = yanjiBorderlessTextFieldColors(),
@@ -544,9 +549,8 @@ fun AiConfigDialog(
                         onDismissRequest = { modelDropdownExpanded = false },
                         properties = PopupProperties(focusable = true, dismissOnClickOutside = true, clippingEnabled = false),
                         modifier = Modifier
-                            .fillMaxWidth(0.85f)
+                            .width(modelFieldWidth)
                             .heightIn(max = 260.dp)
-                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Text(
                             text = "可用模型 (${availableModels.size})",
