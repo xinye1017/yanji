@@ -60,7 +60,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.R
-import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
@@ -73,16 +72,14 @@ import kotlin.math.roundToInt
 object NoteScreenTags {
     const val SearchInput = "note_search_input"
     const val SearchControl = "note_search_control"
-    const val DailyDurationButton = "note_daily_duration_button"
 }
 
 @Composable
 fun NoteScreen(
     modifier: Modifier = Modifier,
-    onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToNoteEditor: (noteId: String?, date: String) -> Unit = { _, _ -> },
     viewModel: NoteViewModel = yanjiViewModel { container ->
-        NoteViewModel(container.repository, container.statisticsRepository)
+        NoteViewModel(container.repository)
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -178,7 +175,9 @@ fun NoteScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // ---- 标题栏：点击标题或上方留白空白处，收起滑开行与取消搜索 ----
+            // ---- 标题栏：钉在列表上方、居中；点击标题或留白收起滑开行与取消搜索 ----
+            // 这一页刻意不换 YanjiPageHeader：组件是左对齐 + SpaceBetween，
+            // 随笔页要的是居中大标题。两者在 App 里并存是有意的分工，不是漏改。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,27 +206,28 @@ fun NoteScreen(
                 // 页眉「随笔」与下方分隔线：保持贴身，收紧垂直间距。
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // ---- 标题栏下的分隔线 ----
                 NoteRowDivider()
+
+                // 分隔线与搜索栏之间必须留一段呼吸：胶囊顶部紧贴 0.8dp 的线时，
+                // 两者会读成同一个元素（此前就是这样，视觉上「重合」）。
+                Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // ---- 搜索框：支持关键词或日期 ----
+            // ---- 搜索框：支持关键词或日期。唯一钉死在列表外的控件。----
             // 搜索框的点击在 NoteSearchBar 内部同步 requestFocus()，不靠外层状态驱动；
-            // 因此上面标题栏 / 下面列表的「点空白收起」不会把它刚拿到的焦点清掉。
-            // 窄而长：原本 353dp 通铺太宽，收到 240dp 后左右各留约 76dp；
-            // 槽高 56dp，其中上下各 4dp 内边距，输入面板本身保留 48dp 触控高度。
+            // 因此下面列表的「点空白收起」不会把它刚拿到的焦点清掉。
+            // 宽 300dp：窄屏 / 分屏下由内部 fillMaxWidth 自然收窄，不溢出。
+            // 高：视觉胶囊 40dp 画在 48dp 的透明触控槽里 —— 看着更轻薄，
+            // 点击区域仍满足 48dp 最小触控高度。
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 NoteSearchBar(
                     query = query,
                     onQueryChange = { query = it },
                     isFocused = isSearchFocused,
                     onFocusChange = { isSearchFocused = it },
-                    // 窄而长：宽度 320dp（240 偏短、353 通铺偏宽），高度 56dp 保持细长比例。
-                    // 取消描边后整体视觉重量大幅下降，比原先带硬边时能吃下更宽的尺寸。
                     modifier = Modifier
-                        .widthIn(max = 320.dp)
-                        .height(56.dp)
-                        .padding(vertical = 4.dp)
+                        .widthIn(max = 300.dp)
+                        .height(48.dp)
                 )
             }
 
@@ -247,13 +247,14 @@ fun NoteScreen(
                 if (filteredGroups.isEmpty()) {
                     item(key = "note-empty", contentType = "note-empty") {
                         // 空态 / 无结果态是「这一屏只有它」的状态，必须占满可视区并垂直居中。
-                        // 原来只给 top padding，卡片贴在搜索框下方、下面留出大半屏空白
-                        //（1256×2760 上尤其明显），构图头重脚轻。0.85 而不是 1.0：
-                        // 给底部栏与搜索框让一点余量，视觉重心略高于正中。
+                        // contentAlignment 不可省：漏掉它 Box 会顶对齐，空态就贴在页眉下方，
+                        // 下面留出大半屏空白（1256×2760 上尤其明显），构图头重脚轻。
+                        // 1.0 而不是 0.85：contentPadding 已经为底部栏与 FAB 让出空间，
+                        // 真正的可视区就是「搜索框以下」的部分，取满即正中，不必再乘系数。
                         Box(
                             modifier = Modifier
                                 .fillParentMaxWidth()
-                                .fillParentMaxHeight(0.85f),
+                                .fillParentMaxHeight(1f),
                             contentAlignment = Alignment.Center
                         ) {
                             if (state.notes.isEmpty()) {
@@ -276,11 +277,7 @@ fun NoteScreen(
                             }
                         }
                         item(key = "header-${group.date}", contentType = "note-header") {
-                            NoteDayHeaderItem(
-                                viewModel = viewModel,
-                                date = group.date,
-                                onStudyDurationClick = { onNavigateToDailyDetail(group.date) }
-                            )
+                            NoteDayHeader(date = group.date)
                         }
                         items(
                             count = group.entries.size,
@@ -466,10 +463,13 @@ private fun NoteSearchBar(
         showKeyboard()
     }
 
-    val isDark = yanjiIsDarkTheme()
-    Surface(
+    // 触控槽 48dp（透明）：只负责承载点击。视觉胶囊只有 40dp，比触控槽矮一圈，
+    // 列表里更轻薄，而点击区域仍然是完整的 48dp 最小目标。
+    // testTag 必须留在这一层 —— 仪器化测试按 SearchControl >= 48dp 断言触控尺寸。
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .testTag(NoteScreenTags.SearchControl)
             .clickable(
                 // 已聚焦时不再拦截点击，把事件让给内层 BasicTextField 处理光标定位。
@@ -477,27 +477,28 @@ private fun NoteSearchBar(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusSearch() },
-        shape = RoundedCornerShape(YanjiRadius.Pill),
-        // 取消描边后，识别度全部由「窄而长的形状 + 填充」承担。
-        color = YanjiColors.inputFill,
-        // 静止态完全不给边框：真机反馈实线太硬。聚焦时才给 1dp 主色描边作为交互反馈，
-        // 那条线是「正在输入」的状态提示，不是控件的常态外观。
-        border = if (isFocused) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        }
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                // 下限 48dp 而非固定 48dp：原注释的意图（清除键的 48dp 触控槽不会在输入时
-                // 把搜索栏顶高）被完整保留 —— 槽本身就是 48dp，min = 48 时不会长高；
-                // 但大字号下占位词需要更多高度时仍能向上生长，不会被裁掉。
-                .heightIn(min = 48.dp),
-            contentAlignment = Alignment.CenterStart
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(40.dp),
+            shape = RoundedCornerShape(YanjiRadius.Pill),
+            // 取消描边后，识别度全部由「窄而长的形状 + 填充」承担。
+            color = YanjiColors.inputFill,
+            // 静止态完全不给边框：真机反馈实线太硬。聚焦时才给 1dp 主色描边作为交互反馈，
+            // 那条线是「正在输入」的状态提示，不是控件的常态外观。
+            border = if (isFocused) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+            } else {
+                null
+            }
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .padding(horizontal = 18.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
             // 未聚焦且无输入：图标与占位词居中展示（常驻，仅淡出）。
             // 聚焦过渡时整行淡出，其中放大镜额外向左滑出（与左侧图标滑入方向连成一体）。
             Row(
@@ -594,6 +595,7 @@ private fun NoteSearchBar(
             }
         }
     }
+    }
 }
 
 /** 无搜索结果时的提示。 */
@@ -621,74 +623,35 @@ private fun NoteNoResultState(query: String) {
     }
 }
 
-/** 日期分组头：左侧「9月21日」，右侧该日真实学习时长 chip。 */
 /**
- * 日期头：学时从 [NoteViewModel.dailySummaryFlow] 取，避免在组合过程中做全量会话扫描。
+ * 日期分组头：只留「9月21日」。
+ *
+ * 此前右侧还挂着一枚「当日学习时长」药丸并可点进当日详情。已按需求整条移除：
+ * 时长属于统计域，随笔历史页只回答「写了什么、什么时候写的」，
+ * 混进第二个指标会让分组头承担两套语义，也逼着每个日期多建一条统计 Flow。
+ *
+ * 高度不再写死。药丸连带它那格 48dp 触控槽消失后，原 52dp 里大半是空槽，
+ * 日期与当日随笔之间多出一截空白，所以整体收紧。
+ *
+ * 间距由 `top = 14dp` 单值决定，而不是「固定高度 + 垂直居中」：居中会让日期
+ * 上下各留一半（上方贴分隔线只有 ~7.5dp，下方再加行的 14dp 内边距共 ~21.5dp），
+ * 上下严重不对称。这里把日期顶到盒子底部，**上方留 14dp、下方 0dp**，
+ * 而随笔行自身有 14dp 顶部内边距 —— 于是分隔线到日期、日期到首条随笔
+ * 两侧都是 14dp，一上一下对称呼应。
  */
 @Composable
-private fun NoteDayHeaderItem(
-    viewModel: NoteViewModel,
-    date: String,
-    onStudyDurationClick: () -> Unit
-) {
-    val summary by viewModel.dailySummaryFlow(date).collectAsStateWithLifecycle()
-    NoteDayHeader(
-        date = date,
-        studyDurationSeconds = summary.totalDurationSeconds,
-        onStudyDurationClick = onStudyDurationClick
-    )
-}
-
-@Composable
-private fun NoteDayHeader(
-    date: String,
-    studyDurationSeconds: Long,
-    onStudyDurationClick: () -> Unit
-) {
-    Row(
+private fun NoteDayHeader(date: String) {
+    Text(
+        text = noteDayHeaderLabel(date),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = YanjiColors.primaryLabel,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            // 48dp 点击目标由上方 2dp 槽位包裹，日期文字向下偏移 6dp，
-            // 保持原来的文字顶边 20dp 和整组 50dp 高度。
-            .padding(top = 2.dp, bottom = 0.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = noteDayHeaderLabel(date),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = YanjiColors.primaryLabel,
-            modifier = Modifier.offset(y = 6.dp)
-        )
-
-        // 触控槽满足 48dp 最小目标，内部时长药丸仍保持紧凑视觉尺寸。
-        Box(
-            modifier = Modifier
-                .height(48.dp)
-                .clickable(onClick = onStudyDurationClick)
-                .semantics {
-                    contentDescription = "${noteDayHeaderLabel(date)}，学习时长 ${DurationFormatter.formatHoursMinutes(studyDurationSeconds)}"
-                }
-                .testTag(NoteScreenTags.DailyDurationButton),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(YanjiRadius.Small))
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = DurationFormatter.formatHoursMinutes(studyDurationSeconds),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-    }
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp)
+    )
 }
 
 /**

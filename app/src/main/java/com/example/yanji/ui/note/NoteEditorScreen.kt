@@ -160,7 +160,7 @@ fun NoteEditorScreen(
     modifier: Modifier = Modifier,
     draftKeySuffix: String = "",
     viewModel: NoteViewModel = com.example.yanji.di.yanjiViewModel { container ->
-        NoteViewModel(container.repository, container.statisticsRepository)
+        NoteViewModel(container.repository)
     }
 ) {
     val context = LocalContext.current

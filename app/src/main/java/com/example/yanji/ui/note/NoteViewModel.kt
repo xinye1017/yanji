@@ -2,9 +2,7 @@ package com.example.yanji.ui.note
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.yanji.data.DailyStudySummary
 import com.example.yanji.data.NoteEntry
-import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,12 +26,11 @@ data class NoteUiState(
 )
 
 /**
- * 日记 Feature ViewModel：日记列表 + 保存动作 + 当日学时摘要查询。
+ * 日记 Feature ViewModel：日记列表 + 保存动作。
  * NoteScreen 与 NoteEditorScreen 共享同一实例（Activity scope）。
  */
 open class NoteViewModel(
-    private val repo: YanjiRepository,
-    private val statsRepo: StudyStatisticsRepository
+    private val repo: YanjiRepository
 ) : ViewModel() {
 
     /**
@@ -65,25 +62,6 @@ open class NoteViewModel(
 
     /** 用户设置（同步读缓存），编辑页用于计算初试倒计时。 */
     val settings: StateFlow<UserSettings> get() = repo.settings
-
-    /** 该日期真实学习时长（单一事实来源：FocusSession + ExamSession 聚合）。 */
-    fun dailySummaryFor(date: String): DailyStudySummary = statsRepo.getDailyStudySummary(date)
-
-    private val dailySummaryFlows = mutableMapOf<String, StateFlow<DailyStudySummary>>()
-
-    /**
-     * 日期头学时的响应式来源：走按日区间下推的查询，每个日期只建一条共享 Flow。
-     * 列表此前在组合函数内直接调 [dailySummaryFor]，那会全量扫描内存中的会话列表。
-     * 与 DailyStudyDetailViewModel 用的是同一条数据通路。
-     */
-    fun dailySummaryFlow(date: String): StateFlow<DailyStudySummary> =
-        dailySummaryFlows.getOrPut(date) {
-            statsRepo.getDailyStudySummaryFlow(date).stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = statsRepo.getDailyStudySummary(date)
-            )
-        }
 
     companion object {
         /**

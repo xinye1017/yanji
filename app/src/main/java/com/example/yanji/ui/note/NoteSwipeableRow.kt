@@ -334,10 +334,12 @@ private fun SquareActionPanel(
     }
 
 /**
- * 条目正文，布局对齐聊天列表：
- *  - 左列：时间（无头像设置, 用时间占位）；收藏随笔在时间与内容之间显示书签符号
- *  - 中列：内容
- *  - 右列：状态打分（星级）
+ * 条目正文，四列：时间 | 收藏书签 | 摘要 | 状态打分（星级）。
+ *
+ * 摘要的可用宽度**恒定**，与是否收藏、打了多少星都无关：
+ * 左边界 = 时间列固定 40dp + 书签恒定槽 16dp + 两段 8dp 间隙；
+ * 右边界 = 恒定画满的 5 星槽 + 12dp 间隙。
+ * 此前书签不占位、星级只画点亮的，两处都会让摘要的边界随行状态浮动。
  *
  * 若沿用容器的 [Alignment.Top]，字框顶对齐会让首行基线互相错开约 3dp，
  * 肉眼表现为时间「浮」在摘要上方。
@@ -361,7 +363,7 @@ private fun NoteRowContent(
 
     // 星级跟随系统 Dynamic Type 缩放：写成固定 dp 时，2× 字号下相邻正文撑开、
     // 星级却纹丝不动，评分会被文字淹没。用 sp 表达基准尺寸，toDp() 会带上当前 fontScale。
-    val starSize = with(LocalDensity.current) { 11.sp.toDp() }
+    val starSize = with(LocalDensity.current) { 13.sp.toDp() }
 
     Row(
         modifier = Modifier
@@ -375,15 +377,16 @@ private fun NoteRowContent(
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // 中列：时间 / 收藏书签（左）与草稿徽标 / 摘要（右）
+        // 中列：时间 + 收藏书签（左）与草稿徽标 / 摘要（右）
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.Top
         ) {
-            // (a) 左：时间（无头像设置，用时间占位）+ 收藏书签
-            // 高度 = 摘要一行、内部居中 → 无论摘要是一行还是两行，时间都坐在首行上。
-            // 宽度取「至少 48dp」而非固定 48dp：大字号下 "14:30" 自然向右生长，
-            // 固定宽度会把它挤成 "14:" / "30" 两行，把整行节奏撑坏。
+            // (a) 左：时间
+            // 用一层 heightIn(min = bodyLineHeight) + 垂直居中的包裹，让比正文小的
+            // labelMedium 时间坐在摘要**首行**上（详见本函数上方关于首行对齐的说明）。
+            // 宽度**固定** 40dp（不再是 widthIn(min=48)）：min 宽会随大字号向右生长，
+            // 同一列表里各行时间列宽度就不再一致，左缘参差。
             Row(
                 modifier = Modifier.heightIn(min = bodyLineHeight),
                 verticalAlignment = Alignment.CenterVertically
@@ -394,13 +397,20 @@ private fun NoteRowContent(
                     color = YanjiColors.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(min = 48.dp)
+                    modifier = Modifier.width(40.dp)
                 )
 
-                // (a.5) 收藏书签：只显示一个书签符号（不显示「已收藏」文字），
-                // 加粗实心、主题色，位置在时间与随记内容之间。
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            // (a.5) 收藏书签：留在时间右侧，但占**恒定**的 16dp 槽位。
+            // 未收藏时槽位空着而不是不画 —— 槽位恒定，摘要起始 x 就不随收藏状态跳动，
+            // 同一屏里的左缘是一条直线；同时书签仍然贴着时间，视觉上仍属左侧。
+            Box(
+                modifier = Modifier.width(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 if (entry.isFavorite) {
-                    Spacer(modifier = Modifier.width(8.dp))
                     Icon(
                         imageVector = RemixIcons.BookmarkFill,
                         contentDescription = "已收藏",
@@ -408,9 +418,9 @@ private fun NoteRowContent(
                         modifier = Modifier.size(13.dp)
                     )
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             // (b) 内容
             // 摘要走 stripNoteMarkdown：`**` / `##` / `———` 是样式标记，不该在列表里露出来
@@ -460,6 +470,9 @@ private fun NoteRowContent(
         Spacer(modifier = Modifier.width(12.dp))
 
         // (c) 右：状态打分（与编辑页同一套星形资源）
+        // 恒定画满 5 颗，未点亮的那几颗压到极低透明度当占位：
+        // 之前只画点亮的星星，星级 0~5 会让右侧宽度在 0~63dp 之间浮动，
+        // 摘要的**右缘**就跟着每一行的心情分变化。占位满格后左右留白恒定。
         // 星形本身是装饰（contentDescription = null），分数只有这条语义上报读得出。
         // 星级不参与首行对齐：它是整块图形，右对齐到行顶即可。
         Row(
@@ -468,11 +481,17 @@ private fun NoteRowContent(
             },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(entry.moodScore.coerceIn(0, 5)) {
+            val lit = entry.moodScore.coerceIn(0, 5)
+            repeat(5) { index ->
+                if (index > 0) Spacer(modifier = Modifier.width(1.dp))
                 Icon(
                     painter = painterResource(R.drawable.star),
                     contentDescription = null,
-                    tint = YanjiColors.warning,
+                    tint = if (index < lit) {
+                        YanjiColors.warning
+                    } else {
+                        YanjiColors.warning.copy(alpha = 0.16f)
+                    },
                     modifier = Modifier.size(starSize)
                 )
             }

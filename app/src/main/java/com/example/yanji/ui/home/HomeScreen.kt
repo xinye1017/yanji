@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
@@ -359,14 +358,18 @@ fun SubjectTimeChip(
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    // 不画背景：学科胶囊原本是「圆角块 + 12% 学科色底」，在「今日专注学习」这张已经
+    // 有大数字、进度条和目标文案的卡里，N 个色块会把标题和数字的层级压掉。
+    // 去掉底色后学科色交给左侧 6dp 圆点承载，仍然一眼能分辨，但整行安静下来。
+    // 48dp 的最小触控高度保留（点击进科目详情），只是不再有可见的点击态外观。
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = modifier
             .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(YanjiRadius.Small))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            // 横向内边距由 10dp 收到 6dp：底色没了，原本用来「填」的呼吸感会让
+            // 相邻两个科目之间空出 28dp（10 + FlowRow 的 8 + 10），收到 6dp 后是 20dp。
+            .padding(horizontal = 6.dp)
     ) {
         Box(
             modifier = Modifier

@@ -295,7 +295,6 @@ fun MainNavigation() {
                         }
                         YanjiTab.NOTE -> {
                             NoteScreen(
-                                onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
                                 onNavigateToNoteEditor = { jId, d ->
                                     screenStack.add(
                                         YanjiSubScreen.NoteEditor(

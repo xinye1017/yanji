@@ -16,12 +16,10 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.yanji.data.NoteEntry
-import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.YanjiTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,34 +48,18 @@ class NoteScreenInstrumentedTest {
         composeRule.onNodeWithTag(NoteScreenTags.SearchInput).assertTextEquals("")
     }
 
-    @Test
-    fun dailyDurationButtonHasFortyEightDpTargetAndNavigatesToItsDate() {
-        var navigatedDate: String? = null
-        val date = "1970-01-01"
-        setScreen(listOf(note(date)), onNavigateToDailyDetail = { navigatedDate = it })
-
-        val durationButton = composeRule.onNodeWithTag(NoteScreenTags.DailyDurationButton)
-        durationButton.assertIsDisplayed().assertHeightIsAtLeast(48.dp).assertHasClickAction()
-        durationButton.performClick()
-
-        assertEquals(date, navigatedDate)
-    }
-
     private fun setScreen(
-        notes: List<NoteEntry>,
-        onNavigateToDailyDetail: (String) -> Unit = {}
+        notes: List<NoteEntry>
     ) {
         val repository = YanjiRepository.getInstance()
         val viewModel = ReadOnlyNoteScreenViewModel(
             repository,
-            StudyStatisticsRepository(repository),
             notes
         )
         composeRule.setContent {
             YanjiTheme {
                 Box(modifier = Modifier.size(width = 320.dp, height = 640.dp)) {
                     NoteScreen(
-                        onNavigateToDailyDetail = onNavigateToDailyDetail,
                         viewModel = viewModel
                     )
                 }
@@ -96,9 +78,8 @@ class NoteScreenInstrumentedTest {
 /** UI fixture only; mutation entry points are sealed off from the singleton user repository. */
 private class ReadOnlyNoteScreenViewModel(
     repository: YanjiRepository,
-    statsRepository: StudyStatisticsRepository,
     notes: List<NoteEntry>
-) : NoteViewModel(repository, statsRepository) {
+) : NoteViewModel(repository) {
     override val uiState: StateFlow<NoteUiState> = MutableStateFlow(NoteViewModel.groupsOf(notes))
 
     override fun saveNote(entry: NoteEntry) = Unit

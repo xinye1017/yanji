@@ -45,10 +45,7 @@ class NoteEditorScreenInstrumentedTest {
 
     private fun setEditorContent(onSaveSuccess: () -> Unit = {}) {
         val repo = YanjiRepository.getInstance()
-        val viewModel = NoopSaveNoteViewModel(
-            repo,
-            StudyStatisticsRepository(repo)
-        )
+        val viewModel = NoopSaveNoteViewModel(repo)
         composeRule.setContent {
             YanjiTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -162,11 +159,7 @@ class NoteEditorScreenInstrumentedTest {
             updatedAt = 1_000L
         )
         val repo = YanjiRepository.getInstance()
-        val viewModel = SeededNoopSaveNoteViewModel(
-            repo,
-            StudyStatisticsRepository(repo),
-            seed = listOf(existing)
-        )
+        val viewModel = SeededNoopSaveNoteViewModel(repo, seed = listOf(existing))
 
         composeRule.setContent {
             YanjiTheme {
@@ -235,20 +228,19 @@ class NoteEditorScreenInstrumentedTest {
  */
 private class SeededNoopSaveNoteViewModel(
     repo: YanjiRepository,
-    statsRepo: StudyStatisticsRepository,
     seed: List<NoteEntry>
-) : NoteViewModel(repo, statsRepo) {
+) : NoteViewModel(repo) {
     override val uiState: StateFlow<NoteUiState> = MutableStateFlow(NoteViewModel.groupsOf(seed))
 }
 
+
 /**
  * 测试专用 ViewModel：拦下 [NoteViewModel.saveNote]，避免插桩测试写入用户真实数据库。
- * 其余读路径（日记列表、当日学时聚合、用户设置）仍走真实实现，保证 UI 拿到的状态是真的。
+ * 其余读路径（日记列表、用户设置）仍走真实实现，保证 UI 拿到的状态是真的。
  */
 private class NoopSaveNoteViewModel(
-    repo: YanjiRepository,
-    statsRepo: StudyStatisticsRepository
-) : NoteViewModel(repo, statsRepo) {
+    repo: YanjiRepository
+) : NoteViewModel(repo) {
     override fun saveNote(entry: NoteEntry) {
         // 测试边界：不落库。
     }
