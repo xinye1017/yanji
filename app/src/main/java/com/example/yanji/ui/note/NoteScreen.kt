@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
@@ -71,6 +72,8 @@ import kotlin.math.roundToInt
 /** UI 测试定位锚点（与插桩/单测共享，避免断言依赖中文文案）。 */
 object NoteScreenTags {
     const val SearchInput = "note_search_input"
+    const val SearchControl = "note_search_control"
+    const val DailyDurationButton = "note_daily_duration_button"
 }
 
 @Composable
@@ -211,15 +214,22 @@ fun NoteScreen(
             // ---- 搜索框：支持关键词或日期 ----
             // 搜索框的点击在 NoteSearchBar 内部同步 requestFocus()，不靠外层状态驱动；
             // 因此上面标题栏 / 下面列表的「点空白收起」不会把它刚拿到的焦点清掉。
-            NoteSearchBar(
-                query = query,
-                onQueryChange = { query = it },
-                isFocused = isSearchFocused,
-                onFocusChange = { isSearchFocused = it },
-                // vertical 10 → 8：回到 4/8 节奏。改后搜索框上下留白各 16dp
-                //（上方 8 分隔线 + 8 内边距，下方 8 内边距 + 8 日头上边距），对称。
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
+            // 窄而长：原本 353dp 通铺太宽，收到 240dp 后左右各留约 76dp；
+            // 槽高 56dp，其中上下各 4dp 内边距，输入面板本身保留 48dp 触控高度。
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                NoteSearchBar(
+                    query = query,
+                    onQueryChange = { query = it },
+                    isFocused = isSearchFocused,
+                    onFocusChange = { isSearchFocused = it },
+                    // 窄而长：宽度 320dp（240 偏短、353 通铺偏宽），高度 56dp 保持细长比例。
+                    // 取消描边后整体视觉重量大幅下降，比原先带硬边时能吃下更宽的尺寸。
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .height(56.dp)
+                        .padding(vertical = 4.dp)
+                )
+            }
 
             // ---- 列表：整幅通铺到屏幕边缘，滑块从屏幕边缘滑出；点击列表空白处收起滑开行与取消搜索 ----
             LazyColumn(
@@ -460,6 +470,7 @@ private fun NoteSearchBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .testTag(NoteScreenTags.SearchControl)
             .clickable(
                 // 已聚焦时不再拦截点击，把事件让给内层 BasicTextField 处理光标定位。
                 enabled = !isFocused,
@@ -467,20 +478,15 @@ private fun NoteSearchBar(
                 indication = null
             ) { focusSearch() },
         shape = RoundedCornerShape(YanjiRadius.Pill),
-        color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(
-            width = if (isFocused) 1.dp else 0.8.dp,
-            // 未聚焦一律用 `outline`（专职字段边界，亮 #7E8DA1 白底 3.38:1 / 暗 3.52:1）。
-            // 亮色原本走 `opaqueSeparator`，那是装饰性描边 token，白底只有 1.21:1；
-            // 而搜索框是**输入控件边界**，WCAG 1.4.11 要求 ≥3:1（Color.kt 的
-            // YanjiFieldBorder 注释早就预警过这个坑）。两支塌缩成一支后，
-            // 亮暗也终于一致——暗色原本就是对的。
-            color = if (isFocused) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outline
-            }
-        )
+        // 取消描边后，识别度全部由「窄而长的形状 + 填充」承担。
+        color = YanjiColors.inputFill,
+        // 静止态完全不给边框：真机反馈实线太硬。聚焦时才给 1dp 主色描边作为交互反馈，
+        // 那条线是「正在输入」的状态提示，不是控件的常态外观。
+        border = if (isFocused) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
     ) {
         Box(
             modifier = Modifier
@@ -643,11 +649,9 @@ private fun NoteDayHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            // top 由 20 收到 8：下面的 chip 命中区已撑到 48dp，日期文案在 48dp 高的行里
-            // 垂直居中，字顶正好落在 8 + 12 = 20dp —— 与改动前「分割线到日期 20dp」完全一致。
-            // 代价是日期头整块由 50dp 变 64dp，换来的是 chip 命中区达标。
-            // bottom 6 → 8：回到 4/8 节奏。
-            .padding(top = 8.dp, bottom = 8.dp),
+            // 48dp 点击目标由上方 2dp 槽位包裹，日期文字向下偏移 6dp，
+            // 保持原来的文字顶边 20dp 和整组 50dp 高度。
+            .padding(top = 2.dp, bottom = 0.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -655,18 +659,19 @@ private fun NoteDayHeader(
             text = noteDayHeaderLabel(date),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = YanjiColors.primaryLabel
+            color = YanjiColors.primaryLabel,
+            modifier = Modifier.offset(y = 6.dp)
         )
 
-        // 命中区与视觉分离：外层只负责 ≥48dp 的触控目标（Android 最小触控尺寸，
-        // ux-guidelines 的 Touch Target Size 条目），内层才是那枚紧凑的时长药丸。
-        // 原先药丸本身 12sp 行高 + 2dp×2 内边距只有 22dp 高，不到要求的一半；
-        // 直接把 padding 撑大又会连带动摇日期头的垂直节奏。
-        // 药丸内边距 2 → 4：回到 4/8 节奏，药丸由 22dp 变 26dp，仍在 48dp 命中区内。
+        // 触控槽满足 48dp 最小目标，内部时长药丸仍保持紧凑视觉尺寸。
         Box(
             modifier = Modifier
-                .heightIn(min = 48.dp)
-                .clickable(onClick = onStudyDurationClick),
+                .height(48.dp)
+                .clickable(onClick = onStudyDurationClick)
+                .semantics {
+                    contentDescription = "${noteDayHeaderLabel(date)}，学习时长 ${DurationFormatter.formatHoursMinutes(studyDurationSeconds)}"
+                }
+                .testTag(NoteScreenTags.DailyDurationButton),
             contentAlignment = Alignment.Center
         ) {
             Box(

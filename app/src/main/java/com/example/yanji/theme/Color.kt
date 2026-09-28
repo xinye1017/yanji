@@ -45,11 +45,28 @@ val YanjiDivider = Color(0xFFEDF1F6)
  * 分割线本身就是唯一的分组线索，1.0:1 级等于没有线，跨日期分组会糊成一片。
  * 随笔历史页正是这种结构：同日多篇之间不画线，只有跨日期才画（见 NoteScreen 的分组循环）。
  *
- * 取 #AAB3C0 而非更深的值：这是列表节奏线，目标是「看得见分组」而不是「抢主体」，
- * 且不承载任何信息，不受 WCAG 1.4.11 的 3:1 约束（那条只管控件边界，见 [YanjiFieldBorder]）。
- * 实测：#AAB3C0 在页面底 #F2F4F7 上 1.92:1。
+ * 取 #C6CCD5：连调两档后按真机反馈继续回调。1.92 → 1.66 → 1.47:1，
+ * 最终与改动前的原始观感（quaternary@50% 的 1.48:1）基本齐平。
+ * 教训记在这里：这个页面的分割线承担的是「肌理」而不是「信息」，
+ * 超过原始观感一档就会在长屏上变成一道道横杠。该值不承载任何信息，
+ * 不受 WCAG 1.4.11 的 3:1 约束（那条只管控件边界，见 [YanjiFieldBorder]）。
  */
-val YanjiListSeparator = Color(0xFFAAB3C0)
+val YanjiListSeparator = Color(0xFFC6CCD5)
+
+/**
+ * 输入控件填充色：搜索框等**无描边**输入控件的底色。
+ *
+ * 为什么不复用 [YanjiSurfaceSoft]（#F1F5FB）或 [YanjiSurfaceBlue]（#F4F7FF）：
+ * 它们都比页面底 [YanjiBackground]（#F2F4F7）更浅，铺上去等于没铺。
+ * 搜索框取消描边后，识别度只能由「形状 + 填充」承担，填充必须真的比页面底暗一档。
+ *
+ * 实测：#DEE4EC 在页面底 #F2F4F7 上 1.16:1。填充是大面积色块，
+ * 1.16:1 的可辨识度远高于同等数值的 0.8dp 发丝线。
+ */
+val YanjiInputFill = Color(0xFFDEE4EC)
+
+/** 暗色输入填充：与暗色次级卡 #1D2536 同值，在 #0D111A 上 1.21:1。 */
+val YanjiDarkInputFill = Color(0xFF1D2536)
 
 /**
  * 表单 / 控件边界的专职色（WCAG 1.4.11 要求「可辨识组件边界」≥3:1）。
@@ -143,15 +160,43 @@ val YanjiDarkQuaternaryLabel = Color(0xFF475569)
 /** 暗色控件边界专职色，与 [YanjiFieldBorder] 同职（实测：暗卡 3.95 / 浮层 3.21）。 */
 val YanjiDarkFieldBorder = Color(0xFF6B7A91)
 
-// --- 描边与分割线（暗色用 8% / 5% 白替代阴影定义边界）---
+// --- 描边与分割线 ---
+//
+// 分割线只有**两档**语义，两个主题一一对应，不再各页面自行 copy(alpha) 凑值：
+//
+//   档位          Token                 亮色              暗色              用途
+//   ------------------------------------------------------------------
+//   内部分行      rowDivider            #EDF1F6  1.13:1   白@3%  1.06:1   设置行、详情页行间、弹窗
+//   结构分组线    listSeparator         #C6CCD5  1.47:1   白@9%  1.24:1   非卡片列表的跨分组线
+//
+// 暗色为什么比亮色低一截：亮暗底的感知不对称 —— 同样的亮度比，浅底上的深线
+// 远不如深底上的浅线显眼。暗色若照搬亮色的 1.47:1（白@14%），会直接变成一道道硬杠。
+// 这也是此前「深色下分割线不统一」的成因：14%（结构线）/ 5%（满强度 outlineVariant）/
+// 2.5%（separator@0.5）三个值同时存在，彼此没有语义关系。
+
 /** rgba(255,255,255,0.08)：精细高质感 1px 描边，替代阴影定义卡片边缘。 */
 val YanjiDarkBorder = Color(0x14FFFFFF)
 
-/** rgba(255,255,255,0.05)：极弱分割线，存在而不喧宾夺主。 */
+/**
+ * 通用描边/分隔基准（白@5%），M3 `outlineVariant` 的落点。
+ *
+ * 职责已收窄：只服务**非分割线**的装饰性描边（卡片边缘、输入框弱边界等）。
+ * 画分割线请改用 [YanjiDarkRowDivider]（内部分行）或 [YanjiDarkListSeparator]（结构分组），
+ * 不要再直接引用本值 —— 那正是此前深色下出现三档强度的来源。
+ */
 val YanjiDarkDivider = Color(0x0DFFFFFF)
 
-/** rgba(255,255,255,0.16)：列表行分割线，合成后 #34373F 在 #0D111A 上 1.59:1。与亮色 1.92:1 视重量级对齐。 */
-val YanjiDarkListSeparator = Color(0x29FFFFFF)
+/** rgba(255,255,255,0.03)：内部分行线，合成后 #141821 在 #0D111A 上 1.06:1。 */
+val YanjiDarkRowDivider = Color(0x08FFFFFF)
+
+/** rgba(255,255,255,0.09)：结构分组线，合成后 #1E222A 在 #0D111A 上 1.24:1。 */
+val YanjiDarkListSeparator = Color(0x17FFFFFF)
+
+/**
+ * 亮色内部分行线。与 [YanjiDivider] 同值（#EDF1F6），单列一份只为让
+ * 「内部分行 / 结构分组」两档在两个主题下语义对称，暗色有独立取值时不必再靠 alpha 硬凑。
+ */
+val YanjiRowDivider = Color(0xFFEDF1F6)
 
 // --- 主色（升调）---
 /** 高透心流蓝：暗底上的主 CTA、进度环、高亮标记。 */
@@ -225,8 +270,15 @@ val AchievementLegendaryGradientEnd = Color(0xFFFCD34D)
  * 单列的原因：该变体直接压在页面背景上，需要比 `YanjiSegmentTrack` 更重的凹槽对比，
  * 又不能复用 `surfaceVariant` —— 亮色下它会和页面浅灰底糊在一起，暗色下又压不出层次。
  * UI 层只能引用这三个 token，不得内联字面量。
+ *
+ * 亮色由 #E2E7EE 加深到 #D8DFE9：分段控件取消描边后（见 YanjiSegmentedControl），
+ * 轨道填充要独自承担控件边界。#E2E7EE 在页面底上只有 1.13:1，等于没有边界；
+ * #D8DFE9 提到 1.22:1，同时选中药丸（纯白）压在其上仍有 1.34:1，两头都不吃亏。
+ *
+ * 暗色**不加深**：暗轨 #1A2333 压深到 #212B3D 会让药丸 #2A374F 的对比从 1.32:1
+ * 掉到 1.19:1，药丸直接糊进轨道里。暗色靠药丸自身的亮度拉开层次，轨道维持原值。
  */
-val YanjiSegmentTrackOnPage = Color(0xFFE2E7EE)
+val YanjiSegmentTrackOnPage = Color(0xFFD8DFE9)
 val YanjiDarkSegmentTrackOnPage = Color(0xFF1A2333)
 
 /** OnPage 变体暗色的选中药丸：浮于暗轨之上，需与主蓝文字拉开对比。 */

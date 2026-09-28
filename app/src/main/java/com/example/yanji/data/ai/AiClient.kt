@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -35,6 +36,8 @@ internal class AiClient(
     companion object {
         private const val TAG = "YanjiAI"
         private const val USER_AGENT = "Yanji-Android/1.0"
+        private const val MAX_RESPONSE_CHARS = 256 * 1024
+        private const val MAX_ERROR_BODY_CHARS = 16 * 1024
     }
 
     suspend fun fetchModels(
@@ -66,7 +69,7 @@ internal class AiClient(
                             url = endpoint
                         )
                     }
-                    val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    val body = readUtf8Limited(connection.inputStream, MAX_RESPONSE_CHARS)
                     AiProtocol.parseModels(body).distinct().sorted().also {
                         if (it.isEmpty()) {
                             throw AiException(
@@ -123,7 +126,7 @@ internal class AiClient(
                 val detail = AiProtocol.extractErrorDetail(readErrorBody(connection))
                 throw httpException(AiCallKind.DIAGNOSIS, code, detail, endpoint)
             }
-            val responseText = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val responseText = readUtf8Limited(connection.inputStream, MAX_RESPONSE_CHARS)
             val content = AiProtocol.extractContent(responseText, protocol)
             if (content.isNullOrBlank()) {
                 throw AiException("模型响应内容为空", failure = AiFailure.InvalidResponse)
@@ -166,7 +169,7 @@ internal class AiClient(
                 throw httpException(AiCallKind.DIAGNOSIS, code)
             }
             requireContent(
-                response = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() },
+                response = readUtf8Limited(connection.inputStream, MAX_RESPONSE_CHARS),
                 protocol = protocol,
                 emptyMessage = "AI 诊断接口返回内容为空"
             )
@@ -255,10 +258,35 @@ internal class AiClient(
 
     private fun readErrorBody(connection: HttpURLConnection): String =
         runCatching {
-            BufferedReader(
-                InputStreamReader(connection.errorStream ?: connection.inputStream, Charsets.UTF_8)
-            ).use { it.readText() }
+            readUtf8Limited(
+                connection.errorStream ?: connection.inputStream,
+                maxChars = MAX_ERROR_BODY_CHARS,
+                rejectOversize = false
+            )
         }.getOrDefault("")
+
+    private fun readUtf8Limited(
+        input: InputStream,
+        maxChars: Int,
+        rejectOversize: Boolean = true
+    ): String = BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
+        val result = StringBuilder(minOf(maxChars, 8 * 1024))
+        val buffer = CharArray(8 * 1024)
+        while (true) {
+            val count = reader.read(buffer)
+            if (count < 0) break
+            val remaining = maxChars - result.length
+            val accepted = minOf(count, remaining.coerceAtLeast(0))
+            if (accepted > 0) result.append(buffer, 0, accepted)
+            if (accepted < count) {
+                if (rejectOversize) {
+                    throw AiException("AI 响应内容过大", failure = AiFailure.InvalidResponse)
+                }
+                break
+            }
+        }
+        result.toString()
+    }
 
     private fun requireContent(
         response: String,

@@ -38,11 +38,9 @@ import com.example.yanji.theme.rememberPressScale
 import com.example.yanji.ui.components.WarmTooltip
 import com.example.yanji.ui.components.WarmTooltipGroup
 import com.example.yanji.ui.icons.RemixIcons
-import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.HazeColorEffect
-import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 /**
  * 未点「完成」直接返回时的确认卡片：
@@ -434,15 +432,12 @@ fun FrostedTopBarButton(
     )
 
     val hazeModifier = if (hazeState != null && tokens.blurRadius > 0.dp) {
-        Modifier.hazeBlur(
-            input = HazeInput.Sources(hazeState),
-            style = HazeBlurStyle {
-                blurRadius(tokens.blurRadius)
-                colorEffects(listOf(HazeColorEffect.tint(tintColor)))
-                noiseFactor(0.08f)
-                backgroundColor(Color.Transparent)
-            }
-        )
+        Modifier.hazeEffect(state = hazeState) {
+            blurRadius = tokens.blurRadius
+            tints = listOf(HazeTint(tintColor))
+            noiseFactor = 0.08f
+            backgroundColor = Color.Transparent
+        }
     } else {
         Modifier.background(tintColor)
     }

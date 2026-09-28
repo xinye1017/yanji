@@ -389,7 +389,9 @@ fun ProfileSettingsGroup(
 @Composable
 fun ProfileSettingsDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
-        color = YanjiColors.separator.copy(alpha = 0.5f),
+        // 走 rowDivider token，与设置页其它行分隔同值同档。
+        // 原先的 separator.copy(alpha = 0.5f) 在暗色下等于白@2.5%，是与设置行分行的第三种强度。
+        color = YanjiColors.rowDivider,
         thickness = 0.6.dp,
         modifier = modifier.padding(start = 64.dp, end = 16.dp)
     )

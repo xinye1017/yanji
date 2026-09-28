@@ -162,7 +162,7 @@ fun ManualFocusLogDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = YanjiColors.separator, thickness = 0.8.dp)
+                HorizontalDivider(color = YanjiColors.rowDivider, thickness = 0.8.dp)
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // 1. 学科选择

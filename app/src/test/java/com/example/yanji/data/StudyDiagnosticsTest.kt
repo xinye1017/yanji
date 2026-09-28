@@ -80,6 +80,36 @@ class StudyDiagnosticsTest {
     }
 
     @Test
+    fun diagnosticPromptBoundsCustomFieldsAndCollections() {
+        val base = StudyDiagnosticSnapshot.from(
+            periodDays = 7,
+            settings = UserSettings(),
+            focusSessions = emptyList(),
+            examSessions = emptyList(),
+            noteEntries = emptyList(),
+            now = 1_700_000_000_000L
+        )
+        val snapshot = base.copy(
+            subjectStats = List(50) { index ->
+                SubjectStudyStat(name = "课".repeat(200), seconds = index.toLong(), share = 0.02)
+            },
+            dailyHours = List(300) { 1.25 },
+            noteSummaries = List(10) { "复盘".repeat(300) },
+            targetSchool = "校".repeat(200),
+            targetMajor = "专业".repeat(200)
+        )
+
+        val prompt = snapshot.toPromptData()
+
+        assertTrue("诊断上下文必须有总字符上限", prompt.length <= 6_000)
+        assertTrue("裁剪后仍要关闭结构化快照标签", prompt.endsWith("</study_snapshot>"))
+        assertTrue("省略科目数应告知模型", prompt.contains("另有 30 个科目未列出"))
+        assertTrue("院校名必须裁剪", !prompt.contains("校".repeat(81)))
+        assertTrue("科目名必须裁剪", !prompt.contains("课".repeat(81)))
+        assertTrue("随笔摘录必须裁剪", !prompt.contains("复盘".repeat(201)))
+    }
+
+    @Test
     fun subjectCatalogKeepsChildAndCategoryStatisticsCompatibleWithLegacyRecords() {
         assertEquals(
             listOf("高等数学", "线性代数", "概率论"),

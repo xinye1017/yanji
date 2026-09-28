@@ -303,7 +303,7 @@ private fun CategoryRow(
         } else {
             children.forEach { child ->
                 HorizontalDivider(
-                    color = YanjiColors.separator,
+                    color = YanjiColors.rowDivider,
                     thickness = 0.8.dp,
                     modifier = Modifier.padding(start = 20.dp, top = 4.dp)
                 )

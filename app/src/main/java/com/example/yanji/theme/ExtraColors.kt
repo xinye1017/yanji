@@ -38,12 +38,19 @@ data class YanjiExtraColors(
     val quaternaryLabel: Color = YanjiQuaternaryLabel,
     val separator: Color = YanjiDivider,
     /**
+     * 内部分行线：设置行之间、详情页行之间、弹窗内的分隔。
+     * 与 [listSeparator]（结构分组线）构成两档，亮暗两套语义对称。见 [YanjiRowDivider]。
+     */
+    val rowDivider: Color = YanjiRowDivider,
+    /**
      * 列表行分割线。非卡片列表唯一的分组线索，因此强度高于 [separator]；
      * 见 [YanjiListSeparator] 的取值理由。
      */
     val listSeparator: Color = YanjiListSeparator,
     val opaqueSeparator: Color = YanjiBorder,
     val fill: Color = YanjiSurfaceSoft,
+    /** 无描边输入控件的底色（搜索框等）。见 [YanjiInputFill]。 */
+    val inputFill: Color = YanjiInputFill,
 )
 
 /** 亮色实例：与既有 `YanjiTextTertiary` / `YanjiWarning` 等**逐值相同**。 */
@@ -60,9 +67,11 @@ internal val LightExtraColors = YanjiExtraColors(
     tertiaryLabel = YanjiTextTertiary,
     quaternaryLabel = YanjiQuaternaryLabel,
     separator = YanjiDivider,
+    rowDivider = YanjiRowDivider,
     listSeparator = YanjiListSeparator,
     opaqueSeparator = YanjiBorder,
     fill = YanjiSurfaceSoft,
+    inputFill = YanjiInputFill,
 )
 
 /** 暗色实例：对齐暗色语义 Token 规范（AGENTS.md §三.6）。 */
@@ -79,9 +88,11 @@ internal val DarkExtraColors = YanjiExtraColors(
     tertiaryLabel = YanjiDarkTextTertiary,
     quaternaryLabel = YanjiDarkQuaternaryLabel,
     separator = YanjiDarkDivider,
+    rowDivider = YanjiDarkRowDivider,
     listSeparator = YanjiDarkListSeparator,
     opaqueSeparator = YanjiDarkBorder,
     fill = YanjiDarkSurfaceSoft,
+    inputFill = YanjiDarkInputFill,
 )
 
 internal val LocalYanjiExtraColors = staticCompositionLocalOf { LightExtraColors }
@@ -130,6 +141,9 @@ object YanjiColors {
     val separator: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.separator
 
+    val rowDivider: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.rowDivider
+
     val listSeparator: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.listSeparator
 
@@ -138,4 +152,7 @@ object YanjiColors {
 
     val fill: Color
         @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.fill
+
+    val inputFill: Color
+        @Composable @ReadOnlyComposable get() = LocalYanjiExtraColors.current.inputFill
 }

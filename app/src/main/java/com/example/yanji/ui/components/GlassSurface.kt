@@ -16,11 +16,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import com.example.yanji.theme.YanjiLiquidGlass
 import com.example.yanji.theme.yanjiIsDarkTheme
-import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.HazeColorEffect
-import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 /**
  * 通用液态玻璃表面容器 (GlassSurface)
@@ -67,19 +65,19 @@ fun GlassSurface(
     }
 
     val hazeModifier = if (hazeState != null && tokens.blurRadius > 0.dp) {
-        Modifier.hazeBlur(
-            input = HazeInput.Sources(hazeState),
-            style = HazeBlurStyle {
-                blurRadius(tokens.blurRadius)
-                colorEffects(listOf(HazeColorEffect.tint(baseTint)))
-                noiseFactor(tokens.noiseFactor)
-                // haze 2.0 仍需显式 backgroundColor：旧版本 RenderEffect 路径（API 31+）
-                // 在三级全空时抛 IllegalArgumentException("backgroundColor not specified")，
-                // 导致真机启动即崩溃。玻璃面板需透出底层内容，故以 Transparent 垫底：
-                // 绘制透明矩形是 no-op，不改变原本的通透观感。着色仍由上面的 colorEffects 负责。
-                backgroundColor(Color.Transparent)
-            }
-        )
+        Modifier.hazeEffect(state = hazeState) {
+            blurRadius = tokens.blurRadius
+            tints = listOf(HazeTint(baseTint))
+            noiseFactor = tokens.noiseFactor
+            // haze 1.5.4 的 RenderEffect 路径（API 31+）会在 drawScaledContentLayer 中
+            // 硬性校验 resolveBackgroundColor().isSpecified，其解析链为
+            // node.backgroundColor → style.backgroundColor → compositionLocalStyle.backgroundColor。
+            // 三级全空时抛 IllegalArgumentException("backgroundColor not specified")，
+            // 导致真机启动即崩溃（模拟器同样受影响，仅取决于是否走 RenderEffect 分支）。
+            // 玻璃面板本身需要透出底层内容，故以 Transparent 垫底：
+            // 绘制透明矩形是 no-op，不改变原本的通透观感。着色仍由上面的 tints 负责。
+            backgroundColor = Color.Transparent
+        }
     } else {
         Modifier.background(baseTint)
     }

@@ -120,12 +120,12 @@ class UiDesignSystemContractTest {
         )
         assertTrue(
             "Dock and backdrop must share the same liquid-glass blur token",
-            content.contains("blurRadius(glassTokens.blurRadius)") &&
-                content.contains("HazeInput.Sources(hazeState)")
+            content.contains("blurRadius = glassTokens.blurRadius") &&
+                content.contains("hazeState = hazeState")
         )
         assertTrue(
-            "Every hazeBlur must provide an explicit background color to prevent device crashes",
-            content.contains("backgroundColor(Color.Transparent)")
+            "Every hazeEffect must provide an explicit background color to prevent device crashes",
+            content.contains("backgroundColor = Color.Transparent")
         )
     }
 
@@ -181,8 +181,8 @@ class UiDesignSystemContractTest {
             assertTrue("File must exist: $relPath", file.exists())
             val content = file.readText()
             assertTrue(
-                "$relPath must NOT directly invoke hazeEffect/hazeBlur; 80% content layer must remain quiet per 80/20 rule",
-                !content.contains(".hazeEffect(") && !content.contains(".hazeBlur(")
+                "$relPath must NOT directly invoke hazeEffect; 80% content layer must remain quiet per 80/20 rule",
+                !content.contains(".hazeEffect(")
             )
         }
     }

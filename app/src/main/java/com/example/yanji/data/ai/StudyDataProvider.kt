@@ -62,9 +62,13 @@ class DefaultStudyDataProvider : StudyDataProvider {
             it.status == SessionStatus.COMPLETED && it.durationSeconds > 0L && it.startTime in previousStart until start
         }
 
+        val secondsByDay = mutableMapOf<LocalDate, Long>()
+        sessions.forEach { session ->
+            val day = YanjiTime.localDate(session.startTime)
+            secondsByDay[day] = (secondsByDay[day] ?: 0L) + session.durationSeconds
+        }
         val dailySeconds = (0 until safePeriodDays).map { dayOffset ->
-            val day = startDay.plusDays(dayOffset.toLong())
-            sessions.filter { YanjiTime.localDate(it.startTime) == day }.sumOf { it.durationSeconds }
+            secondsByDay[startDay.plusDays(dayOffset.toLong())] ?: 0L
         }
         val totalSeconds = dailySeconds.sum()
 

@@ -169,7 +169,6 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
   implementation(libs.haze)
-  implementation(libs.haze.blur)
   // Markdown：源码编辑由本项目负责，预览交给成熟的 Compose/GFM 渲染器。
   implementation(libs.markdown.renderer)
   implementation(libs.markdown.renderer.m3)

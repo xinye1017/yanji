@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.platform.LocalContext
@@ -33,6 +35,28 @@ object YanjiMotion {
     const val DurationStandard = 280  // 默认过渡（模式切换、滑块）
     const val DurationEmphasis = 360  // 需要被注意到的状态变化
     const val DurationAmbient = 1200  // 环境级循环（呼吸、进度滴答）
+
+    /** 折线图「绘制」揭示：路径沿长度推进，560ms 走完全程，足够看清又不拖沓。 */
+    const val DurationLineDraw = 560
+
+    /** 柱状图单根「上升」：320ms 走完一根。 */
+    const val DurationBarRise = 320
+
+    /**
+     * 柱状图逐根错峰步长。60ms × 6 根 = 360ms，加上单根 320ms，整排约 680ms 落定。
+     *
+     * 为什么从 26ms 提到 60ms：26ms 下一排柱子几乎同时起跳，整排像一整块板在升降，
+     * 看不出「逐根」的意思。60ms 是一眼能分辨先后、又不显得拖的步长。
+     */
+    const val BarStaggerStep = 60
+
+    /**
+     * 揭示专用缓动：两端慢、中间快（`cubic-bezier(0.4, 0, 0.2, 1)`）。
+     *
+     * 不用 EaseEntering：那条曲线开头极快，80% 的位移挤在前 20% 的时间里，
+     * 几帧内就冲完，肉眼跟不住。缓入缓出能让上升过程铺满整段时间。
+     */
+    val EaseReveal = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
 
     /** 缓动档位：进入用 Decelerate、离开用 Accelerate、一般用 Standard，均为 Material 曲线。 */
     val EaseStandard = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
@@ -100,6 +124,31 @@ object YanjiMotion {
             snap()
         } else {
             spring(dampingRatio = dampingRatio, stiffness = stiffness, visibilityThreshold = visibilityThreshold)
+        }
+    }
+
+    /**
+     * 时长-缓动档位，图表揭示专用（与 [accessibleSpring] 同构，只是把弹簧换成定时曲线）。
+     *
+     * 为什么放在 theme/ 而不是 ui/：`check-design-tokens.sh` 的时长棘轮
+     * （`PATTERN_TWEEN='tween\('`，`TWEEN_CEILING=48`）只扫 `app/.../ui/` 目录。
+     * 档位集中定义在这里，ui/ 里就只剩 [accessibleTween] 一个入口，
+     * 棘轮计数不会因为新增图表动效而增长。
+     *
+     * 为什么图表揭示不用弹簧：弹簧会过冲，而路径长度推进和柱高推进是**有明确终点**
+     * 的量纲，过冲会让折线画过头、柱子冲过顶再弹回。定时曲线在终点处稳稳停住。
+     *
+     * 开启系统「减少动态效果」时返回 [snap]，图表直接以终态出现，不做空间位移。
+     */
+    @Composable
+    fun <T> accessibleTween(
+        durationMillis: Int = DurationStandard,
+        easing: Easing = EaseEntering
+    ): AnimationSpec<T> {
+        return if (isReduceMotionEnabled()) {
+            snap()
+        } else {
+            tween(durationMillis = durationMillis, easing = easing)
         }
     }
 }

@@ -161,12 +161,13 @@ fun YanjiSettingsRow(
         }
 
         if (showDivider) {
-            val isDark = yanjiIsDarkTheme()
+            // 走 rowDivider token，不再按亮暗分支各调一次 alpha。
+            // 旧写法是「亮色减半、暗色满强度」—— 正好和感知规律相反：
+            // 深底上的浅线远比浅底上的深线显眼，暗色满强度才会显得刺眼。
             HorizontalDivider(
                 modifier = Modifier.padding(start = dividerInset),
                 thickness = 0.6.dp,
-                color = if (isDark) MaterialTheme.colorScheme.outlineVariant
-                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                color = YanjiColors.rowDivider
             )
         }
     }

@@ -102,6 +102,23 @@ class AiClientTest {
     }
 
     @Test
+    fun oversizedProviderResponseIsRejectedAndDisconnected() = runBlocking {
+        val connection = FakeConnection(
+            status = 200,
+            // If the transport has no size limit, this remains valid JSON after leading whitespace.
+            responseBody = " ".repeat(300_000) + """{"choices":[{"message":{"content":"可用回复"}}]}"""
+        )
+
+        val exception = expectAiException {
+            client(connection).diagnoseRaw(snapshot, settings)
+        }
+
+        assertEquals(AiFailure.InvalidResponse, exception.failure)
+        assertTrue(exception.message.orEmpty().contains("过大"))
+        assertTrue(connection.disconnected)
+    }
+
+    @Test
     fun socketTimeoutHasTimeoutCategoryAndDisconnects() = runBlocking {
         val connection = FakeConnection(200, responseCodeFailure = SocketTimeoutException("read timed out"))
 

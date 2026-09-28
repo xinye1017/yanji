@@ -160,12 +160,12 @@ fun FocusSessionDetailScreen(
                     DetailRowItem(label = "专注状态", value = "已完成")
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                        color = YanjiColors.rowDivider
                     )
                     DetailRowItem(label = "计时模式", value = session.mode)
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                        color = YanjiColors.rowDivider
                     )
                     DetailRowItem(
                         label = "暂停次数",
@@ -173,7 +173,7 @@ fun FocusSessionDetailScreen(
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                        color = YanjiColors.rowDivider
                     )
                     DetailRowItem(label = "记录 ID", value = session.id.take(8))
                 }

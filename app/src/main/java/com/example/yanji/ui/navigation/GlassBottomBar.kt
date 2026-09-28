@@ -50,13 +50,10 @@ import com.example.yanji.YanjiTab
 import com.example.yanji.theme.YanjiLiquidGlass
 import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.GlassSurface
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.HazeColorEffect
-import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.abs
 
 private val DockHeight = 60.dp
@@ -87,36 +84,31 @@ fun GlassBottomBar(
     val isDark = yanjiIsDarkTheme()
     val glassTokens = YanjiLiquidGlass
     val colors = MaterialTheme.colorScheme
+    // 参考霜化药丸质感：胶囊本体更 milky，透光但不透形；降级无 blur 时保持原高不透明。
     val dockSurfaceColor = if (isDark) {
         lerp(colors.surfaceContainerHigh, colors.primary, 0.08f).copy(
-            alpha = if (glassTokens.blurRadius > 0.dp) 0.82f else 0.95f
+            alpha = if (glassTokens.blurRadius > 0.dp) 0.86f else 0.95f
         )
     } else {
         lerp(colors.surface, colors.surfaceVariant, 0.35f).copy(
-            alpha = if (glassTokens.blurRadius > 0.dp) 0.80f else 0.95f
+            alpha = if (glassTokens.blurRadius > 0.dp) 0.88f else 0.95f
         )
     }
 
     // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
     // 与胶囊共用同一 blurRadius，保证两层玻璃在交界处没有光学强度断层。
     val gradientBackdrop = if (hazeState != null && glassTokens.blurRadius > 0.dp) {
-        Modifier.hazeBlur(
-            input = HazeInput.Sources(hazeState),
-            style = HazeBlurStyle {
-                blurRadius(glassTokens.blurRadius)
-                colorEffects(listOf(HazeColorEffect.tint(dockSurfaceColor.copy(alpha = if (isDark) 0.36f else 0.30f))))
-                noiseFactor(glassTokens.noiseFactor)
-                progressive(
-                    HazeProgressive.verticalGradient(
-                        startIntensity = 0f,
-                        endIntensity = 1f
-                    )
-                )
-                backgroundColor(Color.Transparent)
-            },
-            // 旧 preferPerformance = true 的等价映射：固定性能档。
-            performanceMode = HazePerformanceMode.Performance
-        )
+        Modifier.hazeEffect(state = hazeState) {
+            blurRadius = glassTokens.blurRadius
+            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.36f else 0.30f)))
+            noiseFactor = glassTokens.noiseFactor
+            progressive = HazeProgressive.verticalGradient(
+                startIntensity = 0f,
+                endIntensity = 1f,
+                preferPerformance = true
+            )
+            backgroundColor = Color.Transparent
+        }
     } else {
         Modifier.background(
             Brush.verticalGradient(
@@ -170,6 +162,8 @@ fun GlassBottomBar(
         val selectedColor = primaryColor
 
         // 真实物理聚光边框（Top Specular Rim）：模拟漫反射环境光从上方投射在弧面玻璃上的自然折射
+        // 深浅同配方（4 段：顶高光 → 主色 → 描边 → 底微光），数值按主题映射。
+        // 浅色顶高光强、深色整体收敛，呼应霜化药丸的上缘反光。
         val glassBorder: BorderStroke = if (isDark) {
             BorderStroke(
                 1.dp,
@@ -188,14 +182,16 @@ fun GlassBottomBar(
                 Brush.verticalGradient(
                     listOf(
                         Color.White.copy(alpha = 0.85f),
+                        primaryColor.copy(alpha = 0.12f),
                         outlineVariant.copy(alpha = 0.35f),
-                        Color.White.copy(alpha = 0.30f)
+                        Color.White.copy(alpha = 0.25f)
                     )
                 )
             )
         }
 
-        // 滑动选中态指示器水滴材质
+        // 滑动选中态指示器水滴材质：深浅同配方（primary 半透明 wash），数值按主题映射。
+        // 浅色此前是近不透的 primaryContainer 实色，与深色的通透 wash 是两种材质语言，现统一。
         val dropletBrush = if (isDark) {
             Brush.verticalGradient(
                 listOf(
@@ -206,8 +202,8 @@ fun GlassBottomBar(
         } else {
             Brush.verticalGradient(
                 listOf(
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
+                    primaryColor.copy(alpha = 0.22f),
+                    primaryColor.copy(alpha = 0.12f)
                 )
             )
         }
@@ -217,8 +213,8 @@ fun GlassBottomBar(
                 1.dp,
                 Brush.verticalGradient(
                     listOf(
-                        primaryColor.copy(alpha = 0.45f),
-                        primaryColor.copy(alpha = 0.12f)
+                        Color.White.copy(alpha = 0.22f),
+                        primaryColor.copy(alpha = 0.30f)
                     )
                 ),
                 CircleShape
@@ -239,9 +235,9 @@ fun GlassBottomBar(
         GlassSurface(
             modifier = Modifier
                 .shadow(
-                    elevation = if (isDark) 10.dp else 8.dp,
+                    elevation = 12.dp,
                     shape = CircleShape,
-                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.45f) else onSurfaceColor.copy(alpha = 0.06f),
+                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.45f) else onSurfaceColor.copy(alpha = 0.09f),
                     spotColor = if (isDark) primaryColor.copy(alpha = 0.20f) else primaryColor.copy(alpha = 0.10f)
                 )
                 .width(dockWidth)
@@ -251,7 +247,8 @@ fun GlassBottomBar(
             fallbackColor = dockSurfaceColor,
             border = glassBorder
         ) {
-            // 表面光学漫反射微光层：模拟弧面玻璃透镜顶部的自然反光与底部微透环境光
+            // 表面光学漫反射微光层：模拟弧面玻璃透镜顶部的自然反光与底部微透环境光。
+            // 参考霜化药丸：顶部高光带加亮，还原稿子里那圈沿上缘的强反光。
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -259,7 +256,7 @@ fun GlassBottomBar(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                if (isDark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.22f),
+                                if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.34f),
                                 Color.Transparent,
                                 if (isDark) primaryColor.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.05f)
                             )

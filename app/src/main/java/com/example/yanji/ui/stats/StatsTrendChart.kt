@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +25,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -31,6 +34,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +50,18 @@ import com.example.yanji.theme.*
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiSegmentedControl
+
+/**
+ * 趋势图容器高度。柱状与折线**必须同高**：
+ * 两者原本是 140dp / 150dp，切换时卡片内容高度跳 10dp，观感上就是「顿一下」。
+ * 内部排版（柱状图标签在下方、折线图标签叠在底部）可以不同，**外层盒子只有一个高度**。
+ */
+private const val TREND_CHART_HEIGHT = 150
+
+object StatsTrendChartTags {
+    const val LinePlot = "stats_trend_line_plot"
+}
+
 
 enum class TrendMode(val label: String) {
     BAR("柱状"),
@@ -113,6 +129,7 @@ fun StatsTrendChart(
             }
 
             Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
+
 
             when {
                 // Monthly Heatmap View (Month tab defaults to heatmap unless LINE is selected)
@@ -705,14 +722,32 @@ private fun LineChartView(
     val maxBarDuration = if (actualMax > 0L) actualMax else 3600L
     val n = days.size
 
+    // ---- 切换视图时的「沿路径绘制」揭示 ----
+    //
+    // 一条 0→1 的进度代表「画到整条路径的百分之几」。曲线本体用 PathMeasure
+    // 截取前缀来画，面积填充跟着同一条前缀往下合拢，数据点则在笔尖扫过它时逐个出现 ——
+    // 「线带着点走」比「线画完再一起冒点」更能让眼睛跟住进度。
+    // 进度只在 Canvas 的 onDraw 里读，只重绘不重组。
+    val draw = remember { Animatable(0f) }
+    // spec 必须在组合作用域求值：accessibleTween 是 @Composable，
+    // 在 LaunchedEffect 的挂起块里调用编译不过。
+    val drawSpec = YanjiMotion.accessibleTween<Float>(YanjiMotion.DurationLineDraw, YanjiMotion.EaseReveal)
+    LaunchedEffect(Unit) { draw.animateTo(1f, drawSpec) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp)
+            .height(TREND_CHART_HEIGHT.dp)
     ) {
         val chartLineColor = MaterialTheme.colorScheme.primary
 
-        Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .semantics { contentDescription = "学习时长折线图" }
+                .testTag(StatsTrendChartTags.LinePlot)
+        ) {
             if (n > 0) {
                 val topPad = 16.dp.toPx()
                 val bottomPad = 28.dp.toPx()
@@ -726,8 +761,13 @@ private fun LineChartView(
                     )
                 }
 
-                if (pts.size >= 2) {
-                    val linePath = Path().apply {
+                // ---- 揭示进度的度量，提到 `if (pts.size >= 2)` 之外 ----
+                // 圆点循环在块外，它要用同一个「笔尖位置」判断自己是否已被扫过。
+                // 在 Canvas 绘制回调里读取动画状态，只让这块 Canvas 重绘，
+                // 不因每帧进度变化而重组整张趋势卡片。
+                val progress = draw.value
+                val linePath: Path? = if (pts.size >= 2) {
+                    Path().apply {
                         moveTo(pts.first().x, pts.first().y)
                         for (i in 1 until pts.size) {
                             val prev = pts[i - 1]
@@ -736,64 +776,93 @@ private fun LineChartView(
                             cubicTo(midX, prev.y, midX, cur.y, cur.x, cur.y)
                         }
                     }
-
-                    // 曲线下方柔和区域渐变
-                    val areaPath = Path().apply {
-                        addPath(linePath)
-                        lineTo(pts.last().x, topPad + plotH)
-                        lineTo(pts.first().x, topPad + plotH)
-                        close()
-                    }
-                    drawPath(
-                        path = areaPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                chartLineColor.copy(alpha = 0.18f),
-                                Color.Transparent
-                            ),
-                            startY = topPad,
-                            endY = topPad + plotH
-                        )
-                    )
-
-                    // 绘制平滑主折线
-                    drawPath(
-                        path = linePath,
-                        color = chartLineColor,
-                        style = Stroke(
-                            width = 2.8.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
-                    )
+                } else {
+                    null
+                }
+                val measure = linePath?.let { PathMeasure().apply { setPath(it, false) } }
+                val totalLen = measure?.length ?: 0f
+                val drawnLen = totalLen * progress
+                // 笔尖位置：面积填充与数据点都以它为进度锚点。
+                val tip = if (measure != null && totalLen > 0f) {
+                    measure.getPosition(drawnLen.coerceIn(0f, totalLen))
+                } else {
+                    pts.first()
+                }
+                // 截取已绘制的前缀。缺了这一句 segment 永远是空 Path，
+                // 描边与面积填充都会画成空 —— 线直接消失。
+                val segment = Path()
+                if (measure != null && drawnLen > 0f) {
+                    measure.getSegment(0f, drawnLen, segment, true)
                 }
 
-                // 绘制实心点（杜绝空心圆点）：常规实心圆点，今日加柔和光晕
+                if (linePath != null) {
+
+                    // 曲线下方柔和区域渐变：跟随同一条前缀往下合拢，
+                    // 而不是整块渐变先淡入、线再画 —— 后者会看到填充「浮」在空白上。
+                    if (drawnLen > 0f) {
+                        val areaPath = Path().apply {
+                            addPath(segment)
+                            lineTo(tip.x, topPad + plotH)
+                            lineTo(pts.first().x, topPad + plotH)
+                            close()
+                        }
+                        drawPath(
+                            path = areaPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    chartLineColor.copy(alpha = 0.18f),
+                                    Color.Transparent
+                                ),
+                                startY = topPad,
+                                endY = topPad + plotH
+                            )
+                        )
+                    }
+
+                    // 绘制平滑主折线（只画已绘制的那一段）
+                    if (drawnLen > 0f) {
+                        drawPath(
+                            path = segment,
+                            color = chartLineColor,
+                            style = Stroke(
+                                width = 2.8.dp.toPx(),
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                    }
+                }
+
+                // 绘制实心点（杜绝空心圆点）：常规实心圆点，今日加柔和光晕。
+                // 点跟着笔尖逐个出现 —— 曲线「画到哪、点就亮到哪」，
+                // 眼睛能跟住进度；等线画完再一起冒点会丢掉这段可读性。
                 val normalDotRadius = if (n > 15) 2.5f.dp.toPx() else 3.8f.dp.toPx()
                 pts.forEachIndexed { index, pt ->
                     val isToday = days[index].isToday
                     val hasData = days[index].durationSeconds > 0L
-
-                    if (isToday) {
-                        // 今日光晕外环
-                        drawCircle(
-                            color = chartLineColor.copy(alpha = 0.22f),
-                            radius = 8.dp.toPx(),
-                            center = pt
-                        )
-                        // 今日实心主点
-                        drawCircle(
-                            color = chartLineColor,
-                            radius = 4.5f.dp.toPx(),
-                            center = pt
-                        )
-                    } else if (n <= 15 || hasData) {
-                        // 实心圆点（无任何内掏空心）
-                        drawCircle(
-                            color = chartLineColor,
-                            radius = normalDotRadius,
-                            center = pt
-                        )
+                    // 笔尖扫过该点即显示；进度为 0 时一个点都不画。
+                    if (progress > 0f && pt.x <= tip.x + 0.5f) {
+                        if (isToday) {
+                            // 今日光晕外环
+                            drawCircle(
+                                color = chartLineColor.copy(alpha = 0.22f),
+                                radius = 8.dp.toPx(),
+                                center = pt
+                            )
+                            // 今日实心主点
+                            drawCircle(
+                                color = chartLineColor,
+                                radius = 4.5f.dp.toPx(),
+                                center = pt
+                            )
+                        } else if (n <= 15 || hasData) {
+                            // 实心圆点（无任何内掏空心）
+                            drawCircle(
+                                color = chartLineColor,
+                                radius = normalDotRadius,
+                                center = pt
+                            )
+                        }
                     }
                 }
             }
@@ -889,14 +958,38 @@ private fun BarChartView(
     val actualMax = days.maxOfOrNull { it.durationSeconds } ?: 0L
     val maxBarDuration = if (actualMax > 0L) actualMax else 3600L
 
+    // ---- 切换视图时的「逐根上升」揭示 ----
+    //
+    // 一条 0→1 的全局进度驱动整排，每根柱按下标开一个时间窗，只需要一个 Animatable。
+    // 柱高在**组合期**求值（柱高是布局参数），每帧重组一次 ——
+    // 7 个 Box、约 680ms，对一次性揭示来说代价可忽略。
+    val rise = remember { Animatable(0f) }
+    val barCount = days.size
+    val totalRiseMs = YanjiMotion.DurationBarRise +
+            YanjiMotion.BarStaggerStep * (barCount - 1).coerceAtLeast(0)
+    // spec 必须在组合作用域求值（accessibleTween 是 @Composable）。
+    val riseSpec = YanjiMotion.accessibleTween<Float>(totalRiseMs, YanjiMotion.EaseReveal)
+    LaunchedEffect(Unit) { rise.animateTo(1f, riseSpec) }
+    // 把全局进度换算成第 index 根柱的本地进度（0→1，超出窗口则钳在两端）。
+    // 组合期读取：柱高是布局参数，必须在组合期求值才会重新测量。
+    val riseProgress = rise.value
+    fun riseAt(index: Int): Float {
+        val startFrac = if (barCount <= 1) 0f
+        else YanjiMotion.BarStaggerStep * index / totalRiseMs.toFloat()
+        val endFrac = if (barCount <= 1) 1f
+        else (YanjiMotion.BarStaggerStep * index + YanjiMotion.DurationBarRise) / totalRiseMs.toFloat()
+        if (endFrac <= startFrac) return 1f
+        return ((riseProgress - startFrac) / (endFrac - startFrac)).coerceIn(0f, 1f)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .height(TREND_CHART_HEIGHT.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom
     ) {
-        days.forEach { day ->
+        days.forEachIndexed { index, day ->
             val ratio = if (day.durationSeconds > 0L) {
                 (day.durationSeconds.toFloat() / maxBarDuration).coerceIn(0.02f, 1f)
             } else {
@@ -938,11 +1031,17 @@ private fun BarChartView(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight(ratio)
-                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
-                            .background(
-                                if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                            )
+                                // 高度直接随进度变化，**不用 scaleY 模拟**。
+                                // scaleY 会把顶部 6dp 圆角一起压扁（scaleY=0.3 时只剩 1.8dp），
+                                // 视觉上是「变形缩下去」而不是「长上去」；再叠加密集错峰和强减速曲线，
+                                // 整排几帧内一起挤完，肉眼完全捕捉不到 —— 这就是之前「没有动画」的原因。
+                                // 柱子本质上就是高度变化的矩形，动 height 才是它本来的样子。
+                                // 代价是每帧重排 7 个 Box，一次性揭示，代价可忽略。
+                                .fillMaxHeight(ratio * riseAt(index))
+                                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
+                                .background(
+                                    if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                )
                         )
                     }
                 }

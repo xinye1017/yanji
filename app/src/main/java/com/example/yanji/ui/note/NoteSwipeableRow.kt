@@ -36,6 +36,7 @@ import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.yanjiIsDarkTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.example.yanji.theme.YanjiMotion
@@ -164,11 +165,18 @@ fun NoteSwipeableRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左：收藏块，主题色底 + 书签图标
             SquareActionPanel(
                 width = actionWidth,
+                // 底色：亮暗都用 `primary`。暗色下它被刻意升调成亮蓝（#4F7DF3），
+                // 滑开时是整块高饱和色块，识别度足够。
                 container = MaterialTheme.colorScheme.primary,
-                tint = MaterialTheme.colorScheme.onPrimary,
+                // 图标：暗色用 primaryLabel（柔白冷灰 #F0F4FC，Color.kt 的定义就是
+                // 「杜绝纯白 #FFF 的刺眼」），压亮蓝 3.78:1，过图标 3:1 线。
+                // 不用 onPrimary：主题按 M3「亮主色 + 暗前景」惯例把它压成 #0D111A 深墨，
+                // 深墨压在饱和亮蓝上视觉上就是一个「黑图标」，与预期完全相反。
+                // 亮色维持 onPrimary 纯白（白压 #356AE6 = 4.82:1）。
+                tint = if (yanjiIsDarkTheme()) YanjiColors.primaryLabel
+                       else MaterialTheme.colorScheme.onPrimary,
                 icon = RemixIcons.BookmarkFill,
                 contentDescription = if (entry.isFavorite) "取消收藏" else "收藏",
                 revealProgress = revealProgress,
@@ -475,9 +483,9 @@ private fun NoteRowContent(
 /**
  * 条目之间的分隔线（跨日期分组的**唯一**边界 —— 同日多篇之间不画线）。
  *
- * 用 [YanjiColors.listSeparator]（亮 1.92:1 / 暗 1.59:1），不再把 quaternaryLabel
- * 稀释到 50% 凑出 1.48:1：非卡片列表没有卡片边界兜底，这条线本身就是分组线索，
- * 1.48:1 实测近乎不可见。语义与强度都由 token 一次定死，调用点不再 `copy(alpha = )`。
+ * 用 [YanjiColors.listSeparator]（结构分组线档），不再把 quaternaryLabel
+ * 稀释到 50% 凑出 1.48:1：非卡片列表没有卡片边界兜底，这条线本身就是分组线索。
+ * 与「内部分行线」[YanjiColors.rowDivider] 分属两档，亮暗两侧一一对应。
  */
 @Composable
 fun NoteRowDivider(modifier: Modifier = Modifier) {

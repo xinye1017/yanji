@@ -454,7 +454,7 @@ fun AiConfigDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                        HorizontalDivider(color = YanjiColors.rowDivider, thickness = 0.5.dp)
 
                         availableModels.forEach { m ->
                             DropdownMenuItem(

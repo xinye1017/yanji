@@ -137,7 +137,7 @@ fun YanjiExamDatePickerDialog(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                HorizontalDivider(color = YanjiColors.rowDivider, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Row(modifier = Modifier.fillMaxWidth()) {

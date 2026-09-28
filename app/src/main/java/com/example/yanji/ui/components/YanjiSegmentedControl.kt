@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -104,10 +103,11 @@ fun <T> YanjiSegmentedControl(
         }
     }
 
-    // 轨道描边：分段控件是一个「控件组」，其凹槽边界属于 WCAG 1.4.11 要求可辨识的组件边界，
-    // 因此亮暗两态统一走 colorScheme.outline（专职控件边界，≥3:1）。
-    // 轨道**填充**保持原有的浅色不变 —— 层级靠描边表达，不靠把凹槽压深。
-    val trackBorderModifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, shape)
+    // 轨道**没有描边**。此前这里挂了一条 1dp `outline` 实线，理由写的是
+    // 「WCAG 1.4.11 要求控件边界可辨识」——真机反馈这条实线又硬又脏。
+    // 那条判据用错了地方：分段控件的边界靠「轨道填充 vs 页面底」表达，
+    // 选中态靠「悬浮药丸 + 阴影」表达，都不需要再叠一条线。
+    // 轨道填充已相应加深（见 YanjiSegmentTrackOnPage），保证无描边时边界依然读得出。
 
     val pillBackground = when (variant) {
         YanjiSegmentedControlVariant.InCard -> {
@@ -128,22 +128,14 @@ fun <T> YanjiSegmentedControl(
         YanjiSegmentedControlVariant.OnPage -> if (isDark) 4.dp else 2.5.dp
     }
 
-    val pillBorderModifier = when (variant) {
-        YanjiSegmentedControlVariant.InCard -> {
-            if (isDark) Modifier
-            else Modifier.border(1.dp, Color.White.copy(alpha = 0.70f), shape)
-        }
-        YanjiSegmentedControlVariant.OnPage -> {
-            if (isDark) Modifier
-            else Modifier.border(1.dp, Color.White.copy(alpha = 0.85f), shape)
-        }
-    }
+    // 药丸同样不描边。原先亮色挂了一条白色高光边（白 @70%/85%），
+    // 在纯白药丸上等于一条多余的硬线；药丸的立体感由 [pillElevation] 的阴影 + 与轨道的
+    // 填充色差承担。暗色本来就是 `Modifier`（无描边），这里统一成无描边。
 
     BoxWithConstraints(
         modifier = modifier
             .clip(shape)
             .background(trackBackground)
-            .then(trackBorderModifier)
             .padding(3.dp)
             .height(height)
     ) {
@@ -166,7 +158,6 @@ fun <T> YanjiSegmentedControl(
                 )
                 .clip(shape)
                 .background(pillBackground)
-                .then(pillBorderModifier)
         )
 
         // 交互项文字
