@@ -1,6 +1,7 @@
 package com.example.yanji.ui.profile
 
 import com.example.yanji.ui.icons.RemixIcons
+import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,6 +53,7 @@ fun ProfileScreen(
     val mascot = currentMascotTheme()
 
     val context = LocalContext.current
+    val appVersionName = remember(context) { currentAppVersionName(context) }
     val coroutineScope = rememberCoroutineScope()
     val focusPrefs = remember(context) { FocusPreferences.getInstance(context) }
     val autoPowerSavingEnabled by focusPrefs.autoPowerSavingEnabled.collectAsStateWithLifecycle()
@@ -251,8 +253,8 @@ fun ProfileScreen(
             ProfileSettingsItem(
                 icon = RemixIcons.InformationLine,
                 title = "关于研迹与${mascot.name}",
-                subtitle = "v1.0 · 记录、专注、积累、复盘",
-                trailingText = "v1.0",
+                subtitle = "记录、专注、积累、复盘",
+                trailingText = appVersionName.takeIf { it.isNotBlank() }?.let { "v$it" },
                 onClick = { showAboutDialog = true }
             )
         }
@@ -348,6 +350,12 @@ fun ProfileScreen(
         )
     }
 }
+
+@Suppress("DEPRECATION")
+private fun currentAppVersionName(context: Context): String =
+    runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+    }.getOrDefault("")
 
 @Composable
 private fun PowerSavingTimeoutDialog(

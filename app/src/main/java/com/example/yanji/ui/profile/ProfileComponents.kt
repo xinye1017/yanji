@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,7 +169,7 @@ fun ProfileAiCard(
     settings: UserSettings,
     onClick: () -> Unit
 ) {
-    val aiConfigured = settings.aiApiKey.isNotBlank()
+    val aiConfigured = settings.isAiConfigured
     val aiModel = settings.aiModel.ifBlank { settings.aiProvider }.ifBlank { "未指定模型" }
     val protocol = com.example.yanji.data.ai.AiProtocolType.fromId(settings.aiProtocol)
 
@@ -242,7 +244,7 @@ fun ProfileAiCard(
                                     )
                             )
                             Text(
-                                text = if (aiConfigured) "已就绪" else "未配置",
+                                text = if (aiConfigured) "已配置" else "未配置",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Medium,
                                 color = if (aiConfigured) YanjiColors.success else YanjiColors.textTertiary
@@ -338,7 +340,7 @@ fun ProfileSectionHeader(
             text = title,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             letterSpacing = 0.5.sp
         )
         Spacer(modifier = Modifier.weight(1f))
@@ -496,7 +498,12 @@ fun ProfileSettingsSwitchItem(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 52.dp)
             .semantics(mergeDescendants = true) {}
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -526,7 +533,7 @@ fun ProfileSettingsSwitchItem(
         Spacer(modifier = Modifier.width(8.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
             enabled = enabled
         )
     }
