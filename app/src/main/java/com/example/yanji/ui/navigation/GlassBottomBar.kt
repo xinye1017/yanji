@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -32,7 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,24 +85,24 @@ fun GlassBottomBar(
     val isDark = yanjiIsDarkTheme()
     val glassTokens = YanjiLiquidGlass
     val colors = MaterialTheme.colorScheme
-    // 参考霜化药丸质感：胶囊本体更 milky，透光但不透形；降级无 blur 时保持原高不透明。
-    val dockSurfaceColor = if (isDark) {
-        lerp(colors.surfaceContainerHigh, colors.primary, 0.08f).copy(
-            alpha = if (glassTokens.blurRadius > 0.dp) 0.86f else 0.95f
-        )
+    val hasGlass = glassTokens.blurRadius > 0.dp
+    // 中性底色让模糊后的页面内容提供环境色，避免叠加一层主色光晕。
+    val dockBaseColor = if (isDark) {
+        colors.surfaceContainerHigh
     } else {
-        lerp(colors.surface, colors.surfaceVariant, 0.35f).copy(
-            alpha = if (glassTokens.blurRadius > 0.dp) 0.88f else 0.95f
-        )
+        lerp(colors.surface, colors.surfaceVariant, 0.18f)
     }
+    val dockSurfaceColor = dockBaseColor.copy(
+        alpha = if (hasGlass) { if (isDark) 0.80f else 0.82f } else 1f
+    )
 
     // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
     // 与胶囊共用同一 blurRadius，保证两层玻璃在交界处没有光学强度断层。
     val gradientBackdrop = if (hazeState != null && glassTokens.blurRadius > 0.dp) {
         Modifier.hazeEffect(state = hazeState) {
             blurRadius = glassTokens.blurRadius
-            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.36f else 0.30f)))
-            noiseFactor = glassTokens.noiseFactor
+            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.22f else 0.18f)))
+            noiseFactor = glassTokens.noiseFactor * 0.5f
             progressive = HazeProgressive.verticalGradient(
                 startIntensity = 0f,
                 endIntensity = 1f,
@@ -114,7 +115,7 @@ fun GlassBottomBar(
             Brush.verticalGradient(
                 listOf(
                     Color.Transparent,
-                    dockSurfaceColor.copy(alpha = if (isDark) 0.70f else 0.62f)
+                    dockBaseColor.copy(alpha = if (isDark) 0.40f else 0.30f)
                 )
             )
         )
@@ -161,84 +162,49 @@ fun GlassBottomBar(
         // 浅色与深色模式均采用鲜明的主题主色（primary），确保色彩辨识度高度一致
         val selectedColor = primaryColor
 
-        // 真实物理聚光边框（Top Specular Rim）：模拟漫反射环境光从上方投射在弧面玻璃上的自然折射
-        // 深浅同配方（4 段：顶高光 → 主色 → 描边 → 底微光），数值按主题映射。
-        // 浅色顶高光强、深色整体收敛，呼应霜化药丸的上缘反光。
-        val glassBorder: BorderStroke = if (isDark) {
+        // 边缘与表面共用左上方光源，向右下方衰减；减少透明度时只保留中性轮廓。
+        val glassBorder: BorderStroke = if (hasGlass) {
             BorderStroke(
                 1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        primaryColor.copy(alpha = 0.18f),
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
+                Brush.linearGradient(
+                    0f to Color.White.copy(alpha = if (isDark) 0.16f else 0.38f),
+                    0.45f to outlineVariant.copy(alpha = 0.20f),
+                    1f to onSurfaceColor.copy(alpha = if (isDark) 0.10f else 0.07f)
                 )
             )
         } else {
-            BorderStroke(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.85f),
-                        primaryColor.copy(alpha = 0.12f),
-                        outlineVariant.copy(alpha = 0.35f),
-                        Color.White.copy(alpha = 0.25f)
-                    )
-                )
-            )
+            BorderStroke(1.dp, outlineVariant.copy(alpha = 0.70f))
         }
 
-        // 滑动选中态指示器水滴材质：深浅同配方（primary 半透明 wash），数值按主题映射。
-        // 浅色此前是近不透的 primaryContainer 实色，与深色的通透 wash 是两种材质语言，现统一。
+        // 选中态用柔和的主色面区分，不再叠加亮白环线。
         val dropletBrush = if (isDark) {
             Brush.verticalGradient(
                 listOf(
-                    primaryColor.copy(alpha = 0.28f),
+                    primaryColor.copy(alpha = 0.22f),
                     primaryColor.copy(alpha = 0.14f)
                 )
             )
         } else {
             Brush.verticalGradient(
                 listOf(
-                    primaryColor.copy(alpha = 0.22f),
-                    primaryColor.copy(alpha = 0.12f)
+                    primaryColor.copy(alpha = 0.16f),
+                    primaryColor.copy(alpha = 0.10f)
                 )
             )
         }
 
-        val dropletBorderModifier = if (isDark) {
-            Modifier.border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.22f),
-                        primaryColor.copy(alpha = 0.30f)
-                    )
-                ),
-                CircleShape
-            )
-        } else {
-            Modifier.border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.70f),
-                        primaryColor.copy(alpha = 0.15f)
-                    )
-                ),
-                CircleShape
-            )
-        }
+        val reflectionColor = Color.White.copy(
+            alpha = if (hasGlass) { if (isDark) 0.08f else 0.16f } else 0f
+        )
+        val shadowColor = if (isDark) colors.scrim else onSurfaceColor
 
         GlassSurface(
             modifier = Modifier
                 .shadow(
-                    elevation = 12.dp,
+                    elevation = 8.dp,
                     shape = CircleShape,
-                    ambientColor = if (isDark) Color.Black.copy(alpha = 0.45f) else onSurfaceColor.copy(alpha = 0.09f),
-                    spotColor = if (isDark) primaryColor.copy(alpha = 0.20f) else primaryColor.copy(alpha = 0.10f)
+                    ambientColor = shadowColor.copy(alpha = if (isDark) 0.28f else 0.06f),
+                    spotColor = shadowColor.copy(alpha = if (isDark) 0.36f else 0.10f)
                 )
                 .width(dockWidth)
                 .height(DockHeight),
@@ -247,21 +213,19 @@ fun GlassBottomBar(
             fallbackColor = dockSurfaceColor,
             border = glassBorder
         ) {
-            // 表面光学漫反射微光层：模拟弧面玻璃透镜顶部的自然反光与底部微透环境光。
-            // 参考霜化药丸：顶部高光带加亮，还原稿子里那圈沿上缘的强反光。
+            // 宽而柔和的局部反光，避免整条上沿出现均匀的亮白光带。
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.34f),
-                                Color.Transparent,
-                                if (isDark) primaryColor.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.05f)
-                            )
+                    .drawWithCache {
+                        val reflection = Brush.radialGradient(
+                            colors = listOf(reflectionColor, Color.Transparent),
+                            center = Offset(size.width * 0.22f, -size.height * 0.8f),
+                            radius = size.width * 0.72f
                         )
-                    )
+                        onDrawBehind { drawRect(reflection) }
+                    }
             )
             // 滑动指示器（按同心圆几何中心与动态拉伸渲染）
             Box(
@@ -279,7 +243,6 @@ fun GlassBottomBar(
                     }
                     .clip(CircleShape)
                     .background(dropletBrush)
-                    .then(dropletBorderModifier)
             )
 
             // Tab 触控交互项：各 Tab 的中心点与同心圆中心严格重合，触控区域无缝衔接
