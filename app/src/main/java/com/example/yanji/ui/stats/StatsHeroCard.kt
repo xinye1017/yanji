@@ -11,7 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.yanji.data.DurationFormatter
@@ -30,14 +32,18 @@ fun StatsHeroCard(
     previousWeekSeconds: Long,
     weeklyTotalSeconds: Long,
     dailyAverageSeconds: Long,
+    /** 滚动近 7 天总时长：只有本年视角会用到。 */
+    recentSevenDaysSeconds: Long = 0L,
     settings: UserSettings
 ) {
     val goalSeconds = when (selectedTimeTab) {
-        0 -> (settings.dailyGoalHours * 7 * 3600f).toLong()
-        1 -> (settings.dailyGoalHours * 30 * 3600f).toLong()
+        STATS_TAB_WEEK -> (settings.dailyGoalHours * 7 * 3600f).toLong()
+        STATS_TAB_MONTH -> (settings.dailyGoalHours * 30 * 3600f).toLong()
+        // 本年不设目标进度：每日目标 × 365 天是个没有约束力的数字，
+        // 进度条常年停在低位只会让人麻掉 —— 整行直接不渲染。
         else -> 0L
     }
-    val goalLabel = if (selectedTimeTab == 1) "月目标进度" else "周目标进度"
+    val goalLabel = if (selectedTimeTab == STATS_TAB_MONTH) "月目标进度" else "周目标进度"
 
     YanjiCard(
         modifier = Modifier.fillMaxWidth(),
@@ -55,6 +61,9 @@ fun StatsHeroCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
+                    // 左侧这组吃满剩余空间并允许省略：本年的「有效学习 120 天」比周视角长，
+                    // 不给权重的话整行会超出卡片，右侧胶囊直接被挤出屏幕。
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -64,57 +73,60 @@ fun StatsHeroCard(
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                     Text(
-                        text = when (selectedTimeTab) { 0 -> "本周学习时长"; 1 -> "本月学习时长"; else -> "累计总学时" },
+                        text = when (selectedTimeTab) {
+                            STATS_TAB_WEEK -> "本周学习时长"
+                            STATS_TAB_MONTH -> "本月学习时长"
+                            else -> "本年学习时长"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Text(
                         text = "有效学习 ${activeDays} 天",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
-                        color = YanjiColors.success
+                        color = YanjiColors.success,
+                        maxLines = 1
                     )
                 }
 
-                // 「较上周」仅在周视角显示：两个都是周一至周日的自然周。
-                if (selectedTimeTab == 0) {
-                    if (previousWeekSeconds > 0L || weeklyTotalSeconds > 0L) {
-                        val delta = weeklyTotalSeconds - previousWeekSeconds
-                        val isUp = delta > 0
-                        val isFlat = delta == 0L
-                        val pillBg = when {
-                            isFlat -> MaterialTheme.colorScheme.surfaceVariant
-                            isUp -> YanjiColors.successSoft
-                            else -> YanjiColors.warningSoft
+                when (selectedTimeTab) {
+                    // 「较上周」仅在周视角显示：两个都是周一至周日的自然周，可比。
+                    STATS_TAB_WEEK ->
+                        if (previousWeekSeconds > 0L || weeklyTotalSeconds > 0L) {
+                            val delta = weeklyTotalSeconds - previousWeekSeconds
+                            val isUp = delta > 0
+                            val isFlat = delta == 0L
+                            val text = if (isFlat) {
+                                "较上周 持平"
+                            } else {
+                                "较上周 ${if (isUp) "+" else "-"}${formatDeltaCompact(abs(delta))}"
+                            }
+                            val (pillBg, pillFg) = when {
+                                isFlat -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+                                isUp -> YanjiColors.successSoft to YanjiColors.success
+                                else -> YanjiColors.warningSoft to YanjiColors.warning
+                            }
+                            HeroDeltaPill(text = text, container = pillBg, content = pillFg)
                         }
-                        val pillFg = when {
-                            isFlat -> MaterialTheme.colorScheme.onSurfaceVariant
-                            isUp -> YanjiColors.success
-                            else -> YanjiColors.warning
-                        }
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(pillBg)
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = RemixIcons.LineChartLine,
-                                contentDescription = null,
-                                tint = pillFg,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = if (isFlat) "较上周 持平" else "较上周 ${if (isUp) "+" else "-"}${formatDeltaCompact(abs(delta))}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = pillFg
+
+                    // 本年没有「较上周」可讲：全年总量和七天窗口量级差太远，
+                    // 比出来的差值没有信息量。换成「近 7 天」——
+                    // 长周期视角下读者真正想知道的是「最近还在学吗」。
+                    STATS_TAB_YEAR ->
+                        if (recentSevenDaysSeconds > 0L) {
+                            HeroDeltaPill(
+                                text = "近 7 天 ${formatDeltaCompact(recentSevenDaysSeconds)}",
+                                container = MaterialTheme.colorScheme.primaryContainer,
+                                content = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
-                    }
+
+                    else -> Unit
                 }
             }
 
@@ -221,6 +233,32 @@ fun StatsHeroCard(
 }
 
 private val HeroHeaderRowHeight = 26.dp
+
+/** Hero 首行右侧的对比胶囊：图标 + 文案，配色由调用方按语义给。 */
+@Composable
+private fun HeroDeltaPill(text: String, container: Color, content: Color) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(container)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Icon(
+            imageVector = RemixIcons.LineChartLine,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = content
+        )
+    }
+}
 
 private fun formatDeltaCompact(seconds: Long): String {
     if (seconds < 3600L) return "${seconds / 60}m"

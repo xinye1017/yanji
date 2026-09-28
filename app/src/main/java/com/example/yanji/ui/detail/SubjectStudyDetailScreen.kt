@@ -76,10 +76,13 @@ fun SubjectStudyDetailScreen(
         )
 
         // Time Range Filter Tabs
+        // 「本年」是统计页总览的视角，这里刻意不跟：科目详情保持四段，
+        // 每段多一个选项就被压窄一截，而单科维度下「本年」和「全部」差别不大。
+        val rangeOptions = StudyTimeRange.entries.filter { it != StudyTimeRange.YEAR }
         YanjiSegmentedControl(
-            items = StudyTimeRange.entries,
-            selectedIndex = selectedRange.ordinal,
-            onItemSelected = { selectRange(StudyTimeRange.entries[it]) },
+            items = rangeOptions,
+            selectedIndex = rangeOptions.indexOf(selectedRange).coerceAtLeast(0),
+            onItemSelected = { selectRange(rangeOptions[it]) },
             variant = YanjiSegmentedControlVariant.OnPage,
             modifier = Modifier
                 .fillMaxWidth()

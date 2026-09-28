@@ -75,6 +75,18 @@ object YanjiTime {
         )
     }
 
+    /** Calendar year semantics: Jan 1 00:00 through the next Jan 1 00:00. */
+    fun currentYearRange(
+        clock: Clock = Clock.systemDefaultZone(),
+        zoneId: ZoneId = clock.zone
+    ): EpochRange {
+        val first = today(clock).withDayOfYear(1)
+        return EpochRange(
+            first.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+            first.plusYears(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+        )
+    }
+
     /** Rolling N-day semantics, including today and excluding tomorrow. */
     fun lastDaysRange(
         days: Long,
@@ -94,6 +106,7 @@ object YanjiTime {
         StudyTimeRange.WEEK -> currentWeekRange(clock, clock.zone)
         StudyTimeRange.MONTH -> currentMonthRange(clock, clock.zone)
         StudyTimeRange.ALL -> EpochRange(0L, Long.MAX_VALUE)
+        StudyTimeRange.YEAR -> currentYearRange(clock, clock.zone)
     }
 
     fun formatTime(epochMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): String =

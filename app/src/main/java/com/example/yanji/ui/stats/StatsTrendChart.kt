@@ -70,7 +70,7 @@ enum class TrendMode(val label: String) {
 }
 
 fun resolveAvailableTrendModes(selectedTimeTab: Int): List<TrendMode> =
-    if (selectedTimeTab == 1) {
+    if (selectedTimeTab == STATS_TAB_MONTH) {
         listOf(TrendMode.HEATMAP, TrendMode.LINE)
     } else {
         listOf(TrendMode.BAR, TrendMode.LINE)
@@ -79,6 +79,19 @@ fun resolveAvailableTrendModes(selectedTimeTab: Int): List<TrendMode> =
 fun resolveEffectiveTrendMode(selectedTimeTab: Int, trendChartMode: TrendMode): TrendMode {
     val available = resolveAvailableTrendModes(selectedTimeTab)
     return if (trendChartMode in available) trendChartMode else available.first()
+}
+
+/**
+ * 图表模式的分段控件文案。
+ *
+ * 周/本月的「柱状/折线」是同一批日粒度柱子换画法，名字可以通用；
+ * 本年的 BAR 已经是**月粒度**、LINE 是**累计曲线**，再叫「柱状/折线」
+ * 就说不出这张图在讲什么，所以按视角换词。
+ */
+fun trendModeLabel(mode: TrendMode, selectedTimeTab: Int): String = when {
+    selectedTimeTab == STATS_TAB_YEAR && mode == TrendMode.BAR -> "按月"
+    selectedTimeTab == STATS_TAB_YEAR && mode == TrendMode.LINE -> "累计"
+    else -> mode.label
 }
 
 @Composable
@@ -94,9 +107,13 @@ fun StatsTrendChart(
     val currentModeIndex = availableModes.indexOf(effectiveMode).coerceAtLeast(0)
 
     val titleText = when {
-        selectedTimeTab == 0 -> "本周学习时长趋势"
-        selectedTimeTab == 1 && effectiveMode == TrendMode.HEATMAP -> "本月专注热力图"
-        selectedTimeTab == 1 -> "本月学习趋势"
+        selectedTimeTab == STATS_TAB_WEEK -> "本周学习时长趋势"
+        selectedTimeTab == STATS_TAB_MONTH && effectiveMode == TrendMode.HEATMAP -> "本月专注热力图"
+        selectedTimeTab == STATS_TAB_MONTH -> "本月学习趋势"
+        // 本年：一根柱子一个月，折线画的是累计值 —— 标题必须说清粒度，
+        // 否则读者会以为这还是「每日学时分布」。
+        selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.LINE -> "累计学时曲线"
+        selectedTimeTab == STATS_TAB_YEAR -> "每月学时分布"
         else -> "每日学时分布"
     }
 
@@ -122,7 +139,7 @@ fun StatsTrendChart(
                     items = availableModes,
                     selectedIndex = currentModeIndex,
                     onItemSelected = { onSelectTrendMode(availableModes[it]) },
-                    itemLabel = { it.label },
+                    itemLabel = { trendModeLabel(it, selectedTimeTab) },
                     height = 32.dp,
                     modifier = Modifier.width(136.dp)
                 )
@@ -133,7 +150,7 @@ fun StatsTrendChart(
 
             when {
                 // Monthly Heatmap View (Month tab defaults to heatmap unless LINE is selected)
-                selectedTimeTab == 1 && effectiveMode != TrendMode.LINE -> {
+                selectedTimeTab == STATS_TAB_MONTH && effectiveMode != TrendMode.LINE -> {
                     MonthlyHeatmapView(
                         days = days,
                         onSelectDay = onSelectDay
@@ -141,10 +158,28 @@ fun StatsTrendChart(
                 }
 
                 // Month Tick Trend View (Bencho ProgressTicks design for dense monthly data)
-                selectedTimeTab == 1 && effectiveMode == TrendMode.LINE -> {
+                selectedTimeTab == STATS_TAB_MONTH && effectiveMode == TrendMode.LINE -> {
                     MonthTickTrendView(
                         days = days,
                         onSelectDay = onSelectDay
+                    )
+                }
+
+                // 本年 · 按月：一根柱子一个月，点柱子看这个月的科目投入
+                selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.BAR -> {
+                    MonthlyBarView(
+                        days = days,
+                        onSelectDay = onSelectDay
+                    )
+                }
+
+                // 本年 · 累计：单调递增的累计曲线，看的是成长斜率而不是单月波动
+                selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.LINE -> {
+                    LineChartView(
+                        days = days,
+                        onSelectDay = null,
+                        valueDescription = "累计学习时长",
+                        milestoneUsesDayLabel = true
                     )
                 }
 
@@ -712,11 +747,18 @@ private fun MonthTickTrendView(
  * - 今日焦点采用柔光外晕 + 实心主点标识；
  * - 曲线下方支持柔和渐变填充；
  * - 针对月度多天场景自适应 X 轴刻度展示。
+ *
+ * @param onSelectDay 为空表示该视角没有可下钻的下一级（本年的月粒度没有“某一天”）。
+ * @param valueDescription 无障碍文案里的指标名：日视图是“学习时长”，累计视角是“累计学习时长”。
+ * @param milestoneUsesDayLabel 为 true 时 X 轴刻度直接用 [DayBarData.dayLabel]（“3月”），
+ *        否则按“第几天”生成（“1日”）—— 后者对月份没有意义。
  */
 @Composable
 private fun LineChartView(
     days: List<DayBarData>,
-    onSelectDay: (DayBarData) -> Unit
+    onSelectDay: ((DayBarData) -> Unit)?,
+    valueDescription: String = "学习时长",
+    milestoneUsesDayLabel: Boolean = false
 ) {
     val actualMax = days.maxOfOrNull { it.durationSeconds } ?: 0L
     val maxBarDuration = if (actualMax > 0L) actualMax else 3600L
@@ -907,7 +949,7 @@ private fun LineChartView(
                 milestoneIndices.forEach { idx ->
                     val day = days[idx]
                     Text(
-                        text = "${idx + 1}日",
+                        text = if (milestoneUsesDayLabel) day.dayLabel else "${idx + 1}日",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
                         color = if (day.isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -928,24 +970,146 @@ private fun LineChartView(
         }
 
         // Transparent clickable touch area for each day
-        Row(modifier = Modifier.fillMaxSize()) {
-            days.forEach { day ->
-                val dayDurationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
-                val a11yText = "${day.dayLabel}，学习时长 $dayDurationText" + if (day.isToday) "，今日" else ""
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onSelectDay(day) }
-                        .semantics { contentDescription = a11yText }
+        if (onSelectDay != null) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                days.forEach { day ->
+                    val dayDurationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
+                    val a11yText = "${day.dayLabel}，$valueDescription $dayDurationText" + if (day.isToday) "，今日" else ""
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelectDay(day) }
+                            .semantics { contentDescription = a11yText }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 本年柱状视图：一根柱子一个月。
+ *
+ * 刻意不复用 [BarChartView]：那张图把日期标签挂在每根柱子下面，
+ * 12 个月会把「12月」挤成半截字；这里只给奇数月与当月挂标签，柱子之间留足空间。
+ */
+@Composable
+private fun MonthlyBarView(
+    days: List<DayBarData>,
+    onSelectDay: (DayBarData) -> Unit
+) {
+    if (days.isEmpty()) return
+
+    val count = days.size
+    val maxDuration = days.maxOf { it.durationSeconds }.coerceAtLeast(3600L)
+
+    // 一次性整体上升，不做错峰：12 根逐个错峰要拖一秒以上，
+    // 而月粒度读数不需要那种逐根引导。
+    val rise = remember { Animatable(0f) }
+    val riseSpec = YanjiMotion.accessibleTween<Float>(YanjiMotion.DurationBarRise, YanjiMotion.EaseReveal)
+    LaunchedEffect(Unit) { rise.animateTo(1f, riseSpec) }
+    val progress = rise.value
+
+    val barShape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val barColor = MaterialTheme.colorScheme.primary
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MONTH_BAR_AREA_HEIGHT)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                days.forEach { day ->
+                    val ratio = if (day.durationSeconds > 0L) {
+                        (day.durationSeconds.toFloat() / maxDuration).coerceIn(0.02f, 1f)
+                    } else {
+                        0f
+                    }
+                    val durationText = DurationFormatter.formatHoursMinutes(day.durationSeconds)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(horizontal = 2.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelectDay(day) }
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = "${day.dayLabel}，学习时长 $durationText"
+                            },
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        // 底轨：没学过的月份也留一格，横轴读起来才是连续的 12 个月
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .clip(barShape)
+                                .background(trackColor.copy(alpha = 0.35f))
+                        )
+                        if (ratio > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(ratio * progress)
+                                    .clip(barShape)
+                                    .background(
+                                        if (day.isToday) barColor else barColor.copy(alpha = 0.85f)
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // X 轴标签：奇数月 + 当月。用与折线图一致的 layout 定位，
+        // 标签中心正对柱子中心，且不会互相重叠。
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+        ) {
+            val labelIndices = days.indices.filter { it % 2 == 0 || it == count - 1 }.distinct()
+            labelIndices.forEach { idx ->
+                val day = days[idx]
+                Text(
+                    text = day.dayLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
+                    color = if (day.isToday) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    modifier = Modifier.layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val targetCenterX = constraints.maxWidth * ((idx + 0.5f) / count)
+                        val x = (targetCenterX - placeable.width / 2f)
+                            .roundToInt()
+                            .coerceIn(0, constraints.maxWidth - placeable.width)
+                        layout(placeable.width, placeable.height) {
+                            placeable.placeRelative(x, 0)
+                        }
+                    }
                 )
             }
         }
     }
 }
+
+private val MONTH_BAR_AREA_HEIGHT = 128.dp
 
 /**
  * 柱状图：用于周或紧凑视角。

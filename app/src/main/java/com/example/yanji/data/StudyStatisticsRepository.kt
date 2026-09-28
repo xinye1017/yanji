@@ -12,7 +12,9 @@ enum class StudyTimeRange(val title: String) {
     TODAY("今日"),
     WEEK("本周"),
     MONTH("本月"),
-    ALL("全部")
+    ALL("全部"),
+    /** 自然年：1 月 1 日 00:00 起。追加在末尾，既有 ordinal 与科目详情页选项不变。 */
+    YEAR("本年")
 }
 
 enum class SubjectStatsLevel(val title: String) {
@@ -96,6 +98,42 @@ data class MonthlyStudySummary(
     val days: List<DayBarData>
 )
 
+/**
+ * 月度聚合条：「本年」视图趋势图的横轴一格。
+ *
+ * 用 [label]（"3月"）而不是 DayBarData 的 weekday 标签：
+ * 本年视图的时间粒度是月，硬套「日」标签会让图表语义错位。
+ */
+data class MonthBarData(
+    val year: Int,
+    val month: Int, // 1..12
+    val label: String,
+    val durationSeconds: Long,
+    /** 当月有效学习天数（>= 30min），口径与周/月汇总一致。 */
+    val activeDays: Int,
+    val isCurrentMonth: Boolean,
+    /** 当月科目投入（展示名 -> 秒数），按月粒度倒序，供月度抽屉展示。 */
+    val subjectDistribution: Map<String, Long> = emptyMap()
+)
+
+/**
+ * 本年汇总：所有口径都是**自然年**（1 月 1 日 00:00 起，到今天为止）。
+ *
+ * [dailyAverageSeconds] 的分母是 [activeDays]（有效学习天数），不是自然日跨度 ——
+ * 年初的空档会把日均稀释到失真，按有效天数算才反映「学的时候平均学多少」。
+ */
+data class YearlyStudySummary(
+    val totalDurationSeconds: Long = 0L,
+    val dailyAverageSeconds: Long = 0L,
+    val activeDays: Int = 0,
+    /** 本年最长连续学习天数（不是「当前连续」，不受日边界截断）。 */
+    val longestStreakDays: Int = 0,
+    val longestSession: DailySessionItem? = null,
+    val examCount: Int = 0,
+    /** 1 月..当月，未学习的月份也占位（时长为 0）。 */
+    val months: List<MonthBarData> = emptyList()
+)
+
 object DurationFormatter {
     fun formatHoursMinutes(seconds: Long): String {
         if (seconds <= 0) return "0m"
@@ -143,6 +181,14 @@ object DurationFormatter {
 class StudyStatisticsRepository(
     private val repo: YanjiRepository
 ) {
+    /**
+     * 「有效学习天数」阈值：当天累计 >= 30min 才算一天。
+     *
+     * 周 / 月 / 年三个汇总必须共用同一个常量 —— 阈值一旦分叉，
+     * 「有效学习 N 天」在三个视角下就不是同一件事，对比就失去意义。
+     */
+    private val activeDayThresholdSeconds = 1800L
+
     private fun getSubjectColor(subjectId: String, subjectName: String): String {
         val found = SubjectCatalog.find(subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
             ?: repo.subjects.value.find { it.id == subjectId || it.name == subjectName }
@@ -282,6 +328,29 @@ class StudyStatisticsRepository(
     fun getPreviousCalendarWeekDurationFlow(): Flow<Long> {
         val range = YanjiTime.previousWeekRange()
         return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
+    }
+
+    /** 滚动 N 天总时长（含今天）。「本年」视角的 hero 用「近 7 天」替代无意义的「较上周」。 */
+    fun getLastDaysDurationFlow(days: Long): Flow<Long> {
+        val range = YanjiTime.lastDaysRange(days)
+        return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
+    }
+
+    /**
+     * 本年汇总：自然年区间（1 月 1 日 00:00 起）的专注 + 模考。
+     *
+     * 区间有界（最多 366 天），走 startTime 索引；日粒度与月粒度聚合都在 Kotlin 侧完成，
+     * 不引入按 UTC 月份分组的 SQL —— 那种写法在跨月/跨年边界会差 8 小时，
+     * 而这里的数据量级（一年几百条）还远没到需要把分组下推到 SQL 的程度。
+     */
+    fun getYearlyStudySummaryFlow(): Flow<YearlyStudySummary> {
+        val range = YanjiTime.currentYearRange()
+        return combine(
+            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
+            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
+        ) { focusList, examList ->
+            buildYearlyStudySummary(focusList, examList)
+        }
     }
 
     fun getSubjectDistribution(
@@ -530,7 +599,7 @@ class StudyStatisticsRepository(
         }
 
         val totalDuration = days.sumOf { it.durationSeconds }
-        val activeDays = days.count { it.durationSeconds >= 1800L } // >= 30m
+        val activeDays = days.count { it.durationSeconds >= activeDayThresholdSeconds } // >= 30m
         val dailyAvg = if (days.isNotEmpty()) totalDuration / days.size else 0L
 
         // Find longest session in the 7 days
@@ -543,7 +612,7 @@ class StudyStatisticsRepository(
         // Calculate consecutive active streak days
         var streak = 0
         for (i in days.indices.reversed()) {
-            if (days[i].durationSeconds >= 1800L) {
+            if (days[i].durationSeconds >= activeDayThresholdSeconds) {
                 streak++
             } else if (!days[i].isToday) {
                 break
@@ -631,7 +700,7 @@ class StudyStatisticsRepository(
         }
 
         val totalDuration = days.sumOf { it.durationSeconds }
-        val activeDays = days.count { it.durationSeconds >= 1800L } // >= 30m
+        val activeDays = days.count { it.durationSeconds >= activeDayThresholdSeconds } // >= 30m
         val dailyAvg = if (days.isNotEmpty()) totalDuration / days.size else 0L
 
         val recentFocus = focusList.filter { it.status == SessionStatus.COMPLETED }.map(::focusToSessionItem)
@@ -642,7 +711,7 @@ class StudyStatisticsRepository(
 
         var streak = 0
         for (i in days.indices.reversed()) {
-            if (days[i].durationSeconds >= 1800L) {
+            if (days[i].durationSeconds >= activeDayThresholdSeconds) {
                 streak++
             } else if (!days[i].isToday) {
                 break
@@ -660,6 +729,116 @@ class StudyStatisticsRepository(
             month = today.monthValue,
             firstDayOfWeek = firstDay.dayOfWeek,
             days = days
+        )
+    }
+
+    /**
+     * 本年汇总构建：日粒度打底（有效天数、最长连续），再向上聚合成月粒度条。
+     *
+     * internal 而非 private：聚合口径（分母取有效天数、连续天数取本年最长一段、
+     * 未学习的月份也要占位）需要被 JVM 单测钉住，见 StudyStatisticsRepositoryYearlyTest。
+     *
+     * @param today 可注入的“今天”，单测靠它把自然年边界钉死，避免跨年时结论漂移。
+     */
+    internal fun buildYearlyStudySummary(
+        focusList: List<FocusSession>,
+        examList: List<ExamSession>,
+        today: LocalDate = YanjiTime.today()
+    ): YearlyStudySummary {
+        val yearStart = today.withDayOfYear(1)
+
+        // 只认本自然年、且不晚于今天的 COMPLETED 记录：调用方（流程查询）已经按年区间过滤，
+        // 这里再收口一次，是为了让这个函数对任意入参都能自洽（单测直接喂列表）。
+        fun inThisYear(startTime: Long): Boolean {
+            val date = YanjiTime.localDate(startTime)
+            return !date.isBefore(yearStart) && !date.isAfter(today)
+        }
+
+        val completedFocus = focusList.filter {
+            it.status == SessionStatus.COMPLETED && inThisYear(it.startTime)
+        }
+        val completedExams = examList.filter {
+            it.status == SessionStatus.COMPLETED && inThisYear(it.startTime)
+        }
+
+        // 日粒度：日期 -> 当天秒数。只存 >0 的天，未学习天然缺席。
+        val dayTotals = HashMap<LocalDate, Long>()
+        completedFocus.forEach {
+            dayTotals.merge(YanjiTime.localDate(it.startTime), it.durationSeconds, Long::plus)
+        }
+        completedExams.forEach {
+            dayTotals.merge(YanjiTime.localDate(it.startTime), it.actualDurationSeconds, Long::plus)
+        }
+
+        val totalDuration = dayTotals.values.sum()
+        val activeDays = dayTotals.count { it.value >= activeDayThresholdSeconds }
+        // 分母是有效学习天数：按自然日跨度算会被年初空档稀释（见 YearlyStudySummary 注释）。
+        val dailyAvg = if (activeDays > 0) totalDuration / activeDays else 0L
+
+        // 本年最长连续段：从 1 月 1 日扫到今天，取最长的一段，
+        // 而不是「当前连续」—— 后者在年初断一次就归零，作为年度指标信息量太低。
+        var longestStreak = 0
+        var runningStreak = 0
+        var cursor = yearStart
+        while (!cursor.isAfter(today)) {
+            if ((dayTotals[cursor] ?: 0L) >= activeDayThresholdSeconds) {
+                runningStreak++
+                if (runningStreak > longestStreak) longestStreak = runningStreak
+            } else {
+                runningStreak = 0
+            }
+            cursor = cursor.plusDays(1)
+        }
+
+        // 月粒度：1 月..当月全部占位，没学过的月份也要有一根 0 柱，
+        // 否则横轴会随数据跳动（2 月没学 → 柱子从 3 月开始，读者以为年初是 3 月）。
+        val secondsByMonth = IntArray(13)
+        val activeDaysByMonth = IntArray(13)
+        dayTotals.forEach { (date, seconds) ->
+            secondsByMonth[date.monthValue] += seconds.toInt()
+            if (seconds >= activeDayThresholdSeconds) activeDaysByMonth[date.monthValue]++
+        }
+
+        // 当月科目分布：抽屉里点开某个月要能看到各科投了多少。
+        // 桶口径与日视图一致（子类 + 目录展示名），只是按月份分开存。
+        val distributionByMonth = Array(13) { HashMap<String, Long>() }
+        fun addMonthSubject(date: LocalDate, subjectId: String, subjectName: String, seconds: Long) {
+            val bucketId = SubjectCatalog.subcategoryBucketId(subjectId, subjectName)
+            val name = SubjectCatalog.displayName(bucketId) ?: subjectName
+            distributionByMonth[date.monthValue].merge(name, seconds, Long::plus)
+        }
+        completedFocus.forEach {
+            addMonthSubject(YanjiTime.localDate(it.startTime), it.subjectId, it.subjectName, it.durationSeconds)
+        }
+        completedExams.forEach {
+            addMonthSubject(YanjiTime.localDate(it.startTime), it.subjectId, it.subjectName, it.actualDurationSeconds)
+        }
+
+        val months = (1..today.monthValue).map { month ->
+            MonthBarData(
+                year = today.year,
+                month = month,
+                label = "${month}月",
+                durationSeconds = secondsByMonth[month].toLong(),
+                activeDays = activeDaysByMonth[month],
+                isCurrentMonth = month == today.monthValue,
+                subjectDistribution = distributionByMonth[month]
+                    .toList()
+                    .sortedByDescending { it.second }
+                    .toMap()
+            )
+        }
+
+        val allItems = completedFocus.map(::focusToSessionItem) + completedExams.map(::examToSessionItem)
+
+        return YearlyStudySummary(
+            totalDurationSeconds = totalDuration,
+            dailyAverageSeconds = dailyAvg,
+            activeDays = activeDays,
+            longestStreakDays = longestStreak,
+            longestSession = allItems.maxByOrNull { it.durationSeconds },
+            examCount = completedExams.size,
+            months = months
         )
     }
 

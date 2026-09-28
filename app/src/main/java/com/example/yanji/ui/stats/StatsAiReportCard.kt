@@ -153,7 +153,9 @@ fun StatsAiReportCard(
                             text = if (report != null) {
                                 "${report.periodStart} ~ ${report.periodEnd} 阶段评估"
                             } else {
-                                "依据专注记录、学科投入与模考深度建模"
+                                // 说清窗口：这张卡始终按近 7 天生成，与上方时间 Tab 无关。
+                                // 在「本年」视角下尤其要写出来，否则会被读成全年诊断。
+                                "基于近 7 天专注记录、学科投入与模考深度建模"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
