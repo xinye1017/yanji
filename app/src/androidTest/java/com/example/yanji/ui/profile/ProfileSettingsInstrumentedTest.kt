@@ -12,7 +12,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -122,11 +124,55 @@ class ProfileSettingsInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("OpenAI").performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription("选择模型提供商").performClick()
+        listOf("DeepSeek", "OpenAI", "Kimi", "GLM", "自定义").forEach { provider ->
+            composeRule.onNodeWithTag("ai-provider-option-$provider").assertIsDisplayed()
+        }
+        composeRule.onNodeWithTag("ai-provider-option-OpenAI").performClick()
         composeRule.onNodeWithText("gpt-4o-mini").assertDoesNotExist()
-        composeRule.onNodeWithText("选择或输入模型，如 deepseek-chat")
+        composeRule.onNodeWithText("选择模型或直接输入模型ID")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun switchingProvidersClearsAndRestoresApiKeyState() {
+        val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as YanjiApplication
+        composeRule.setContent {
+            CompositionLocalProvider(LocalAppContainer provides application.container) {
+                YanjiTheme {
+                    AiConfigDialog(onDismissRequest = {})
+                }
+            }
+        }
+
+        val initialProvider = composeRule.onNodeWithTag("ai-selected-provider")
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.StateDescription]
+        val apiKeyPlaceholder = "sk-... (局域网本地模型可留空)"
+        val initiallyHasApiKey = composeRule.onAllNodesWithText(apiKeyPlaceholder)
+            .fetchSemanticsNodes()
+            .isEmpty()
+        val otherProvider = listOf("DeepSeek", "OpenAI", "Kimi", "GLM")
+            .first { it != initialProvider }
+
+        fun selectProvider(provider: String) {
+            composeRule.onNodeWithContentDescription("选择模型提供商").performClick()
+            composeRule.onNodeWithTag("ai-provider-option-$provider").performClick()
+        }
+
+        selectProvider(otherProvider)
+        composeRule.onNodeWithText(apiKeyPlaceholder).assertIsDisplayed()
+        selectProvider(initialProvider)
+
+        val placeholderVisibleAfterReturn = composeRule.onAllNodesWithText(apiKeyPlaceholder)
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+        assertEquals(
+            "切回原提供商后应恢复其 API Key 是否已填写的状态",
+            initiallyHasApiKey,
+            !placeholderVisibleAfterReturn
+        )
     }
 
     @Test

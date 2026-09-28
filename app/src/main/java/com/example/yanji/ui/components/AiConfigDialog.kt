@@ -14,8 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -34,20 +36,27 @@ import kotlinx.coroutines.launch
 private data class ProviderPreset(
     val name: String,
     val baseUrl: String,
-    val defaultModel: String,
-    val protocol: AiProtocolType = AiProtocolType.OPENAI_CHAT,
-    val tag: String = ""
+    val protocol: AiProtocolType = AiProtocolType.OPENAI_CHAT
 )
 
+private const val CUSTOM_PROVIDER = "自定义"
+
 private val AI_PRESETS = listOf(
-    ProviderPreset("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat", AiProtocolType.OPENAI_CHAT, "推荐"),
-    ProviderPreset("硅基流动", "https://api.siliconflow.cn/v1", "deepseek-ai/DeepSeek-V3", AiProtocolType.OPENAI_CHAT, "聚合"),
-    ProviderPreset("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", AiProtocolType.OPENAI_CHAT, "开放平台"),
-    ProviderPreset("OpenAI", "https://api.openai.com/v1", "", AiProtocolType.OPENAI_CHAT, "官方"),
-    ProviderPreset("Anthropic", "https://api.anthropic.com", "claude-3-5-sonnet-20241022", AiProtocolType.ANTHROPIC, "Claude"),
-    ProviderPreset("本地 Ollama", "http://192.168.1.100:11434/v1", "qwen2.5:latest", AiProtocolType.OPENAI_CHAT, "本地/内网"),
-    ProviderPreset("自定义", "", "", AiProtocolType.OPENAI_CHAT, "手动输入")
+    ProviderPreset("DeepSeek", "https://api.deepseek.com/v1"),
+    ProviderPreset("OpenAI", "https://api.openai.com/v1"),
+    ProviderPreset("Kimi", "https://api.moonshot.cn/v1"),
+    ProviderPreset("GLM", "https://open.bigmodel.cn/api/paas/v4"),
+    ProviderPreset(CUSTOM_PROVIDER, "")
 )
+
+private val AI_PROVIDER_NAMES = AI_PRESETS.map { it.name }.toSet()
+
+private fun providerOptionFor(configuredProvider: String): String =
+    when {
+        configuredProvider == "智谱 GLM" -> "GLM"
+        configuredProvider in AI_PROVIDER_NAMES && configuredProvider != CUSTOM_PROVIDER -> configuredProvider
+        else -> CUSTOM_PROVIDER
+    }
 
 @Composable
 fun AiConfigDialog(
@@ -56,7 +65,23 @@ fun AiConfigDialog(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.settings
-    var provider by remember(settings.aiProvider) { mutableStateOf(settings.aiProvider) }
+    val configuredProvider = settings.aiProvider
+    val initialProviderSelection = providerOptionFor(configuredProvider)
+    var selectedProvider by remember(configuredProvider) { mutableStateOf(initialProviderSelection) }
+    var customProviderName by remember(configuredProvider) {
+        mutableStateOf(
+            configuredProvider.takeIf {
+                initialProviderSelection == CUSTOM_PROVIDER && it != CUSTOM_PROVIDER
+            }.orEmpty()
+        )
+    }
+    val provider = if (selectedProvider == CUSTOM_PROVIDER) customProviderName else selectedProvider
+    val apiKeysByProvider = remember(configuredProvider, settings.aiApiKey) {
+        mutableMapOf(initialProviderSelection to settings.aiApiKey)
+    }
+    val baseUrlsByProvider = remember(configuredProvider, settings.aiBaseUrl) {
+        mutableMapOf(initialProviderSelection to settings.aiBaseUrl)
+    }
     var protocol by remember(settings.aiProtocol) { mutableStateOf(AiProtocolType.fromId(settings.aiProtocol)) }
     var baseUrl by remember(settings.aiBaseUrl) { mutableStateOf(settings.aiBaseUrl) }
     var apiKey by remember(settings.aiApiKey) { mutableStateOf(settings.aiApiKey) }
@@ -72,7 +97,28 @@ fun AiConfigDialog(
     var connectionMessage by remember { mutableStateOf<String?>(null) }
     var connectionSucceeded by remember { mutableStateOf<Boolean?>(null) }
     var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var providerDropdownExpanded by remember { mutableStateOf(false) }
     var modelDropdownExpanded by remember { mutableStateOf(false) }
+
+    fun selectProvider(preset: ProviderPreset) {
+        if (selectedProvider != preset.name) {
+            apiKeysByProvider[selectedProvider] = apiKey
+            baseUrlsByProvider[selectedProvider] = baseUrl
+            selectedProvider = preset.name
+            apiKey = apiKeysByProvider[preset.name].orEmpty()
+            baseUrl = baseUrlsByProvider[preset.name] ?: preset.baseUrl
+            model = ""
+            protocol = preset.protocol
+            viewModel.clearSecurityError()
+            availableModels = emptyList()
+            modelDropdownExpanded = false
+            connectionMessage = null
+            connectionSucceeded = null
+        }
+        providerDropdownExpanded = false
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -109,84 +155,83 @@ fun AiConfigDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                // 1. 服务商快捷预设横条
-                Text(
-                    text = "快速预设服务商",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // 1. 模型提供商
+                YanjiFormFieldLabel("模型提供商")
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AI_PRESETS.forEach { preset ->
-                        val isSelected = (preset.name == "自定义" && (provider == "自定义" || (provider.isNotBlank() && AI_PRESETS.none { it.name != "自定义" && it.name == provider }))) ||
-                                (preset.name != "自定义" && provider == preset.name)
-                        Surface(
-                            shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                            ),
-                            modifier = Modifier.clickable {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                if (preset.name != "自定义") {
-                                    provider = preset.name
-                                    baseUrl = preset.baseUrl
-                                    model = preset.defaultModel
-                                    protocol = preset.protocol
-                                } else {
-                                    provider = "自定义"
-                                }
-                                connectionMessage = null
-                                connectionSucceeded = null
-                            }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        onClick = { providerDropdownExpanded = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("ai-selected-provider")
+                            .semantics {
+                                contentDescription = "选择模型提供商"
+                                stateDescription = selectedProvider
+                            },
+                        shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                        color = YanjiColors.inputFill
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = RemixIcons.CheckLine,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                                Text(
-                                    text = preset.name,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                                if (preset.tag.isNotBlank() && preset.name != "自定义") {
+                            Text(
+                                text = selectedProvider,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = if (providerDropdownExpanded) RemixIcons.ArrowUpSLine else RemixIcons.ArrowDownSLine,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = providerDropdownExpanded,
+                        onDismissRequest = { providerDropdownExpanded = false },
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        AI_PRESETS.forEach { preset ->
+                            val isSelected = selectedProvider == preset.name
+                            DropdownMenuItem(
+                                modifier = Modifier.testTag("ai-provider-option-${preset.name}"),
+                                text = {
                                     Text(
-                                        text = preset.tag,
-                                        fontSize = 10.sp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else YanjiColors.textTertiary
+                                        text = preset.name,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                     )
-                                }
-                            }
+                                },
+                                onClick = { selectProvider(preset) },
+                                trailingIcon = if (isSelected) {
+                                    {
+                                        Icon(
+                                            imageVector = RemixIcons.CheckLine,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null
+                            )
                         }
                     }
                 }
 
-                // 若选择自定义或非预设服务商，显示自定义服务商输入框
-                if (provider == "自定义" || (provider.isNotBlank() && AI_PRESETS.none { it.name == provider && it.name != "自定义" })) {
+                // 自定义服务商名称
+                if (selectedProvider == CUSTOM_PROVIDER) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         YanjiFormFieldLabel("服务商名称")
                         TextField(
-                            value = if (provider == "自定义") "" else provider,
-                            onValueChange = { provider = it },
+                            value = customProviderName,
+                            onValueChange = { customProviderName = it },
                             placeholder = { Text("如 MiniMax、Moonshot 等") },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -403,7 +448,7 @@ fun AiConfigDialog(
                     TextField(
                         value = model,
                         onValueChange = { model = it },
-                        placeholder = { Text("选择或输入模型，如 deepseek-chat") },
+                        placeholder = { Text("选择模型或直接输入模型ID") },
                         trailingIcon = {
                             IconButton(
                                 enabled = availableModels.isNotEmpty(),
