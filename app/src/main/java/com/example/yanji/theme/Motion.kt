@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 
+import android.content.Context
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Easing
@@ -79,8 +80,9 @@ object YanjiMotion {
      * 检查系统是否开启了“减少动态效果”或将系统动画时长调整为 0。
      */
     @Composable
-    fun isReduceMotionEnabled(): Boolean {
-        val context = LocalContext.current
+    fun isReduceMotionEnabled(): Boolean = isReduceMotionEnabled(LocalContext.current)
+
+    fun isReduceMotionEnabled(context: Context): Boolean {
         return try {
             val resolver = context.contentResolver
             val animatorScale = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)

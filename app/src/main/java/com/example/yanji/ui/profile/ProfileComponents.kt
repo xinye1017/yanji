@@ -1,7 +1,6 @@
 package com.example.yanji.ui.profile
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
@@ -61,15 +60,10 @@ fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                AiAvatar(size = 52.dp)
-            }
+            AiAvatar(
+                size = 64.dp,
+                shape = RoundedCornerShape(YanjiRadius.ContentBlockRadius)
+            )
 
             Spacer(modifier = Modifier.width(14.dp))
 

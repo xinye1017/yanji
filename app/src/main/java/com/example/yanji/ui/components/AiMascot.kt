@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,21 +27,24 @@ import com.example.yanji.ui.components.YanjiCardVariant
 @Composable
 fun MascotAvatar(
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp
+    size: Dp = 44.dp,
+    shape: Shape = CircleShape
 ) {
     val mascot = currentMascotTheme()
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(id = mascot.drawableRes),
             contentDescription = mascot.name,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(size * 0.15f),
+            contentScale = ContentScale.Fit
         )
     }
 }
@@ -48,8 +52,9 @@ fun MascotAvatar(
 @Composable
 fun AiAvatar(
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp
-) = MascotAvatar(modifier = modifier, size = size)
+    size: Dp = 44.dp,
+    shape: Shape = CircleShape
+) = MascotAvatar(modifier = modifier, size = size, shape = shape)
 
 @Composable
 fun AiEncouragementBanner(

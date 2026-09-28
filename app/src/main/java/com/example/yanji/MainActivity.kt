@@ -1,6 +1,7 @@
 package com.example.yanji
 
 import android.os.Bundle
+import android.view.animation.PathInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,6 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreenViewProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.theme.YanjiMotion
@@ -21,9 +24,32 @@ import com.example.yanji.ui.SystemBarAppearance
 import com.example.yanji.ui.achievement.AchievementCelebrationOverlay
 
 class MainActivity : ComponentActivity() {
+  private var exitingSplashScreen: SplashScreenViewProvider? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    val splashScreen = installSplashScreen()
     super.onCreate(savedInstanceState)
+    splashScreen.setOnExitAnimationListener { provider ->
+      exitingSplashScreen = provider
+      if (savedInstanceState != null || YanjiMotion.isReduceMotionEnabled(this)) {
+        removeSplashScreen()
+      } else {
+        val easing = PathInterpolator(0.22f, 1f, 0.36f, 1f)
+        val duration = YanjiMotion.DurationStandard.toLong()
+        provider.iconView.animate()
+            .scaleX(1.04f)
+            .scaleY(1.04f)
+            .setDuration(duration)
+            .setInterpolator(easing)
+            .start()
+        provider.view.animate()
+            .alpha(0f)
+            .setDuration(duration)
+            .setInterpolator(easing)
+            .withEndAction { removeSplashScreen() }
+            .start()
+      }
+    }
 
     // 1. Initialize Room Database via Repository
     YanjiRepository.init(applicationContext)
@@ -61,6 +87,19 @@ class MainActivity : ComponentActivity() {
       }
     }
     handleIntent(intent)
+  }
+
+  private fun removeSplashScreen() {
+    val provider = exitingSplashScreen ?: return
+    exitingSplashScreen = null
+    provider.iconView.animate().cancel()
+    provider.view.animate().cancel()
+    provider.remove()
+  }
+
+  override fun onDestroy() {
+    removeSplashScreen()
+    super.onDestroy()
   }
 
   override fun onNewIntent(intent: android.content.Intent) {

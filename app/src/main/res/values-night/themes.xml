@@ -11,4 +11,12 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
     </style>
+
+    <style name="Theme.Yanji.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/yanji_window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Yanji</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+    </style>
 </resources>

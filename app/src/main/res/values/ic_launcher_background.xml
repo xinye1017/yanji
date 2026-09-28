@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#AF9AE0</color>
+    <!-- MascotThemes.PENGUIN.palette.lightPrimarySoft -->
+    <color name="ic_launcher_background">#E6F2FB</color>
 </resources>
