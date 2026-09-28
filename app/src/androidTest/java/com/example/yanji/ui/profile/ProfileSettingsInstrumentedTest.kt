@@ -133,6 +133,19 @@ class ProfileSettingsInstrumentedTest {
         composeRule.onNodeWithText("选择模型或直接输入模型ID")
             .performScrollTo()
             .assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("选择接口协议规范").performClick()
+        listOf("OpenAI Chat", "Response 格式", "Claude 格式").forEach { protocol ->
+            composeRule.onNodeWithTag("ai-protocol-option-$protocol").assertIsDisplayed()
+        }
+        composeRule.onNodeWithTag("ai-protocol-option-Claude 格式").performClick()
+        assertEquals(
+            "选择后应显示当前接口协议",
+            "Claude 格式",
+            composeRule.onNodeWithTag("ai-selected-protocol")
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.StateDescription]
+        )
     }
 
     @Test

@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -49,6 +50,12 @@ private val AI_PRESETS = listOf(
     ProviderPreset(CUSTOM_PROVIDER, "")
 )
 
+private val AI_PROTOCOL_OPTIONS = listOf(
+    AiProtocolType.OPENAI_CHAT to "OpenAI Chat",
+    AiProtocolType.OPENAI_RESPONSE to "Response 格式",
+    AiProtocolType.ANTHROPIC to "Claude 格式"
+)
+
 private val AI_PROVIDER_NAMES = AI_PRESETS.map { it.name }.toSet()
 
 private fun providerOptionFor(configuredProvider: String): String =
@@ -57,6 +64,146 @@ private fun providerOptionFor(configuredProvider: String): String =
         configuredProvider in AI_PROVIDER_NAMES && configuredProvider != CUSTOM_PROVIDER -> configuredProvider
         else -> CUSTOM_PROVIDER
     }
+
+@Composable
+private fun AiDropdownField(
+    label: String,
+    value: String,
+    options: List<String>,
+    expanded: Boolean,
+    description: String,
+    fieldTestTag: String,
+    optionTestTagPrefix: String,
+    onExpand: () -> Unit,
+    onDismissRequest: () -> Unit,
+    onOptionSelected: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(YanjiSpacing.TightGap)) {
+        YanjiFormFieldLabel(label)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                onClick = onExpand,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(fieldTestTag)
+                    .semantics {
+                        contentDescription = description
+                        stateDescription = value
+                    },
+                shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                color = YanjiColors.inputFill
+            ) {
+                Row(
+                    modifier = Modifier.padding(YanjiSpacing.CardPaddingCompact),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = if (expanded) RemixIcons.ArrowUpSLine else RemixIcons.ArrowDownSLine,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            AiDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = onDismissRequest,
+                modifier = Modifier.fillMaxWidth(0.9f)
+            ) {
+                options.forEach { option ->
+                    AiDropdownMenuItem(
+                        text = option,
+                        selected = option == value,
+                        modifier = Modifier.testTag("$optionTestTagPrefix$option"),
+                        onClick = { onOptionSelected(option) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    properties: PopupProperties = PopupProperties(focusable = true, dismissOnClickOutside = true),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        properties = properties,
+        shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 8.dp,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        ),
+        content = content
+    )
+}
+
+@Composable
+private fun AiDropdownMenuItem(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        modifier = Modifier
+            .padding(
+                horizontal = YanjiSpacing.TightGap,
+                vertical = YanjiSpacing.TightGap
+            )
+            .background(
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                } else {
+                    Color.Transparent
+                },
+                shape = RoundedCornerShape(YanjiRadius.ItemRadius)
+            )
+            .then(modifier),
+        text = {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        onClick = onClick,
+        trailingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = RemixIcons.CheckLine,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else null,
+        contentPadding = PaddingValues(
+            horizontal = YanjiSpacing.ItemGapSmall,
+            vertical = YanjiSpacing.TightGap
+        )
+    )
+}
 
 @Composable
 fun AiConfigDialog(
@@ -98,6 +245,7 @@ fun AiConfigDialog(
     var connectionSucceeded by remember { mutableStateOf<Boolean?>(null) }
     var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
+    var protocolDropdownExpanded by remember { mutableStateOf(false) }
     var modelDropdownExpanded by remember { mutableStateOf(false) }
 
     fun selectProvider(preset: ProviderPreset) {
@@ -156,73 +304,20 @@ fun AiConfigDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 // 1. 模型提供商
-                YanjiFormFieldLabel("模型提供商")
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Surface(
-                        onClick = { providerDropdownExpanded = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("ai-selected-provider")
-                            .semantics {
-                                contentDescription = "选择模型提供商"
-                                stateDescription = selectedProvider
-                            },
-                        shape = RoundedCornerShape(YanjiRadius.InputRadius),
-                        color = YanjiColors.inputFill
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = selectedProvider,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = if (providerDropdownExpanded) RemixIcons.ArrowUpSLine else RemixIcons.ArrowDownSLine,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                AiDropdownField(
+                    label = "模型提供商",
+                    value = selectedProvider,
+                    options = AI_PRESETS.map { it.name },
+                    expanded = providerDropdownExpanded,
+                    description = "选择模型提供商",
+                    fieldTestTag = "ai-selected-provider",
+                    optionTestTagPrefix = "ai-provider-option-",
+                    onExpand = { providerDropdownExpanded = true },
+                    onDismissRequest = { providerDropdownExpanded = false },
+                    onOptionSelected = { name ->
+                        selectProvider(AI_PRESETS.first { it.name == name })
                     }
-
-                    DropdownMenu(
-                        expanded = providerDropdownExpanded,
-                        onDismissRequest = { providerDropdownExpanded = false },
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .background(MaterialTheme.colorScheme.surface)
-                    ) {
-                        AI_PRESETS.forEach { preset ->
-                            val isSelected = selectedProvider == preset.name
-                            DropdownMenuItem(
-                                modifier = Modifier.testTag("ai-provider-option-${preset.name}"),
-                                text = {
-                                    Text(
-                                        text = preset.name,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                onClick = { selectProvider(preset) },
-                                trailingIcon = if (isSelected) {
-                                    {
-                                        Icon(
-                                            imageVector = RemixIcons.CheckLine,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                } else null
-                            )
-                        }
-                    }
-                }
+                )
 
                 // 自定义服务商名称
                 if (selectedProvider == CUSTOM_PROVIDER) {
@@ -243,59 +338,30 @@ fun AiConfigDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGap))
 
-                // 2. 接口协议格式分段选择
-                Text(
-                    text = "接口协议规范",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    AiProtocolType.entries.forEach { proto ->
-                        val isSelected = protocol == proto
-                        Surface(
-                            shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    protocol = proto
-                                    connectionMessage = null
-                                    connectionSucceeded = null
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = when (proto) {
-                                        AiProtocolType.OPENAI_CHAT -> "OpenAI Chat"
-                                        AiProtocolType.OPENAI_RESPONSE -> "Response 格式"
-                                        AiProtocolType.ANTHROPIC -> "Claude 格式"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                // 2. 接口协议规范
+                val selectedProtocolLabel = AI_PROTOCOL_OPTIONS.first { it.first == protocol }.second
+                AiDropdownField(
+                    label = "接口协议规范",
+                    value = selectedProtocolLabel,
+                    options = AI_PROTOCOL_OPTIONS.map { it.second },
+                    expanded = protocolDropdownExpanded,
+                    description = "选择接口协议规范",
+                    fieldTestTag = "ai-selected-protocol",
+                    optionTestTagPrefix = "ai-protocol-option-",
+                    onExpand = { protocolDropdownExpanded = true },
+                    onDismissRequest = { protocolDropdownExpanded = false },
+                    onOptionSelected = { selectedLabel ->
+                        protocol = AI_PROTOCOL_OPTIONS.first { it.second == selectedLabel }.first
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        availableModels = emptyList()
+                        modelDropdownExpanded = false
+                        connectionMessage = null
+                        connectionSucceeded = null
                     }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -473,7 +539,7 @@ fun AiConfigDialog(
                         singleLine = true
                     )
 
-                    DropdownMenu(
+                    AiDropdownMenu(
                         expanded = modelDropdownExpanded && availableModels.isNotEmpty(),
                         onDismissRequest = { modelDropdownExpanded = false },
                         properties = PopupProperties(focusable = true, dismissOnClickOutside = true, clippingEnabled = false),
@@ -491,31 +557,15 @@ fun AiConfigDialog(
                         HorizontalDivider(color = YanjiColors.rowDivider, thickness = 0.5.dp)
 
                         availableModels.forEach { m ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = m,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (m == model) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (m == model) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
+                            AiDropdownMenuItem(
+                                text = m,
+                                selected = m == model,
                                 onClick = {
                                     model = m
                                     modelDropdownExpanded = false
                                     keyboardController?.hide()
                                     focusManager.clearFocus(force = true)
-                                },
-                                trailingIcon = if (m == model) {
-                                    {
-                                        Icon(
-                                            imageVector = RemixIcons.CheckLine,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                } else null
+                                }
                             )
                         }
                     }
