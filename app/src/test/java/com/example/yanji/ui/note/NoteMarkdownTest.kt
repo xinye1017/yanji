@@ -408,27 +408,37 @@ class NoteMarkdownTest {
     fun lineCacheLowersPerKeystrokeHighlightCost() {
         val scheme = darkColorScheme()
 
-        // 交替喂两份不同文本：让 F2b 的整篇级单条目记忆每轮都未命中，
-        // 这样测到的才是一行输入触发的真实高亮成本，而不是缓存命中路径。
-        fun timeAlternating(t: MarkdownSyntaxTransformation, a: AnnotatedString, b: AnnotatedString): Long {
-            var i = 0
-            while (i < 6) { t.filter(a); t.filter(b); i++ }
-            val started = System.nanoTime()
-            i = 0
-            while (i < 60) { t.filter(a); t.filter(b); i++ }
-            return (System.nanoTime() - started) / 120 / 1000
+        // 用带计数的行缓存直接驱动高亮：确定性度量「一次按键重算几行」。
+        // 早先按墙钟耗时比较冷/热路径，但 warmup 早已把冷实例的行缓存一并预热，
+        // 两者测的几乎是同一条热路径，CI runner 的 JIT/GC/调频噪声会让该断言随机翻车。
+        class CountingLineCache : LinkedHashMap<String, List<NoteInlineSpan>>() {
+            var hits = 0
+            var misses = 0
+            override fun get(key: String): List<NoteInlineSpan>? {
+                val v = super.get(key)
+                if (v != null) hits++ else misses++
+                return v
+            }
         }
 
+        fun noteLine(i: Int) = "第 $i 条复习记录 **高数** 与 *英语* 已完成"
+
         for (lines in listOf(240, 1200)) {
-            val stem = (1..lines).joinToString("\n") { "第 $it 条复习记录 **高数** 与 *英语* 已完成" }
-            val docA = AnnotatedString(stem + "！")
-            val docB = AnnotatedString(stem + "？")
-            val cold = timeAlternating(MarkdownSyntaxTransformation(scheme), docA, docB)
-            val hot = MarkdownSyntaxTransformation(scheme)
-            hot.filter(docA); hot.filter(docB)
-            val warm = timeAlternating(hot, docA, docB)
-            println("HILITE-COST lines=$lines cold=${cold}us warm=${warm}us")
-            assertTrue("lines=$lines 热路径不得慢于冷路径 (cold=$cold, warm=$warm)", warm <= cold)
+            val shared = (1 until lines).joinToString("\n") { noteLine(it) }
+            val coldDoc = shared + "\n" + noteLine(lines)
+            // 一次按键只改末行：真实输入下其余行逐字不变。
+            val editedDoc = shared + "\n" + (noteLine(lines) + " ✅")
+
+            val cache = CountingLineCache()
+            MarkdownSyntaxTransformation.highlightMarkdown(coldDoc, scheme, cache)
+            assertEquals("lines=$lines 首遍应逐行全量计算", lines, cache.misses)
+            assertEquals("lines=$lines 首遍不应有任何命中", 0, cache.hits)
+
+            cache.hits = 0
+            cache.misses = 0
+            MarkdownSyntaxTransformation.highlightMarkdown(editedDoc, scheme, cache)
+            assertEquals("lines=$lines 改一行应只重算该行", 1, cache.misses)
+            assertEquals("lines=$lines 其余行应全部命中行缓存", lines - 1, cache.hits)
         }
     }
 }
