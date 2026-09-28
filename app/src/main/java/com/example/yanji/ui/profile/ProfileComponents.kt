@@ -2,6 +2,7 @@ package com.example.yanji.ui.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -400,6 +402,10 @@ fun ProfileSettingsSwitchItem(
             .semantics(mergeDescendants = true) {}
             .toggleable(
                 value = checked,
+                // 交互视觉只交给 Switch 滑块：整行不再出现按压涟漪/阴影，
+                // 但保留整行为触控与无障碍（TalkBack）目标。
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
                 enabled = enabled,
                 role = Role.Switch,
                 onValueChange = onCheckedChange
@@ -434,7 +440,14 @@ fun ProfileSettingsSwitchItem(
         Switch(
             checked = checked,
             onCheckedChange = null,
-            enabled = enabled
+            enabled = enabled,
+            // 无边框线开关：轨道四周不描边（Material3 未选中态默认带 outline），更干净。
+            colors = SwitchDefaults.colors(
+                checkedBorderColor = Color.Transparent,
+                uncheckedBorderColor = Color.Transparent,
+                disabledCheckedBorderColor = Color.Transparent,
+                disabledUncheckedBorderColor = Color.Transparent
+            )
         )
     }
 }

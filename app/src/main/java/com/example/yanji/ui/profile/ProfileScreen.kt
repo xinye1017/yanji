@@ -5,6 +5,11 @@ import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.backup.BackupCodec
@@ -200,15 +206,27 @@ fun ProfileScreen(
                 checked = autoPowerSavingEnabled,
                 onCheckedChange = { focusPrefs.setAutoPowerSavingEnabled(it) }
             )
-            if (autoPowerSavingEnabled) {
-                ProfileSettingsDivider()
-                ProfileSettingsItem(
-                    icon = RemixIcons.TimeLine,
-                    title = "沉浸等待时长",
-                    subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
-                    trailingText = "${timeoutSeconds}秒",
-                    onClick = { showTimeoutDialog = true }
-                )
+            // 开启省电开关后，"沉浸等待时长"平滑展开/收起（淡入 + 竖向展开）。
+            // 时长与缓动统一取自 YanjiMotion 的转场 spec，避免在 ui/ 层新增裸过渡时长而触发设计 token 棘轮。
+            val revealFade = YanjiMotion.accessibleFiniteTween<Float>(YanjiMotion.DurationFast, YanjiMotion.EaseEntering)
+            val revealExpand = YanjiMotion.accessibleFiniteTween<IntSize>(YanjiMotion.DurationStandard, YanjiMotion.EaseEntering)
+            val hideFade = YanjiMotion.accessibleFiniteTween<Float>(YanjiMotion.DurationFast, YanjiMotion.EaseExiting)
+            val hideShrink = YanjiMotion.accessibleFiniteTween<IntSize>(YanjiMotion.DurationStandard, YanjiMotion.EaseExiting)
+            AnimatedVisibility(
+                visible = autoPowerSavingEnabled,
+                enter = fadeIn(revealFade) + expandVertically(revealExpand),
+                exit = fadeOut(hideFade) + shrinkVertically(hideShrink)
+            ) {
+                Column {
+                    ProfileSettingsDivider()
+                    ProfileSettingsItem(
+                        icon = RemixIcons.TimeLine,
+                        title = "沉浸等待时长",
+                        subtitle = "${timeoutSeconds} 秒无触碰后自动进入",
+                        trailingText = "${timeoutSeconds}秒",
+                        onClick = { showTimeoutDialog = true }
+                    )
+                }
             }
         }
 

@@ -12,6 +12,7 @@ import android.content.Context
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
@@ -147,6 +148,26 @@ object YanjiMotion {
         durationMillis: Int = DurationStandard,
         easing: Easing = EaseEntering
     ): AnimationSpec<T> {
+        return if (isReduceMotionEnabled()) {
+            snap()
+        } else {
+            tween(durationMillis = durationMillis, easing = easing)
+        }
+    }
+
+    /**
+     * 与 [accessibleTween] 同构，但返回 [FiniteAnimationSpec] —— 专供 `AnimatedVisibility` 的
+     * fadeIn / expandVertically 等 Enter/Exit 转场使用：这些 API 要求 FiniteAnimationSpec，
+     * 而 [accessibleTween] 的返回类型 `AnimationSpec` 不满足。Reduce Motion 时同样降级为 [snap]。
+     *
+     * 定义在 theme/ 而非 ui/：`check-design-tokens.sh` 的时长棘轮只扫 `app/.../ui/`，
+     * 集中在这里可避免在 ui/ 层新增裸 `tween(`。
+     */
+    @Composable
+    fun <T> accessibleFiniteTween(
+        durationMillis: Int = DurationStandard,
+        easing: Easing = EaseEntering
+    ): FiniteAnimationSpec<T> {
         return if (isReduceMotionEnabled()) {
             snap()
         } else {
