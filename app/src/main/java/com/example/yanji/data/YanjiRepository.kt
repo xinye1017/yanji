@@ -389,6 +389,36 @@ class YanjiRepository private constructor() {
         return combine(focusFlow, examFlow) { f, e -> f + e }
     }
 
+    /** 已保存的快捷专注模板。DB 是唯一事实来源。 */
+    fun observeQuickStartPresets(): Flow<List<QuickStartPreset>> =
+        requireDatabase().quickStartPresetDao().getAllFlow()
+            .map { rows -> rows.map(QuickStartPresetEntity::toDomainModel) }
+
+    suspend fun saveQuickStartPreset(preset: QuickStartPreset) {
+        requireDatabase().quickStartPresetDao().insert(QuickStartPresetEntity.fromDomainModel(preset))
+    }
+
+    suspend fun deleteQuickStartPreset(id: String) {
+        requireDatabase().quickStartPresetDao().deleteById(id)
+    }
+
+    /** 指定日期的轻量学习计划；当前 UI 只订阅今天。 */
+    fun observeStudyTasks(date: String): Flow<List<StudyTask>> =
+        requireDatabase().studyTaskDao().observeByDate(date)
+            .map { rows -> rows.map(StudyTaskEntity::toDomainModel) }
+
+    suspend fun saveStudyTask(task: StudyTask) {
+        requireDatabase().studyTaskDao().insert(StudyTaskEntity.fromDomainModel(task))
+    }
+
+    suspend fun setStudyTaskCompleted(id: String, completed: Boolean) {
+        requireDatabase().studyTaskDao().setCompleted(id, completed, System.currentTimeMillis())
+    }
+
+    suspend fun deleteStudyTask(id: String) {
+        requireDatabase().studyTaskDao().deleteById(id)
+    }
+
     /** 探测可用模型列表。协议与传输细节见 [com.example.yanji.data.ai.AiClient]。 */
     suspend fun fetchAvailableModels(
         baseUrl: String,
@@ -736,6 +766,7 @@ class YanjiRepository private constructor() {
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
         db.aiAnalysisDao().deleteAll()
+        db.studyTaskDao().deleteAll()
         _aiAnalyses.value = emptyList()
     }
 }

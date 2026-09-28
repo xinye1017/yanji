@@ -33,6 +33,7 @@ internal object BackupTransfer {
         checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
         unlockedAchievements = db.achievementDao().getAllFlow().first().associate { it.id to it.unlockedAt },
         quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() },
+        studyTasks = db.studyTaskDao().getAllFlow().first().map { it.toDomainModel() },
         subjects = db.subjectDao().getAll().map { it.toDomainModel() }
     )
 
@@ -85,6 +86,13 @@ internal object BackupTransfer {
         if (backup.quickStartPresets.isNotEmpty()) {
             db.quickStartPresetDao().insertAll(
                 backup.quickStartPresets.map { QuickStartPresetEntity.fromDomainModel(it) }
+            )
+        }
+
+        db.studyTaskDao().deleteAll()
+        if (backup.studyTasks.isNotEmpty()) {
+            db.studyTaskDao().insertAll(
+                backup.studyTasks.map { StudyTaskEntity.fromDomainModel(it) }
             )
         }
 

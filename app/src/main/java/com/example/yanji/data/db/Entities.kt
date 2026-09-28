@@ -432,6 +432,48 @@ data class QuickStartPresetEntity(
     }
 }
 
+@Entity(
+    tableName = "study_tasks",
+    indices = [Index("date")]
+)
+data class StudyTaskEntity(
+    @PrimaryKey val id: String,
+    val date: String,
+    val subjectId: String,
+    val subjectName: String,
+    val title: String,
+    val plannedMinutes: Int,
+    val isCompleted: Boolean,
+    val createdAt: Long,
+    val updatedAt: Long
+) {
+    fun toDomainModel(): StudyTask = StudyTask(
+        id = id,
+        date = date,
+        subjectId = subjectId,
+        subjectName = subjectName,
+        title = title,
+        plannedMinutes = plannedMinutes,
+        isCompleted = isCompleted,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+
+    companion object {
+        fun fromDomainModel(model: StudyTask): StudyTaskEntity = StudyTaskEntity(
+            id = model.id,
+            date = model.date,
+            subjectId = model.subjectId,
+            subjectName = model.subjectName,
+            title = model.title,
+            plannedMinutes = model.plannedMinutes,
+            isCompleted = model.isCompleted,
+            createdAt = model.createdAt,
+            updatedAt = model.updatedAt
+        )
+    }
+}
+
 /**
  * AI 阶段学情诊断报告。由 [com.example.yanji.data.ai.AiDiagnosticParser] 生成后落库，
  * 让上一次诊断在冷启动 / 进程被杀后依然可读（旧版仅存内存，重启即丢）。

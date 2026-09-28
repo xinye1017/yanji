@@ -20,10 +20,11 @@ import java.io.File
         CheckInEntity::class,
         UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class,
+        StudyTaskEntity::class,
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -37,6 +38,7 @@ abstract class YanjiDatabase : RoomDatabase() {
     abstract fun checkInDao(): CheckInDao
     abstract fun achievementDao(): AchievementDao
     abstract fun quickStartPresetDao(): QuickStartPresetDao
+    abstract fun studyTaskDao(): StudyTaskDao
     abstract fun subjectDao(): SubjectDao
     abstract fun aiAnalysisDao(): AiAnalysisDao
 
@@ -568,6 +570,34 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v18 -> v19:
+         * 新增轻量「今日学习计划」表。只存执行所需字段，不引入通用 Todo 的额外复杂度。
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    """
+                    CREATE TABLE IF NOT EXISTS `study_tasks` (
+                        `id` TEXT NOT NULL,
+                        `date` TEXT NOT NULL,
+                        `subjectId` TEXT NOT NULL,
+                        `subjectName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `plannedMinutes` INTEGER NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_study_tasks_date` ON `study_tasks` (`date`)"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -591,7 +621,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_14_15,
             MIGRATION_15_16,
             MIGRATION_16_17,
-            MIGRATION_17_18
+            MIGRATION_17_18,
+            MIGRATION_18_19
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

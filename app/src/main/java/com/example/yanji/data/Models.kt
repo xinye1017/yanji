@@ -60,6 +60,24 @@ data class QuickStartPreset(
     }
 }
 
+/**
+ * 轻量学习任务：只服务「今天准备做什么 → 直接开始专注」这条执行链。
+ *
+ * 刻意不承担通用 Todo 职责：没有优先级、提醒、重复规则、截止时间或子任务。
+ */
+@Serializable
+data class StudyTask(
+    val id: String = UUID.randomUUID().toString(),
+    val date: String,
+    val subjectId: String,
+    val subjectName: String,
+    val title: String,
+    val plannedMinutes: Int,
+    val isCompleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 @Serializable
 data class Subject(
     val id: String,

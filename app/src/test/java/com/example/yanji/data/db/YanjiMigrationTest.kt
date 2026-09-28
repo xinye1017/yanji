@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 18
+    private val CURRENT_VERSION = 19
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -186,7 +186,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_14_15,
         YanjiDatabase.MIGRATION_15_16,
         YanjiDatabase.MIGRATION_16_17,
-        YanjiDatabase.MIGRATION_17_18
+        YanjiDatabase.MIGRATION_17_18,
+        YanjiDatabase.MIGRATION_18_19
     )
 
     /**
@@ -715,6 +716,23 @@ class YanjiMigrationTest {
         db.close()
     }
 
+    // ---------------------------------------------------------------- 18 -> 19 今日学习计划
+
+    @Test
+    fun migrate18To19_createsEmptyStudyTasksTable() {
+        val db18 = helper.createDatabase(18)
+        db18.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(18))
+
+        val columns = db.columnNames("study_tasks")
+        assertTrue("study_tasks 应包含 date 列", "date" in columns)
+        assertTrue("study_tasks 应包含 plannedMinutes 列", "plannedMinutes" in columns)
+        assertTrue("study_tasks 应包含 isCompleted 列", "isCompleted" in columns)
+        assertEquals(0, db.intValue("SELECT COUNT(*) FROM study_tasks"))
+        db.close()
+    }
+
     // ---------------------------------------------------------------- 不造数据
 
     @Test
@@ -729,7 +747,7 @@ class YanjiMigrationTest {
         listOf(
             "focus_sessions", "exam_sessions", "journal_entries",
             "chat_messages", "chat_sessions", "check_ins",
-            "unlocked_achievements", "quick_start_presets", "ai_analyses"
+            "unlocked_achievements", "quick_start_presets", "ai_analyses", "study_tasks"
         ).forEach { table ->
             assertEquals("迁移不应向 $table 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM $table"))
         }

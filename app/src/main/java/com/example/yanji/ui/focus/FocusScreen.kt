@@ -83,6 +83,15 @@ fun FocusScreen(
     var pendingFocusNote by rememberSaveable { mutableStateOf("") }
     var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
 
+    fun resolveSubject(subjectId: String, subjectName: String): Subject =
+        subjects.firstOrNull { it.id == subjectId }
+            ?: Subject(
+                id = subjectId,
+                name = subjectName.ifBlank { subjectId },
+                colorHex = SubjectCatalog.find(subjectId)?.colorHex
+                    ?: SubjectCatalog.DEFAULT_PRIMARY_COLOR
+            )
+
     fun doLaunchFocus(subject: Subject, mode: String, note: String) {
         screenScope.launch {
             val session = viewModel.startFocus(
@@ -100,6 +109,7 @@ fun FocusScreen(
                 return@launch
             }
             FocusTimerService.startFocus(context, session.id, subject.name, FocusModes.targetSeconds(mode))
+            noteText = ""
         }
     }
 
@@ -112,12 +122,7 @@ fun FocusScreen(
 
     fun runPendingFocusLaunch() {
         val subjectId = pendingFocusSubjectId ?: return
-        val subject = subjects.firstOrNull { it.id == subjectId }
-            ?: Subject(
-                id = subjectId,
-                name = pendingFocusSubjectName.orEmpty().ifBlank { subjectId },
-                colorHex = SubjectCatalog.find(subjectId)?.colorHex ?: SubjectCatalog.DEFAULT_PRIMARY_COLOR
-            )
+        val subject = resolveSubject(subjectId, pendingFocusSubjectName.orEmpty())
         doLaunchFocus(subject, pendingFocusMode, pendingFocusNote)
         clearPendingFocusLaunch()
     }
@@ -190,10 +195,43 @@ fun FocusScreen(
             selectedMode = selectedMode,
             onSelectMode = { selectedMode = it },
             todayTotalSeconds = state.todayTotalSeconds,
-            onStart = { launchFocus(selectedSubject, selectedMode, "") },
+            onStart = { launchFocus(selectedSubject, selectedMode, noteText.trim()) },
             onNavigateToExam = onNavigateToExam,
             onNavigateToDailyDetail = onNavigateToDailyDetail,
-            onManualLogClick = { showManualLogDialog = true }
+            onManualLogClick = { showManualLogDialog = true },
+            noteText = noteText,
+            onNoteChange = { noteText = it },
+            quickStartPresets = state.quickStartPresets,
+            todayTasks = state.todayTasks,
+            onSavePreset = {
+                screenScope.launch {
+                    viewModel.saveQuickStartPreset(selectedSubject, selectedMode, noteText)
+                    Toast.makeText(context, "已保存快捷专注", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onQuickStart = { preset ->
+                val subject = resolveSubject(preset.subjectId, preset.subjectName)
+                selectedSubjectId = subject.id
+                selectedMode = preset.mode
+                noteText = preset.note
+                launchFocus(subject, preset.mode, preset.note)
+            },
+            onDeleteQuickStart = { id -> viewModel.deleteQuickStartPreset(id) },
+            onAddStudyTask = { subject, title, minutes ->
+                viewModel.addStudyTask(subject, title, minutes)
+            },
+            onToggleStudyTask = { task ->
+                viewModel.setStudyTaskCompleted(task.id, !task.isCompleted)
+            },
+            onDeleteStudyTask = { id -> viewModel.deleteStudyTask(id) },
+            onStartStudyTask = { task ->
+                val subject = resolveSubject(task.subjectId, task.subjectName)
+                val mode = viewModel.modeForTask(task)
+                selectedSubjectId = subject.id
+                selectedMode = mode
+                noteText = task.title
+                launchFocus(subject, mode, task.title)
+            }
         )
     }
 

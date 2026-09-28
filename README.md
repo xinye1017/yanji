@@ -1,6 +1,6 @@
 # 研迹 (Yanji) · 考研学习管理与心流伴侣
 
-<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=18 roomLibrary=2.8.4 -->
+<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=19 roomLibrary=2.8.4 -->
 
 <p align="center">
   <img src="app/src/main/res/drawable/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />
@@ -13,7 +13,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin Version" />
   <img src="https://img.shields.io/badge/Jetpack_Compose-Material_3-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
-  <img src="https://img.shields.io/badge/Room-v14_(2.8.4)-3DDC84?logo=sqlite&logoColor=white" alt="Room Database" />
+  <img src="https://img.shields.io/badge/Room-v19_(2.8.4)-3DDC84?logo=sqlite&logoColor=white" alt="Room Database" />
   <img src="https://img.shields.io/badge/Android-minSdk_24_|_targetSdk_36-3DDC84?logo=android&logoColor=white" alt="Android SDK" />
   <img src="https://img.shields.io/badge/Architecture-UDF_+_Pure_Kotlin_DI-FF6F00" alt="Architecture" />
   <img src="https://img.shields.io/badge/Restore-Room_Transaction-brightgreen" alt="Transactional Restore" />

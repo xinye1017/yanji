@@ -85,6 +85,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
+import com.example.yanji.data.QuickStartPreset
+import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 
 import com.example.yanji.theme.YanjiColors
@@ -150,7 +152,18 @@ fun QuietFocusSetupContent(
     onStart: () -> Unit,
     onNavigateToExam: () -> Unit,
     onNavigateToDailyDetail: (String) -> Unit = {},
-    onManualLogClick: () -> Unit = {}
+    onManualLogClick: () -> Unit = {},
+    noteText: String = "",
+    onNoteChange: (String) -> Unit = {},
+    quickStartPresets: List<QuickStartPreset> = emptyList(),
+    todayTasks: List<StudyTask> = emptyList(),
+    onSavePreset: () -> Unit = {},
+    onQuickStart: (QuickStartPreset) -> Unit = {},
+    onDeleteQuickStart: (String) -> Unit = {},
+    onAddStudyTask: (Subject, String, Int) -> Unit = { _, _, _ -> },
+    onToggleStudyTask: (StudyTask) -> Unit = {},
+    onDeleteStudyTask: (String) -> Unit = {},
+    onStartStudyTask: (StudyTask) -> Unit = {}
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -233,6 +246,15 @@ fun QuietFocusSetupContent(
                 QuietFocusStep.CATEGORY -> {
                     QuietCategoryStep(
                         categories = topCategories,
+                        subjects = subjects,
+                        quickStartPresets = quickStartPresets,
+                        studyTasks = todayTasks,
+                        onQuickStart = onQuickStart,
+                        onDeleteQuickStart = onDeleteQuickStart,
+                        onAddStudyTask = onAddStudyTask,
+                        onToggleStudyTask = onToggleStudyTask,
+                        onDeleteStudyTask = onDeleteStudyTask,
+                        onStartStudyTask = onStartStudyTask,
                         onCategoryClick = { category ->
                             selectedCategoryId = category.id
                             val children = subjects.filter { it.parentId == category.id && it.enabled }
@@ -286,6 +308,9 @@ fun QuietFocusSetupContent(
                             selectedDurationMinutes = option.minutes
                             onSelectMode(option.mode)
                         },
+                        noteText = noteText,
+                        onNoteChange = onNoteChange,
+                        onSavePreset = onSavePreset,
                         onStart = onStart
                     )
                 }
@@ -433,6 +458,15 @@ private fun QuietProgressIndicator(stepIndex: Int) {
 @Composable
 private fun QuietCategoryStep(
     categories: List<Subject>,
+    subjects: List<Subject>,
+    quickStartPresets: List<QuickStartPreset>,
+    studyTasks: List<StudyTask>,
+    onQuickStart: (QuickStartPreset) -> Unit,
+    onDeleteQuickStart: (String) -> Unit,
+    onAddStudyTask: (Subject, String, Int) -> Unit,
+    onToggleStudyTask: (StudyTask) -> Unit,
+    onDeleteStudyTask: (String) -> Unit,
+    onStartStudyTask: (StudyTask) -> Unit,
     onCategoryClick: (Subject) -> Unit,
     onNavigateToExam: () -> Unit
 ) {
@@ -442,6 +476,26 @@ private fun QuietCategoryStep(
             .verticalScroll(rememberScrollState())
             .padding(bottom = AppContentInsets.BottomBarPadding)
     ) {
+        StudyPlanSection(
+            subjects = subjects,
+            tasks = studyTasks,
+            onAdd = onAddStudyTask,
+            onToggle = onToggleStudyTask,
+            onDelete = onDeleteStudyTask,
+            onStart = onStartStudyTask
+        )
+
+        if (quickStartPresets.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(20.dp))
+            QuickPresetSection(
+                presets = quickStartPresets,
+                onStart = onQuickStart,
+                onDelete = onDeleteQuickStart
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Text(
             text = "选择学习方向",
             style = MaterialTheme.typography.titleLarge.copy(
@@ -595,6 +649,9 @@ private fun QuietRhythmStep(
     onCountdownSelected: () -> Unit,
     onCountUpSelected: () -> Unit,
     onDurationSelected: (QuietDurationOption) -> Unit,
+    noteText: String,
+    onNoteChange: (String) -> Unit,
+    onSavePreset: () -> Unit,
     onStart: () -> Unit
 ) {
     Column(
@@ -641,6 +698,32 @@ private fun QuietRhythmStep(
                         textAlign = TextAlign.Center
                     )
                 }
+            }
+        }
+
+        OutlinedTextField(
+            value = noteText,
+            onValueChange = { value ->
+                if (value.length <= 80) onNoteChange(value)
+            },
+            label = { Text("本次目标（可选）") },
+            placeholder = { Text("例如：二次型 30 道题") },
+            singleLine = true,
+            supportingText = {
+                if (noteText.isNotEmpty()) {
+                    Text("${noteText.length}/80")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(YanjiRadius.InputRadius)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onSavePreset) {
+                Text("保存为快捷专注")
             }
         }
 

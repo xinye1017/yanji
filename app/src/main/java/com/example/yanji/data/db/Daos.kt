@@ -348,6 +348,34 @@ interface QuickStartPresetDao {
 }
 
 @Dao
+interface StudyTaskDao {
+    @Query(
+        "SELECT * FROM study_tasks WHERE date = :date " +
+            "ORDER BY isCompleted ASC, createdAt ASC"
+    )
+    fun observeByDate(date: String): Flow<List<StudyTaskEntity>>
+
+    @Query("SELECT * FROM study_tasks ORDER BY date DESC, createdAt ASC")
+    fun getAllFlow(): Flow<List<StudyTaskEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(task: StudyTaskEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(tasks: List<StudyTaskEntity>)
+
+    @Query("UPDATE study_tasks SET isCompleted = :completed, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setCompleted(id: String, completed: Boolean, updatedAt: Long)
+
+    @Query("DELETE FROM study_tasks WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    /** 仅用于备份恢复 / 全新备考旅程。 */
+    @Query("DELETE FROM study_tasks")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface AiAnalysisDao {
     @Query("SELECT * FROM ai_analyses ORDER BY createdAt DESC")
     fun getAll(): Flow<List<AiAnalysisEntity>>
