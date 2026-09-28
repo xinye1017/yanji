@@ -178,16 +178,13 @@ fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
     }
 }
 
-/**
- * 个人页「AI 与智能」专属卡片：具备生动的状态感知与参数摘要
- */
+/** 个人页「AI API 配置」入口与简洁状态。 */
 @Composable
 fun ProfileAiCard(
     settings: UserSettings,
     onClick: () -> Unit
 ) {
     val aiConfigured = settings.isAiConfigured
-    val aiModel = settings.aiModel.ifBlank { "使用服务默认模型" }
 
     YanjiCard(
         onClick = onClick,
@@ -197,132 +194,35 @@ fun ProfileAiCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
-                    .background(
-                        if (aiConfigured) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        } else {
-                            YanjiColors.fill
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = RemixIcons.BrainLine,
-                    contentDescription = null,
-                    tint = if (aiConfigured) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(
+            Row(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Text(
+                    text = "AI API 配置",
+                    style = YanjiTypography.body,
+                    fontWeight = FontWeight.SemiBold,
+                    color = YanjiColors.primaryLabel
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                    color = if (aiConfigured) {
+                        YanjiColors.success.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
                 ) {
                     Text(
-                        text = "AI API 配置",
-                        style = YanjiTypography.body,
-                        fontWeight = FontWeight.SemiBold,
-                        color = YanjiColors.primaryLabel
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                        color = if (aiConfigured) {
-                            YanjiColors.success.copy(alpha = 0.12f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (aiConfigured) YanjiColors.success else YanjiColors.textTertiary
-                                    )
-                            )
-                            Text(
-                                text = if (aiConfigured) "已配置" else "未配置",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = if (aiConfigured) YanjiColors.success else YanjiColors.textTertiary
-                            )
-                        }
-                    }
-                }
-
-                if (aiConfigured) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (settings.aiProvider.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                            ) {
-                                Text(
-                                    text = settings.aiProvider,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = aiModel,
-                            style = YanjiTypography.footnote,
-                            color = YanjiColors.secondaryLabel,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "配置服务地址和模型",
-                        style = YanjiTypography.footnote,
-                        color = YanjiColors.secondaryLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-            ) {
-                Box(
-                    modifier = Modifier.size(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = RemixIcons.ArrowRightSLine,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                        text = if (aiConfigured) "已配置" else "未配置",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (aiConfigured) YanjiColors.success else YanjiColors.textTertiary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }

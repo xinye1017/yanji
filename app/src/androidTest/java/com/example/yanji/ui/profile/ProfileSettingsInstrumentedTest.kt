@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -22,6 +23,7 @@ import com.example.yanji.YanjiApplication
 import com.example.yanji.data.UserSettings
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.YanjiTheme
+import com.example.yanji.ui.components.AiConfigDialog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -51,10 +53,11 @@ class ProfileSettingsInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithText("AI API 配置").assertIsDisplayed()
         composeRule.onNodeWithText("已配置").assertIsDisplayed()
-        composeRule.onNodeWithText("本地 Ollama").assertIsDisplayed()
-        composeRule.onNodeWithText("qwen2.5:latest").assertIsDisplayed()
-        composeRule.onNodeWithText("管理").assertDoesNotExist()
+        composeRule.onNodeWithText("本地 Ollama").assertDoesNotExist()
+        composeRule.onNodeWithText("qwen2.5:latest").assertDoesNotExist()
+        composeRule.onNodeWithText("使用服务默认模型").assertDoesNotExist()
     }
 
     @Test
@@ -76,21 +79,54 @@ class ProfileSettingsInstrumentedTest {
     }
 
     @Test
-    fun missingAiModelUsesServiceDefaultSummary() {
+    fun unconfiguredAiCardShowsNoSubtitle() {
         composeRule.setContent {
             YanjiTheme {
-                ProfileAiCard(
-                    settings = UserSettings(
-                        aiProvider = "本地 Ollama",
-                        aiBaseUrl = "http://127.0.0.1:11434/v1"
-                    ),
-                    onClick = {}
+                ProfileAiCard(settings = UserSettings(), onClick = {})
+            }
+        }
+
+        composeRule.onNodeWithText("未配置").assertIsDisplayed()
+        composeRule.onNodeWithText("配置服务地址和模型").assertDoesNotExist()
+    }
+
+    @Test
+    fun examTargetDialogUsesSeparateLabelsAndGoalStepper() {
+        composeRule.setContent {
+            YanjiTheme {
+                ExamTargetDialog(
+                    settings = UserSettings(),
+                    onDismiss = {},
+                    onSave = {}
                 )
             }
         }
 
-        composeRule.onNodeWithText("已配置").assertIsDisplayed()
-        composeRule.onNodeWithText("使用服务默认模型").assertIsDisplayed()
+        composeRule.onNodeWithText("目标院校").assertIsDisplayed()
+        composeRule.onNodeWithText("填写目标院校").assertIsDisplayed()
+        composeRule.onNodeWithText("目标专业").assertIsDisplayed()
+        composeRule.onNodeWithText("填写目标专业").assertIsDisplayed()
+        composeRule.onNodeWithText("每日学习目标").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("增加每日学习目标").performClick()
+        composeRule.onNodeWithText("1h").assertIsDisplayed()
+    }
+
+    @Test
+    fun openAiPresetLeavesModelForUserToEnter() {
+        val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as YanjiApplication
+        composeRule.setContent {
+            CompositionLocalProvider(LocalAppContainer provides application.container) {
+                YanjiTheme {
+                    AiConfigDialog(onDismissRequest = {})
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("OpenAI").performScrollTo().performClick()
+        composeRule.onNodeWithText("gpt-4o-mini").assertDoesNotExist()
+        composeRule.onNodeWithText("选择或输入模型，如 deepseek-chat")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

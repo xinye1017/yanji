@@ -12,9 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -42,7 +43,7 @@ private val AI_PRESETS = listOf(
     ProviderPreset("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat", AiProtocolType.OPENAI_CHAT, "推荐"),
     ProviderPreset("硅基流动", "https://api.siliconflow.cn/v1", "deepseek-ai/DeepSeek-V3", AiProtocolType.OPENAI_CHAT, "聚合"),
     ProviderPreset("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", AiProtocolType.OPENAI_CHAT, "开放平台"),
-    ProviderPreset("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini", AiProtocolType.OPENAI_CHAT, "官方"),
+    ProviderPreset("OpenAI", "https://api.openai.com/v1", "", AiProtocolType.OPENAI_CHAT, "官方"),
     ProviderPreset("Anthropic", "https://api.anthropic.com", "claude-3-5-sonnet-20241022", AiProtocolType.ANTHROPIC, "Claude"),
     ProviderPreset("本地 Ollama", "http://192.168.1.100:11434/v1", "qwen2.5:latest", AiProtocolType.OPENAI_CHAT, "本地/内网"),
     ProviderPreset("自定义", "", "", AiProtocolType.OPENAI_CHAT, "手动输入")
@@ -83,38 +84,12 @@ fun AiConfigDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = RemixIcons.BrainLine,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "AI API 配置",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "配置大模型以支持诊断答疑与个性化复盘",
-                            fontSize = 11.sp,
-                            color = YanjiColors.textTertiary
-                        )
-                    }
-                }
+                Text(
+                    text = "AI API 配置",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 IconButton(
                     onClick = onDismissRequest,
                     modifier = Modifier.size(32.dp)
@@ -207,15 +182,20 @@ fun AiConfigDialog(
                 // 若选择自定义或非预设服务商，显示自定义服务商输入框
                 if (provider == "自定义" || (provider.isNotBlank() && AI_PRESETS.none { it.name == provider && it.name != "自定义" })) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = if (provider == "自定义") "" else provider,
-                        onValueChange = { provider = it },
-                        label = { Text("服务商名称") },
-                        placeholder = { Text("如 MiniMax、Moonshot 等") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                        singleLine = true
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        YanjiFormFieldLabel("服务商名称")
+                        TextField(
+                            value = if (provider == "自定义") "" else provider,
+                            onValueChange = { provider = it },
+                            placeholder = { Text("如 MiniMax、Moonshot 等") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "服务商名称" },
+                            shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                            colors = yanjiBorderlessTextFieldColors(),
+                            singleLine = true
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -276,69 +256,79 @@ fun AiConfigDialog(
 
                 // 3. API 地址 (Base URL)
                 val cleartextWarning = CleartextPolicy.warningFor(baseUrl)
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = {
-                        baseUrl = it
-                        connectionMessage = null
-                        connectionSucceeded = null
-                    },
-                    label = { Text("API 地址 (Base URL)") },
-                    placeholder = { Text("https://api.deepseek.com/v1") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                    singleLine = true,
-                    isError = cleartextWarning != null,
-                    supportingText = cleartextWarning?.let { warning ->
-                        {
-                            Text(
-                                text = warning,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp,
-                                color = YanjiColors.warning
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    YanjiFormFieldLabel("API 地址 (Base URL)")
+                    TextField(
+                        value = baseUrl,
+                        onValueChange = {
+                            baseUrl = it
+                            connectionMessage = null
+                            connectionSucceeded = null
+                        },
+                        placeholder = { Text("https://api.deepseek.com/v1") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "API 地址 (Base URL)" },
+                        shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                        colors = yanjiBorderlessTextFieldColors(),
+                        singleLine = true,
+                        isError = cleartextWarning != null,
+                        supportingText = cleartextWarning?.let { warning ->
+                            {
+                                Text(
+                                    text = warning,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    color = YanjiColors.warning
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // 4. API Key
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = {
-                        apiKey = it
-                        viewModel.clearSecurityError()
-                        connectionMessage = null
-                        connectionSucceeded = null
-                    },
-                    label = { Text("API Key") },
-                    placeholder = { Text("sk-... (局域网本地模型可留空)") },
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                imageVector = if (showPassword) RemixIcons.EyeLine else RemixIcons.EyeOffLine,
-                                contentDescription = if (showPassword) "隐藏密钥" else "显示密钥",
-                                modifier = Modifier.size(18.dp)
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    YanjiFormFieldLabel("API Key")
+                    TextField(
+                        value = apiKey,
+                        onValueChange = {
+                            apiKey = it
+                            viewModel.clearSecurityError()
+                            connectionMessage = null
+                            connectionSucceeded = null
+                        },
+                        placeholder = { Text("sk-... (局域网本地模型可留空)") },
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) RemixIcons.EyeLine else RemixIcons.EyeOffLine,
+                                    contentDescription = if (showPassword) "隐藏密钥" else "显示密钥",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "API Key" },
+                        shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                        colors = yanjiBorderlessTextFieldColors(),
+                        singleLine = true,
+                        isError = state.securityError != null,
+                        supportingText = state.securityError?.let { message ->
+                            {
+                                Text(
+                                    text = message,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                    singleLine = true,
-                    isError = state.securityError != null,
-                    supportingText = state.securityError?.let { message ->
-                        {
-                            Text(
-                                text = message,
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                )
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -348,12 +338,7 @@ fun AiConfigDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "模型名称",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    YanjiFormFieldLabel("模型名称")
                     TextButton(
                         onClick = {
                             keyboardController?.hide()
@@ -413,8 +398,9 @@ fun AiConfigDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(6.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
+                    TextField(
                         value = model,
                         onValueChange = { model = it },
                         placeholder = { Text("选择或输入模型，如 deepseek-chat") },
@@ -434,8 +420,11 @@ fun AiConfigDialog(
                                 )
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = "模型名称" },
+                        shape = RoundedCornerShape(YanjiRadius.InputRadius),
+                        colors = yanjiBorderlessTextFieldColors(),
                         singleLine = true
                     )
 
@@ -650,7 +639,7 @@ fun AiConfigDialog(
                         Text("测试中...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     } else {
                         Icon(
-                            imageVector = RemixIcons.NetworkLine,
+                            imageVector = RemixIcons.Link,
                             contentDescription = null,
                             modifier = Modifier.size(15.dp)
                         )
