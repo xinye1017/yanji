@@ -2,8 +2,6 @@ package com.example.yanji.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -571,42 +569,6 @@ fun AiConfigDialog(
                                     focusManager.clearFocus(force = true)
                                 }
                             )
-                        }
-                    }
-                }
-
-                // 快捷模型标签行（如果有在线拉取结果）
-                if (availableModels.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        availableModels.take(8).forEach { m ->
-                            val isChosen = m == model
-                            Surface(
-                                shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                                color = if (isChosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                border = BorderStroke(
-                                    0.5.dp,
-                                    if (isChosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                                ),
-                                modifier = Modifier.clickable {
-                                    model = m
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                }
-                            ) {
-                                Text(
-                                    text = m,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isChosen) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isChosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
                         }
                     }
                 }
