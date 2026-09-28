@@ -4,14 +4,17 @@ import com.example.yanji.ui.icons.RemixIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,7 +28,11 @@ import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.AiConfigDialog
+import com.example.yanji.ui.components.AiReportCard
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiPageHeader
+import com.example.yanji.ui.components.aiReportTitle
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 
@@ -231,7 +238,11 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // AI Diagnosis Trigger & Report Card
-        StatsAiReportCard(
+        AiReportCard(
+            title = aiReportTitle("AI 阶段学情诊断"),
+            // 说清窗口：这张卡始终按近 7 天生成，与上方时间 Tab 无关。
+            // 在「本年」视角下尤其要写出来，否则会被读成全年诊断。
+            emptyHint = "基于近 7 天专注记录、学科投入与模考深度建模",
             report = state.latestReport,
             isAnalyzing = state.isAnalyzing,
             errorMessage = state.analysisError,
@@ -261,5 +272,79 @@ fun StatsScreen(
     }
     if (showAiConfigDialog) {
         AiConfigDialog(onDismissRequest = { showAiConfigDialog = false })
+    }
+}
+
+/**
+ * 关键指标小卡： streak / 单次最长 / 全真模拟 三连排。
+ * 只服务统计页，因此跟屏幕放一起，不进通用组件库。
+ */
+@Composable
+internal fun MetricMiniCard(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBg: Color,
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    unit: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val cardContent: @Composable ColumnScope.() -> Unit = {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(iconBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (unit != null) {
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = unit,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (onClick != null) {
+        YanjiCard(
+            onClick = onClick,
+            modifier = modifier,
+            variant = YanjiCardVariant.Compact,
+            content = cardContent
+        )
+    } else {
+        YanjiCard(
+            modifier = modifier,
+            variant = YanjiCardVariant.Compact,
+            content = cardContent
+        )
     }
 }

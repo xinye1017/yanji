@@ -15,6 +15,8 @@ import com.example.yanji.ui.components.YanjiPageHeader
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 import com.example.yanji.ui.components.AiConfigDialog
+import com.example.yanji.ui.components.AiReportCard
+import com.example.yanji.ui.components.aiReportTitle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -172,8 +174,10 @@ fun ExamScreen(
                     ExamScoreTrendSection(examSessions = examSessions)
                 }
                 2 -> {
-                    ExamAiDiagnosisSection(
-                        analysis = latestAiAnalysis,
+                    AiReportCard(
+                        title = aiReportTitle("学情与模考分析"),
+                        emptyHint = "基于已完成的专注、模考与已保存随笔",
+                        report = latestAiAnalysis,
                         isAnalyzing = isAnalyzingAi,
                         errorMessage = analysisError,
                         onGenerate = {
