@@ -346,3 +346,16 @@ interface QuickStartPresetDao {
     @Query("DELETE FROM quick_start_presets")
     suspend fun deleteAll()
 }
+
+@Dao
+interface AiAnalysisDao {
+    @Query("SELECT * FROM ai_analyses ORDER BY createdAt DESC")
+    fun getAll(): Flow<List<AiAnalysisEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(analysis: AiAnalysisEntity)
+
+    /** 随「全新备考旅程」重置一并清除：诊断是基于学习记录派生的，不单独保留。 */
+    @Query("DELETE FROM ai_analyses")
+    suspend fun deleteAll()
+}

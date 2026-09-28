@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.yanji.data.*
+import org.json.JSONArray
 
 @Entity(
     tableName = "focus_sessions",
@@ -427,6 +428,72 @@ data class QuickStartPresetEntity(
                 createdAt = model.createdAt,
                 sortOrder = model.sortOrder
             )
+        }
+    }
+}
+
+/**
+ * AI 阶段学情诊断报告。由 [com.example.yanji.data.ai.AiDiagnosticParser] 生成后落库，
+ * 让上一次诊断在冷启动 / 进程被杀后依然可读（旧版仅存内存，重启即丢）。
+ *
+ * 三个列表字段以 JSON 数组字符串存储：项目不使用 Room TypeConverter，且列表元素
+ * （优势/短板/建议）可能包含逗号等分隔符，逗号拼接不安全，故用 JSON。
+ */
+@Entity(tableName = "ai_analyses")
+data class AiAnalysisEntity(
+    @PrimaryKey val id: String,
+    val periodStart: String,
+    val periodEnd: String,
+    val provider: String,
+    val model: String,
+    val requestSnapshot: String,
+    val overview: String,
+    val strengths: String, // JSON array of String
+    val weaknesses: String, // JSON array of String
+    val trendAnalysis: String,
+    val suggestions: String, // JSON array of String
+    val createdAt: Long
+) {
+    fun toDomainModel(): AiAnalysis = AiAnalysis(
+        id = id,
+        periodStart = periodStart,
+        periodEnd = periodEnd,
+        provider = provider,
+        model = model,
+        requestSnapshot = requestSnapshot,
+        overview = overview,
+        strengths = decodeList(strengths),
+        weaknesses = decodeList(weaknesses),
+        trendAnalysis = trendAnalysis,
+        suggestions = decodeList(suggestions),
+        createdAt = createdAt
+    )
+
+    companion object {
+        fun fromDomainModel(model: AiAnalysis): AiAnalysisEntity = AiAnalysisEntity(
+            id = model.id,
+            periodStart = model.periodStart,
+            periodEnd = model.periodEnd,
+            provider = model.provider,
+            model = model.model,
+            requestSnapshot = model.requestSnapshot,
+            overview = model.overview,
+            strengths = encodeList(model.strengths),
+            weaknesses = encodeList(model.weaknesses),
+            trendAnalysis = model.trendAnalysis,
+            suggestions = encodeList(model.suggestions),
+            createdAt = model.createdAt
+        )
+
+        private fun encodeList(values: List<String>): String =
+            JSONArray().apply { values.forEach { put(it) } }.toString()
+
+        private fun decodeList(raw: String): List<String> {
+            if (raw.isBlank()) return emptyList()
+            return runCatching {
+                val array = JSONArray(raw)
+                (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
+            }.getOrDefault(emptyList())
         }
     }
 }

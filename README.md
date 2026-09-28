@@ -1,6 +1,6 @@
 # 研迹 (Yanji) · 考研学习管理与心流伴侣
 
-<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=17 roomLibrary=2.8.4 -->
+<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=18 roomLibrary=2.8.4 -->
 
 <p align="center">
   <img src="app/src/main/res/drawable/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />
@@ -269,7 +269,7 @@ cd yanji
 ## 🔐 数据隐私与安全规范
 
 1. **本地优先**：学习与日记功能不依赖研迹自建服务器；只有用户配置并主动使用 AI 功能时，相关请求才会发往用户选择的服务商。
-2. **传输边界**：默认禁止明文网络流量，仅为本机 `127.0.0.1` / `localhost` 调试后端保留例外；实际 TLS 版本由设备与所选 AI 服务商协商。
+2. **传输边界**：为支持局域网本地大模型（如同一 WiFi 下的 Ollama、LM Studio、vLLM 或私有网关），应用放行明文 HTTP 流量；访问公网 AI 服务商时建议使用 HTTPS，实际 TLS 版本由设备与所选服务商协商。AI 请求仅在用户配置并主动触发分析时才会发出，凭证不随请求外泄、也不进入任何备份。
 3. **OS 备份契约**：Room 学习数据库允许 Android 按用户的系统设置进行云备份和设备迁移。AI 凭证与活动计时快照位于 `noBackupFilesDir`，不会进入 OS 备份；用户导出的 JSON 同样不含 API Key。
 
 ---

@@ -11,6 +11,7 @@ import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.data.achievement.AchievementEvaluator
 import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
+import com.example.yanji.data.ai.AiDiagnosticParser
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
 import com.example.yanji.data.note.NoteStore
@@ -32,7 +33,6 @@ import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
@@ -60,6 +60,9 @@ class YanjiRepository private constructor() {
 
     /** 第三方 AI 的网络客户端。Repository 只决定「要不要发请求、失败怎么兜底」。 */
     private val aiClient = AiClient()
+
+    /** 把 AI 返回的自由文本解析为结构化诊断；协议/解析细节与数据层隔离。 */
+    private val aiDiagnosticParser = AiDiagnosticParser()
 
     private val repoScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var database: YanjiDatabase? = null
@@ -314,6 +317,13 @@ class YanjiRepository private constructor() {
                 }
             }
             launch {
+                // AI 诊断报告：DB 为唯一事实来源，内存 StateFlow 仅作同步读缓存。
+                // 冷启动时从这里恢复上一次报告，避免重启即丢。
+                db.aiAnalysisDao().getAll().collect { entities ->
+                    _aiAnalyses.value = entities.map { it.toDomainModel() }
+                }
+            }
+            launch {
                 reconcileAchievements()
             }
         }
@@ -563,7 +573,12 @@ class YanjiRepository private constructor() {
             throw com.example.yanji.data.ai.AiException("本周期内暂无已完成的专注或模考，也没有已保存的随笔。记录一次学习后再生成分析。")
         }
         val analysis = callAiDiagnosticApi(snapshot, settings)
-        _aiAnalyses.value = listOf(analysis) + _aiAnalyses.value
+        // 落库后由 bindDatabase 的 Flow 订阅回填 _aiAnalyses；仅当 db 缺席（罕见）才退回内存态。
+        if (db != null) {
+            db.aiAnalysisDao().insert(AiAnalysisEntity.fromDomainModel(analysis))
+        } else {
+            _aiAnalyses.value = listOf(analysis) + _aiAnalyses.value
+        }
         analysis
     }
 
@@ -580,296 +595,7 @@ class YanjiRepository private constructor() {
         content: String,
         snapshot: StudyDiagnosticSnapshot,
         settings: UserSettings
-    ): AiAnalysis? {
-        val sanitized = content
-            .replace(Regex("<(think|thought|reasoning|details)>[\\s\\S]*?</\\1>", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("```(?:json)?|```", RegexOption.IGNORE_CASE), "")
-            .trim()
-
-        val jsonString = extractFirstJsonObject(sanitized)
-        if (jsonString != null) {
-            val parsed = runCatching {
-                val cleanJson = jsonString.replace(Regex(",+\\s*([}\\]])"), "$1")
-                val json = JSONObject(cleanJson)
-
-                fun cleanString(value: String?): String? {
-                    if (value == null) return null
-                    val trimmed = value.trim()
-                    if (trimmed.length < 2) return null
-                    if (trimmed.equals("null", ignoreCase = true) ||
-                        trimmed.equals("undefined", ignoreCase = true)
-                    ) {
-                        return null
-                    }
-                    if (trimmed.count { it.isLetterOrDigit() } < 2) return null
-                    val brackets = setOf('{', '}', '[', ']', '(', ')', '（', '）', '【', '】', '<', '>', '"', '\'', ':', ';', ',', '、')
-                    if (trimmed.all { it in brackets || it.isWhitespace() }) return null
-                    return trimmed
-                }
-
-                fun optCleanString(vararg keys: String): String? {
-                    for (k in keys) {
-                        if (!json.has(k) || json.isNull(k)) continue
-                        val raw = json.optString(k, "")
-                        val cleaned = cleanString(raw)
-                        if (cleaned != null) return cleaned
-                    }
-                    return null
-                }
-
-                fun stringList(vararg keys: String): List<String> {
-                    for (k in keys) {
-                        val array = json.optJSONArray(k) ?: continue
-                        val list = (0 until array.length()).mapNotNull { index ->
-                            if (array.isNull(index)) null
-                            else cleanString(array.optString(index))
-                        }
-                        if (list.isNotEmpty()) return list
-                    }
-                    return emptyList()
-                }
-
-                val strengths = stringList("strengths", "highlights", "advantages")
-                    .take(5)
-                    .map { it.take(220) }
-
-                val weaknesses = stringList("weaknesses", "shortcomings", "risks", "areas_for_improvement")
-                    .take(5)
-                    .map { it.take(220) }
-
-                val suggestions = stringList("threeDayPlan", "three_day_plan", "suggestions", "plan", "actions", "actionPlan")
-                    .take(5)
-                    .map { it.take(250) }
-
-                val rawOverview = optCleanString("overview", "summary", "academicOverview", "analysis", "evaluation", "description")
-                val rawTrend = optCleanString("trendAnalysis", "trend_analysis", "trend")
-
-                if (rawOverview != null || suggestions.isNotEmpty() || strengths.isNotEmpty()) {
-                    val finalOverview = rawOverview ?: when {
-                        strengths.isNotEmpty() -> "本阶段复习稳步推进中，已提炼 ${strengths.size} 项主要优势，建议对照下方重点展开针对性巩固。"
-                        suggestions.isNotEmpty() -> "已根据你的专注投入与复习进度完成学情评估，具体行动方案见下方建议。"
-                        else -> "已结合阶段学情完成分析，详见以下诊断要点与建议。"
-                    }
-                    val finalTrend = when {
-                        rawTrend != null ->
-                            rawTrend.take(400)
-                        snapshot.previousSessionCount == 0 && snapshot.previousExamCount == 0 ->
-                            "前一同长周期没有可比的专注或模考记录，暂时无法判断变化趋势。"
-                        else ->
-                            "阶段复习按计划稳步推进中，请保持良好的学习节奏。"
-                    }
-                    val finalSuggestions = suggestions.ifEmpty {
-                        listOf("保持现有良好专注节奏，稳步推进各科复习任务。")
-                    }
-
-                    AiAnalysis(
-                        id = UUID.randomUUID().toString(),
-                        periodStart = snapshot.periodStart,
-                        periodEnd = snapshot.periodEnd,
-                        provider = settings.aiProvider.ifBlank { "自定义 AI" },
-                        model = settings.aiModel.ifBlank { com.example.yanji.data.ai.AiProtocol.DEFAULT_MODEL },
-                        requestSnapshot = snapshot.requestSnapshot(),
-                        overview = finalOverview.take(600),
-                        strengths = strengths,
-                        weaknesses = weaknesses,
-                        trendAnalysis = finalTrend,
-                        suggestions = finalSuggestions
-                    )
-                } else null
-            }.onFailure { e ->
-                Log.e("YanjiAI", "parseAiDiagnostic JSON parse failed: ${e.message}")
-            }.getOrNull()
-
-            if (parsed != null) return parsed
-        }
-
-        val regexParsed = parseByRegexExtraction(sanitized, snapshot, settings)
-        if (regexParsed != null) return regexParsed
-
-        return parseFallbackDiagnosticText(sanitized, snapshot, settings)
-    }
-
-    private fun parseByRegexExtraction(
-        text: String,
-        snapshot: StudyDiagnosticSnapshot,
-        settings: UserSettings
-    ): AiAnalysis? {
-        fun cleanString(value: String?): String? {
-            if (value == null) return null
-            val trimmed = value.trim()
-            if (trimmed.length < 2) return null
-            if (trimmed.equals("null", ignoreCase = true) ||
-                trimmed.equals("undefined", ignoreCase = true)
-            ) return null
-            if (trimmed.count { it.isLetterOrDigit() } < 2) return null
-            val brackets = setOf('{', '}', '[', ']', '(', ')', '（', '）', '【', '】', '<', '>', '"', '\'', ':', ';', ',', '、')
-            if (trimmed.all { it in brackets || it.isWhitespace() }) return null
-            return trimmed
-        }
-
-        fun unescape(str: String): String =
-            str.replace("\\\"", "\"")
-                .replace("\\n", "\n")
-                .replace("\\r", "")
-                .replace("\\t", " ")
-                .replace("\\\\", "\\")
-
-        fun extractStringField(vararg keys: String): String? {
-            for (k in keys) {
-                val pattern = Regex("\"$k\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", RegexOption.IGNORE_CASE)
-                val match = pattern.find(text)
-                if (match != null) {
-                    val raw = match.groupValues[1]
-                    val cleaned = cleanString(unescape(raw))
-                    if (cleaned != null) return cleaned
-                }
-            }
-            return null
-        }
-
-        fun extractArrayField(vararg keys: String): List<String> {
-            for (k in keys) {
-                val blockPattern = Regex("\"$k\"\\s*:\\s*\\[([\\s\\S]*?)\\]", RegexOption.IGNORE_CASE)
-                val blockMatch = blockPattern.find(text) ?: continue
-                val block = blockMatch.groupValues[1]
-                val itemPattern = Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
-                val items = itemPattern.findAll(block).mapNotNull { m ->
-                    cleanString(unescape(m.groupValues[1]))
-                }.toList()
-                if (items.isNotEmpty()) return items
-            }
-            return emptyList()
-        }
-
-        val rawOverview = extractStringField("overview", "summary", "academicOverview", "analysis", "evaluation", "description")
-        val strengths = extractArrayField("strengths", "highlights", "advantages").take(5).map { it.take(220) }
-        val weaknesses = extractArrayField("weaknesses", "shortcomings", "risks", "areas_for_improvement").take(5).map { it.take(220) }
-        val rawTrend = extractStringField("trendAnalysis", "trend_analysis", "trend")
-        val suggestions = extractArrayField("threeDayPlan", "three_day_plan", "suggestions", "plan", "actions", "actionPlan").take(5).map { it.take(250) }
-
-        if (rawOverview != null || strengths.isNotEmpty() || suggestions.isNotEmpty()) {
-            val finalOverview = rawOverview ?: when {
-                strengths.isNotEmpty() -> "本阶段复习稳步推进中，已提炼 ${strengths.size} 项主要优势，建议对照下方重点展开针对性巩固。"
-                suggestions.isNotEmpty() -> "已根据你的专注投入与复习进度完成学情评估，具体行动方案见下方建议。"
-                else -> "已结合阶段学情完成分析，详见以下诊断要点与建议。"
-            }
-            val finalTrend = when {
-                rawTrend != null -> rawTrend.take(400)
-                snapshot.previousSessionCount == 0 && snapshot.previousExamCount == 0 ->
-                    "前一同长周期没有可比的专注或模考记录，暂时无法判断变化趋势。"
-                else -> "阶段复习按计划稳步推进中，请保持良好的学习节奏。"
-            }
-            return AiAnalysis(
-                id = UUID.randomUUID().toString(),
-                periodStart = snapshot.periodStart,
-                periodEnd = snapshot.periodEnd,
-                provider = settings.aiProvider.ifBlank { "自定义 AI" },
-                model = settings.aiModel.ifBlank { com.example.yanji.data.ai.AiProtocol.DEFAULT_MODEL },
-                requestSnapshot = snapshot.requestSnapshot(),
-                overview = finalOverview.take(600),
-                strengths = strengths,
-                weaknesses = weaknesses,
-                trendAnalysis = finalTrend,
-                suggestions = suggestions.ifEmpty { listOf("保持现有良好专注节奏，稳步推进各科复习任务。") }
-            )
-        }
-        return null
-    }
-
-    private fun extractFirstJsonObject(text: String): String? {
-        val start = text.indexOf('{')
-        if (start < 0) return null
-        var depth = 0
-        var inString = false
-        var escape = false
-        for (i in start until text.length) {
-            val c = text[i]
-            if (escape) {
-                escape = false
-                continue
-            }
-            if (c == '\\') {
-                escape = true
-                continue
-            }
-            if (c == '"') {
-                inString = !inString
-                continue
-            }
-            if (!inString) {
-                if (c == '{') depth++
-                else if (c == '}') {
-                    depth--
-                    if (depth == 0) {
-                        return text.substring(start, i + 1)
-                    }
-                }
-            }
-        }
-        val last = text.lastIndexOf('}')
-        return if (last > start) text.substring(start, last + 1) else null
-    }
-
-    private fun parseFallbackDiagnosticText(
-        text: String,
-        snapshot: StudyDiagnosticSnapshot,
-        settings: UserSettings
-    ): AiAnalysis? {
-        if (text.isBlank()) return null
-
-        fun isMeaningfulText(str: String?): Boolean {
-            if (str == null) return false
-            val t = str.trim()
-            if (t.length < 3) return false
-            if (t.equals("null", ignoreCase = true) || t.equals("undefined", ignoreCase = true)) return false
-            if (t.count { it.isLetterOrDigit() } < 2) return false
-            if (t.startsWith("{") || t.startsWith("}") || t.startsWith("[") || t.startsWith("]")) return false
-            if (t.startsWith("\"") && t.contains("\":")) return false
-            val brackets = setOf('{', '}', '[', ']', '(', ')', '（', '）', '【', '】', '<', '>', '"', '\'', ':', ';', ',', '、', '。')
-            if (t.all { it in brackets || it.isWhitespace() }) return false
-            return true
-        }
-
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        if (lines.isEmpty()) return null
-
-        val overviewCandidate = lines.firstOrNull {
-            !it.startsWith("#") && !it.startsWith("•") && !it.startsWith("-") && !it.startsWith("*") &&
-                isMeaningfulText(it)
-        }
-        val overview = overviewCandidate
-            ?: lines.firstOrNull { isMeaningfulText(it) }
-            ?: "阶段复习按计划稳步推进中，请保持良好的学习节奏。"
-
-        val bullets = lines.filter {
-            (it.startsWith("•") || it.startsWith("-") || it.startsWith("*") || it.matches(Regex("^\\d+[.、].*"))) &&
-                isMeaningfulText(it.replace(Regex("^[•\\-*\\d.、\\s]+"), ""))
-        }.map {
-            it.replace(Regex("^[•\\-*\\d.、\\s]+"), "").trim()
-        }
-
-        val strengths = bullets.take(3).map { it.take(220) }
-        val suggestions = if (bullets.size > 3) bullets.drop(3).take(3).map { it.take(250) }
-        else bullets.take(3).map { it.take(250) }
-
-        return AiAnalysis(
-            id = UUID.randomUUID().toString(),
-            periodStart = snapshot.periodStart,
-            periodEnd = snapshot.periodEnd,
-            provider = settings.aiProvider.ifBlank { "自定义 AI" },
-            model = settings.aiModel.ifBlank { com.example.yanji.data.ai.AiProtocol.DEFAULT_MODEL },
-            requestSnapshot = snapshot.requestSnapshot(),
-            overview = overview.take(600),
-            strengths = strengths,
-            weaknesses = emptyList(),
-            trendAnalysis = if (snapshot.previousSessionCount == 0 && snapshot.previousExamCount == 0) {
-                "前一同长周期没有可比的专注或模考记录，暂时无法判断变化趋势。"
-            } else {
-                "阶段复习按计划稳步推进。"
-            },
-            suggestions = suggestions.ifEmpty { listOf("保持现有专注节奏，稳步推进复习。") }
-        )
-    }
+    ): AiAnalysis? = aiDiagnosticParser.parse(content, snapshot, settings)
 
     // Helper query computations (Unified Single Source of Truth)
     fun getTodayFocusDurationSeconds(): Long =
@@ -1009,5 +735,7 @@ class YanjiRepository private constructor() {
         db.checkInDao().deleteAll()
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
+        db.aiAnalysisDao().deleteAll()
+        _aiAnalyses.value = emptyList()
     }
 }

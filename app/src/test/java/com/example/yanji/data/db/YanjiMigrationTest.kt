@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 17
+    private val CURRENT_VERSION = 18
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -185,7 +185,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_13_14,
         YanjiDatabase.MIGRATION_14_15,
         YanjiDatabase.MIGRATION_15_16,
-        YanjiDatabase.MIGRATION_16_17
+        YanjiDatabase.MIGRATION_16_17,
+        YanjiDatabase.MIGRATION_17_18
     )
 
     /**
@@ -696,6 +697,24 @@ class YanjiMigrationTest {
         db.close()
     }
 
+    // ---------------------------------------------------------------- 17 -> 18 AI 诊断报告落库
+
+    @Test
+    fun migrate17To18_createsEmptyAiAnalysesTable() {
+        val db17 = helper.createDatabase(17)
+        db17.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(17))
+
+        val columns = db.columnNames("ai_analyses")
+        assertTrue("ai_analyses 应包含 id 列", "id" in columns)
+        assertTrue("ai_analyses 应包含 overview 列", "overview" in columns)
+        assertTrue("ai_analyses 应包含 createdAt 列", "createdAt" in columns)
+        // 诊断报告是用户行为派生的：迁移只建空表，绝不凭空造报告
+        assertEquals(0, db.intValue("SELECT COUNT(*) FROM ai_analyses"))
+        db.close()
+    }
+
     // ---------------------------------------------------------------- 不造数据
 
     @Test
@@ -710,7 +729,7 @@ class YanjiMigrationTest {
         listOf(
             "focus_sessions", "exam_sessions", "journal_entries",
             "chat_messages", "chat_sessions", "check_ins",
-            "unlocked_achievements", "quick_start_presets"
+            "unlocked_achievements", "quick_start_presets", "ai_analyses"
         ).forEach { table ->
             assertEquals("迁移不应向 $table 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM $table"))
         }
