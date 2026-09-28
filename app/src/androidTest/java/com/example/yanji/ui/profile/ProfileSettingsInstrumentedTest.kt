@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.yanji.YanjiApplication
 import com.example.yanji.data.UserSettings
+import com.example.yanji.data.ai.AiProtocolType
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.ui.components.AiConfigDialog
@@ -135,13 +136,15 @@ class ProfileSettingsInstrumentedTest {
             .assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription("选择接口协议规范").performClick()
-        listOf("OpenAI Chat", "Response 格式", "Claude 格式").forEach { protocol ->
-            composeRule.onNodeWithTag("ai-protocol-option-$protocol").assertIsDisplayed()
+        val protocols = AiProtocolType.entries
+        protocols.forEach { protocol ->
+            composeRule.onNodeWithTag("ai-protocol-option-${protocol.displayName}").assertIsDisplayed()
         }
-        composeRule.onNodeWithTag("ai-protocol-option-Claude 格式").performClick()
+        val anthropic = AiProtocolType.ANTHROPIC
+        composeRule.onNodeWithTag("ai-protocol-option-${anthropic.displayName}").performClick()
         assertEquals(
             "选择后应显示当前接口协议",
-            "Claude 格式",
+            anthropic.displayName,
             composeRule.onNodeWithTag("ai-selected-protocol")
                 .fetchSemanticsNode()
                 .config[SemanticsProperties.StateDescription]

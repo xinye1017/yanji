@@ -9,8 +9,10 @@ internal enum class AiCallKind { MODELS, DIAGNOSIS }
 /**
  * 支持的 AI 协议格式：
  * 1. OPENAI_CHAT: OpenAI Chat Completions 协议 (/chat/completions)
- * 2. OPENAI_RESPONSE: OpenAI Response 协议 (/responses)
- * 3. ANTHROPIC: Anthropic Messages 协议 (/messages)
+ * 2. OPENAI_RESPONSE: OpenAI Responses 协议 (/responses)
+ * 3. ANTHROPIC: Anthropic 格式 (/messages)
+ *
+ * [displayName] 是设置页「接口协议规范」下拉的**唯一文案来源**，UI 层不得再维护第二份标签表。
  */
 enum class AiProtocolType(
     val id: String,
@@ -18,8 +20,8 @@ enum class AiProtocolType(
     val defaultPath: String
 ) {
     OPENAI_CHAT("OPENAI_CHAT", "OpenAI Chat Completions", "/chat/completions"),
-    OPENAI_RESPONSE("OPENAI_RESPONSE", "OpenAI Response", "/responses"),
-    ANTHROPIC("ANTHROPIC", "Anthropic Messages", "/messages");
+    OPENAI_RESPONSE("OPENAI_RESPONSE", "OpenAI Responses", "/responses"),
+    ANTHROPIC("ANTHROPIC", "Anthropic 格式", "/messages");
 
     companion object {
         fun fromId(raw: String?): AiProtocolType =

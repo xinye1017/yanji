@@ -50,12 +50,6 @@ private val AI_PRESETS = listOf(
     ProviderPreset(CUSTOM_PROVIDER, "")
 )
 
-private val AI_PROTOCOL_OPTIONS = listOf(
-    AiProtocolType.OPENAI_CHAT to "OpenAI Chat",
-    AiProtocolType.OPENAI_RESPONSE to "Response 格式",
-    AiProtocolType.ANTHROPIC to "Claude 格式"
-)
-
 private val AI_PROVIDER_NAMES = AI_PRESETS.map { it.name }.toSet()
 
 private fun providerOptionFor(configuredProvider: String): String =
@@ -340,14 +334,12 @@ fun AiConfigDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGap))
-
-                // 2. 接口协议规范
-                val selectedProtocolLabel = AI_PROTOCOL_OPTIONS.first { it.first == protocol }.second
+                // 2. 接口协议规范（文案取自枚举的 displayName，不在 UI 层另建标签表）
+                val selectedProtocolLabel = protocol.displayName
                 AiDropdownField(
                     label = "接口协议规范",
                     value = selectedProtocolLabel,
-                    options = AI_PROTOCOL_OPTIONS.map { it.second },
+                    options = AiProtocolType.entries.map { it.displayName },
                     expanded = protocolDropdownExpanded,
                     description = "选择接口协议规范",
                     fieldTestTag = "ai-selected-protocol",
@@ -355,7 +347,7 @@ fun AiConfigDialog(
                     onExpand = { protocolDropdownExpanded = true },
                     onDismissRequest = { protocolDropdownExpanded = false },
                     onOptionSelected = { selectedLabel ->
-                        protocol = AI_PROTOCOL_OPTIONS.first { it.second == selectedLabel }.first
+                        protocol = AiProtocolType.entries.first { it.displayName == selectedLabel }
                         keyboardController?.hide()
                         focusManager.clearFocus()
                         availableModels = emptyList()
