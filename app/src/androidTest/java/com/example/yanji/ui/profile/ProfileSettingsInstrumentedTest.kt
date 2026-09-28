@@ -53,6 +53,44 @@ class ProfileSettingsInstrumentedTest {
 
         composeRule.onNodeWithText("已配置").assertIsDisplayed()
         composeRule.onNodeWithText("本地 Ollama").assertIsDisplayed()
+        composeRule.onNodeWithText("qwen2.5:latest").assertIsDisplayed()
+        composeRule.onNodeWithText("管理").assertDoesNotExist()
+    }
+
+    @Test
+    fun emptyExamGoalUsesOneSetupPrompt() {
+        composeRule.setContent {
+            YanjiTheme {
+                ProfileIdentityCard(
+                    settings = UserSettings(),
+                    onClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("备考目标").assertIsDisplayed()
+        composeRule.onNodeWithText("设置院校、专业与初试日期").assertIsDisplayed()
+        composeRule.onNodeWithText("点击设置专业").assertDoesNotExist()
+        composeRule.onNodeWithText("点击设置初试日期").assertDoesNotExist()
+        composeRule.onNodeWithText("考研").assertDoesNotExist()
+    }
+
+    @Test
+    fun missingAiModelUsesServiceDefaultSummary() {
+        composeRule.setContent {
+            YanjiTheme {
+                ProfileAiCard(
+                    settings = UserSettings(
+                        aiProvider = "本地 Ollama",
+                        aiBaseUrl = "http://127.0.0.1:11434/v1"
+                    ),
+                    onClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("已配置").assertIsDisplayed()
+        composeRule.onNodeWithText("使用服务默认模型").assertIsDisplayed()
     }
 
     @Test

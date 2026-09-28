@@ -36,18 +36,19 @@ import java.util.Locale
 
 @Composable
 fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
-    val examYear = settings.targetExamDate
-        .substringBefore("-")
-        .takeIf { it.length == 4 && it.all(Char::isDigit) }
-
     val targetDate = remember(settings.targetExamDate) {
         YanjiTime.parseIsoDate(settings.targetExamDate)
     }
+    val hasTargetInfo = settings.targetSchool.isNotBlank() ||
+        settings.targetMajor.isNotBlank() ||
+        settings.targetExamDate.isNotBlank()
+    val examYear = targetDate?.year?.toString()
     val daysRemaining = remember(targetDate) {
         targetDate?.let {
             ChronoUnit.DAYS.between(YanjiTime.today(), it).toInt()
         }
     }
+    val examIsTodayOrUpcoming = daysRemaining != null && daysRemaining >= 0
 
     YanjiCard(
         onClick = onClick,
@@ -81,61 +82,77 @@ fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = settings.targetSchool.ifBlank { "设置目标院校" },
+                        text = settings.targetSchool.ifBlank {
+                            if (hasTargetInfo) "目标院校未设置" else "备考目标"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (settings.targetSchool.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurface,
+                        color = if (settings.targetSchool.isNotBlank() || !hasTargetInfo) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            YanjiColors.textTertiary
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
 
-                    val badgeText = examYear?.let { "${it}届" } ?: "考研"
-                    Surface(
-                        shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                    ) {
-                        Text(
-                            text = badgeText,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                    if (examYear != null) {
+                        Surface(
+                            shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = examYear + "届",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
 
                 Text(
-                    text = settings.targetMajor.ifBlank { "点击设置专业" },
+                    text = settings.targetMajor.ifBlank {
+                        if (hasTargetInfo) "专业未设置" else "设置院校、专业与初试日期"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (settings.targetMajor.isBlank()) YanjiColors.textTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (settings.targetMajor.isNotBlank() || !hasTargetInfo) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        YanjiColors.textTertiary
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = RemixIcons.CalendarLine,
-                        contentDescription = null,
-                        tint = if (daysRemaining != null && daysRemaining > 0) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    val dateText = when {
-                        daysRemaining != null && daysRemaining > 0 -> "初试 ${formatExamDateCompact(settings.targetExamDate)} · 剩 $daysRemaining 天"
-                        daysRemaining != null && daysRemaining == 0 -> "今日初试 · 旗开得胜！"
-                        daysRemaining != null && daysRemaining < 0 -> "初试已过 · ${formatExamDateCompact(settings.targetExamDate)}"
-                        else -> "点击设置初试日期"
+                if (hasTargetInfo) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = RemixIcons.CalendarLine,
+                            contentDescription = null,
+                            tint = if (examIsTodayOrUpcoming) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        val dateText = when {
+                            targetDate == null && settings.targetExamDate.isNotBlank() -> "初试日期待确认"
+                            daysRemaining != null && daysRemaining > 0 -> "初试 ${formatExamDateCompact(settings.targetExamDate)} · 剩 $daysRemaining 天"
+                            daysRemaining == 0 -> "今日初试 · 旗开得胜！"
+                            daysRemaining != null && daysRemaining < 0 -> "初试已过 · ${formatExamDateCompact(settings.targetExamDate)}"
+                            else -> "初试日期未设置"
+                        }
+                        Text(
+                            text = dateText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (examIsTodayOrUpcoming) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        text = dateText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (daysRemaining != null && daysRemaining > 0) MaterialTheme.colorScheme.primary else YanjiColors.textTertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
 
@@ -151,7 +168,7 @@ fun ProfileIdentityCard(settings: UserSettings, onClick: () -> Unit) {
                 ) {
                     Icon(
                         imageVector = RemixIcons.Edit2Line,
-                        contentDescription = "编辑备考信息",
+                        contentDescription = if (hasTargetInfo) "编辑备考信息" else "设置备考信息",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(15.dp)
                     )
@@ -170,8 +187,7 @@ fun ProfileAiCard(
     onClick: () -> Unit
 ) {
     val aiConfigured = settings.isAiConfigured
-    val aiModel = settings.aiModel.ifBlank { settings.aiProvider }.ifBlank { "未指定模型" }
-    val protocol = com.example.yanji.data.ai.AiProtocolType.fromId(settings.aiProtocol)
+    val aiModel = settings.aiModel.ifBlank { "使用服务默认模型" }
 
     YanjiCard(
         onClick = onClick,
@@ -273,16 +289,17 @@ fun ProfileAiCard(
                             }
                         }
                         Text(
-                            text = "$aiModel · ${protocol.displayName}",
+                            text = aiModel,
                             style = YanjiTypography.footnote,
                             color = YanjiColors.secondaryLabel,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 } else {
                     Text(
-                        text = "接入大模型 · 智能学情诊断与个性化复盘",
+                        text = "配置服务地址和模型",
                         style = YanjiTypography.footnote,
                         color = YanjiColors.secondaryLabel,
                         maxLines = 1,
@@ -295,28 +312,17 @@ fun ProfileAiCard(
 
             Surface(
                 shape = CircleShape,
-                color = if (aiConfigured) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                }
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                Box(
+                    modifier = Modifier.size(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (aiConfigured) "管理" else "去配置",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (aiConfigured) MaterialTheme.colorScheme.primary else YanjiColors.secondaryLabel
-                    )
                     Icon(
                         imageVector = RemixIcons.ArrowRightSLine,
                         contentDescription = null,
-                        tint = if (aiConfigured) MaterialTheme.colorScheme.primary else YanjiColors.tertiaryLabel,
-                        modifier = Modifier.size(14.dp)
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
