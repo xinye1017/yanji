@@ -6,7 +6,7 @@ import java.util.UUID
 
 /**
  * 计时模式单一数据源：模式名 ↔ 目标时长。
- * FocusScreen 与首页快捷启动共用，避免两处硬编码漂移。
+ * FocusScreen、专注准备页的时长滚轮与今日计划共用，避免多处硬编码漂移。
  */
 object FocusModes {
     const val COUNT_UP = "正向计时"
@@ -16,6 +16,23 @@ object FocusModes {
     const val BIG_90 = "90分钟专题"
 
     val ALL: List<String> = listOf(COUNT_UP, POMODORO_25, POMODORO_45, DEEP_60, BIG_90)
+
+    /**
+     * 时长 → 计时模式：正好落在四个标准档位上就复用该档位名，其余走「N分钟专注」。
+     *
+     * 此前这份映射在专注页的 `FocusViewModel.modeForTask` 与专注准备页的
+     * `quietModeForMinutes` 里各写了一遍。两份实现今天恰好一致，但它们服务的是同一条
+     * 「用户选了一个分钟数 → 该用哪个模式」的规则 —— 一旦某一侧单独调整档位
+     * （新增 30 分钟、或把 45 分钟改名），两侧就会静默漂移。
+     * 首页今日计划搬走后 `modeForTask` 失去唯一调用方已删除；本函数是该规则唯一实现。
+     */
+    fun forPlannedMinutes(minutes: Int): String = when (minutes) {
+        25 -> POMODORO_25
+        45 -> POMODORO_45
+        60 -> DEEP_60
+        90 -> BIG_90
+        else -> "${minutes}分钟专注"
+    }
 
     /** 正向计时返回 0，表示不限时长；倒计时返回目标秒数。 */
     fun targetSeconds(mode: String): Long = when {

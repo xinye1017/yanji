@@ -2,10 +2,8 @@ package com.example.yanji.ui.focus
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.QuickStartPreset
-import com.example.yanji.data.StudyTask
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.Subject
 import com.example.yanji.data.YanjiRepository
@@ -13,6 +11,7 @@ import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,7 +21,6 @@ data class FocusUiState(
     val activeSession: FocusSession?,
     val lastCompletedFocus: FocusSession?,
     val quickStartPresets: List<QuickStartPreset>,
-    val todayTasks: List<StudyTask>,
     /** 今日专注时长（不含模考）。 */
     val todayFocusSeconds: Long,
     /** 今日总学时（专注 + 模考，与统计页"今日"口径一致）。 */
@@ -43,28 +41,25 @@ class FocusViewModel(
 
     private val todayIso: String = YanjiTime.todayIso()
 
-    private val planningFlow = combine(
-        repo.observeQuickStartPresets(),
-        repo.observeStudyTasks(todayIso)
-    ) { presets, tasks ->
-        presets
-            .filter { it.type == QuickStartPreset.TYPE_CUSTOM }
-            .sortedByDescending { it.createdAt } to tasks
-    }
+    private val customPresetsFlow = repo.observeQuickStartPresets()
+        .map { presets ->
+            presets
+                .filter { it.type == QuickStartPreset.TYPE_CUSTOM }
+                .sortedByDescending { it.createdAt }
+        }
 
     val uiState: StateFlow<FocusUiState> = combine(
         repo.subjects,
         repo.activeFocus,
         repo.lastCompletedFocus,
         statsRepo.getDailyStudySummaryFlow(todayIso),
-        planningFlow
-    ) { subjects, active, lastCompleted, todaySummary, planning ->
+        customPresetsFlow
+    ) { subjects, active, lastCompleted, todaySummary, presets ->
         FocusUiState(
             subjects = subjects,
             activeSession = active,
             lastCompletedFocus = lastCompleted,
-            quickStartPresets = planning.first,
-            todayTasks = planning.second,
+            quickStartPresets = presets,
             todayFocusSeconds = repo.getTodayFocusDurationSeconds(),
             todayTotalSeconds = todaySummary.totalDurationSeconds
         )
@@ -76,7 +71,6 @@ class FocusViewModel(
             activeSession = repo.activeFocus.value,
             lastCompletedFocus = repo.lastCompletedFocus.value,
             quickStartPresets = emptyList(),
-            todayTasks = emptyList(),
             todayFocusSeconds = repo.getTodayFocusDurationSeconds(),
             todayTotalSeconds = statsRepo.getDailyStudySummary(todayIso).totalDurationSeconds
         )
@@ -117,39 +111,6 @@ class FocusViewModel(
 
     fun deleteQuickStartPreset(id: String) = viewModelScope.launch {
         repo.deleteQuickStartPreset(id)
-    }
-
-    fun addStudyTask(subject: Subject, title: String, plannedMinutes: Int) = viewModelScope.launch {
-        val cleanTitle = title.trim()
-        if (cleanTitle.isEmpty()) return@launch
-        repo.saveStudyTask(
-            StudyTask(
-                date = todayIso,
-                subjectId = subject.id,
-                subjectName = subject.name,
-                title = cleanTitle,
-                plannedMinutes = plannedMinutes.coerceIn(5, 360)
-            )
-        )
-    }
-
-    fun setStudyTaskCompleted(id: String, completed: Boolean) = viewModelScope.launch {
-        repo.setStudyTaskCompleted(id, completed)
-    }
-
-    fun deleteStudyTask(id: String) = viewModelScope.launch {
-        repo.deleteStudyTask(id)
-    }
-
-    fun modeForTask(task: StudyTask): String {
-        val minutes = task.plannedMinutes.coerceAtLeast(1)
-        return when (minutes) {
-            25 -> FocusModes.POMODORO_25
-            45 -> FocusModes.POMODORO_45
-            60 -> FocusModes.DEEP_60
-            90 -> FocusModes.BIG_90
-            else -> "${minutes}分钟专注"
-        }
     }
 
     companion object {

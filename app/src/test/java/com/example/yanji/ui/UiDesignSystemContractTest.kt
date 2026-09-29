@@ -168,6 +168,44 @@ class UiDesignSystemContractTest {
     }
 
     @Test
+    fun verifyTodayPlanLivesOnHomeNotOnFocusPrepPage() {
+        val projectRoot = findProjectRoot()
+
+        // 今日计划是「今天要做什么」，属于首页开屏就该回答的问题；
+        // 放在专注准备页会让用户在选学科的路径里才发现自己的计划。
+        val homeFile = File(projectRoot, "app/src/main/java/com/example/yanji/ui/home/TodayPlanCard.kt")
+        assertTrue("TodayPlanCard.kt must exist on the home feature", homeFile.exists())
+        val homeCode = codeOf(homeFile)
+        assertTrue(
+            "TodayPlanCard must render the 今日计划 title",
+            homeCode.contains("今日计划")
+        )
+        // 完成态/未完成态由同一个圆圈承担，行内不应再出现独立的 Checkbox 方块：
+        // 方形 Checkbox 在 56dp 高的行里过重，且其主色填充会与学科色点抢注意力。
+        assertTrue(
+            "TodayPlanCard must not reintroduce the M3 Checkbox",
+            !homeCode.contains("Checkbox(")
+        )
+
+        val homeScreenCode = codeOf(
+            File(projectRoot, "app/src/main/java/com/example/yanji/ui/home/HomeScreen.kt")
+        )
+        assertTrue(
+            "HomeScreen must render TodayPlanCard",
+            homeScreenCode.contains("TodayPlanCard(")
+        )
+
+        // 专注准备页不应再出现今日计划：那里只保留与当前科目/模式绑定的快捷专注。
+        val quietSetupCode = codeOf(
+            File(projectRoot, "app/src/main/java/com/example/yanji/ui/focus/QuietFocusSetupContent.kt")
+        )
+        assertTrue(
+            "QuietFocusSetupContent must not re-add 今日计划",
+            !quietSetupCode.contains("今日计划")
+        )
+    }
+
+    @Test
     fun verify80_20RuleContentCardsDoNotAbuseHazeEffect() {
         val projectRoot = findProjectRoot()
         val contentFiles = listOf(

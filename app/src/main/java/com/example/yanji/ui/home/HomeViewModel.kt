@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.DailyStudySummary
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.StudyStatisticsRepository
+import com.example.yanji.data.StudyTask
+import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.time.temporal.ChronoUnit
 
 /**
@@ -29,7 +32,19 @@ data class HomeUiState(
     /** 目标日期解析失败时为 null（页面回退显示原始日期字符串）。 */
     val daysRemaining: Int?,
     /** 已评分模考的平均分；没有任何评分时为 0.0。 */
-    val avgExamScore: Double
+    val avgExamScore: Double,
+    /** 今日计划（意图侧）。与 todaySummary（结果侧）成对构成首页的「今天」叙事。 */
+    val todayTasks: List<StudyTask>,
+    /** 可选科目：添加计划时需要按目录过滤可选项。 */
+    val subjects: List<Subject>
+)
+
+/** 今日语义的聚合载荷：把「结果」与「意图」合成一个值，供外层 combine 消费。 */
+private data class TodayFacts(
+    val summary: DailyStudySummary,
+    val streakDays: Int,
+    val tasks: List<StudyTask>,
+    val subjects: List<Subject>
 )
 
 /**
@@ -56,29 +71,74 @@ class HomeViewModel(
         todaySummary = statsRepo.getDailyStudySummary(todayIso),
         streakDays = statsRepo.getWeeklyStudySummary().streakDays,
         daysRemaining = daysRemainingFor(repo.settings.value.targetExamDate),
-        avgExamScore = averageScore(repo.examSessions.value)
+        avgExamScore = averageScore(repo.examSessions.value),
+        todayTasks = emptyList(),
+        subjects = repo.subjects.value
     )
+
+    // 今天的两组数据：结果（统计）与意图（计划 + 科目目录）。
+    // 先合成一个 todayFacts 再与设置类数据 combine —— typed combine 最多 5 路，
+    // 直接堆 6 路会退化到 vararg 版本而丢失类型。
+    private val todayFactsFlow = combine(
+        todaySummaryFlow,
+        weeklySummaryFlow,
+        repo.observeStudyTasks(todayIso),
+        repo.subjects
+    ) { todaySummary, weekly, tasks, subjects ->
+        TodayFacts(
+            summary = todaySummary,
+            streakDays = weekly.streakDays,
+            tasks = tasks,
+            subjects = subjects
+        )
+    }
 
     val uiState: StateFlow<HomeUiState> = combine(
         repo.settings,
         repo.examSessions,
-        todaySummaryFlow,
-        weeklySummaryFlow
-    ) { settings, exams, todaySummary, weekly ->
+        todayFactsFlow
+    ) { settings, exams, facts ->
         HomeUiState(
             todayIso = todayIso,
             settings = settings,
             examSessions = exams,
-            todaySummary = todaySummary,
-            streakDays = weekly.streakDays,
+            todaySummary = facts.summary,
+            streakDays = facts.streakDays,
             daysRemaining = daysRemainingFor(settings.targetExamDate),
-            avgExamScore = averageScore(exams)
+            avgExamScore = averageScore(exams),
+            todayTasks = facts.tasks,
+            subjects = facts.subjects
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = initial
     )
+
+    // ---- 动作 ----
+
+    /** 写入今日计划。标题空串与超范围时长在这里挡住，不让脏数据落库。 */
+    fun addStudyTask(subject: Subject, title: String, plannedMinutes: Int) = viewModelScope.launch {
+        val cleanTitle = title.trim()
+        if (cleanTitle.isEmpty()) return@launch
+        repo.saveStudyTask(
+            StudyTask(
+                date = todayIso,
+                subjectId = subject.id,
+                subjectName = subject.name,
+                title = cleanTitle,
+                plannedMinutes = plannedMinutes.coerceIn(5, 360)
+            )
+        )
+    }
+
+    fun setStudyTaskCompleted(id: String, completed: Boolean) = viewModelScope.launch {
+        repo.setStudyTaskCompleted(id, completed)
+    }
+
+    fun deleteStudyTask(id: String) = viewModelScope.launch {
+        repo.deleteStudyTask(id)
+    }
 
     // ---- 派生计算 ----
 

@@ -202,7 +202,6 @@ fun FocusScreen(
             noteText = noteText,
             onNoteChange = { noteText = it },
             quickStartPresets = state.quickStartPresets,
-            todayTasks = state.todayTasks,
             onSavePreset = {
                 screenScope.launch {
                     viewModel.saveQuickStartPreset(selectedSubject, selectedMode, noteText)
@@ -216,22 +215,7 @@ fun FocusScreen(
                 noteText = preset.note
                 launchFocus(subject, preset.mode, preset.note)
             },
-            onDeleteQuickStart = { id -> viewModel.deleteQuickStartPreset(id) },
-            onAddStudyTask = { subject, title, minutes ->
-                viewModel.addStudyTask(subject, title, minutes)
-            },
-            onToggleStudyTask = { task ->
-                viewModel.setStudyTaskCompleted(task.id, !task.isCompleted)
-            },
-            onDeleteStudyTask = { id -> viewModel.deleteStudyTask(id) },
-            onStartStudyTask = { task ->
-                val subject = resolveSubject(task.subjectId, task.subjectName)
-                val mode = viewModel.modeForTask(task)
-                selectedSubjectId = subject.id
-                selectedMode = mode
-                noteText = task.title
-                launchFocus(subject, mode, task.title)
-            }
+            onDeleteQuickStart = { id -> viewModel.deleteQuickStartPreset(id) }
         )
     }
 

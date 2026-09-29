@@ -196,7 +196,23 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 2. Today's Study Grouped Card (Clickable to DailyStudyDetail)
+            // 2. 今日计划（意图）—— 排在「今日专注学习」（结果）之前，
+            //    首页自上而下即读成：今天打算做什么 → 实际做了多久。
+            TodayPlanCard(
+                tasks = state.todayTasks,
+                subjects = state.subjects,
+                onAdd = { subject, title, minutes -> viewModel.addStudyTask(subject, title, minutes) },
+                onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
+                onDelete = { id -> viewModel.deleteStudyTask(id) },
+                // 只切到专注页：启动专注要走通知权限闸门 + 前台 Service 派发，
+                // 那条链路由 FocusScreen 独占（见 FocusScreen.launchFocus），
+                // 在这里复制一遍会立刻分叉出两套权限 UX。用户在专注页确认后开始。
+                onStart = { onNavigateToFocus() }
+            )
+
+            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+
+            // 3. Today's Study Grouped Card (Clickable to DailyStudyDetail)
             YanjiGroupedCard(
                 modifier = Modifier.fillMaxWidth(),
                 cardModifier = Modifier.testTag("home_today_study_card"),
@@ -290,7 +306,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 3. Exam Panorama & Linked Card (iOS SettingsRow pattern)
+            // 4. Exam Panorama & Linked Card (iOS SettingsRow pattern)
             YanjiGroupedCard(
                 modifier = Modifier
                     .fillMaxWidth()

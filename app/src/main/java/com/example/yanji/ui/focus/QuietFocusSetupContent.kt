@@ -86,7 +86,6 @@ import androidx.compose.ui.util.lerp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.QuickStartPreset
-import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 
 import com.example.yanji.theme.YanjiColors
@@ -122,13 +121,7 @@ private val QuietDurationOptions =
         QuietDurationOption(minutes = minutes, mode = quietModeForMinutes(minutes))
     }
 
-private fun quietModeForMinutes(minutes: Int): String = when (minutes) {
-    25 -> FocusModes.POMODORO_25
-    45 -> FocusModes.POMODORO_45
-    60 -> FocusModes.DEEP_60
-    90 -> FocusModes.BIG_90
-    else -> "${minutes}分钟专注"
-}
+private fun quietModeForMinutes(minutes: Int): String = FocusModes.forPlannedMinutes(minutes)
 
 private fun normalizeQuietDuration(minutes: Int): Int {
     val clamped = minutes.coerceIn(QuietDurationMinMinutes, QuietDurationMaxMinutes)
@@ -156,14 +149,9 @@ fun QuietFocusSetupContent(
     noteText: String = "",
     onNoteChange: (String) -> Unit = {},
     quickStartPresets: List<QuickStartPreset> = emptyList(),
-    todayTasks: List<StudyTask> = emptyList(),
     onSavePreset: () -> Unit = {},
     onQuickStart: (QuickStartPreset) -> Unit = {},
-    onDeleteQuickStart: (String) -> Unit = {},
-    onAddStudyTask: (Subject, String, Int) -> Unit = { _, _, _ -> },
-    onToggleStudyTask: (StudyTask) -> Unit = {},
-    onDeleteStudyTask: (String) -> Unit = {},
-    onStartStudyTask: (StudyTask) -> Unit = {}
+    onDeleteQuickStart: (String) -> Unit = {}
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -248,13 +236,8 @@ fun QuietFocusSetupContent(
                         categories = topCategories,
                         subjects = subjects,
                         quickStartPresets = quickStartPresets,
-                        studyTasks = todayTasks,
                         onQuickStart = onQuickStart,
                         onDeleteQuickStart = onDeleteQuickStart,
-                        onAddStudyTask = onAddStudyTask,
-                        onToggleStudyTask = onToggleStudyTask,
-                        onDeleteStudyTask = onDeleteStudyTask,
-                        onStartStudyTask = onStartStudyTask,
                         onCategoryClick = { category ->
                             selectedCategoryId = category.id
                             val children = subjects.filter { it.parentId == category.id && it.enabled }
@@ -460,13 +443,8 @@ private fun QuietCategoryStep(
     categories: List<Subject>,
     subjects: List<Subject>,
     quickStartPresets: List<QuickStartPreset>,
-    studyTasks: List<StudyTask>,
     onQuickStart: (QuickStartPreset) -> Unit,
     onDeleteQuickStart: (String) -> Unit,
-    onAddStudyTask: (Subject, String, Int) -> Unit,
-    onToggleStudyTask: (StudyTask) -> Unit,
-    onDeleteStudyTask: (String) -> Unit,
-    onStartStudyTask: (StudyTask) -> Unit,
     onCategoryClick: (Subject) -> Unit,
     onNavigateToExam: () -> Unit
 ) {
@@ -476,22 +454,16 @@ private fun QuietCategoryStep(
             .verticalScroll(rememberScrollState())
             .padding(bottom = AppContentInsets.BottomBarPadding)
     ) {
-        StudyPlanSection(
-            subjects = subjects,
-            tasks = studyTasks,
-            onAdd = onAddStudyTask,
-            onToggle = onToggleStudyTask,
-            onDelete = onDeleteStudyTask,
-            onStart = onStartStudyTask
-        )
-
+        // 今日计划已迁到首页（TodayPlanCard）：「今天要做什么」是每天开屏就要回答的问题，
+        // 不该藏在选学科的路径里。这里保留的快捷专注是**与当前所选科目/模式绑定**的启动器，
+        // 归属本步骤（发起专注），与「今天打算做什么」是两件事，因此留下。
         if (quickStartPresets.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(20.dp))
             QuickPresetSection(
                 presets = quickStartPresets,
                 onStart = onQuickStart,
                 onDelete = onDeleteQuickStart
             )
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
