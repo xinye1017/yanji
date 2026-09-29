@@ -114,10 +114,11 @@ fun YanjiSettingsRow(
             ) {
                 Text(
                     text = title,
-                    // 首页把它当「模考看板」的卡片标题用，因此走 titleMedium（16sp / SemiBold），
-                    // 与同页「今日计划 / 今日专注学习 / 每日打卡」等重等大。原先用 bodyLarge+Medium
-                    // （同为 16sp 但更细），扫首页时那张卡会比其他卡轻一档。
+                    // 首页用它承载「模考看板」的卡片标题，因此走 titleMedium（16sp）+ Bold，
+                    // 与同页「每日打卡 / 今日计划 / 今日专注学习」同字号同字重。
+                    // 原先是 bodyLarge + Medium（同为 16sp 但更细），扫首页时那张卡会比其他卡轻一档。
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = if (enabled) MaterialTheme.colorScheme.onSurface else YanjiColors.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

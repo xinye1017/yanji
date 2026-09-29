@@ -222,7 +222,9 @@ fun HomeScreen(
                     Text(
                         text = "今日专注学习",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        // 与「今日计划」「每日打卡」同为 16sp / Bold：
+                        // 三条主卡标题同一字号同一字重，扫首页时是同一层级的三件事。
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
