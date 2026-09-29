@@ -65,7 +65,7 @@ fun CheckInCard(
                         Text(
                             text = "每日打卡",
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(

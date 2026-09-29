@@ -207,9 +207,15 @@ internal fun TodayPlanCard(
 }
 
 /**
- * 卡片头：标题 + 状态一句话 + 添加。
+ * 卡片头：图标 + 标题 + 添加按钮。
  *
- * 状态文案是本卡唯一的计数表达，因此按「下一步该做什么」而不是「做了多少」来组织。
+ * 靶心图标（[RemixIcons.Focus3Line]）表达「今天要打到哪」，与相邻「每日打卡」的
+ * 火焰图标形成同一套「图标即卡片主题」的读法 —— 用户扫过首页时，图标比文字更快
+ * 认出这张卡是关于计划的。沿用打卡卡的 32dp 色调圆底 + 18dp 图标写法，
+ * 两张相邻卡因此出自同一套排版规则。
+ *
+ * 标题用 `titleMedium`（16sp / SemiBold），与首页其余卡片标题一致；
+ * 副标题状态文案由 [PlanProgressSummary] 承担。
  */
 @Composable
 private fun TodayPlanHeader(onAdd: () -> Unit) {
@@ -219,6 +225,21 @@ private fun TodayPlanHeader(onAdd: () -> Unit) {
             .padding(horizontal = YanjiSpacing.CardPaddingCompact, vertical = YanjiSpacing.ItemGapSmall),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = RemixIcons.Focus3Line,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "今日计划",
             modifier = Modifier.weight(1f),
