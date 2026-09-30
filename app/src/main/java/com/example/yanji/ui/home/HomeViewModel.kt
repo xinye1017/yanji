@@ -117,7 +117,7 @@ class HomeViewModel(
 
     // ---- 动作 ----
 
-    /** 写入今日计划。标题空串与超范围时长在这里挡住，不让脏数据落库。 */
+    /** 写入今日计划。标题空串与超范围时长在这里挡住，不让脏数据落库。0 表示不限时。 */
     fun addStudyTask(subject: Subject, title: String, plannedMinutes: Int) = viewModelScope.launch {
         val cleanTitle = title.trim()
         if (cleanTitle.isEmpty()) return@launch
@@ -127,9 +127,23 @@ class HomeViewModel(
                 subjectId = subject.id,
                 subjectName = subject.name,
                 title = cleanTitle,
-                plannedMinutes = plannedMinutes.coerceIn(5, 360)
+                plannedMinutes = if (plannedMinutes <= 0) 0 else plannedMinutes.coerceIn(5, 720)
             )
         )
+    }
+
+    fun createSubjectCategory(name: String, onCreated: ((Subject) -> Unit)? = null) = viewModelScope.launch {
+        val clean = name.trim()
+        if (clean.isBlank()) return@launch
+        val newCat = repo.addSubjectCategory(clean)
+        onCreated?.invoke(newCat)
+    }
+
+    fun createSubSubject(parentId: String, name: String, onCreated: ((Subject) -> Unit)? = null) = viewModelScope.launch {
+        val clean = name.trim()
+        if (clean.isBlank()) return@launch
+        val newSub = repo.addSubSubject(parentId, clean)
+        if (newSub != null) onCreated?.invoke(newSub)
     }
 
     fun setStudyTaskCompleted(id: String, completed: Boolean) = viewModelScope.launch {

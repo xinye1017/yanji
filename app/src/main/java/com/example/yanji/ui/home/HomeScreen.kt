@@ -201,13 +201,17 @@ fun HomeScreen(
             TodayPlanCard(
                 tasks = state.todayTasks,
                 subjects = state.subjects,
+                dailyGoalMinutes = (state.settings.dailyGoalHours * 60).toInt(),
                 onAdd = { subject, title, minutes -> viewModel.addStudyTask(subject, title, minutes) },
                 onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
                 onDelete = { id -> viewModel.deleteStudyTask(id) },
                 // 只切到专注页：启动专注要走通知权限闸门 + 前台 Service 派发，
                 // 那条链路由 FocusScreen 独占（见 FocusScreen.launchFocus），
                 // 在这里复制一遍会立刻分叉出两套权限 UX。用户在专注页确认后开始。
-                onStart = { onNavigateToFocus() }
+                onStart = { onNavigateToFocus() },
+                onStartFocus = { onNavigateToFocus() },
+                onCreateCategory = { name -> viewModel.createSubjectCategory(name) },
+                onCreateSubSubject = { parentId, name -> viewModel.createSubSubject(parentId, name) }
             )
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))

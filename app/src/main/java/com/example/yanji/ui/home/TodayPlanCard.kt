@@ -64,13 +64,7 @@ import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiProgressBar
 import com.example.yanji.ui.icons.RemixIcons
 
-/**
- * 计划可选的时长档位。
- *
- * 取值与 [com.example.yanji.data.FocusModes] 的四个倒计时档位对齐：
- * 用户在「今日计划」里写下的 45 分钟，和在专注准备页选的「45分钟深度」是同一个长度。
- */
-private val PlannedDurationOptions = listOf(25, 45, 60, 90)
+
 
 /**
  * 完成圈直径。分割线要用它内缩到文字列起点，因此不能只写在 [TaskCheckCircle] 里。
@@ -137,9 +131,13 @@ internal fun TodayPlanCard(
     onToggle: (StudyTask) -> Unit,
     onDelete: (String) -> Unit,
     onStart: (StudyTask) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dailyGoalMinutes: Int = 0,
+    onStartFocus: (() -> Unit)? = null,
+    onCreateCategory: ((String) -> Unit)? = null,
+    onCreateSubSubject: ((parentId: String, name: String) -> Unit)? = null
 ) {
-    var showAddDialog by rememberSaveable { mutableStateOf(false) }
+    var showAddSheet by rememberSaveable { mutableStateOf(false) }
 
     YanjiCard(
         modifier = modifier
@@ -147,13 +145,14 @@ internal fun TodayPlanCard(
             .testTag("home_today_plan_card"),
         variant = YanjiCardVariant.Grouped
     ) {
-        Column(modifier = Modifier.padding(vertical = YanjiSpacing.CardPaddingCompact)) {
-            TodayPlanHeader(onAdd = { showAddDialog = true })
+        Column(modifier = Modifier.padding(top = YanjiSpacing.CardPaddingCompact, bottom = 12.dp)) {
+            TodayPlanHeader(onAdd = { showAddSheet = true })
 
             if (tasks.isEmpty()) {
-                EmptyPlanHint()
+                EmptyPlanHint(onClick = { showAddSheet = true })
             } else {
                 val completed = tasks.count { it.isCompleted }
+                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
                 PlanProgressSummary(completed = completed, total = tasks.size)
                 Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
                 YanjiProgressBar(
@@ -164,8 +163,10 @@ internal fun TodayPlanCard(
                     } else {
                         MaterialTheme.colorScheme.primary
                     },
-                    height = YanjiSpacing.TightGap
+                    height = YanjiSpacing.TightGap,
+                    modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding)
                 )
+                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
 
                 tasks.forEachIndexed { index, task ->
                     if (index > 0) {
@@ -175,7 +176,7 @@ internal fun TodayPlanCard(
                         // 起点按行内实际排版推：左内边距(含溢出回补) + 触控框 + 间隙。
                         HorizontalDivider(
                             modifier = Modifier.padding(
-                                start = (YanjiSpacing.CardPaddingCompact - TaskTouchTargetOverhang) +
+                                start = (YanjiSpacing.CardPadding - TaskTouchTargetOverhang) +
                                     TaskTouchTargetSize +
                                     YanjiSpacing.ItemGap
                             ),
@@ -194,14 +195,30 @@ internal fun TodayPlanCard(
         }
     }
 
-    if (showAddDialog) {
-        StudyTaskDialog(
+    if (showAddSheet) {
+        AddPlanSheet(
             subjects = subjects,
-            onDismiss = { showAddDialog = false },
-            onConfirm = { subject, title, minutes ->
+            recentTasks = tasks,
+            plannedTodayMinutes = tasks.sumOf { it.plannedMinutes },
+            dailyGoalMinutes = dailyGoalMinutes,
+            onDismiss = { showAddSheet = false },
+            onConfirm = { subject, title, minutes, startNow ->
                 onAdd(subject, title, minutes)
-                showAddDialog = false
-            }
+                showAddSheet = false
+                if (startNow) {
+                    onStartFocus?.invoke() ?: onStart(
+                        StudyTask(
+                            date = "",
+                            subjectId = subject.id,
+                            subjectName = subject.name,
+                            title = title,
+                            plannedMinutes = minutes
+                        )
+                    )
+                }
+            },
+            onCreateCategory = onCreateCategory,
+            onCreateSubSubject = onCreateSubSubject
         )
     }
 }
@@ -225,7 +242,7 @@ private fun TodayPlanHeader(onAdd: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = YanjiSpacing.CardPaddingCompact, vertical = YanjiSpacing.ItemGapSmall),
+            .padding(horizontal = YanjiSpacing.CardPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -285,13 +302,16 @@ private fun AddPlanButton(onClick: () -> Unit) {
 
 /** 空态：不是禁用态控件，而是把这张卡变成一个明确的行动入口。 */
 @Composable
-private fun EmptyPlanHint() {
+private fun EmptyPlanHint(onClick: () -> Unit = {}) {
     Text(
-        text = "写下今天要完成的事，之后可以从这里直接开始专注。",
-        modifier = Modifier.padding(
-            horizontal = YanjiSpacing.CardPaddingCompact,
-            vertical = YanjiSpacing.ItemGapSmall
-        ),
+        text = "写下今天要做的事，之后可以从这里直接开始专注。",
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = YanjiSpacing.CardPadding,
+                vertical = YanjiSpacing.ItemGapSmall
+            ),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -315,7 +335,7 @@ private fun PlanProgressSummary(
             completed == 0 -> "还有 $remaining 件待完成"
             else -> "还剩 $remaining 件，已完成 $completed 件"
         },
-        modifier = Modifier.padding(horizontal = YanjiSpacing.CardPaddingCompact),
+        modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding),
         style = MaterialTheme.typography.bodySmall,
         color = if (remaining == 0) YanjiColors.success else MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -360,8 +380,8 @@ private fun StudyTaskRow(
             // 使 22dp 圆圈本身的左缘仍与卡片文字左缘对齐；
             // 触摸区则刚好铺满内边距，不越出卡片。
             .padding(
-                start = YanjiSpacing.CardPaddingCompact - TaskTouchTargetOverhang,
-                end = YanjiSpacing.CardPaddingCompact,
+                start = YanjiSpacing.CardPadding - TaskTouchTargetOverhang,
+                end = YanjiSpacing.CardPadding,
                 top = 8.dp,
                 bottom = 8.dp
             ),
@@ -393,8 +413,9 @@ private fun StudyTaskRow(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
+            val durationText = if (task.plannedMinutes > 0) "${task.plannedMinutes} 分钟" else "不限时"
             Text(
-                text = "${task.subjectName} · ${task.plannedMinutes} 分钟",
+                text = "${task.subjectName} · $durationText",
                 style = MaterialTheme.typography.bodySmall,
                 color = YanjiColors.textTertiary,
                 maxLines = 1,
@@ -500,146 +521,4 @@ private fun TaskCheckCircle(
             }
         }
     }
-}
-
-/**
- * 添加今日计划。
- *
- * 三段式：目标 → 科目 → 时长。科目用 FlowRow 药丸而不是下拉 ——
- * 可选科目在十几条量级，下拉要多一次点击且看不到全貌，药丸一屏铺开更好扫。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun StudyTaskDialog(
-    subjects: List<Subject>,
-    onDismiss: () -> Unit,
-    onConfirm: (Subject, String, Int) -> Unit
-) {
-    val selectableSubjects = remember(subjects) {
-        subjects.filter { subject ->
-            subject.enabled && (
-                subject.parentId != null ||
-                    subjects.none { it.enabled && it.parentId == subject.id }
-                )
-        }.sortedBy { it.sortOrder }
-    }
-    var title by rememberSaveable { mutableStateOf("") }
-    var selectedSubjectId by rememberSaveable(selectableSubjects) {
-        mutableStateOf(selectableSubjects.firstOrNull()?.id.orEmpty())
-    }
-    var selectedMinutes by rememberSaveable { mutableIntStateOf(45) }
-    val selectedSubject = selectableSubjects.firstOrNull { it.id == selectedSubjectId }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "添加今日计划",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { if (it.length <= 60) title = it },
-                    label = { Text("准备完成什么？") },
-                    placeholder = { Text("例如：二次型 30 道题") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(YanjiRadius.InputRadius)
-                )
-
-                Text(
-                    text = "科目",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    selectableSubjects.forEach { subject ->
-                        val selected = subject.id == selectedSubjectId
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .clickable { selectedSubjectId = subject.id },
-                            shape = RoundedCornerShape(YanjiRadius.Small),
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ) {
-                            Text(
-                                text = subject.name,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    text = "预计时长",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PlannedDurationOptions.forEach { minutes ->
-                        val selected = selectedMinutes == minutes
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(YanjiRadius.Small))
-                                .clickable { selectedMinutes = minutes },
-                            shape = RoundedCornerShape(YanjiRadius.Small),
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ) {
-                            Text(
-                                text = "${minutes}m",
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { selectedSubject?.let { onConfirm(it, title.trim(), selectedMinutes) } },
-                enabled = title.isNotBlank() && selectedSubject != null
-            ) {
-                Text("添加")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
-        containerColor = MaterialTheme.colorScheme.surface
-    )
 }
