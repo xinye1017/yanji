@@ -10,6 +10,7 @@ import com.example.yanji.data.AchievementRepository
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.timer.ActiveSessionCoordinator
+import com.example.yanji.data.timer.FocusPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +29,16 @@ interface AppContainer {
     val statisticsRepository: StudyStatisticsRepository
     val achievementRepository: AchievementRepository
     val activeSessionCoordinator: ActiveSessionCoordinator
+
+    /**
+     * 专注/省电偏好。由组合根持有，页面与 ViewModel 都从这里取，不再各自
+     * `FocusPreferences.getInstance(context)`。
+     *
+     * 刻意**复用既有单例**而不是新建实例：[FocusPreferences] 是 private 构造 + 内部
+     * `MutableStateFlow` 镜像 SharedPreferences 的单例，若容器另建一个，写入方与读取方
+     * 会持有两份互不同步的内存镜像。
+     */
+    val focusPreferences: FocusPreferences
 }
 
 class DefaultAppContainer(private val context: Context) : AppContainer {
@@ -52,6 +63,10 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         AchievementRepository(repository, applicationScope)
     }
     override val activeSessionCoordinator: ActiveSessionCoordinator get() = ActiveSessionCoordinator
+
+    override val focusPreferences: FocusPreferences by lazy {
+        FocusPreferences.getInstance(context.applicationContext)
+    }
 }
 
 val LocalAppContainer = staticCompositionLocalOf<AppContainer> {

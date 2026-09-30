@@ -46,7 +46,10 @@ fun SubjectDistributionCard(
     onSelectSubjectLevel: (SubjectStatsLevel) -> Unit,
     onNavigateToSubjectDetail: (String) -> Unit
 ) {
-    val subjectDist = subjectDistribution.associate { it.subjectName to it.durationSeconds }
+    // 每次重组重建 Map 会让下游 SubjectDonutChart 的 Map 参数身份不断变化，跳过永远失效。
+    val subjectDist = remember(subjectDistribution) {
+        subjectDistribution.associate { it.subjectName to it.durationSeconds }
+    }
     val isDark = yanjiIsDarkTheme()
     val mascotTheme = currentMascotTheme()
 

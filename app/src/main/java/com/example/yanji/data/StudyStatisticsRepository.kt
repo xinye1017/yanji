@@ -1,5 +1,6 @@
 package com.example.yanji.data
 
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
@@ -29,6 +30,14 @@ data class SubjectDistributionItem(
     val durationSeconds: Long
 )
 
+/**
+ * 领域模型对 Compose 是**只读不可变**的：字段全为 val、且不含任何集合字段。
+ * 标注后编译器能把它们视为稳定类型，避免以 List/整体对象作参数时跳过失败。
+ *
+ * 只加在真正平坦的 val-only 类型上——含 List/Map 的类型（如 NoteEntry、DayBarData）
+ * 标注 @Immutable 等于对编译器撒谎，不要加。
+ */
+@Immutable
 data class DailySessionItem(
     val id: String,
     val title: String,

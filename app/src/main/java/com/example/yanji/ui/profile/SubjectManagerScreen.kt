@@ -73,7 +73,7 @@ fun SubjectManagerScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = yanjiViewModel { container ->
-        ProfileViewModel(container.repository)
+        ProfileViewModel(container.repository, container.focusPreferences)
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -105,6 +105,11 @@ private fun SubjectManagerContent(
     val childrenOf = remember(subjects) {
         subjects.filter { it.parentId != null }.groupBy { it.parentId!! }
     }
+    // 排序上提到这里：原先在 LazyColumn 的 items{} 内逐行排序，每行每次重组都重新
+    // 分配一个 List，CategoryRow 的 List<Subject> 参数因此永远引用不稳定、无法跳过。
+    val sortedChildrenOf = remember(childrenOf) {
+        childrenOf.mapValues { (_, children) -> children.sortedBy { it.sortOrder } }
+    }
 
     // 编辑弹窗状态：新增类别 / 新增子学科 / 重命名 共用一套输入框。
     var editing by remember { mutableStateOf<SubjectEditTarget?>(null) }
@@ -134,7 +139,7 @@ private fun SubjectManagerContent(
             items(categories, key = { it.id }) { category ->
                 CategoryRow(
                     category = category,
-                    children = childrenOf[category.id].orEmpty().sortedBy { it.sortOrder },
+                    children = sortedChildrenOf[category.id].orEmpty(),
                     onAddChild = { editing = SubjectEditTarget.AddChild(category.id, category.name) },
                     onRename = { editing = SubjectEditTarget.Rename(it) },
                     onDelete = { pendingDelete = it }

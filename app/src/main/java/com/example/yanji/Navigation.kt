@@ -243,7 +243,7 @@ fun MainNavigation() {
                             SubjectManagerScreen(
                                 onBack = { screenStack.removeLastOrNull() },
                                 viewModel = yanjiViewModel { container ->
-                                    ProfileViewModel(container.repository)
+                                    ProfileViewModel(container.repository, container.focusPreferences)
                                 }
                             )
                         }

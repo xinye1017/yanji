@@ -157,7 +157,10 @@ fun QuietFocusSetupContent(
         YanjiTime.todayIso()
     }
     var currentStep by rememberSaveable { mutableStateOf(QuietFocusStep.CATEGORY) }
-    var selectedCategoryId by rememberSaveable(subjects) {
+    // rememberSaveable 的 key 必须能存进 Bundle，List<Subject> 做不到；
+    // 用稳定的 id 投影既保留「学科集变化时重置」的原意，又让进程重建可正确恢复。
+    val subjectIdsKey = remember(subjects) { subjects.map { it.id } }
+    var selectedCategoryId by rememberSaveable(subjectIdsKey) {
         mutableStateOf(selectedSubject.parentId ?: selectedSubject.id)
     }
     var isCountdownMode by rememberSaveable {

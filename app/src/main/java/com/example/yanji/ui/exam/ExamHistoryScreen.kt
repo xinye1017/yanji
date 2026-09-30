@@ -86,7 +86,8 @@ fun ExamHistoryScreen(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(YanjiSpacing.CardGap)
             ) {
-                items(examSessions) { exam ->
+                // Room 驱动的可增删列表，用稳定 id 保住每张卡片自己的组合与滚动位置。
+                items(examSessions, key = { it.id }) { exam ->
                     ExamHistoryCard(
                         exam = exam,
                         onClick = { onNavigateToExamDetail(exam.id) }

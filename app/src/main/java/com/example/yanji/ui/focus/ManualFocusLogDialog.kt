@@ -57,7 +57,9 @@ fun ManualFocusLogDialog(
         }.sortedBy { it.sortOrder }
     }
 
-    var selectedCategoryId by rememberSaveable(subjects) {
+    // 同上：rememberSaveable 的 key 用可保存的 id 列表，而非 List<Subject> 本身。
+    val subjectIdsKey = remember(subjects) { subjects.map { it.id } }
+    var selectedCategoryId by rememberSaveable(subjectIdsKey) {
         val initialSub = subjects.firstOrNull { it.id == initialSubjectId }
         mutableStateOf(initialSub?.parentId ?: initialSub?.id ?: topCategories.firstOrNull()?.id ?: "math")
     }

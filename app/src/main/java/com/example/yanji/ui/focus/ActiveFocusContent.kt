@@ -63,6 +63,7 @@ import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.timer.FocusPreferences
+import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.data.timer.formatFocusClock
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
@@ -101,7 +102,7 @@ fun ActiveFocusContent(
 ) {
     FocusSystemBarAppearance()
     val context = LocalContext.current
-    val focusPrefs = remember(context) { FocusPreferences.getInstance(context) }
+    val focusPrefs = LocalAppContainer.current.focusPreferences
     val autoPowerSavingEnabled by focusPrefs.autoPowerSavingEnabled.collectAsStateWithLifecycle()
     val timeoutSeconds by focusPrefs.timeoutSeconds.collectAsStateWithLifecycle()
 

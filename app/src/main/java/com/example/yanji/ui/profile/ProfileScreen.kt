@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupDecodeResult
 import com.example.yanji.data.timer.FocusPreferences
 import com.example.yanji.di.yanjiViewModel
@@ -51,7 +50,7 @@ fun ProfileScreen(
     onNavigateToAchievements: () -> Unit = {},
     onNavigateToSubjectManager: () -> Unit = {},
     viewModel: ProfileViewModel = yanjiViewModel { container ->
-        ProfileViewModel(container.repository)
+        ProfileViewModel(container.repository, container.focusPreferences)
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -61,9 +60,8 @@ fun ProfileScreen(
     val context = LocalContext.current
     val appVersionName = remember(context) { currentAppVersionName(context) }
     val coroutineScope = rememberCoroutineScope()
-    val focusPrefs = remember(context) { FocusPreferences.getInstance(context) }
-    val autoPowerSavingEnabled by focusPrefs.autoPowerSavingEnabled.collectAsStateWithLifecycle()
-    val timeoutSeconds by focusPrefs.timeoutSeconds.collectAsStateWithLifecycle()
+    val autoPowerSavingEnabled = state.autoPowerSavingEnabled
+    val timeoutSeconds = state.powerSavingTimeoutSeconds
 
     var showExamTargetDialog by remember { mutableStateOf(false) }
     var showAiConfigDialog by remember { mutableStateOf(false) }
@@ -121,7 +119,9 @@ fun ProfileScreen(
                 }
             }
             text.onSuccess { raw ->
-                when (val decoded = BackupCodec.decode(raw)) {
+                // decode 对整份 JSON（上限 64MB）做解析与 schema 校验，属于重 CPU 工作。
+                // 调度与结果判定都交给 ViewModel，页面层不再直接触碰 BackupCodec。
+                when (val decoded = viewModel.decodeBackupPreview(raw)) {
                     is BackupDecodeResult.Failure -> {
                         importError = decoded.message
                     }
@@ -204,7 +204,7 @@ fun ProfileScreen(
                 title = "自动沉浸省电",
                 subtitle = if (autoPowerSavingEnabled) "静置自动进入全屏纯黑省电模式" else "已关闭自动沉浸",
                 checked = autoPowerSavingEnabled,
-                onCheckedChange = { focusPrefs.setAutoPowerSavingEnabled(it) }
+                onCheckedChange = { viewModel.setAutoPowerSavingEnabled(it) }
             )
             // 开启省电开关后，"沉浸等待时长"平滑展开/收起（淡入 + 竖向展开）。
             // 时长与缓动统一取自 YanjiMotion 的转场 spec，避免在 ui/ 层新增裸过渡时长而触发设计 token 棘轮。
@@ -363,7 +363,7 @@ fun ProfileScreen(
     if (showTimeoutDialog) {
         PowerSavingTimeoutDialog(
             currentSeconds = timeoutSeconds,
-            onSelect = { focusPrefs.setTimeoutSeconds(it) },
+            onSelect = { viewModel.setPowerSavingTimeoutSeconds(it) },
             onDismiss = { showTimeoutDialog = false }
         )
     }

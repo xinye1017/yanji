@@ -207,7 +207,9 @@ fun DailyStudyDetailScreen(
                     }
                 }
             } else {
-                items(summary.sessions) { item ->
+                // key 用稳定的业务 id：列表按 startTime 倒序，新会话前插会让 index 整体位移，
+                // 不给 key 时 LazyColumn 会把已有槽位复用给另一条记录。
+                items(summary.sessions, key = { it.id }) { item ->
                     DailySessionRowCard(
                         item = item,
                         onClick = {

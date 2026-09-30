@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,17 +41,10 @@ fun SubjectStudyDetailScreen(
         key = subjectId
     ) { container -> SubjectStudyDetailViewModel(container.statisticsRepository, subjectId) }
 ) {
-    var selectedRange by rememberSaveable(subjectId) { mutableStateOf(StudyTimeRange.TODAY) }
-
     val summary by viewModel.summary.collectAsStateWithLifecycle()
+    val selectedRange by viewModel.selectedRange.collectAsStateWithLifecycle()
 
-    val selectRange: (StudyTimeRange) -> Unit = { range ->
-        selectedRange = range
-    }
-
-    LaunchedEffect(selectedRange) {
-        viewModel.selectRange(selectedRange)
-    }
+    val selectRange: (StudyTimeRange) -> Unit = viewModel::selectRange
 
     val subjectColor = yanjiSubjectColor(subjectId)
 
@@ -188,7 +180,8 @@ fun SubjectStudyDetailScreen(
                     }
                 }
             } else {
-                items(summary.sessions) { item ->
+                // 同 DailyStudyDetailScreen：按时间倒序 + 新记录前插，必须用稳定 id 而非 index。
+                items(summary.sessions, key = { it.id }) { item ->
                     DailySessionRowCard(
                         item = item,
                         onClick = {

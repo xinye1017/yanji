@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 
@@ -41,18 +42,26 @@ class SubjectStudyDetailViewModel(
     private val subjectId: String
 ) : ViewModel() {
 
-    private val selectedRange = MutableStateFlow(StudyTimeRange.TODAY)
+    private val _selectedRange = MutableStateFlow(StudyTimeRange.TODAY)
 
-    val summary: StateFlow<SubjectStudySummary> = selectedRange
+    /**
+     * 时间范围选择的唯一事实来源。只读暴露：页面只 collect + 回调，不再自己存一份。
+     *
+     * 此前页面用 rememberSaveable 存了一份再经 LaunchedEffect 异步推给 VM，导致
+     * 「选中的范围」与「实际查询用的范围」之间存在一帧滞后，且 VM 沦为宿主的下游。
+     */
+    val selectedRange: StateFlow<StudyTimeRange> = _selectedRange.asStateFlow()
+
+    val summary: StateFlow<SubjectStudySummary> = _selectedRange
         .flatMapLatest { range -> statsRepo.getSubjectStudySummaryFlow(subjectId, range) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = statsRepo.getSubjectStudySummary(subjectId, selectedRange.value)
+            initialValue = statsRepo.getSubjectStudySummary(subjectId, _selectedRange.value)
         )
 
     fun selectRange(range: StudyTimeRange) {
-        selectedRange.value = range
+        _selectedRange.value = range
     }
 }
 
