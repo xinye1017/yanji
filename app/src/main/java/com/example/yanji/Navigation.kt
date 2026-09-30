@@ -122,6 +122,8 @@ fun MainNavigation() {
         if (activeFocus != null) currentTab = YanjiTab.FOCUS
     }
 
+    var pendingFocusPreset by remember { mutableStateOf<com.example.yanji.data.FocusPresetRequest?>(null) }
+
     val todayStr = remember {
         YanjiTime.todayIso()
     }
@@ -283,14 +285,25 @@ fun MainNavigation() {
                                         )
                                     )
                                 },
-                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) }
+                                onNavigateToAchievements = { screenStack.add(YanjiSubScreen.Achievements) },
+                                onStartTask = { task ->
+                                    pendingFocusPreset = com.example.yanji.data.FocusPresetRequest(
+                                        subjectId = task.subjectId,
+                                        subjectName = task.subjectName,
+                                        plannedMinutes = task.plannedMinutes,
+                                        note = task.title
+                                    )
+                                    currentTab = YanjiTab.FOCUS
+                                }
                             )
                         }
                         YanjiTab.FOCUS -> {
                             FocusScreen(
                                 onNavigateToExam = { screenStack.add(YanjiSubScreen.ExamMode) },
                                 onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
-                                onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) }
+                                onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) },
+                                presetRequest = pendingFocusPreset,
+                                onClearPresetRequest = { pendingFocusPreset = null }
                             )
                         }
                         YanjiTab.NOTE -> {

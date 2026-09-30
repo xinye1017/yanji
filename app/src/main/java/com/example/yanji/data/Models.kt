@@ -51,6 +51,18 @@ object FocusModes {
 }
 
 /**
+ * 从外部页面（如今日计划卡片）请求在专注页预设/启动专注的传参模型。
+ */
+@Serializable
+@Immutable
+data class FocusPresetRequest(
+    val subjectId: String,
+    val subjectName: String,
+    val plannedMinutes: Int = 0,
+    val note: String = ""
+)
+
+/**
  * 首页快捷操作。type 区分内置模板与用户自定义组合：
  * - start_focus / exam / journal：出厂默认三项，行为与原先写死的三个按钮一致
  *   （`journal` 是写入 `quick_start_presets.type` 的持久化值，不随代码命名调整）

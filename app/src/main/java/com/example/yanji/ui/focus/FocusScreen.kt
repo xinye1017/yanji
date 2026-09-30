@@ -46,6 +46,8 @@ fun FocusScreen(
     modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
+    presetRequest: com.example.yanji.data.FocusPresetRequest? = null,
+    onClearPresetRequest: (() -> Unit)? = null,
     viewModel: FocusViewModel = yanjiViewModel { container ->
         FocusViewModel(container.repository, container.statisticsRepository)
     }
@@ -72,6 +74,22 @@ fun FocusScreen(
         ?: (SubjectCatalog.find("math_advanced") ?: SubjectCatalog.defaults.first())
     var selectedMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var noteText by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(presetRequest) {
+        presetRequest?.let { req ->
+            if (req.subjectId.isNotBlank()) {
+                selectedSubjectId = req.subjectId
+            }
+            if (req.plannedMinutes > 0) {
+                selectedMode = FocusModes.forPlannedMinutes(req.plannedMinutes)
+            }
+            if (req.note.isNotBlank()) {
+                noteText = req.note
+            }
+            onClearPresetRequest?.invoke()
+        }
+    }
+
     var showSummaryDialog by remember { mutableStateOf(false) }
     var showManualLogDialog by rememberSaveable { mutableStateOf(false) }
     var lastFinishedSession by remember { mutableStateOf<FocusSession?>(null) }

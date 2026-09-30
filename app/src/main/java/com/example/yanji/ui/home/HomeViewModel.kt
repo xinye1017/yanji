@@ -132,6 +132,21 @@ class HomeViewModel(
         )
     }
 
+    /** 更新已有今日计划。保留原有 id、date、createdAt 与完成状态。 */
+    fun updateStudyTask(task: StudyTask, subject: Subject, title: String, plannedMinutes: Int) = viewModelScope.launch {
+        val cleanTitle = title.trim()
+        if (cleanTitle.isEmpty()) return@launch
+        repo.saveStudyTask(
+            task.copy(
+                subjectId = subject.id,
+                subjectName = subject.name,
+                title = cleanTitle,
+                plannedMinutes = if (plannedMinutes <= 0) 0 else plannedMinutes.coerceIn(5, 720),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     fun createSubjectCategory(name: String, onCreated: ((Subject) -> Unit)? = null) = viewModelScope.launch {
         val clean = name.trim()
         if (clean.isBlank()) return@launch

@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.StudyTask
@@ -63,8 +64,6 @@ import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiProgressBar
 import com.example.yanji.ui.icons.RemixIcons
-
-
 
 /**
  * 完成圈直径。分割线要用它内缩到文字列起点，因此不能只写在 [TaskCheckCircle] 里。
@@ -92,6 +91,17 @@ private val TaskTouchTargetSize = 40.dp
  * 侵入相邻两行的命中区（否则会勾上一行却把下一行也划掉）。
  */
 private val TaskTouchTargetOverhang = (TaskTouchTargetSize - TaskCircleSize) / 2
+
+private fun formatTaskMinutes(minutes: Int): String {
+    if (minutes <= 0) return "0m"
+    val h = minutes / 60
+    val m = minutes % 60
+    return when {
+        h == 0 -> "${m}m"
+        m == 0 -> "${h}h"
+        else -> "${h}h ${m}m"
+    }
+}
 
 /**
  * 首页「今日计划」卡片。
@@ -133,11 +143,13 @@ internal fun TodayPlanCard(
     onStart: (StudyTask) -> Unit,
     modifier: Modifier = Modifier,
     dailyGoalMinutes: Int = 0,
+    onEdit: ((StudyTask, Subject, String, Int) -> Unit)? = null,
     onStartFocus: (() -> Unit)? = null,
     onCreateCategory: ((String) -> Unit)? = null,
     onCreateSubSubject: ((parentId: String, name: String) -> Unit)? = null
 ) {
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<StudyTask?>(null) }
 
     YanjiCard(
         modifier = modifier
@@ -146,14 +158,20 @@ internal fun TodayPlanCard(
         variant = YanjiCardVariant.Grouped
     ) {
         Column(modifier = Modifier.padding(top = YanjiSpacing.CardPaddingCompact, bottom = 12.dp)) {
-            TodayPlanHeader(onAdd = { showAddSheet = true })
+            TodayPlanHeader(onAdd = {
+                editingTask = null
+                showAddSheet = true
+            })
 
             if (tasks.isEmpty()) {
-                EmptyPlanHint(onClick = { showAddSheet = true })
+                EmptyPlanHint(onClick = {
+                    editingTask = null
+                    showAddSheet = true
+                })
             } else {
                 val completed = tasks.count { it.isCompleted }
                 Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                PlanProgressSummary(completed = completed, total = tasks.size)
+                PlanProgressSummary(tasks = tasks)
                 Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
                 YanjiProgressBar(
                     progress = completed.toFloat() / tasks.size,
@@ -188,6 +206,10 @@ internal fun TodayPlanCard(
                         task = task,
                         onToggle = { onToggle(task) },
                         onStart = { onStart(task) },
+                        onEdit = {
+                            editingTask = task
+                            showAddSheet = true
+                        },
                         onDelete = { onDelete(task.id) }
                     )
                 }
@@ -201,20 +223,34 @@ internal fun TodayPlanCard(
             recentTasks = tasks,
             plannedTodayMinutes = tasks.sumOf { it.plannedMinutes },
             dailyGoalMinutes = dailyGoalMinutes,
-            onDismiss = { showAddSheet = false },
-            onConfirm = { subject, title, minutes, startNow ->
-                onAdd(subject, title, minutes)
+            editingTask = editingTask,
+            onDismiss = {
                 showAddSheet = false
+                editingTask = null
+            },
+            onConfirm = { subject, title, minutes, startNow ->
+                val currentEditing = editingTask
+                if (currentEditing != null) {
+                    onEdit?.invoke(currentEditing, subject, title, minutes)
+                } else {
+                    onAdd(subject, title, minutes)
+                }
+                showAddSheet = false
+                editingTask = null
                 if (startNow) {
-                    onStartFocus?.invoke() ?: onStart(
-                        StudyTask(
-                            date = "",
-                            subjectId = subject.id,
-                            subjectName = subject.name,
-                            title = title,
-                            plannedMinutes = minutes
-                        )
+                    val taskToStart = currentEditing?.copy(
+                        subjectId = subject.id,
+                        subjectName = subject.name,
+                        title = title,
+                        plannedMinutes = minutes
+                    ) ?: StudyTask(
+                        date = "",
+                        subjectId = subject.id,
+                        subjectName = subject.name,
+                        title = title,
+                        plannedMinutes = minutes
                     )
+                    onStart(taskToStart)
                 }
             },
             onCreateCategory = onCreateCategory,
@@ -300,40 +336,85 @@ private fun AddPlanButton(onClick: () -> Unit) {
     }
 }
 
-/** 空态：不是禁用态控件，而是把这张卡变成一个明确的行动入口。 */
+/** 空态：现代卡片式引导，点击即可唤出添加计划面板。 */
 @Composable
 private fun EmptyPlanHint(onClick: () -> Unit = {}) {
-    Text(
-        text = "写下今天要做的事，之后可以从这里直接开始专注。",
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .padding(
                 horizontal = YanjiSpacing.CardPadding,
                 vertical = YanjiSpacing.ItemGapSmall
-            ),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = RemixIcons.AddLine,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "规划今日第一项任务",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "写下今天要做的事，之后可以从这里直接开始专注。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 /**
  * 进度区：一句状态 + 一条与全站共用的胶囊进度条。
  *
- * 措辞按「还剩几件」组织，因为待办的用户问题是「现在该做哪一件」，
- * 不是「我已经完成多少」。全部完成时改用 success 语义色，与首页进度条达成 100% 时一致。
+ * 结合件数与预计时长，直观感知剩余负担。
+ * 全部完成时改用 success 语义色，与首页进度条达成 100% 时一致。
  */
 @Composable
 private fun PlanProgressSummary(
-    completed: Int,
-    total: Int
+    tasks: List<StudyTask>
 ) {
+    val completed = tasks.count { it.isCompleted }
+    val total = tasks.size
     val remaining = total - completed
+    val remainingMinutes = tasks.filter { !it.isCompleted }.sumOf { it.plannedMinutes }
+    val totalMinutes = tasks.sumOf { it.plannedMinutes }
+
+    val remainingTimeText = if (remainingMinutes > 0) " (约 ${formatTaskMinutes(remainingMinutes)})" else ""
+    val completedTimeText = if (totalMinutes > 0) " · 共完成 ${formatTaskMinutes(totalMinutes)}" else ""
+
     Text(
         text = when {
-            remaining == 0 -> "今天的事都做完了"
-            completed == 0 -> "还有 $remaining 件待完成"
-            else -> "还剩 $remaining 件，已完成 $completed 件"
+            remaining == 0 -> "今天的事都做完了$completedTimeText"
+            completed == 0 -> "还有 $remaining 件待完成$remainingTimeText"
+            else -> "还剩 $remaining 件$remainingTimeText · 已完成 $completed 件"
         },
         modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding),
         style = MaterialTheme.typography.bodySmall,
@@ -348,12 +429,7 @@ private fun PlanProgressSummary(
  * 标题用 weight 自适应并在过长时省略，保证右侧的开始图标永远不被挤走。
  *
  * 整行可点 = 开始专注，**包括已完成的那一行**。
- * 早先只在未完成时可点，导致已完成行变成一块「按了没反应」的死区：
- * 读屏仍会念出「可双击激活」，视觉上又有开始图标，点了却什么都不发生。
- * 完成后想再练一遍同样合理，因此统一为可点，完成状态由「标题变淡 + 圆圈填色」表达。
- *
- * `onClickLabel` 把「开始专注」挂到整行的可点击语义上，而不是挂在那个 Play 图标上 ——
- * 图标本身不是可聚焦的点击目标，给它 contentDescription 只会多出一个念得到、按不动的节点。
+ * 完成状态由「删除线 + 标题变淡 + 圆圈填色」表达。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -361,6 +437,7 @@ private fun StudyTaskRow(
     task: StudyTask,
     onToggle: () -> Unit,
     onStart: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -388,8 +465,6 @@ private fun StudyTaskRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 勾选圈：视觉 22dp 圆画在 40dp 的方盒正中 —— 盒子本身即命中区
-        // （沿用 Material「小图标 + 大命中区」的范式），圆圈因此不需要任何
-        // 溢出或负偏移的技巧，版面与命中区严格一致。
         TaskCheckCircle(
             checked = task.isCompleted,
             subjectColor = subjectColor,
@@ -404,8 +479,9 @@ private fun StudyTaskRow(
                 text = task.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
                 color = if (task.isCompleted) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
@@ -441,6 +517,14 @@ private fun StudyTaskRow(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false }
         ) {
+            DropdownMenuItem(
+                text = { Text("编辑计划") },
+                leadingIcon = { Icon(RemixIcons.EditLine, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onEdit()
+                }
+            )
             DropdownMenuItem(
                 text = { Text("删除") },
                 leadingIcon = { Icon(RemixIcons.DeleteBinLine, contentDescription = null) },

@@ -39,6 +39,8 @@ class AddPlanSheetTest {
         assertTrue("Must support wheel picker", content.contains("WheelPicker"))
         assertTrue("Must support start focus action", content.contains("添加并开始专注"))
         assertTrue("Must support un-timed mode", content.contains("不限时"))
+        assertTrue("Must support editing mode", content.contains("editingTask"))
+        assertTrue("Must support action suggestions", content.contains("getSubjectActionSuggestions"))
     }
 
     private fun findProjectRoot(): File {

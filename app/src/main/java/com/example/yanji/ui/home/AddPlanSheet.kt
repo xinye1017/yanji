@@ -88,6 +88,7 @@ fun AddPlanSheet(
     recentTasks: List<StudyTask> = emptyList(),
     plannedTodayMinutes: Int = 0,
     dailyGoalMinutes: Int = 0,
+    editingTask: StudyTask? = null,
     onDismiss: () -> Unit,
     onConfirm: (subject: Subject, title: String, durationMinutes: Int, startNow: Boolean) -> Unit,
     onCreateCategory: ((String) -> Unit)? = null,
@@ -139,16 +140,27 @@ fun AddPlanSheet(
         list.distinctBy { it.actualSubject.id }.take(3)
     }
 
-    // 默认选择：优先取最近使用，其次取第一个大类及其首个子科目
-    var selectedCategoryItem by remember(coloredCategories) {
+    // 编辑模式或默认选择：优先匹配待编辑任务，其次取最近使用，最后取首个大类及首个子科目
+    val editingCat = remember(editingTask, coloredCategories) {
+        editingTask?.let { task ->
+            coloredCategories.firstOrNull { it.category.id == task.subjectId || it.subjects.any { s -> s.id == task.subjectId } }
+        }
+    }
+    val editingSub = remember(editingTask, editingCat) {
+        editingCat?.subjects?.firstOrNull { it.id == editingTask?.subjectId }
+    }
+
+    var selectedCategoryItem by remember(coloredCategories, editingTask) {
         mutableStateOf(
-            recentSelections.firstOrNull()?.categoryItem
+            editingCat
+                ?: recentSelections.firstOrNull()?.categoryItem
                 ?: coloredCategories.firstOrNull()
         )
     }
-    var selectedSubSubject by remember(coloredCategories) {
+    var selectedSubSubject by remember(coloredCategories, editingTask) {
         mutableStateOf(
-            recentSelections.firstOrNull()?.subject
+            editingSub
+                ?: (if (editingCat != null) null else recentSelections.firstOrNull()?.subject)
                 ?: coloredCategories.firstOrNull()?.subjects?.firstOrNull()
         )
     }
@@ -157,9 +169,15 @@ fun AddPlanSheet(
         SubjectSelection(it, selectedSubSubject)
     }
 
-    var title by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable(editingTask?.id) {
+        mutableStateOf(editingTask?.title.orEmpty())
+    }
     // durationMinutes: null 表示不限时
-    var durationMinutes by rememberSaveable { mutableStateOf<Int?>(45) }
+    var durationMinutes by rememberSaveable(editingTask?.id) {
+        mutableStateOf<Int?>(
+            editingTask?.let { if (it.plannedMinutes > 0) it.plannedMinutes else null } ?: 45
+        )
+    }
 
     // 新建科目弹窗状态
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -189,6 +207,8 @@ fun AddPlanSheet(
             when (currentPage) {
                 AddPlanPage.Form -> {
                     FormPage(
+                        isEditing = editingTask != null,
+                        originalMinutes = editingTask?.plannedMinutes,
                         selection = currentSelection,
                         recentSelections = recentSelections,
                         title = title,
@@ -257,8 +277,26 @@ fun AddPlanSheet(
 
 // --------------------------- 主表单页 ---------------------------
 
+private fun getSubjectActionSuggestions(subjectName: String): List<String> {
+    val name = subjectName.lowercase()
+    return when {
+        name.contains("数") || name.contains("代数") || name.contains("微积分") || name.contains("概率") ->
+            listOf("刷题训练", "错题订正", "真题模考", "概念复盘", "专项突破")
+        name.contains("英") || name.contains("词") || name.contains("语") ->
+            listOf("背核心词", "阅读真题", "长难句拆解", "作文模写", "真题精读")
+        name.contains("政") || name.contains("思修") || name.contains("马原") || name.contains("毛中特") || name.contains("史纲") ->
+            listOf("选择题刷题", "马原框架", "考点默写", "时政热点", "大题背诵")
+        name.contains("计") || name.contains("408") || name.contains("数据结构") || name.contains("网") || name.contains("原理") || name.contains("操作系统") ->
+            listOf("代码训练", "真题演练", "错题复盘", "框架梳理", "章节小测")
+        else ->
+            listOf("核心刷题", "概念复习", "真题精析", "背诵默写", "错题整理")
+    }
+}
+
 @Composable
 private fun FormPage(
+    isEditing: Boolean = false,
+    originalMinutes: Int? = null,
     selection: SubjectSelection?,
     recentSelections: List<SubjectSelection>,
     title: String,
@@ -272,7 +310,12 @@ private fun FormPage(
     onOpenCustomDuration: () -> Unit,
     onSubmit: (startNow: Boolean) -> Unit
 ) {
-    val total = plannedTodayMinutes + (durationMinutes ?: 0)
+    val basePlanned = if (isEditing) {
+        (plannedTodayMinutes - (originalMinutes ?: 0)).coerceAtLeast(0)
+    } else {
+        plannedTodayMinutes
+    }
+    val total = basePlanned + (durationMinutes ?: 0)
     val hasGoal = dailyGoalMinutes > 0
     val over = hasGoal && total > dailyGoalMinutes
 
@@ -283,7 +326,7 @@ private fun FormPage(
             .padding(horizontal = YanjiSpacing.PageHorizontalPadding, vertical = 8.dp)
     ) {
         Text(
-            text = "添加今日计划",
+            text = if (isEditing) "编辑今日计划" else "添加今日计划",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -315,7 +358,20 @@ private fun FormPage(
                 recentSelections.forEach { r ->
                     SuggestionChip(
                         onClick = { onSelectRecent(r) },
-                        label = { Text(r.shortName) },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(r.categoryItem.color)
+                                )
+                                Text(r.shortName)
+                            }
+                        },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = if (selection?.actualSubject?.id == r.actualSubject.id) {
                                 MaterialTheme.colorScheme.secondaryContainer
@@ -332,7 +388,7 @@ private fun FormPage(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // 2. 内容输入（选填）
+        // 2. 内容输入（选填）+ 快捷灵感词
         FormSectionHeader(title = "内容（选填）")
         Spacer(modifier = Modifier.height(6.dp))
 
@@ -345,6 +401,18 @@ private fun FormPage(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             },
+            trailingIcon = if (title.isNotBlank()) {
+                {
+                    IconButton(onClick = { onTitleChange("") }) {
+                        Icon(
+                            imageVector = RemixIcons.CloseLine,
+                            contentDescription = "清空",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            } else null,
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -357,6 +425,47 @@ private fun FormPage(
                 .fillMaxWidth()
                 .testTag("add_plan_title_input")
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        val currentSubName = selection?.shortName.orEmpty()
+        val suggestions = remember(currentSubName) { getSubjectActionSuggestions(currentSubName) }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            suggestions.forEach { tag ->
+                Surface(
+                    onClick = {
+                        if (title.isBlank()) {
+                            onTitleChange(tag)
+                        } else if (!title.contains(tag)) {
+                            onTitleChange("$title $tag")
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = RemixIcons.AddLine,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = tag,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -391,18 +500,55 @@ private fun FormPage(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        if (hasGoal) {
+            val baseRatio = (basePlanned.toFloat() / dailyGoalMinutes).coerceIn(0f, 1f)
+            val addedRatio = ((durationMinutes ?: 0).toFloat() / dailyGoalMinutes).coerceIn(0f, 1f - baseRatio)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                if (baseRatio > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(baseRatio)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                    )
+                }
+                if (addedRatio > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(baseRatio + addedRatio)
+                            .fillMaxHeight()
+                            .background(
+                                if (over) YanjiColors.warning else MaterialTheme.colorScheme.primary
+                            )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         // 今日计划总时长与日目标对比辅助文案
         val goalComparisonText = if (hasGoal) {
-            "添加后今日共计划 ${formatMinutes(total)} / 目标 ${formatMinutes(dailyGoalMinutes)}" +
-                if (over) "，已超出日目标" else ""
+            if (over) {
+                val overMins = total - dailyGoalMinutes
+                "累计计划 ${formatMinutes(total)} / 目标 ${formatMinutes(dailyGoalMinutes)} (超标 ${formatMinutes(overMins)})"
+            } else {
+                val remainMins = dailyGoalMinutes - total
+                "累计计划 ${formatMinutes(total)} / 目标 ${formatMinutes(dailyGoalMinutes)} (还可安排 ${formatMinutes(remainMins)})"
+            }
         } else {
-            "添加后今日共计划 ${formatMinutes(total)}"
+            "累计今日计划共 ${formatMinutes(total)}"
         }
 
         Text(
             text = goalComparisonText,
             style = MaterialTheme.typography.bodySmall,
-            color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (over) YanjiColors.warning else MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -421,7 +567,10 @@ private fun FormPage(
                 .height(50.dp)
                 .testTag("add_plan_confirm_button")
         ) {
-            Text("添加到今日计划", fontWeight = FontWeight.SemiBold)
+            Text(
+                text = if (isEditing) "保存修改" else "添加到今日计划",
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -433,7 +582,10 @@ private fun FormPage(
                 .fillMaxWidth()
                 .testTag("add_plan_start_now_button")
         ) {
-            Text("添加并开始专注", fontWeight = FontWeight.Medium)
+            Text(
+                text = if (isEditing) "保存并开始专注" else "添加并开始专注",
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
