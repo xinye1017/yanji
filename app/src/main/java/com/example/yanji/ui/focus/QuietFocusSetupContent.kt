@@ -363,7 +363,11 @@ private fun QuietFocusHeader(
                             .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onManualLogClick)
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                            // 不走 primary 做前景：暗色 primaryContainer 是主色 16% 半透明
+                            // （0x294F7DF3），再叠 0.55 alpha 后图标与文字同色相低分离，
+                            // 实测文字仅 3.5:1。改为 M3 配对 primaryContainer 底 +
+                            // onPrimaryContainer 前景（暗色 #7197F7 → 5.0:1，亮色 #2453BF → 6.0:1）。
+                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -371,14 +375,14 @@ private fun QuietFocusHeader(
                         Icon(
                             imageVector = RemixIcons.Edit2Line,
                             contentDescription = "手动补记专注",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "补记",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
 
@@ -537,13 +541,15 @@ private fun QuietCategoryStep(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(YanjiRadius.Small))
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+                            // 同页「补记」chip 同一修正：去掉 0.55 alpha 稀释并改配
+                            // onPrimaryContainer 前景，避免图标与底色同色相糊在一起。
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = RemixIcons.TimeLine,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(20.dp)
                         )
                     }
