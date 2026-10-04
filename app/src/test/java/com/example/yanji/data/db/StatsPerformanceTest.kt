@@ -104,7 +104,7 @@ class StatsPerformanceTest {
         assertEquals(5_000, dbExamCount)
 
         // 模拟本周范围查询（7 天窗口）
-        val weekRange = YanjiTime.currentWeekRange()
+        val weekRange = YanjiTime.weekRange()
         val startInclusive = weekRange.startInclusive
         val endExclusive = weekRange.endExclusive
 

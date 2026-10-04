@@ -66,36 +66,39 @@ internal fun yearTrendBars(months: List<MonthBarData>, mode: TrendMode): List<Da
 }
 
 /** 有效学习天数：三个视角各自的口径（本年 = 整个自然年）。 */
-private fun StatsUiState.activeDaysForTab(): Int = when (selectedTimeTab) {
-    STATS_TAB_WEEK -> weeklySummary.activeDays
-    STATS_TAB_MONTH -> monthlySummary.activeDays
-    else -> yearlySummary.activeDays
+private fun StatsUiState.activeDaysForTab(): Int = when (selectedTimeTab.unit) {
+    StatsTimeUnit.WEEK -> weeklySummary.activeDays
+    StatsTimeUnit.MONTH -> monthlySummary.activeDays
+    StatsTimeUnit.YEAR -> yearlySummary.activeDays
 }
 
 /** 日均投入：本年的分母是「有效学习天数」，不是 7 天也不是 365 天。 */
-private fun StatsUiState.dailyAverageForTab(): Long = when (selectedTimeTab) {
-    STATS_TAB_WEEK -> weeklySummary.dailyAverageSeconds
-    STATS_TAB_MONTH -> monthlySummary.dailyAverageSeconds
-    else -> yearlySummary.dailyAverageSeconds
+private fun StatsUiState.dailyAverageForTab(): Long = when (selectedTimeTab.unit) {
+    StatsTimeUnit.WEEK -> weeklySummary.dailyAverageSeconds
+    StatsTimeUnit.MONTH -> monthlySummary.dailyAverageSeconds
+    StatsTimeUnit.YEAR -> yearlySummary.dailyAverageSeconds
 }
 
-private fun StatsUiState.streakDaysForTab(): Int = when (selectedTimeTab) {
-    STATS_TAB_WEEK -> weeklySummary.streakDays
-    STATS_TAB_MONTH -> monthlySummary.streakDays
-    else -> yearlySummary.longestStreakDays
+private fun StatsUiState.streakDaysForTab(): Int = when (selectedTimeTab.unit) {
+    StatsTimeUnit.WEEK -> weeklySummary.streakDays
+    StatsTimeUnit.MONTH -> monthlySummary.streakDays
+    StatsTimeUnit.YEAR -> yearlySummary.longestStreakDays
 }
 
-private fun StatsUiState.longestSessionForTab(): DailySessionItem? = when (selectedTimeTab) {
-    STATS_TAB_WEEK -> weeklySummary.longestSession
-    STATS_TAB_MONTH -> monthlySummary.longestSession
-    else -> yearlySummary.longestSession
+private fun StatsUiState.longestSessionForTab(): DailySessionItem? = when (selectedTimeTab.unit) {
+    StatsTimeUnit.WEEK -> weeklySummary.longestSession
+    StatsTimeUnit.MONTH -> monthlySummary.longestSession
+    StatsTimeUnit.YEAR -> yearlySummary.longestSession
 }
 
-private fun StatsUiState.examCountForTab(): Int = when (selectedTimeTab) {
-    STATS_TAB_WEEK -> weeklySummary.examCount
-    STATS_TAB_MONTH -> monthlySummary.examCount
-    else -> yearlySummary.examCount
+private fun StatsUiState.examCountForTab(): Int = when (selectedTimeTab.unit) {
+    StatsTimeUnit.WEEK -> weeklySummary.examCount
+    StatsTimeUnit.MONTH -> monthlySummary.examCount
+    StatsTimeUnit.YEAR -> yearlySummary.examCount
 }
+
+/** 分段控制器的 Tab 文案。声明顺序即展示顺序，所以列表顺序 = 枚举声明顺序。 */
+private val StatsTabLabels: List<String> = StatsTimeTab.entries.map { it.label }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,10 +138,11 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(YanjiSpacing.SectionGap))
 
         // Time Range Filter
+        // 周 / 月各带一个「上一期」供回看，年不翻（见 StatsTimeTab.periodsBack）。
         YanjiSegmentedControl(
-            items = listOf("本周", "本月", "本年"),
-            selectedIndex = state.selectedTimeTab,
-            onItemSelected = { viewModel.selectTimeTab(it) },
+            items = StatsTabLabels,
+            selectedIndex = state.selectedTimeTab.ordinal,
+            onItemSelected = { viewModel.selectTimeTab(StatsTimeTab.entries[it]) },
             variant = YanjiSegmentedControlVariant.OnPage,
             height = 48.dp,
             modifier = Modifier.fillMaxWidth()
@@ -152,7 +156,6 @@ fun StatsScreen(
             periodDurationSecs = state.periodDurationSeconds,
             activeDays = state.activeDaysForTab(),
             previousWeekSeconds = state.previousWeekSeconds,
-            weeklyTotalSeconds = state.weeklySummary.totalDurationSeconds,
             dailyAverageSeconds = state.dailyAverageForTab(),
             recentSevenDaysSeconds = state.recentSevenDaysSeconds,
             settings = settings
@@ -164,10 +167,10 @@ fun StatsScreen(
         // 本年是月粒度：柱状一根一月，折线是累计值 —— 两者喂给同一张图的数据不同，
         // 所以先按视角把数据备好，图表只管画。
         val effectiveTrendMode = resolveEffectiveTrendMode(state.selectedTimeTab, state.trendChartMode)
-        val trendDays = when (state.selectedTimeTab) {
-            STATS_TAB_MONTH -> state.monthlySummary.days
-            STATS_TAB_YEAR -> yearTrendBars(state.yearlySummary.months, effectiveTrendMode)
-            else -> state.weeklySummary.days
+        val trendDays = when (state.selectedTimeTab.unit) {
+            StatsTimeUnit.MONTH -> state.monthlySummary.days
+            StatsTimeUnit.YEAR -> yearTrendBars(state.yearlySummary.months, effectiveTrendMode)
+            StatsTimeUnit.WEEK -> state.weeklySummary.days
         }
 
         StatsTrendChart(
@@ -188,7 +191,7 @@ fun StatsScreen(
         SubjectDistributionCard(
             subjectDistribution = state.subjectDistribution,
             subjectStatsLevel = state.subjectStatsLevel,
-            timeRangeTitle = state.timeRange.title,
+            timeRangeTitle = state.timeRangeTitle,
             onSelectSubjectLevel = { viewModel.selectSubjectLevel(it) },
             onNavigateToSubjectDetail = onNavigateToSubjectDetail
         )
@@ -205,7 +208,7 @@ fun StatsScreen(
                 iconTint = YanjiColors.warning,
                 iconBg = YanjiColors.warningSoft,
                 // 本年讲「最长连续」：当前连续在年初断一次就归零，作为年度指标没有信息量。
-                title = if (state.selectedTimeTab == STATS_TAB_YEAR) "最长连续" else "连续研读",
+                title = if (state.selectedTimeTab.unit == StatsTimeUnit.YEAR) "最长连续" else "连续研读",
                 value = "${state.streakDaysForTab()}",
                 unit = "天",
                 modifier = Modifier.weight(1f)

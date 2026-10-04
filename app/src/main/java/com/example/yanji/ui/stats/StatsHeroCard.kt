@@ -26,24 +26,23 @@ import kotlin.math.abs
 
 @Composable
 fun StatsHeroCard(
-    selectedTimeTab: Int,
+    selectedTimeTab: StatsTimeTab,
     periodDurationSecs: Long,
     activeDays: Int,
     previousWeekSeconds: Long,
-    weeklyTotalSeconds: Long,
     dailyAverageSeconds: Long,
     /** 滚动近 7 天总时长：只有本年视角会用到。 */
     recentSevenDaysSeconds: Long = 0L,
     settings: UserSettings
 ) {
-    val goalSeconds = when (selectedTimeTab) {
-        STATS_TAB_WEEK -> (settings.dailyGoalHours * 7 * 3600f).toLong()
-        STATS_TAB_MONTH -> (settings.dailyGoalHours * 30 * 3600f).toLong()
+    val goalSeconds = when (selectedTimeTab.unit) {
+        StatsTimeUnit.WEEK -> (settings.dailyGoalHours * 7 * 3600f).toLong()
+        StatsTimeUnit.MONTH -> (settings.dailyGoalHours * 30 * 3600f).toLong()
         // 本年不设目标进度：每日目标 × 365 天是个没有约束力的数字，
         // 进度条常年停在低位只会让人麻掉 —— 整行直接不渲染。
-        else -> 0L
+        StatsTimeUnit.YEAR -> 0L
     }
-    val goalLabel = if (selectedTimeTab == STATS_TAB_MONTH) "月目标进度" else "周目标进度"
+    val goalLabel = if (selectedTimeTab.unit == StatsTimeUnit.MONTH) "月目标进度" else "周目标进度"
 
     YanjiCard(
         modifier = Modifier.fillMaxWidth(),
@@ -73,11 +72,9 @@ fun StatsHeroCard(
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                     Text(
-                        text = when (selectedTimeTab) {
-                            STATS_TAB_WEEK -> "本周学习时长"
-                            STATS_TAB_MONTH -> "本月学习时长"
-                            else -> "本年学习时长"
-                        },
+                        // 标签直接由 Tab 拼出来（本周 / 上周 / 本月 / 上月 / 本年），
+                        // 每加一种回看就多一条 when 是白费。
+                        text = "${selectedTimeTab.label}学习时长",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -94,17 +91,22 @@ fun StatsHeroCard(
                     )
                 }
 
-                when (selectedTimeTab) {
-                    // 「较上周」仅在周视角显示：两个都是周一至周日的自然周，可比。
-                    STATS_TAB_WEEK ->
-                        if (previousWeekSeconds > 0L || weeklyTotalSeconds > 0L) {
-                            val delta = weeklyTotalSeconds - previousWeekSeconds
+                when (selectedTimeTab.unit) {
+                    // 「较上周」：两个都是周一至周日的自然周，可比。
+                    // 回看「上周」时对比基准跟着前移一周（见 previousWeekSeconds），
+                    // 所以文案要说「较上上周」——继续说「较上周」会被读成在跟本周比，
+                    // 而本周还没过完，比出来的差值没有意义。
+                    StatsTimeUnit.WEEK ->
+                        if (previousWeekSeconds > 0L || periodDurationSecs > 0L) {
+                            val delta = periodDurationSecs - previousWeekSeconds
                             val isUp = delta > 0
                             val isFlat = delta == 0L
+                            val comparison =
+                                if (selectedTimeTab == StatsTimeTab.PREVIOUS_WEEK) "较上上周" else "较上周"
                             val text = if (isFlat) {
-                                "较上周 持平"
+                                "$comparison 持平"
                             } else {
-                                "较上周 ${if (isUp) "+" else "-"}${formatDeltaCompact(abs(delta))}"
+                                "$comparison ${if (isUp) "+" else "-"}${formatDeltaCompact(abs(delta))}"
                             }
                             val (pillBg, pillFg) = when {
                                 isFlat -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
@@ -117,7 +119,7 @@ fun StatsHeroCard(
                     // 本年没有「较上周」可讲：全年总量和七天窗口量级差太远，
                     // 比出来的差值没有信息量。换成「近 7 天」——
                     // 长周期视角下读者真正想知道的是「最近还在学吗」。
-                    STATS_TAB_YEAR ->
+                    StatsTimeUnit.YEAR ->
                         if (recentSevenDaysSeconds > 0L) {
                             HeroDeltaPill(
                                 text = "近 7 天 ${formatDeltaCompact(recentSevenDaysSeconds)}",
@@ -126,7 +128,9 @@ fun StatsHeroCard(
                             )
                         }
 
-                    else -> Unit
+                    // 月视角（本月 / 上月）没有可比基准：上一个自然月可能是 28 天也可能是 31 天，
+                    // 时长直接相减会被月长差异污染，索性不讲。
+                    StatsTimeUnit.MONTH -> Unit
                 }
             }
 

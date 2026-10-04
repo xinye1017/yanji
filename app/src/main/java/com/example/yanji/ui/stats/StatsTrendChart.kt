@@ -69,14 +69,14 @@ enum class TrendMode(val label: String) {
     HEATMAP("热力图")
 }
 
-fun resolveAvailableTrendModes(selectedTimeTab: Int): List<TrendMode> =
-    if (selectedTimeTab == STATS_TAB_MONTH) {
+fun resolveAvailableTrendModes(selectedTimeTab: StatsTimeTab): List<TrendMode> =
+    if (selectedTimeTab.unit == StatsTimeUnit.MONTH) {
         listOf(TrendMode.HEATMAP, TrendMode.LINE)
     } else {
         listOf(TrendMode.BAR, TrendMode.LINE)
     }
 
-fun resolveEffectiveTrendMode(selectedTimeTab: Int, trendChartMode: TrendMode): TrendMode {
+fun resolveEffectiveTrendMode(selectedTimeTab: StatsTimeTab, trendChartMode: TrendMode): TrendMode {
     val available = resolveAvailableTrendModes(selectedTimeTab)
     return if (trendChartMode in available) trendChartMode else available.first()
 }
@@ -88,15 +88,15 @@ fun resolveEffectiveTrendMode(selectedTimeTab: Int, trendChartMode: TrendMode): 
  * 本年的 BAR 已经是**月粒度**、LINE 是**累计曲线**，再叫「柱状/折线」
  * 就说不出这张图在讲什么，所以按视角换词。
  */
-fun trendModeLabel(mode: TrendMode, selectedTimeTab: Int): String = when {
-    selectedTimeTab == STATS_TAB_YEAR && mode == TrendMode.BAR -> "按月"
-    selectedTimeTab == STATS_TAB_YEAR && mode == TrendMode.LINE -> "累计"
+fun trendModeLabel(mode: TrendMode, selectedTimeTab: StatsTimeTab): String = when {
+    selectedTimeTab.unit == StatsTimeUnit.YEAR && mode == TrendMode.BAR -> "按月"
+    selectedTimeTab.unit == StatsTimeUnit.YEAR && mode == TrendMode.LINE -> "累计"
     else -> mode.label
 }
 
 @Composable
 fun StatsTrendChart(
-    selectedTimeTab: Int,
+    selectedTimeTab: StatsTimeTab,
     days: List<DayBarData>,
     trendChartMode: TrendMode,
     onSelectTrendMode: (TrendMode) -> Unit,
@@ -107,14 +107,15 @@ fun StatsTrendChart(
     val currentModeIndex = availableModes.indexOf(effectiveMode).coerceAtLeast(0)
 
     val titleText = when {
-        selectedTimeTab == STATS_TAB_WEEK -> "本周学习时长趋势"
-        selectedTimeTab == STATS_TAB_MONTH && effectiveMode == TrendMode.HEATMAP -> "本月专注热力图"
-        selectedTimeTab == STATS_TAB_MONTH -> "本月学习趋势"
         // 本年：一根柱子一个月，折线画的是累计值 —— 标题必须说清粒度，
         // 否则读者会以为这还是「每日学时分布」。
-        selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.LINE -> "累计学时曲线"
-        selectedTimeTab == STATS_TAB_YEAR -> "每月学时分布"
-        else -> "每日学时分布"
+        selectedTimeTab.unit == StatsTimeUnit.YEAR && effectiveMode == TrendMode.LINE -> "累计学时曲线"
+        selectedTimeTab.unit == StatsTimeUnit.YEAR -> "每月学时分布"
+        // 非本年视角的标题由 Tab 标签直接拼出来（本周 / 上周 / 本月 / 上月），
+        // 每加一种回看就多一条 when 是白费。
+        effectiveMode == TrendMode.HEATMAP -> "${selectedTimeTab.label}专注热力图"
+        effectiveMode == TrendMode.LINE && selectedTimeTab.unit == StatsTimeUnit.MONTH -> "${selectedTimeTab.label}学习趋势"
+        else -> "${selectedTimeTab.label}学习时长趋势"
     }
 
     YanjiCard(
@@ -150,7 +151,7 @@ fun StatsTrendChart(
 
             when {
                 // Monthly Heatmap View (Month tab defaults to heatmap unless LINE is selected)
-                selectedTimeTab == STATS_TAB_MONTH && effectiveMode != TrendMode.LINE -> {
+                selectedTimeTab.unit == StatsTimeUnit.MONTH && effectiveMode != TrendMode.LINE -> {
                     MonthlyHeatmapView(
                         days = days,
                         onSelectDay = onSelectDay
@@ -158,7 +159,7 @@ fun StatsTrendChart(
                 }
 
                 // Month Tick Trend View (Bencho ProgressTicks design for dense monthly data)
-                selectedTimeTab == STATS_TAB_MONTH && effectiveMode == TrendMode.LINE -> {
+                selectedTimeTab.unit == StatsTimeUnit.MONTH && effectiveMode == TrendMode.LINE -> {
                     MonthTickTrendView(
                         days = days,
                         onSelectDay = onSelectDay
@@ -166,7 +167,7 @@ fun StatsTrendChart(
                 }
 
                 // 本年 · 按月：一根柱子一个月，点柱子看这个月的科目投入
-                selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.BAR -> {
+                selectedTimeTab.unit == StatsTimeUnit.YEAR && effectiveMode == TrendMode.BAR -> {
                     MonthlyBarView(
                         days = days,
                         onSelectDay = onSelectDay
@@ -174,7 +175,7 @@ fun StatsTrendChart(
                 }
 
                 // 本年 · 累计：单调递增的累计曲线，看的是成长斜率而不是单月波动
-                selectedTimeTab == STATS_TAB_YEAR && effectiveMode == TrendMode.LINE -> {
+                selectedTimeTab.unit == StatsTimeUnit.YEAR && effectiveMode == TrendMode.LINE -> {
                     LineChartView(
                         days = days,
                         onSelectDay = null,

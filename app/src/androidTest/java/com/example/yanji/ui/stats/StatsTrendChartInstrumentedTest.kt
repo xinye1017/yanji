@@ -46,7 +46,7 @@ class StatsTrendChartInstrumentedTest {
             YanjiTheme {
                 var mode by remember { mutableStateOf(TrendMode.LINE) }
                 StatsTrendChart(
-                    selectedTimeTab = 0,
+                    selectedTimeTab = StatsTimeTab.THIS_WEEK,
                     days = days,
                     trendChartMode = mode,
                     onSelectTrendMode = {

@@ -40,35 +40,35 @@ object YanjiTime {
             date.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
         )
 
-    /** Calendar week semantics: Monday 00:00 through the following Monday 00:00. */
-    fun currentWeekRange(
+    /**
+     * 自然周区间：周一 00:00 起 7 天。[weeksBack] 是往回翻几个整周，0 = 本周。
+     *
+     * 统计页回看「上周」走这里取窗口：翻期只平移起点，周一至周日的自然周口径不变。
+     */
+    fun weekRange(
+        weeksBack: Long = 0,
         clock: Clock = Clock.systemDefaultZone(),
         zoneId: ZoneId = clock.zone
     ): EpochRange {
-        val monday = today(clock).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val monday = today(clock).minusWeeks(weeksBack)
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         return EpochRange(
             monday.atStartOfDay(zoneId).toInstant().toEpochMilli(),
             monday.plusWeeks(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
         )
     }
 
-    fun previousWeekRange(
+    /**
+     * 自然月区间：1 日 00:00 起一个自然月。[monthsBack] 是往回翻几个整月，0 = 本月。
+     *
+     * 翻期与取月初的先后顺序无关紧要：先减月再取 1 日，落到的一定是那个月的第一天。
+     */
+    fun monthRange(
+        monthsBack: Long = 0,
         clock: Clock = Clock.systemDefaultZone(),
         zoneId: ZoneId = clock.zone
     ): EpochRange {
-        val current = currentWeekRange(clock, zoneId)
-        val monday = Instant.ofEpochMilli(current.startInclusive).atZone(zoneId).toLocalDate()
-        return EpochRange(
-            monday.minusWeeks(1).atStartOfDay(zoneId).toInstant().toEpochMilli(),
-            current.startInclusive
-        )
-    }
-
-    fun currentMonthRange(
-        clock: Clock = Clock.systemDefaultZone(),
-        zoneId: ZoneId = clock.zone
-    ): EpochRange {
-        val first = today(clock).withDayOfMonth(1)
+        val first = today(clock).minusMonths(monthsBack).withDayOfMonth(1)
         return EpochRange(
             first.atStartOfDay(zoneId).toInstant().toEpochMilli(),
             first.plusMonths(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
@@ -103,8 +103,8 @@ object YanjiTime {
 
     fun rangeFor(range: StudyTimeRange, clock: Clock = Clock.systemDefaultZone()): EpochRange = when (range) {
         StudyTimeRange.TODAY -> dayRange(today(clock), clock.zone)
-        StudyTimeRange.WEEK -> currentWeekRange(clock, clock.zone)
-        StudyTimeRange.MONTH -> currentMonthRange(clock, clock.zone)
+        StudyTimeRange.WEEK -> weekRange(clock = clock, zoneId = clock.zone)
+        StudyTimeRange.MONTH -> monthRange(clock = clock, zoneId = clock.zone)
         StudyTimeRange.ALL -> EpochRange(0L, Long.MAX_VALUE)
         StudyTimeRange.YEAR -> currentYearRange(clock, clock.zone)
     }

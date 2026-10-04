@@ -8,6 +8,7 @@ import com.example.yanji.data.db.StudySubjectAggregateRow
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 
 enum class StudyTimeRange(val title: String) {
     TODAY("今日"),
@@ -317,10 +318,9 @@ class StudyStatisticsRepository(
     }
 
     fun getSubjectDistributionFlow(
-        timeRange: StudyTimeRange,
+        range: EpochRange,
         level: SubjectStatsLevel
     ): Flow<List<SubjectDistributionItem>> {
-        val range = YanjiTime.rangeFor(timeRange)
         return combine(
             repo.observeFocusSubjectTotals(range.startInclusive, range.endExclusive),
             repo.observeExamSubjectTotals(range.startInclusive, range.endExclusive)
@@ -329,13 +329,13 @@ class StudyStatisticsRepository(
         }
     }
 
-    fun getStudyDurationFlow(timeRange: StudyTimeRange): Flow<Long> {
-        val range = YanjiTime.rangeFor(timeRange)
-        return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
-    }
-
-    fun getPreviousCalendarWeekDurationFlow(): Flow<Long> {
-        val range = YanjiTime.previousWeekRange()
+    /**
+     * 指定日历窗口的有效学习时长。
+     *
+     * 窗口由调用方用 [YanjiTime] 现取，而不是收一个「时间范围 + 翻几期」的组合：
+     * 区间本身已经带上了「翻到第几期」的语义，仓库只负责按窗口汇总。
+     */
+    fun getStudyDurationFlow(range: EpochRange): Flow<Long> {
         return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
     }
 
@@ -551,30 +551,40 @@ class StudyStatisticsRepository(
 
     /**
      * Get Weekly summary for statistics and charts.
+     *
+     * [weeksBack] 支持回看自然周：0 = 本周，1 = 上周，以此类推。
      */
-    fun getWeeklyStudySummaryFlow(): Flow<WeeklyStudySummary> {
-        val range = YanjiTime.currentWeekRange()
+    fun getWeeklyStudySummaryFlow(weeksBack: Long = 0): Flow<WeeklyStudySummary> {
+        val range = YanjiTime.weekRange(weeksBack)
         return combine(
             repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
             repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
         ) { focusList, examList ->
-            buildWeeklyStudySummary(focusList, examList)
+            buildWeeklyStudySummary(focusList, examList, weeksBack)
         }
     }
 
-    fun getWeeklyStudySummary(): WeeklyStudySummary {
-        val range = YanjiTime.currentWeekRange()
+    fun getWeeklyStudySummary(weeksBack: Long = 0): WeeklyStudySummary {
+        val range = YanjiTime.weekRange(weeksBack)
         val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
         val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildWeeklyStudySummary(focusList, examList)
+        return buildWeeklyStudySummary(focusList, examList, weeksBack)
     }
 
-    private fun buildWeeklyStudySummary(
+    /**
+     * internal 而非 private：周一至周日 7 根柱子的边界要能被 JVM 单测钉住
+     * （回看上一周时，第一根必须是那个周一而不是今天），见 StatsPreviousPeriodTest。
+     *
+     * @param today 可注入的「今天」，单测靠它把自然周边界钉死，避免跨周时结论漂移。
+     */
+    internal fun buildWeeklyStudySummary(
         focusList: List<FocusSession>,
-        examList: List<ExamSession>
+        examList: List<ExamSession>,
+        weeksBack: Long = 0,
+        today: LocalDate = YanjiTime.today()
     ): WeeklyStudySummary {
-        val today = YanjiTime.today()
-        val monday = today.with(DayOfWeek.MONDAY)
+        val monday = today.minusWeeks(weeksBack)
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val days = mutableListOf<DayBarData>()
 
         // "本周" is a calendar week (Monday through Sunday), not a rolling seven-day window.
@@ -652,31 +662,41 @@ class StudyStatisticsRepository(
 
     /**
      * Get Monthly summary for statistics, heatmap, and monthly charts.
+     *
+     * [monthsBack] 支持回看自然月：0 = 本月，1 = 上月，以此类推。
      */
-    fun getMonthlyStudySummaryFlow(): Flow<MonthlyStudySummary> {
-        val range = YanjiTime.currentMonthRange()
+    fun getMonthlyStudySummaryFlow(monthsBack: Long = 0): Flow<MonthlyStudySummary> {
+        val range = YanjiTime.monthRange(monthsBack)
         return combine(
             repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
             repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
         ) { focusList, examList ->
-            buildMonthlyStudySummary(focusList, examList)
+            buildMonthlyStudySummary(focusList, examList, monthsBack)
         }
     }
 
-    fun getMonthlyStudySummary(): MonthlyStudySummary {
-        val range = YanjiTime.currentMonthRange()
+    fun getMonthlyStudySummary(monthsBack: Long = 0): MonthlyStudySummary {
+        val range = YanjiTime.monthRange(monthsBack)
         val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
         val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildMonthlyStudySummary(focusList, examList)
+        return buildMonthlyStudySummary(focusList, examList, monthsBack)
     }
 
-    private fun buildMonthlyStudySummary(
+    /**
+     * internal 而非 private：1 日至月末的柱数与首星期几要能被 JVM 单测钉住
+     * （2 月是 28/29 天，回看上月时不能被「本月天数」带偏），见 StatsPreviousPeriodTest。
+     *
+     * @param today 可注入的「今天」，单测靠它把自然月边界钉死，避免跨月时结论漂移。
+     */
+    internal fun buildMonthlyStudySummary(
         focusList: List<FocusSession>,
-        examList: List<ExamSession>
+        examList: List<ExamSession>,
+        monthsBack: Long = 0,
+        today: LocalDate = YanjiTime.today()
     ): MonthlyStudySummary {
-        val today = YanjiTime.today()
-        val firstDay = today.withDayOfMonth(1)
-        val daysInMonth = today.lengthOfMonth()
+        val anchor = today.minusMonths(monthsBack)
+        val firstDay = anchor.withDayOfMonth(1)
+        val daysInMonth = anchor.lengthOfMonth()
         val days = mutableListOf<DayBarData>()
 
         for (dayNum in 1..daysInMonth) {
@@ -734,8 +754,10 @@ class StudyStatisticsRepository(
             longestSession = longest,
             examCount = recentExamCount,
             streakDays = streak,
-            year = today.year,
-            month = today.monthValue,
+            // 报的是**当前展示的那个自然月**，不是今天所在的月：
+            // 回看上月时这两个数不同，抽屉与热力图靠它们认月份。
+            year = anchor.year,
+            month = anchor.monthValue,
             firstDayOfWeek = firstDay.dayOfWeek,
             days = days
         )
