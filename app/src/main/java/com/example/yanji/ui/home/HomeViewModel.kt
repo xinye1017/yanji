@@ -147,20 +147,6 @@ class HomeViewModel(
         )
     }
 
-    fun createSubjectCategory(name: String, onCreated: ((Subject) -> Unit)? = null) = viewModelScope.launch {
-        val clean = name.trim()
-        if (clean.isBlank()) return@launch
-        val newCat = repo.addSubjectCategory(clean)
-        onCreated?.invoke(newCat)
-    }
-
-    fun createSubSubject(parentId: String, name: String, onCreated: ((Subject) -> Unit)? = null) = viewModelScope.launch {
-        val clean = name.trim()
-        if (clean.isBlank()) return@launch
-        val newSub = repo.addSubSubject(parentId, clean)
-        if (newSub != null) onCreated?.invoke(newSub)
-    }
-
     fun setStudyTaskCompleted(id: String, completed: Boolean) = viewModelScope.launch {
         repo.setStudyTaskCompleted(id, completed)
     }

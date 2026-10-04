@@ -6,8 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 import com.example.yanji.theme.YanjiColors
+import com.example.yanji.theme.YanjiMotion
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.theme.yanjiSubjectColorOf
@@ -64,10 +63,11 @@ data class SubjectSelection(
     val categoryItem: SubjectCategoryItem,
     val subject: Subject? = null
 ) {
-    val label: String
-        get() = if (subject == null) categoryItem.category.name else "${categoryItem.category.name} › ${subject.name}"
-
-    val shortName: String
+    /**
+     * 显示名：只取末端学科名，不做「大学科 + 细分」的路径拼接（真机规则 2）。
+     * 拼接样式像面包屑，在窄字段里既挤又不比末端名多信息。
+     */
+    val displayName: String
         get() = subject?.name ?: categoryItem.category.name
 
     val actualSubject: Subject
@@ -91,8 +91,6 @@ fun AddPlanSheet(
     editingTask: StudyTask? = null,
     onDismiss: () -> Unit,
     onConfirm: (subject: Subject, title: String, durationMinutes: Int, startNow: Boolean) -> Unit,
-    onCreateCategory: ((String) -> Unit)? = null,
-    onCreateSubSubject: ((parentId: String, name: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -140,7 +138,8 @@ fun AddPlanSheet(
         list.distinctBy { it.actualSubject.id }.take(3)
     }
 
-    // 编辑模式或默认选择：优先匹配待编辑任务，其次取最近使用，最后取首个大类及首个子科目
+    // 编辑模式或默认选择：优先匹配待编辑任务，其次取最近使用，最后取首个大类
+    //（新计划默认落在**大学科自身**，不预选细分学科 —— 真机规则 1）。
     val editingCat = remember(editingTask, coloredCategories) {
         editingTask?.let { task ->
             coloredCategories.firstOrNull { it.category.id == task.subjectId || it.subjects.any { s -> s.id == task.subjectId } }
@@ -157,12 +156,10 @@ fun AddPlanSheet(
                 ?: coloredCategories.firstOrNull()
         )
     }
+    // 默认选择（真机规则 1）：新计划一律落在大学科自身，不预选细分学科；
+    // 仅编辑既有任务时回填它的细分学科，保证改计划不串科目。
     var selectedSubSubject by remember(coloredCategories, editingTask) {
-        mutableStateOf(
-            editingSub
-                ?: (if (editingCat != null) null else recentSelections.firstOrNull()?.subject)
-                ?: coloredCategories.firstOrNull()?.subjects?.firstOrNull()
-        )
+        mutableStateOf(editingSub)
     }
 
     val currentSelection = selectedCategoryItem?.let {
@@ -179,8 +176,21 @@ fun AddPlanSheet(
         )
     }
 
-    // 新建科目弹窗状态
-    var showCreateDialog by remember { mutableStateOf(false) }
+    // 页面切换过渡：**纯交叉淡变，零方向位移**。
+    //
+    // 为什么去掉横向 slide：原实现是 slideIn/slideOutHorizontally(25% 宽) + fade，
+    // 选科目回跳表单时，滑入内容的水平位移与 AnimatedContent 默认 SizeTransform 的高度
+    // 形变叠加，真机上读成左下→右上的斜向扭动（用户原话“看着太别扭”）。层级切换只需
+    // 让内容本身淡入淡出，高度仍交给 SizeTransform 平滑收敛 —— 位移量归零后斜向感消失，
+    // 动效退回“哪一页在上层”这一个语义。
+    //
+    // spec 必须在组合作用域求值：accessibleFiniteTween 是 @Composable，
+    // transitionSpec 不是（同 StatsTrendChart drawSpec 的既有写法）。
+    // 附带收益：系统开启「减少动态效果」时自动降级为瞬切，原 slide 无此降级。
+    val pageFade = YanjiMotion.accessibleFiniteTween<Float>(
+        durationMillis = YanjiMotion.DurationFast,
+        easing = YanjiMotion.EaseStandard
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -198,9 +208,7 @@ fun AddPlanSheet(
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                val forward = targetState != AddPlanPage.Form
-                (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
-                    (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
+                fadeIn(animationSpec = pageFade) togetherWith fadeOut(animationSpec = pageFade)
             },
             label = "add-plan-page-anim"
         ) { currentPage ->
@@ -225,7 +233,7 @@ fun AddPlanSheet(
                         onOpenCustomDuration = { page = AddPlanPage.Duration },
                         onSubmit = { startNow ->
                             val sel = currentSelection ?: return@FormPage
-                            val finalTitle = title.trim().ifBlank { "${sel.shortName}复习" }
+                            val finalTitle = title.trim().ifBlank { "${sel.displayName}复习" }
                             onConfirm(sel.actualSubject, finalTitle, durationMinutes ?: 0, startNow)
                         }
                     )
@@ -240,8 +248,7 @@ fun AddPlanSheet(
                             selectedCategoryItem = sel.categoryItem
                             selectedSubSubject = sel.subject
                             page = AddPlanPage.Form
-                        },
-                        onCreateSubject = { showCreateDialog = true }
+                        }
                     )
                 }
 
@@ -259,20 +266,6 @@ fun AddPlanSheet(
         }
     }
 
-    if (showCreateDialog) {
-        CreateSubjectDialog(
-            activeCategory = selectedCategoryItem?.category,
-            onDismiss = { showCreateDialog = false },
-            onCreateCategory = { name ->
-                onCreateCategory?.invoke(name)
-                showCreateDialog = false
-            },
-            onCreateSubSubject = { parentId, name ->
-                onCreateSubSubject?.invoke(parentId, name)
-                showCreateDialog = false
-            }
-        )
-    }
 }
 
 // --------------------------- 主表单页 ---------------------------
@@ -356,6 +349,7 @@ private fun FormPage(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 recentSelections.forEach { r ->
+                    val isRecentSelected = selection?.actualSubject?.id == r.actualSubject.id
                     SuggestionChip(
                         onClick = { onSelectRecent(r) },
                         label = {
@@ -369,14 +363,19 @@ private fun FormPage(
                                         .clip(CircleShape)
                                         .background(r.categoryItem.color)
                                 )
-                                Text(r.shortName)
+                                Text(r.displayName)
                             }
                         },
                         colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = if (selection?.actualSubject?.id == r.actualSubject.id) {
-                                MaterialTheme.colorScheme.secondaryContainer
+                            containerColor = if (isRecentSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
                             } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                YanjiColors.fill
+                            },
+                            labelColor = if (isRecentSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         ),
                         border = null,
@@ -416,8 +415,8 @@ private fun FormPage(
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = YanjiColors.fill,
+                focusedContainerColor = YanjiColors.fill,
                 unfocusedBorderColor = Color.Transparent,
                 focusedBorderColor = MaterialTheme.colorScheme.primary
             ),
@@ -427,7 +426,7 @@ private fun FormPage(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-        val currentSubName = selection?.shortName.orEmpty()
+        val currentSubName = selection?.displayName.orEmpty()
         val suggestions = remember(currentSubName) { getSubjectActionSuggestions(currentSubName) }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -443,7 +442,7 @@ private fun FormPage(
                         }
                     },
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = YanjiColors.fill,
                     modifier = Modifier.height(28.dp)
                 ) {
                     Row(
@@ -508,7 +507,7 @@ private fun FormPage(
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (baseRatio > 0f) {
                     Box(
@@ -608,7 +607,7 @@ private fun SubjectField(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = YanjiColors.fill,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("add_plan_subject_field")
@@ -625,7 +624,7 @@ private fun SubjectField(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = selection.label,
+                text = selection.displayName,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -661,11 +660,14 @@ private fun PlanChip(
             }
         } else null,
         shape = RoundedCornerShape(12.dp),
+        // 选中态用主色容器（蓝），与「添加」按钮、选中的「最近」Chip 同一套选中语言；
+        // 未选中取 [YanjiColors.fill]（浅一档中性蓝灰；真机反馈 inputFill 调太重后回调）。
+        // 两者都不再走 secondaryContainer（卷卷主题下 = 浅紫 #F0EDFF，整组选项泛紫）。
         colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
+            containerColor = YanjiColors.fill,
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
@@ -683,8 +685,7 @@ private fun SubjectPickerPage(
     categories: List<SubjectCategoryItem>,
     currentSelection: SubjectSelection?,
     onBack: () -> Unit,
-    onSelect: (SubjectSelection) -> Unit,
-    onCreateSubject: () -> Unit
+    onSelect: (SubjectSelection) -> Unit
 ) {
     var activeCategoryItem by remember(categories, currentSelection) {
         mutableStateOf(currentSelection?.categoryItem ?: categories.firstOrNull())
@@ -708,7 +709,7 @@ private fun SubjectPickerPage(
                 modifier = Modifier
                     .width(116.dp)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 items(categories, key = { it.category.id }) { cat ->
                     val isActive = activeCategoryItem?.category?.id == cat.category.id
@@ -824,21 +825,6 @@ private fun SubjectPickerPage(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 底部快捷新建
-        TextButton(
-            onClick = onCreateSubject,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        ) {
-            Icon(
-                imageVector = RemixIcons.AddLine,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("新建科目")
-        }
     }
 }
 
@@ -929,13 +915,14 @@ private fun WheelPicker(
             .height(itemHeight * 3),
         contentAlignment = Alignment.Center
     ) {
-        // 中间高亮带
+        // 中间高亮带：主色容器半透明（与选中 Chip 同一选中语言），
+        // 不再用 secondaryContainer 的紫雾。
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(itemHeight)
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
         )
         LazyColumn(
             state = listState,
@@ -993,91 +980,6 @@ private fun PageHeader(
             action()
         }
     }
-}
-
-/**
- * 新建科目对话框：支持在当前活跃大类下新建子科目，或新建顶级学科大类。
- */
-@Composable
-private fun CreateSubjectDialog(
-    activeCategory: Subject?,
-    onDismiss: () -> Unit,
-    onCreateCategory: (String) -> Unit,
-    onCreateSubSubject: (parentId: String, name: String) -> Unit
-) {
-    var subjectName by rememberSaveable { mutableStateOf("") }
-    // 0: 在当前大类下新建子科目, 1: 新建顶级大类
-    var createMode by rememberSaveable { mutableIntStateOf(if (activeCategory != null) 0 else 1) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "新建科目",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (activeCategory != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = createMode == 0,
-                            onClick = { createMode = 0 },
-                            label = { Text("属于「${activeCategory.name}」") },
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        FilterChip(
-                            selected = createMode == 1,
-                            onClick = { createMode = 1 },
-                            label = { Text("新顶级大类") },
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = subjectName,
-                    onValueChange = { if (it.length <= 20) subjectName = it },
-                    placeholder = {
-                        Text(
-                            if (createMode == 0 && activeCategory != null) "例如：常微分方程"
-                            else "例如：专业课二"
-                        )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val clean = subjectName.trim()
-                    if (clean.isNotBlank()) {
-                        if (createMode == 0 && activeCategory != null) {
-                            onCreateSubSubject(activeCategory.id, clean)
-                        } else {
-                            onCreateCategory(clean)
-                        }
-                    }
-                },
-                enabled = subjectName.trim().isNotBlank()
-            ) {
-                Text("确定", fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
 }
 
 private fun formatMinutes(minutes: Int): String {

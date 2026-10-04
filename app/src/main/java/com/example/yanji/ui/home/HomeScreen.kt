@@ -208,9 +208,7 @@ fun HomeScreen(
                 onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
                 onDelete = { id -> viewModel.deleteStudyTask(id) },
                 onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() },
-                onStartFocus = { onNavigateToFocus() },
-                onCreateCategory = { name -> viewModel.createSubjectCategory(name) },
-                onCreateSubSubject = { parentId, name -> viewModel.createSubSubject(parentId, name) }
+                onStartFocus = { onNavigateToFocus() }
             )
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))

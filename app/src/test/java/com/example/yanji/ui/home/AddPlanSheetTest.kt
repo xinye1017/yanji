@@ -9,21 +9,19 @@ import java.io.File
 class AddPlanSheetTest {
 
     @Test
-    fun testSubjectSelectionLabelAndShortName() {
+    fun testSubjectSelectionDisplayNameNeverShowsPath() {
         val category = Subject(id = "math", name = "数学一", colorHex = "#4A90E2", sortOrder = 1)
         val categoryItem = SubjectCategoryItem(category = category, color = androidx.compose.ui.graphics.Color.Blue)
 
         // When only category is selected
         val catSelection = SubjectSelection(categoryItem = categoryItem, subject = null)
-        assertEquals("数学一", catSelection.label)
-        assertEquals("数学一", catSelection.shortName)
+        assertEquals("数学一", catSelection.displayName)
         assertEquals("math", catSelection.actualSubject.id)
 
-        // When sub-subject is selected
+        // When sub-subject is selected: 只显示末端学科名，不拼 "数学一 › 高等数学" 路径
         val subSubject = Subject(id = "math_adv", name = "高等数学", colorHex = "#4A90E2", parentId = "math", sortOrder = 1)
         val subSelection = SubjectSelection(categoryItem = categoryItem, subject = subSubject)
-        assertEquals("数学一 › 高等数学", subSelection.label)
-        assertEquals("高等数学", subSelection.shortName)
+        assertEquals("高等数学", subSelection.displayName)
         assertEquals("math_adv", subSelection.actualSubject.id)
     }
 
@@ -41,6 +39,14 @@ class AddPlanSheetTest {
         assertTrue("Must support un-timed mode", content.contains("不限时"))
         assertTrue("Must support editing mode", content.contains("editingTask"))
         assertTrue("Must support action suggestions", content.contains("getSubjectActionSuggestions"))
+        // 真机规则：默认大学科 / 显示不拼路径 / 无新建科目入口
+        assertTrue("Default selection must be the big category, not a sub-subject",
+            content.contains("mutableStateOf(editingSub)"))
+        assertTrue("Display name must never concatenate category + sub-subject",
+            content.contains("val displayName: String")
+                && !content.contains("$" + "{categoryItem.category.name} ›"))
+        assertTrue("No create-subject entry inside the picker",
+            !content.contains("新建科目") && !content.contains("CreateSubjectDialog"))
     }
 
     private fun findProjectRoot(): File {

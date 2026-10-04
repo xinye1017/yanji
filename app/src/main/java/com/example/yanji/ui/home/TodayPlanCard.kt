@@ -144,9 +144,7 @@ internal fun TodayPlanCard(
     modifier: Modifier = Modifier,
     dailyGoalMinutes: Int = 0,
     onEdit: ((StudyTask, Subject, String, Int) -> Unit)? = null,
-    onStartFocus: (() -> Unit)? = null,
-    onCreateCategory: ((String) -> Unit)? = null,
-    onCreateSubSubject: ((parentId: String, name: String) -> Unit)? = null
+    onStartFocus: (() -> Unit)? = null
 ) {
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<StudyTask?>(null) }
@@ -253,8 +251,6 @@ internal fun TodayPlanCard(
                     onStart(taskToStart)
                 }
             },
-            onCreateCategory = onCreateCategory,
-            onCreateSubSubject = onCreateSubSubject
         )
     }
 }
@@ -336,13 +332,23 @@ private fun AddPlanButton(onClick: () -> Unit) {
     }
 }
 
-/** 空态：现代卡片式引导，点击即可唤出添加计划面板。 */
+/**
+ * 空态：现代卡片式引导，点击即可唤出添加计划面板。
+ *
+ * 底色取 [YanjiColors.fill]（iOS 式次级填充，比 [YanjiColors.inputFill] 浅一档）。
+ * 空态是「等用户来填」的引导槽而非输入控件，整块压在白色卡片上，
+ * 要的是暗示形而不抢层级；边界由随附发丝描边兜底。取浅一档是真机反馈
+ * “inputFill #DEE4EC 蓝灰调太重”后的回调。
+ *
+ * 不取 M3 `surfaceContainerHigh`：亮色槽位未在本主题赋值，它会回落到 M3 基线
+ * 紫中性 #ECE6F0，铺在白卡上整块泛紫，与表单其余填充色明显不是一家。
+ */
 @Composable
 private fun EmptyPlanHint(onClick: () -> Unit = {}) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+        color = YanjiColors.fill,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
