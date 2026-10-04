@@ -1,6 +1,5 @@
 package com.example.yanji.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -218,8 +217,7 @@ internal fun ReportSuggestionRow(index: Int, text: String) {
 private fun DiagnosticFeaturePill(text: String) {
     Surface(
         shape = RoundedCornerShape(YanjiRadius.ItemRadius),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        color = MaterialTheme.colorScheme.surface
     ) {
         Text(
             text = text,
@@ -352,7 +350,6 @@ fun AiReportCard(
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -381,7 +378,6 @@ fun AiReportCard(
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -432,7 +428,6 @@ fun AiReportCard(
                 Surface(
                     shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -493,7 +488,6 @@ fun AiReportCard(
                     Surface(
                         shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(

@@ -56,7 +56,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
-import com.example.yanji.theme.YanjiCardBorder
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
@@ -341,10 +340,8 @@ private fun AddPlanButton(onClick: () -> Unit) {
  * 要的是暗示形而不抢层级。取浅一档是真机反馈
  * “inputFill #DEE4EC 蓝灰调太重”后的回调。
  *
- * 边界描边收敛到全站唯一的 [YanjiCardBorder]：亮色留 0.8dp 发丝线兜底，
- * **暗色返回 null** —— 暗色不靠描边表达层次（AGENTS.md §三.6），
- * 靠表面明度递进（背景 #0D111A → 卡片 #151B28 → fill #1D2536）即可把槽位显出来。
- * 此前这里手写 1dp `outlineVariant`@40%，暗色下会叠出一道可见白框。
+ * 不设任何描边（AGENTS.md §三.6 卡片零边框）：深浅色均靠「底色 + 圆角形状」
+ * 把槽位显出来，层级交给表面明度递进，不靠 outline。
  *
  * 不取 M3 `surfaceContainerHigh`：亮色槽位未在本主题赋值，它会回落到 M3 基线
  * 紫中性 #ECE6F0，铺在白卡上整块泛紫，与表单其余填充色明显不是一家。
@@ -355,7 +352,6 @@ private fun EmptyPlanHint(onClick: () -> Unit = {}) {
         onClick = onClick,
         shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
         color = YanjiColors.fill,
-        border = YanjiCardBorder.stroke(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(

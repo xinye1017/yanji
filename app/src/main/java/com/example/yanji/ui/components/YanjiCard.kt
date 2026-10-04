@@ -1,6 +1,5 @@
 package com.example.yanji.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import com.example.yanji.theme.YanjiCardBorder
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.rememberPressScale
 
@@ -41,9 +39,9 @@ fun YanjiCardVariant.toShape(): Shape = when (this) {
 }
 
 /**
- * App-wide card primitive. Every standard card receives the same quiet edge so
- * surfaces remain distinguishable across light and dark modes, and consistent
- * rounded geometry family based on semantic variant.
+ * App-wide card primitive. Cards are deliberately borderless in both themes
+ * (AGENTS.md §三.6 卡片零边框）：hierarchy comes from surface lightness steps
+ * and typography, never from an outline.
  */
 @Composable
 fun YanjiCard(
@@ -55,7 +53,6 @@ fun YanjiCard(
         contentColor = MaterialTheme.colorScheme.onSurface
     ),
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    border: BorderStroke? = YanjiCardBorder.stroke(),
     content: @Composable ColumnScope.() -> Unit
 ) {
     MaterialCard(
@@ -63,7 +60,6 @@ fun YanjiCard(
         shape = shape,
         colors = colors,
         elevation = elevation,
-        border = border,
         content = content
     )
 }
@@ -80,7 +76,6 @@ fun YanjiCard(
         contentColor = MaterialTheme.colorScheme.onSurface
     ),
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    border: BorderStroke? = YanjiCardBorder.stroke(),
     interactionSource: MutableInteractionSource? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -96,7 +91,6 @@ fun YanjiCard(
         shape = shape,
         colors = colors,
         elevation = elevation,
-        border = border,
         interactionSource = currentInteractionSource,
         content = content
     )

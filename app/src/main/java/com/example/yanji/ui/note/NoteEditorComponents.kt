@@ -2,7 +2,6 @@ package com.example.yanji.ui.note
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -64,8 +63,7 @@ fun NoteDiscardOrDraftDialog(
             shape = RoundedCornerShape(YanjiRadius.DialogRadius),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            shadowElevation = 8.dp
         ) {
             Column(
                 modifier = Modifier
@@ -185,8 +183,7 @@ fun NoteFormatToolbar(
                     .height(48.dp),
                 shape = RoundedCornerShape(YanjiRadius.Small),
                 color = surfaceColor,
-                shadowElevation = 3.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                shadowElevation = 3.dp
             ) {
                 Box {
                     Row(

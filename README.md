@@ -181,7 +181,7 @@
 
 * **`YanjiPageHeader`**：全页面一致的沉浸式主标题、副标与右侧功能操作区。
 * **`YanjiDetailTopBar`**：二级页面与沉浸式表单标准回退与标题栏。
-* **`YanjiCard`**：统一定义高品质圆角、描边、表面投影与毛玻璃底色容器。
+* **`YanjiCard`**：统一定义高品质圆角、表面投影与毛玻璃底色容器（无边框：深浅色均靠表面明度递进表达层级）。
 * **`YanjiButtons`**：包含主操作按钮 `YanjiPrimaryButton` 与次级幽灵按钮 `YanjiSecondaryButton`。
 * **`YanjiTextField`**：统一轮廓、字符计数与焦点反馈的输入组件。
 

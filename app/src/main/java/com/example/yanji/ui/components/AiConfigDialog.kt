@@ -571,10 +571,6 @@ fun AiConfigDialog(
                     Surface(
                         shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                         color = if (connectionSucceeded == true) YanjiColors.success.copy(alpha = 0.08f) else MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
-                        border = BorderStroke(
-                            0.5.dp,
-                            if (connectionSucceeded == true) YanjiColors.success.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -607,7 +603,6 @@ fun AiConfigDialog(
                     Surface(
                         shape = RoundedCornerShape(YanjiRadius.ItemRadius),
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(

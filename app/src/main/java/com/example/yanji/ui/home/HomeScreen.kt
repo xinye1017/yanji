@@ -1,7 +1,6 @@
 package com.example.yanji.ui.home
 
 import com.example.yanji.ui.icons.RemixIcons
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

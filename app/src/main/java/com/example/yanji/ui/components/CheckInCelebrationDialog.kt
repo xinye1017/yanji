@@ -53,7 +53,6 @@ fun CheckInCelebrationDialog(
                 .fillMaxWidth(0.88f)
                 .clip(RoundedCornerShape(28.dp))
                 .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(28.dp))
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {

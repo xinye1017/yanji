@@ -76,7 +76,6 @@ fun YanjiExamDatePickerDialog(
                 .widthIn(max = 420.dp),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             shadowElevation = 10.dp
         ) {
             Column(modifier = Modifier.padding(20.dp)) {

@@ -673,10 +673,6 @@ private fun NoteEmptyState(
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
         shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        // 全站卡片边框的唯一入口（CardBorder.kt：2026-09 已把四种写法收敛为一条规则）。
-        // 原先这里手搓 BorderStroke(0.8.dp, separator) 是漏网的第四种写法；
-        // stroke() 在暗色返回 null —— 暗色卡片靠表面明度递进表达层次，不描边。
-        border = YanjiCardBorder.stroke(),
         color = YanjiColors.elevatedSurface
     ) {
         Column(

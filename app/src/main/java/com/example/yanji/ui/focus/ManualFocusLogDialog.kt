@@ -119,7 +119,6 @@ fun ManualFocusLogDialog(
                 .padding(vertical = 24.dp),
             shape = RoundedCornerShape(YanjiRadius.DialogRadius),
             color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             shadowElevation = 12.dp
         ) {
             Column(
@@ -377,12 +376,11 @@ fun ManualFocusLogDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 起止时间详情展示卡片
+                // 起止时间详情展示卡片（无描边：层级靠底色与圆角，见 AGENTS.md §三.6）
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(YanjiRadius.Small),
-                    color = YanjiColors.elevatedSurface,
-                    border = BorderStroke(0.8.dp, YanjiColors.separator)
+                    color = YanjiColors.elevatedSurface
                 ) {
                     Row(
                         modifier = Modifier
