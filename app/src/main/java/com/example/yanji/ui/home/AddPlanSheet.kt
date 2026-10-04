@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.StudyTask
@@ -43,9 +44,8 @@ import kotlinx.coroutines.flow.filter
  */
 private enum class AddPlanPage { Form, Subject, Duration }
 
-private val DurationPresets = listOf(25, 45, 60, 90)
-private val HourValues = (0..12).toList()
-private val MinuteValues = (0..55 step 5).toList()
+// 可选时长滚轮刻度：5 ~ 180 分钟（上限 180 分钟，以 5 分钟递增）
+private val DurationValues = (5..180 step 5).toList()
 
 /**
  * 学科大类与其子学科聚合条目。
@@ -169,10 +169,10 @@ fun AddPlanSheet(
     var title by rememberSaveable(editingTask?.id) {
         mutableStateOf(editingTask?.title.orEmpty())
     }
-    // durationMinutes: null 表示不限时
+    // durationMinutes: null 表示不设定时间（无限时间，默认不设定时间）
     var durationMinutes by rememberSaveable(editingTask?.id) {
         mutableStateOf<Int?>(
-            editingTask?.let { if (it.plannedMinutes > 0) it.plannedMinutes else null } ?: 45
+            editingTask?.let { if (it.plannedMinutes > 0) it.plannedMinutes else null }
         )
     }
 
@@ -229,8 +229,7 @@ fun AddPlanSheet(
                             selectedSubSubject = r.subject
                         },
                         onTitleChange = { if (it.length <= 60) title = it },
-                        onDurationChange = { durationMinutes = it },
-                        onOpenCustomDuration = { page = AddPlanPage.Duration },
+                        onOpenDurationPicker = { page = AddPlanPage.Duration },
                         onSubmit = { startNow ->
                             val sel = currentSelection ?: return@FormPage
                             val finalTitle = title.trim().ifBlank { "${sel.displayName}复习" }
@@ -254,7 +253,7 @@ fun AddPlanSheet(
 
                 AddPlanPage.Duration -> {
                     DurationPickerPage(
-                        initialMinutes = durationMinutes ?: 45,
+                        initialMinutes = durationMinutes,
                         onBack = { page = AddPlanPage.Form },
                         onDone = { mins ->
                             durationMinutes = mins
@@ -270,22 +269,6 @@ fun AddPlanSheet(
 
 // --------------------------- 主表单页 ---------------------------
 
-private fun getSubjectActionSuggestions(subjectName: String): List<String> {
-    val name = subjectName.lowercase()
-    return when {
-        name.contains("数") || name.contains("代数") || name.contains("微积分") || name.contains("概率") ->
-            listOf("刷题训练", "错题订正", "真题模考", "概念复盘", "专项突破")
-        name.contains("英") || name.contains("词") || name.contains("语") ->
-            listOf("背核心词", "阅读真题", "长难句拆解", "作文模写", "真题精读")
-        name.contains("政") || name.contains("思修") || name.contains("马原") || name.contains("毛中特") || name.contains("史纲") ->
-            listOf("选择题刷题", "马原框架", "考点默写", "时政热点", "大题背诵")
-        name.contains("计") || name.contains("408") || name.contains("数据结构") || name.contains("网") || name.contains("原理") || name.contains("操作系统") ->
-            listOf("代码训练", "真题演练", "错题复盘", "框架梳理", "章节小测")
-        else ->
-            listOf("核心刷题", "概念复习", "真题精析", "背诵默写", "错题整理")
-    }
-}
-
 @Composable
 private fun FormPage(
     isEditing: Boolean = false,
@@ -299,8 +282,7 @@ private fun FormPage(
     onOpenSubjectPicker: () -> Unit,
     onSelectRecent: (SubjectSelection) -> Unit,
     onTitleChange: (String) -> Unit,
-    onDurationChange: (Int?) -> Unit,
-    onOpenCustomDuration: () -> Unit,
+    onOpenDurationPicker: () -> Unit,
     onSubmit: (startNow: Boolean) -> Unit
 ) {
     val basePlanned = if (isEditing) {
@@ -387,8 +369,8 @@ private fun FormPage(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // 2. 内容输入（选填）+ 快捷灵感词
-        FormSectionHeader(title = "内容（选填）")
+        // 2. 备注输入
+        FormSectionHeader(title = "备注")
         Spacer(modifier = Modifier.height(6.dp))
 
         OutlinedTextField(
@@ -425,77 +407,16 @@ private fun FormPage(
                 .testTag("add_plan_title_input")
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        val currentSubName = selection?.displayName.orEmpty()
-        val suggestions = remember(currentSubName) { getSubjectActionSuggestions(currentSubName) }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            suggestions.forEach { tag ->
-                Surface(
-                    onClick = {
-                        if (title.isBlank()) {
-                            onTitleChange(tag)
-                        } else if (!title.contains(tag)) {
-                            onTitleChange("$title $tag")
-                        }
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    color = YanjiColors.fill,
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = RemixIcons.AddLine,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = tag,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
         Spacer(modifier = Modifier.height(18.dp))
 
-        // 3. 预计时长
+        // 3. 预计时长（点击进入滚轮选择盘）
         FormSectionHeader(title = "预计时长")
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DurationPresets.forEach { m ->
-                PlanChip(
-                    selected = durationMinutes == m,
-                    label = "${m}m",
-                    onClick = { onDurationChange(m) }
-                )
-            }
-            val customMinutes = durationMinutes?.takeIf { it !in DurationPresets }
-            val customLabel = if (customMinutes != null) formatMinutes(customMinutes) else "自定义"
-            PlanChip(
-                selected = customMinutes != null,
-                label = customLabel,
-                onClick = onOpenCustomDuration
-            )
-            PlanChip(
-                selected = durationMinutes == null,
-                label = "不限时",
-                onClick = { onDurationChange(null) }
-            )
-        }
+        DurationField(
+            durationMinutes = durationMinutes,
+            onClick = onOpenDurationPicker
+        )
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -641,41 +562,73 @@ private fun SubjectField(
 }
 
 @Composable
-private fun PlanChip(
-    selected: Boolean,
-    label: String,
+private fun DurationField(
+    durationMinutes: Int?,
     onClick: () -> Unit
 ) {
-    FilterChip(
-        selected = selected,
+    Surface(
         onClick = onClick,
-        label = { Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
-        leadingIcon = if (selected) {
-            {
-                Icon(
-                    imageVector = RemixIcons.CheckLine,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+        shape = RoundedCornerShape(14.dp),
+        color = YanjiColors.fill,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("add_plan_duration_field")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = RemixIcons.TimeLine,
+                contentDescription = null,
+                tint = if (durationMinutes != null && durationMinutes > 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (durationMinutes == null || durationMinutes <= 0) {
+                        "不设定时间"
+                    } else {
+                        formatDurationText(durationMinutes)
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (durationMinutes == null || durationMinutes <= 0) {
+                        "无限时间，自由专注"
+                    } else {
+                        "计划单次学习时长"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
-        } else null,
-        shape = RoundedCornerShape(12.dp),
-        // 选中态用主色容器（蓝），与「添加」按钮、选中的「最近」Chip 同一套选中语言；
-        // 未选中取 [YanjiColors.fill]（浅一档中性蓝灰；真机反馈 inputFill 调太重后回调）。
-        // 两者都不再走 secondaryContainer（卷卷主题下 = 浅紫 #F0EDFF，整组选项泛紫）。
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = YanjiColors.fill,
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ),
-        border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = Color.Transparent,
-            selectedBorderColor = Color.Transparent
-        )
-    )
+            Icon(
+                imageVector = RemixIcons.ArrowRightSLine,
+                contentDescription = "选择时长",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+private fun formatDurationText(minutes: Int): String = when {
+    minutes <= 0 -> "不限时"
+    minutes < 60 -> "$minutes 分钟"
+    minutes == 60 -> "1 小时 (60 分钟)"
+    minutes == 180 -> "3 小时 (180 分钟)"
+    minutes % 60 == 0 -> "${minutes / 60} 小时 ($minutes 分钟)"
+    else -> "${minutes / 60} 小时 ${minutes % 60} 分钟 ($minutes 分钟)"
 }
 
 // --------------------------- 科目选择器页 ---------------------------
@@ -832,13 +785,16 @@ private fun SubjectPickerPage(
 
 @Composable
 private fun DurationPickerPage(
-    initialMinutes: Int,
+    initialMinutes: Int?,
     onBack: () -> Unit,
-    onDone: (Int) -> Unit
+    onDone: (Int?) -> Unit
 ) {
-    var hours by remember { mutableIntStateOf((initialMinutes / 60).coerceIn(0, 12)) }
-    var minutes by remember { mutableIntStateOf((initialMinutes % 60 / 5 * 5).coerceIn(0, 55)) }
-    val total = hours * 60 + minutes
+    var isTimed by rememberSaveable {
+        mutableStateOf(initialMinutes != null && initialMinutes > 0)
+    }
+    var selectedMinutes by rememberSaveable {
+        mutableIntStateOf(initialMinutes?.coerceIn(5, 180) ?: 45)
+    }
 
     Column(
         modifier = Modifier
@@ -846,44 +802,139 @@ private fun DurationPickerPage(
             .navigationBarsPadding()
             .padding(bottom = 16.dp)
     ) {
-        PageHeader(title = "自定义时长", onBack = onBack) {
+        PageHeader(title = "预计时长", onBack = onBack) {
             TextButton(
-                onClick = { onDone(total) },
-                enabled = total >= 5
+                onClick = {
+                    onDone(if (isTimed) selectedMinutes else null)
+                }
             ) {
                 Text("完成", fontWeight = FontWeight.SemiBold)
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 模式切换：不设定时间 vs 设定时间
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            WheelPicker(
-                values = HourValues,
-                initialIndex = hours,
-                onSelected = { hours = it }
+            FilterChip(
+                selected = !isTimed,
+                onClick = { isTimed = false },
+                label = {
+                    Text(
+                        text = "不设定时间",
+                        fontWeight = if (!isTimed) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = YanjiColors.fill,
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                border = null,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
             )
-            Text(
-                text = "小时",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp)
+            FilterChip(
+                selected = isTimed,
+                onClick = { isTimed = true },
+                label = {
+                    Text(
+                        text = "设定时间",
+                        fontWeight = if (isTimed) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = YanjiColors.fill,
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                border = null,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
             )
-            WheelPicker(
-                values = MinuteValues,
-                initialIndex = (minutes / 5).coerceIn(0, MinuteValues.lastIndex),
-                onSelected = { minutes = it }
-            )
-            Text(
-                text = "分钟",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp)
-            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (!isTimed) {
+            // 不设定时间展示说明
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp, horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(YanjiColors.fill),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = RemixIcons.TimeLine,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "不设定时间（无限时间）",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "开始专注后不设倒计时限制，直到您主动结束，适合自由复习与深度研读。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            // 设定时间：滚轮选择盘（上限 180 分钟）
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                WheelPicker(
+                    values = DurationValues,
+                    initialIndex = DurationValues.indexOf(selectedMinutes).coerceAtLeast(0),
+                    onSelected = { selectedMinutes = it }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = formatDurationText(selectedMinutes),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selectedMinutes >= 180) YanjiColors.warning else MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (selectedMinutes >= 180) "已达时长上限 180 分钟 (3小时)" else "上下滑动选择合适的时间，上限 180 分钟",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
@@ -911,12 +962,11 @@ private fun WheelPicker(
 
     Box(
         modifier = Modifier
-            .width(76.dp)
+            .width(180.dp)
             .height(itemHeight * 3),
         contentAlignment = Alignment.Center
     ) {
-        // 中间高亮带：主色容器半透明（与选中 Chip 同一选中语言），
-        // 不再用 secondaryContainer 的紫雾。
+        // 中间高亮带
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -931,6 +981,7 @@ private fun WheelPicker(
             modifier = Modifier.fillMaxSize()
         ) {
             items(values.size) { i ->
+                val v = values[i]
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -938,7 +989,7 @@ private fun WheelPicker(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = values[i].toString().padStart(2, '0'),
+                        text = "$v 分钟",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface

@@ -36,9 +36,14 @@ class AddPlanSheetTest {
         assertTrue("Must support 3 pages: Form, Subject, Duration", content.contains("AddPlanPage"))
         assertTrue("Must support wheel picker", content.contains("WheelPicker"))
         assertTrue("Must support start focus action", content.contains("添加并开始专注"))
-        assertTrue("Must support un-timed mode", content.contains("不限时"))
         assertTrue("Must support editing mode", content.contains("editingTask"))
-        assertTrue("Must support action suggestions", content.contains("getSubjectActionSuggestions"))
+        // 规则更新：标题改为「备注」，且删除所有「快捷添加」灵感词选项
+        assertTrue("Title must be 备注", content.contains("title = \"备注\""))
+        assertTrue("Must not contain action suggestions", !content.contains("getSubjectActionSuggestions"))
+        // 预计时长：取消按钮选择，进入滚轮选择盘，默认不设定时间，上限 180 分钟
+        assertTrue("Must support duration field entry", content.contains("DurationField"))
+        assertTrue("Must default to un-timed mode", content.contains("不设定时间"))
+        assertTrue("Max duration must be 180 minutes", content.contains("180"))
         // 真机规则：默认大学科 / 显示不拼路径 / 无新建科目入口
         assertTrue("Default selection must be the big category, not a sub-subject",
             content.contains("mutableStateOf(editingSub)"))
