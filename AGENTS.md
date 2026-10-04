@@ -63,6 +63,14 @@
      - Windows 无论在 PowerShell 还是 Git Bash 下，均必须显式调用 `gradlew.bat`（PowerShell 下 `.\gradlew.bat assembleDebug`，Git Bash 下 `./gradlew.bat assembleDebug`）。
      - 若省略 `.bat` 直接调用无后缀的 `gradlew`，在 Windows 非 POSIX 环境下易被错误关联，甚至出现管道挂起假死。
 
+### 6. 【铁律】严禁改动设备的系统浅色 / 深色模式
+
+- **红线**：研迹的编译、推送、安装、启动、调试、真机验证全过程中，**严禁以任何方式修改用户手机的系统配色方案**（系统默认的浅色 / 深色模式）：
+  - 禁 ADB 层切换：`adb shell cmd uimode night yes|no`、`adb shell settings put secure ui_night_mode …` 及同类 `settings`/`am` 命令一律不得执行；
+  - 禁代码层切换：不得在应用中调用 `UiModeManager` / `setApplicationNightMode` / `setNightModeOverride` 等 API 写**系统级**模式（研迹主题只允许**读取**系统 uiMode 与应用内偏好 `YanjiThemeMode`，见 `theme/Theme.kt`）；
+  - 禁要求用户为配合验证去改系统模式：深浅色观感问题一律由用户自行切换（优先用研迹应用内主题，无需动系统）后在对话中反馈，AI 依据用户描述的模式排查。
+- **原因**：真机是用户日常使用设备，系统配色属于用户个人设置，不因任何调试目的而被 Agent 改动。
+
 ---
 
 ## 三、Active Constraints（红线清单 · 一页速查）
@@ -74,13 +82,14 @@
 3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
 4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
 5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 设计红线**：`ui/` 层 0 容忍裸 `Color(0x...)` 字面量与静态亮色 Token；裸圆角受棘轮上限约束；暗色背景用 Midnight Blue 系列，**禁止纯黑 `#000000`**；`Modifier.hazeEffect` 必须显式设 `backgroundColor` 垫底（否则真机启动崩溃）。
+6. **UI 设计红线**：`ui/` 层 0 容忍裸 `Color(0x...)` 字面量与静态亮色 Token；裸圆角受棘轮上限约束；暗色背景用 Midnight Blue 系列，**禁止纯黑 `#000000`**；**卡片零边框**：一切卡片容器（`YanjiCard` / `YanjiGroupedCard` / 同级 `Surface` 槽位）一律不设 `BorderStroke`，**深浅色均无描边**，层级只靠表面明度递进与字号字重表达（输入框 / 按钮等需要可辨识边界的控件不受此条约束）；`Modifier.hazeEffect` 必须显式设 `backgroundColor` 垫底（否则真机启动崩溃）。
 7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
 10. **无证据不宣称通过**：严格区分「编译成功」「测试执行成功」「真机推送成功」；未运行项必须显式标注，环境故障不得伪装成产品缺陷。
 11. **严禁自行操作真机与截屏验证**：真机验证以「APK 安装成功且主入口 Activity 正常拉起（无启动崩溃）」为交付终点。**严禁 AI 自行使用 `input tap`、`input swipe`、`uiautomator dump` 等命令模拟操作真机，严禁使用 `screencap` 抓取屏幕截图或跑深浅色交叉比对**。测试操作、交互体验与视觉效果完全由用户在真机上亲自进行并及时反馈，AI 严禁越俎代庖操作用户手机或后台截屏。
 12. **修改完成必须 Git 提交与推送**：任务修改完成并验证后，**不需要**在个人知识库记录工作日志；必须针对目标改动文件执行 `git commit` 与 `git push`，并在提交时附加简略、概括性的提交信息（严禁提交未要求修改的在途文件）。
+13. **严禁改动设备系统配色**：编译 / 推送 / 调试 / 真机验证全程，严禁以任何方式（ADB `cmd uimode night`、`settings put ui_night_mode`、应用内 `UiModeManager` API、要求用户改系统模式等）修改真机系统的浅色 / 深色模式；研迹主题只读系统 uiMode 与应用内 `YanjiThemeMode`，深浅色验证由用户自行切换后反馈（见 §二.6）。
 
 ---
 
@@ -206,6 +215,7 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 2. **交付终点**：编译 APK → 单次覆盖安装（`install -r -d`） → 调起主界面（`am start`）即宣告交付完成；
 3. **严禁越俎代庖**：**严禁 AI 自行截屏验证（禁 `screencap`），严禁 AI 自行模拟点击滑动操作真机（禁 `input tap/swipe`、`uiautomator dump`）**。测试操作、交互体验与视觉效果完全由用户在真机亲自进行并及时在对话中反馈；
 4. **配对与排错**：遇到搜不到设备、提示 `10061 积极拒绝` 或凭证失效时，严格遵循 [ADB.md §二.2](file:///d:/AI项目/yanji/ADB.md) 的标准 6 步法处理。
+5. **严禁改动设备系统配色**：推送与调试全程，严禁通过 ADB（`cmd uimode night` / `settings put ui_night_mode`）或代码改动真机系统的浅色 / 深色模式；深浅色验证由用户自行切换后反馈（见 §二.6）。
 
 ---
 
@@ -255,4 +265,4 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 1. **唯一入口**：本文是仓库主要的 Agent 操作指南与工程规范；其他开发手册与本文冲突时以本文（除代码与 ADR 外）为准。
 2. **修订原则**：只保留清晰可落地的规范与原则，不堆砌冗余报告；易漂移的事实一律改为引用式（§四）。
-3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、严禁自行截屏验证原则、提交 / 忽略与 Git 推送纪律。
+3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、严禁自行截屏验证原则、严禁改动设备系统深浅色模式、卡片零边框（深浅色均无描边）、提交 / 忽略与 Git 推送纪律。
