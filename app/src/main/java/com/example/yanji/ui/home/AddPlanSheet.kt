@@ -4,6 +4,7 @@ package com.example.yanji.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -643,6 +644,10 @@ private fun SubjectPickerPage(
     var activeCategoryItem by remember(categories, currentSelection) {
         mutableStateOf(currentSelection?.categoryItem ?: categories.firstOrNull())
     }
+    val contentFade = YanjiMotion.accessibleFiniteTween<Float>(
+        durationMillis = YanjiMotion.DurationFast,
+        easing = YanjiMotion.EaseStandard
+    )
 
     Column(
         modifier = Modifier
@@ -657,122 +662,142 @@ private fun SubjectPickerPage(
                 .fillMaxWidth()
                 .height(320.dp)
         ) {
-            // 左列：大类
+            // 左列：大类（胶囊高亮与平滑变色）
             LazyColumn(
                 modifier = Modifier
                     .width(116.dp)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(YanjiColors.fill),
+                contentPadding = PaddingValues(vertical = 6.dp, horizontal = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(categories, key = { it.category.id }) { cat ->
                     val isActive = activeCategoryItem?.category?.id == cat.category.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                if (cat.subjects.isEmpty()) {
-                                    onSelect(SubjectSelection(cat, null))
-                                } else {
-                                    activeCategoryItem = cat
-                                }
+                    val itemBgColor by animateColorAsState(
+                        targetValue = if (isActive) MaterialTheme.colorScheme.surface else Color.Transparent,
+                        animationSpec = YanjiMotion.accessibleFiniteTween(durationMillis = YanjiMotion.DurationFast),
+                        label = "cat_item_bg"
+                    )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = YanjiMotion.accessibleFiniteTween(durationMillis = YanjiMotion.DurationFast),
+                        label = "cat_item_text"
+                    )
+
+                    Surface(
+                        onClick = {
+                            if (cat.subjects.isEmpty()) {
+                                onSelect(SubjectSelection(cat, null))
+                            } else {
+                                activeCategoryItem = cat
                             }
-                            .background(
-                                if (isActive) MaterialTheme.colorScheme.surface
-                                else Color.Transparent
-                            )
-                            .padding(vertical = 14.dp, horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = itemBgColor,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.dp)
-                                .height(20.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (isActive) cat.color else Color.Transparent)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = cat.category.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isActive) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isActive) cat.color else cat.color.copy(alpha = 0.45f))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = cat.category.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                                color = textColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
 
-            // 右列：子科目
-            val active = activeCategoryItem
-            LazyColumn(
+            // 右列：子科目（大类切换时平滑淡入淡出）
+            AnimatedContent(
+                targetState = activeCategoryItem,
+                transitionSpec = {
+                    fadeIn(animationSpec = contentFade) togetherWith fadeOut(animationSpec = contentFade)
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .padding(horizontal = 14.dp)
-            ) {
-                if (active != null) {
-                    // 第一个选项：选中大类本身（全部/不细分）
-                    val isCatSelected = currentSelection?.categoryItem?.category?.id == active.category.id &&
-                        currentSelection.subject == null
-                    item(key = "${active.category.id}_all") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(SubjectSelection(active, null)) }
-                                .padding(vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "全部${active.category.name}（不细分）",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isCatSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isCatSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isCatSelected) {
-                                Icon(
-                                    imageVector = RemixIcons.CheckLine,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                    .fillMaxHeight(),
+                label = "active-cat-sub-anim"
+            ) { active ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp)
+                ) {
+                    if (active != null) {
+                        // 第一个选项：选中大类本身（全部/不细分）
+                        val isCatSelected = currentSelection?.categoryItem?.category?.id == active.category.id &&
+                            currentSelection.subject == null
+                        item(key = "${active.category.id}_all") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(SubjectSelection(active, null)) }
+                                    .padding(vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "全部${active.category.name}（不细分）",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isCatSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isCatSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
                                 )
+                                if (isCatSelected) {
+                                    Icon(
+                                        imageVector = RemixIcons.CheckLine,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
+                            HorizontalDivider(thickness = 0.5.dp, color = YanjiColors.rowDivider)
                         }
-                        HorizontalDivider(thickness = 0.5.dp, color = YanjiColors.rowDivider)
-                    }
 
-                    // 子科目列表
-                    items(active.subjects, key = { it.id }) { sub ->
-                        val isSubSelected = currentSelection?.categoryItem?.category?.id == active.category.id &&
-                            currentSelection.subject?.id == sub.id
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(SubjectSelection(active, sub)) }
-                                .padding(vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = sub.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSubSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isSubSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isSubSelected) {
-                                Icon(
-                                    imageVector = RemixIcons.CheckLine,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                        // 子科目列表
+                        items(active.subjects, key = { it.id }) { sub ->
+                            val isSubSelected = currentSelection?.categoryItem?.category?.id == active.category.id &&
+                                currentSelection.subject?.id == sub.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(SubjectSelection(active, sub)) }
+                                    .padding(vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sub.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSubSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSubSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
                                 )
+                                if (isSubSelected) {
+                                    Icon(
+                                        imageVector = RemixIcons.CheckLine,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
+                            HorizontalDivider(thickness = 0.5.dp, color = YanjiColors.rowDivider)
                         }
-                        HorizontalDivider(thickness = 0.5.dp, color = YanjiColors.rowDivider)
                     }
                 }
             }
