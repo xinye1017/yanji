@@ -94,11 +94,14 @@ private fun applyRubberBand(value: Float, limit: Float, max: Float): Float = whe
  *  - **长按 = 滑动的单指针替代路径**：WCAG 2.2 要求作者自定义拖拽必须有按钮 / 菜单等价物，
  *    否则读屏与运动障碍用户完全够不到「收藏 / 删除」。长按弹出的菜单复用同一对回调。
  *
- * 样式：整行是一个**圆角矩形**（最外层 Box 一次给足 20dp 页边距与 16dp 圆角裁剪），
- * 随笔卡片与左右两个操作块都活在这个圆角里，因此完全同形同位：
+ * 样式：整行是一个**圆角矩形**，由两层搭出来 —— 外层 Box 只给 20dp 页边距，
+ * 内层 Box 只给圆角裁剪，随笔卡片与左右两个操作块都活在这个圆角里：
+ *  - 页边距与圆角**不能挂在同一个节点上**：Modifier.clip 按节点自身容积取圆角矩形，
+ *    两者同链时圆角会被推到屏幕两角，操作块仍是直角，静止时从卡片的四个圆角里漏出
+ *    蓝 / 粉色块，看起来像「卡片和整行圆角没接上」；
  *  - 静止时卡片严严实实盖住操作块，四周不留一丝操作块底色；
- *  - 滑开时露出的操作块跟着同一个圆角走，不会漏出屏幕边缘的直角方块。
- * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 圆角刻意由外层裁剪统一
+ *  - 滑开时露出的操作块跟着同一个圆角走，卡片越过这个圆角的部分也由它裁掉。
+ * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 圆角刻意由整行裁剪统一
  * 处理，而不是逐个方块单独抹角：后者会在「操作块与卡片交界的拖尾边」留下缺口，
  * 也会让两个 72dp 方块之间露出一条没被盖住的底色。
  * 卡片之外是页面底色，卡片整体平移让位。
@@ -167,124 +170,133 @@ fun NoteSwipeableRow(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            // 页边距与圆角只在最外层给一次：卡片和两个操作块因此完全同形同位。
-            // 放在内层各自给一遍是不行的 —— 操作块的 matchParentSize 撑满的是整行宽度，
-            // 若只内缩卡片，静止时操作块就会从卡片左右各探出 20dp（直角、且和圆角对不上）。
+            // 页边距只负责把整行从屏幕左右缘收进来，**不在这里给圆角**。
+            // Modifier.clip 的裁剪按**节点自身容积**取圆角矩形：页边距与圆角挂进同一条
+            // modifier 链时，圆角会被推到屏幕两角，行内的操作块仍是直角 —— 静止时两个方块
+            // 就从卡片的四个圆角里漏出蓝 / 粉色块，看起来像「卡片和整行圆角没接上」。
             .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
-            // 圆角取卡片变体自己的形状，行容器与卡片永远同一个半径，不会各自漂移。
-            .clip(YanjiCardVariant.Compact.toShape())
     ) {
-        // ---- 操作块行：matchParentSize 取整行尺寸，两个 72dp 方块分居左右边缘 ----
-        // 注意：不能把 matchParentSize 直接加在方块上——它会把子节点约束固定为整行尺寸，
-        // 后面的 .width() 会被 coerce 成整行宽，导致两块重叠、后声明的红块盖住蓝块。
-        Row(
-            modifier = Modifier.matchParentSize(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SquareActionPanel(
-                width = actionWidth,
-                // 底色：亮暗都用 `primary`。暗色下它被刻意升调成亮蓝（#4F7DF3），
-                // 滑开时是整块高饱和色块，识别度足够。
-                container = MaterialTheme.colorScheme.primary,
-                // 图标：暗色用 primaryLabel（柔白冷灰 #F0F4FC，Color.kt 的定义就是
-                // 「杜绝纯白 #FFF 的刺眼」），压亮蓝 3.78:1，过图标 3:1 线。
-                // 不用 onPrimary：主题按 M3「亮主色 + 暗前景」惯例把它压成 #0D111A 深墨，
-                // 深墨压在饱和亮蓝上视觉上就是一个「黑图标」，与预期完全相反。
-                // 亮色维持 onPrimary 纯白（白压 #356AE6 = 4.82:1）。
-                tint = if (yanjiIsDarkTheme()) YanjiColors.primaryLabel
-                       else MaterialTheme.colorScheme.onPrimary,
-                icon = RemixIcons.BookmarkFill,
-                contentDescription = if (entry.isFavorite) "取消收藏" else "收藏",
-                revealProgress = revealProgress,
-                onClick = {
-                    onToggleFavorite()
-                    settleTo(Reveal.NONE)
-                }
-            )
-
-            // 右：删除块，错误色底 + 删除图标
-            SquareActionPanel(
-                width = actionWidth,
-                container = MaterialTheme.colorScheme.error,
-                tint = MaterialTheme.colorScheme.onError,
-                icon = RemixIcons.DeleteBinLine,
-                contentDescription = "删除",
-                revealProgress = revealProgress,
-                onClick = {
-                    // 不自动确认：点击才进入删除确认流程。
-                    onDelete()
-                    settleTo(Reveal.NONE)
-                }
-            )
-        }
-
-        // ---- 行内容：圆角卡片整体平移，露出一侧固定宽度的操作块 ----
-        YanjiCard(
+        // ---- 整行圆角容器：卡片与两个操作块共用一个裁剪层 ----
+        // 这一层不背页边距，自身容积正好是行矩形，圆角才落在行的四个角上。
+        // 半径取卡片变体自己的形状，行容器与卡片永远是同一个圆角，不会各自漂移；
+        // 滑开时卡片整体平移，越过这个圆角的部分也由它裁掉，不会探到页边距上。
+        Box(
             modifier = Modifier
-                .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
                 .fillMaxWidth()
-                .pointerInput(actionWidthPx, overDragMaxPx, flingVelocityPx) {
-                    var estimatedVelocityX = 0f
-                    var lastEventTime = 0L
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            dragging = true
-                            estimatedVelocityX = 0f
-                            lastEventTime = 0L
-                            // 抢占：本行开始拖动即把「当前滑开行」据为己有，收起其它行。
-                            onOpenChange(true)
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            val now = change.uptimeMillis
-                            if (lastEventTime > 0L) {
-                                val dtMillis = (now - lastEventTime).coerceAtLeast(1L)
-                                estimatedVelocityX = dragAmount / dtMillis * 1000f
-                            }
-                            lastEventTime = now
-                            scope.launch {
-                                offsetAnim.snapTo(
-                                    applyRubberBand(
-                                        value = offsetAnim.value + dragAmount,
-                                        limit = actionWidthPx,
-                                        max = overDragMaxPx
+                .clip(YanjiCardVariant.Compact.toShape())
+        ) {
+            // ---- 操作块行：matchParentSize 取整行尺寸，两个 72dp 方块分居左右边缘 ----
+            // 注意：不能把 matchParentSize 直接加在方块上——它会把子节点约束固定为整行尺寸，
+            // 后面的 .width() 会被 coerce 成整行宽，导致两块重叠、后声明的红块盖住蓝块。
+            Row(
+                modifier = Modifier.matchParentSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SquareActionPanel(
+                    width = actionWidth,
+                    // 底色：亮暗都用 `primary`。暗色下它被刻意升调成亮蓝（#4F7DF3），
+                    // 滑开时是整块高饱和色块，识别度足够。
+                    container = MaterialTheme.colorScheme.primary,
+                    // 图标：暗色用 primaryLabel（柔白冷灰 #F0F4FC，Color.kt 的定义就是
+                    // 「杜绝纯白 #FFF 的刺眼」），压亮蓝 3.78:1，过图标 3:1 线。
+                    // 不用 onPrimary：主题按 M3「亮主色 + 暗前景」惯例把它压成 #0D111A 深墨，
+                    // 深墨压在饱和亮蓝上视觉上就是一个「黑图标」，与预期完全相反。
+                    // 亮色维持 onPrimary 纯白（白压 #356AE6 = 4.82:1）。
+                    tint = if (yanjiIsDarkTheme()) YanjiColors.primaryLabel
+                           else MaterialTheme.colorScheme.onPrimary,
+                    icon = RemixIcons.BookmarkFill,
+                    contentDescription = if (entry.isFavorite) "取消收藏" else "收藏",
+                    revealProgress = revealProgress,
+                    onClick = {
+                        onToggleFavorite()
+                        settleTo(Reveal.NONE)
+                    }
+                )
+
+                // 右：删除块，错误色底 + 删除图标
+                SquareActionPanel(
+                    width = actionWidth,
+                    container = MaterialTheme.colorScheme.error,
+                    tint = MaterialTheme.colorScheme.onError,
+                    icon = RemixIcons.DeleteBinLine,
+                    contentDescription = "删除",
+                    revealProgress = revealProgress,
+                    onClick = {
+                        // 不自动确认：点击才进入删除确认流程。
+                        onDelete()
+                        settleTo(Reveal.NONE)
+                    }
+                )
+            }
+
+            // ---- 行内容：圆角卡片整体平移，露出一侧固定宽度的操作块 ----
+            YanjiCard(
+                modifier = Modifier
+                    .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
+                    .fillMaxWidth()
+                    .pointerInput(actionWidthPx, overDragMaxPx, flingVelocityPx) {
+                        var estimatedVelocityX = 0f
+                        var lastEventTime = 0L
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                dragging = true
+                                estimatedVelocityX = 0f
+                                lastEventTime = 0L
+                                // 抢占：本行开始拖动即把「当前滑开行」据为己有，收起其它行。
+                                onOpenChange(true)
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                val now = change.uptimeMillis
+                                if (lastEventTime > 0L) {
+                                    val dtMillis = (now - lastEventTime).coerceAtLeast(1L)
+                                    estimatedVelocityX = dragAmount / dtMillis * 1000f
+                                }
+                                lastEventTime = now
+                                scope.launch {
+                                    offsetAnim.snapTo(
+                                        applyRubberBand(
+                                            value = offsetAnim.value + dragAmount,
+                                            limit = actionWidthPx,
+                                            max = overDragMaxPx
+                                        )
+                                    )
+                                }
+                            },
+                            onDragEnd = {
+                                dragging = false
+                                settleTo(
+                                    decideSnap(
+                                        offsetPx = offsetAnim.value,
+                                        velocity = estimatedVelocityX,
+                                        actionWidthPx = actionWidthPx,
+                                        flingVelocityPx = flingVelocityPx
+                                    )
+                                )
+                            },
+                            onDragCancel = {
+                                dragging = false
+                                settleTo(
+                                    decideSnap(
+                                        offsetPx = offsetAnim.value,
+                                        velocity = 0f,
+                                        actionWidthPx = actionWidthPx,
+                                        flingVelocityPx = flingVelocityPx
                                     )
                                 )
                             }
-                        },
-                        onDragEnd = {
-                            dragging = false
-                            settleTo(
-                                decideSnap(
-                                    offsetPx = offsetAnim.value,
-                                    velocity = estimatedVelocityX,
-                                    actionWidthPx = actionWidthPx,
-                                    flingVelocityPx = flingVelocityPx
-                                )
-                            )
-                        },
-                        onDragCancel = {
-                            dragging = false
-                            settleTo(
-                                decideSnap(
-                                    offsetPx = offsetAnim.value,
-                                    velocity = 0f,
-                                    actionWidthPx = actionWidthPx,
-                                    flingVelocityPx = flingVelocityPx
-                                )
-                            )
-                        }
-                    )
-                },
-                // 16dp 圆角 + colorScheme.surface 容器色：列表条目卡片档，与全站其它
-                // 卡片同一个基元、同一个底色（见函数上方 KDoc 的样式说明）。
-                variant = YanjiCardVariant.Compact
-        ) {
-            NoteRowContent(
-                entry = entry,
-                onClick = onClick,
-                onLongClick = { menuOpen = true }
-            )
+                        )
+                    },
+                    // 16dp 圆角 + colorScheme.surface 容器色：列表条目卡片档，与全站其它
+                    // 卡片同一个基元、同一个底色（见函数上方 KDoc 的样式说明）。
+                    variant = YanjiCardVariant.Compact
+            ) {
+                NoteRowContent(
+                    entry = entry,
+                    onClick = onClick,
+                    onLongClick = { menuOpen = true }
+                )
+            }
         }
 
         // ---- 长按菜单：滑动的单指针替代路径（WCAG 2.2 AA）----

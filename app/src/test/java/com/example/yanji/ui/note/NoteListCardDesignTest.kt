@@ -11,11 +11,13 @@ import java.io.File
  * 这里曾经是「整行铺在页面底色上 + 0.8dp 分组线」的非卡片列表，与 App 里其它
  * 所有页面都不一致（其余页面一律走 ui/components 的 YanjiCard 基元）。
  *
- * 守四件事：
+ * 守五件事：
  *  1. 每篇随笔的容器是 `YanjiCard` 的 Compact 档（16dp 圆角 + `colorScheme.surface`）；
  *  2. 行内不再手写页面底色 —— 底色由卡片基元给出，在行里再写一次必然和全站漂移；
  *  3. 卡片与两侧滑动操作块内缩同一套页边距，滑开时才不会露出一截页面底色；
- *  4. 组与组之间不再画分隔线（卡片自己就是边界），页眉标题下那条规则线保留。
+ *  4. 组与组之间不再画分隔线（卡片自己就是边界），页眉标题下那条规则线保留；
+ *  5. 圆角裁剪层与页边距分层 —— 同节点挂载会让圆角跑到屏幕两角，操作块带着直角
+ *     从卡片四个圆角里漏出来（静止时看起来像「卡片和整行圆角没接上」）。
  */
 class NoteListCardDesignTest {
 
@@ -68,6 +70,25 @@ class NoteListCardDesignTest {
             "操作块行不得再自己内缩页边距",
             !row.contains(Regex("""matchParentSize\(\)\s*\.padding"""))
         )
+    }
+
+    @Test
+    fun theClipLayerMustNotCarryThePageInset() {
+        // 圆角裁剪层与页边距必须是**两层**：Modifier.clip 按节点自身容积取圆角矩形，
+        // 把页边距和圆角挂进同一条 modifier 链时，圆角会被推到屏幕两角，行内操作块
+        // 仍是直角 —— 静止时就从卡片的四个圆角里漏出蓝 / 粉色块，看起来像
+        // 「卡片和整行圆角没接上」。真机截图上量过：左上角蓝块的外边界是一条直线
+        // 而不是 16dp 圆角弧，就是同链挂载的后果。
+        val paddingAt = row.indexOf(".padding(horizontal = YanjiSpacing.PageHorizontalPadding)")
+        val clipAt = row.indexOf(".clip(YanjiCardVariant.Compact.toShape())")
+        assertTrue("必须先有页边距、再有裁剪层", paddingAt in 0 until clipAt)
+        assertTrue(
+            "裁剪层不得与页边距同节点：两者之间必须隔着一个盒子的闭合",
+            row.substring(paddingAt, clipAt).contains("Box(")
+        )
+        // 操作块与卡片都活在这个裁剪层里，滑开时才被同一个圆角约束
+        assertTrue("操作块行必须在裁剪层内", clipAt < row.indexOf("matchParentSize()"))
+        assertTrue("卡片必须在裁剪层内", clipAt < row.indexOf("YanjiCard("))
     }
 
     @Test
