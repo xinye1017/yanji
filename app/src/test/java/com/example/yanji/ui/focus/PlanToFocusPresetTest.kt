@@ -13,11 +13,12 @@ import java.io.File
  * 「选大类」第一步开始，用户还得自己再走两三步，且一进 MODULE 步骤时
  * `onCategoryClick` 会用默认 45 分钟覆盖掉预设时长。
  *
- * 这里守住三个不变量：
+ * 这里守住四个不变量：
  *  1. 计划标题确实被当作专注备注传过去（用户明确点名的部分）；
  *  2. 预设由准备流程**唯一**消费，父页不再就地应用一遍；
  *  3. 准备页落地即最后一步，且滚轮上限与计划时长上限对齐（否则 120 分钟的计划
- *     会显示 100 分钟，而真正计的又是 120 分钟）。
+ *     会显示 100 分钟，而真正计的又是 120 分钟）；
+ *  4. 计划行内「整行改计划、Play 才开专注」的分工，以及末步屏底栏滑出。
  */
 class PlanToFocusPresetTest {
 
@@ -114,6 +115,80 @@ class PlanToFocusPresetTest {
         assertEquals("计划的时长滚轮上限应可从源码读出", 180, planMax)
         assertEquals("准备页的滚轮上限应可从源码读出", 180, setupMax)
         assertEquals("两侧时长上限必须一致", planMax, setupMax)
+    }
+
+    /**
+     * 计划行内的点击分工：整行改计划，只有右侧 Play 才开专注。
+     *
+     * 曾经整行点击即开始专注，导致想改一条计划的时长或备注时无处下手。
+     * 两个入口必须在**同一行**里按区域分开，且各自带读屏标签。
+     */
+    @Test
+    fun rowClickEditsAndOnlyThePlayButtonStartsFocus() {
+        val row = source("app/src/main/java/com/example/yanji/ui/home/TodayPlanCard.kt")
+        assertTrue(
+            "整行点击必须是编辑计划，而不是开始专注",
+            Regex("""onClick\s*=\s*onEdit""").containsMatchIn(row)
+        )
+        assertTrue(
+            "Play 必须是自带触控框与点击处理的真按钮，而非装饰性图标",
+            row.contains("clickable(role = Role.Button, onClick = onStart)")
+        )
+        assertTrue(
+            "Play 必须带读屏标签，否则视障用户听不出这是「开始」",
+            row.contains("contentDescription = \"开始专注\"")
+        )
+    }
+
+    /**
+     * 末步沉浸式：底部浮岛滑出屏幕，且离开专注 tab 时必须归还。
+     *
+     * 直接 `if (!immersive) { GlassBottomBar(...) }` 会变成闪现消失，
+     * 收不到「滑出屏幕」的方向感；而只在沉浸式置位时隐藏、不复位，
+     * 切到其他 tab 会一直缺一条底栏。
+     */
+    @Test
+    fun bottomBarSlidesOutOnTheImmersiveLastStep() {
+        val nav = source("app/src/main/java/com/example/yanji/Navigation.kt")
+        val setup = source("app/src/main/java/com/example/yanji/ui/focus/QuietFocusSetupContent.kt")
+
+        assertTrue(
+            "底栏显隐必须走 AnimatedVisibility 才能做退场动画",
+            nav.contains("AnimatedVisibility(")
+        )
+        assertTrue(
+            "退场必须是向下移出屏幕（位移量取自身高度）",
+            nav.contains("slideOutVertically(") &&
+                Regex("""\)\s*\{\s*fullHeight\s*->\s*fullHeight\s*\}""").containsMatchIn(nav)
+        )
+        assertTrue(
+            "沉浸式必须进入底栏的可见条件",
+            nav.contains("!focusSetupImmersive")
+        )
+        assertTrue(
+            "准备流程必须把沉浸式开关上报给宿主",
+            nav.contains("onImmersiveChange = { focusSetupImmersive = it }")
+        )
+
+        assertTrue(
+            "准备流程必须接收沉浸式上报通道",
+            setup.contains("onImmersiveChange: ((Boolean) -> Unit)? = null")
+        )
+        assertTrue(
+            "沉浸式 = 走到最后一步",
+            setup.contains("val isImmersive = currentStep == QuietFocusStep.RHYTHM")
+        )
+        assertTrue(
+            "置位与复位都要上报 —— 复位靠 DisposableEffect，LaunchedEffect 不会在离开组合时回调",
+            setup.contains("onImmersiveChange?.invoke(isImmersive)") &&
+                setup.contains("DisposableEffect(Unit)") &&
+                setup.contains("onDispose { onImmersiveChange?.invoke(false) }")
+        )
+        assertTrue(
+            "末步 immersive 为真时内容只避系统手势区；仍按 112dp 预留会在底栏消失后留一片空白",
+            setup.contains("immersive = isImmersive") &&
+                setup.contains("Modifier.navigationBarsPadding()")
+        )
     }
 
     private fun findProjectRoot(): File {

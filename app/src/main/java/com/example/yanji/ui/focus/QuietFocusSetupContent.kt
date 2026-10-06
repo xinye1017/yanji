@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,6 +55,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -163,7 +165,9 @@ fun QuietFocusSetupContent(
     onQuickStart: (QuickStartPreset) -> Unit = {},
     onDeleteQuickStart: (String) -> Unit = {},
     presetRequest: FocusPresetRequest? = null,
-    onPresetApplied: (() -> Unit)? = null
+    onPresetApplied: (() -> Unit)? = null,
+    /** 末步沉浸式开关的上报通道：true 时宿主把底部浮岛滑出屏幕。 */
+    onImmersiveChange: ((Boolean) -> Unit)? = null
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -209,6 +213,16 @@ fun QuietFocusSetupContent(
         if (req.note.isNotBlank()) onNoteChange(req.note)
         currentStep = QuietFocusStep.RHYTHM
         onPresetApplied?.invoke()
+    }
+
+    // 末步是沉浸式：底部浮岛滑出屏幕，内容随之把原本预留给它的空间吃满。
+    // 前两步浮岛仍在，预留量照旧。
+    val isImmersive = currentStep == QuietFocusStep.RHYTHM
+    LaunchedEffect(isImmersive) { onImmersiveChange?.invoke(isImmersive) }
+    // 离开专注 tab（无论当时停在哪一步）都必须把浮岛归还，
+    // 否则切到其他 tab 会一直缺一条底栏 —— LaunchedEffect 不会在离开组合时回调。
+    DisposableEffect(Unit) {
+        onDispose { onImmersiveChange?.invoke(false) }
     }
 
     val topCategories = remember(subjects) {
@@ -337,7 +351,10 @@ fun QuietFocusSetupContent(
                         noteText = noteText,
                         onNoteChange = onNoteChange,
                         onSavePreset = onSavePreset,
-                        onStart = onStart
+                        onStart = onStart,
+                        // 末步时浮岛已滑出，只需避开系统手势区；
+                        // 仍按 112dp 预留会在底栏消失后留下一大片空白。
+                        immersive = isImmersive
                     )
                 }
             }
@@ -673,12 +690,19 @@ private fun QuietRhythmStep(
     noteText: String,
     onNoteChange: (String) -> Unit,
     onSavePreset: () -> Unit,
-    onStart: () -> Unit
+    onStart: () -> Unit,
+    immersive: Boolean = false
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = AppContentInsets.BottomBarPadding)
+            .then(
+                if (immersive) {
+                    Modifier.navigationBarsPadding()
+                } else {
+                    Modifier.padding(bottom = AppContentInsets.BottomBarPadding)
+                }
+            )
     ) {
         QuietTimerSegmentedControl(
             isCountdownMode = isCountdownMode,

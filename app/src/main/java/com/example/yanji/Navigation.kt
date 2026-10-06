@@ -3,11 +3,14 @@ package com.example.yanji
 import com.example.yanji.ui.icons.RemixIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -123,6 +126,8 @@ fun MainNavigation() {
     }
 
     var pendingFocusPreset by remember { mutableStateOf<com.example.yanji.data.FocusPresetRequest?>(null) }
+    // 专注准备流程走到末步时置位：那一屏不要浮岛，而且要看着它滑出去。
+    var focusSetupImmersive by remember { mutableStateOf(false) }
 
     val todayStr = remember {
         YanjiTime.todayIso()
@@ -303,7 +308,8 @@ fun MainNavigation() {
                                 onNavigateToDailyDetail = { d -> screenStack.add(YanjiSubScreen.DailyStudyDetail(d)) },
                                 onNavigateToFocusDetail = { fsId -> screenStack.add(YanjiSubScreen.FocusSessionDetail(fsId)) },
                                 presetRequest = pendingFocusPreset,
-                                onClearPresetRequest = { pendingFocusPreset = null }
+                                onClearPresetRequest = { pendingFocusPreset = null },
+                                onImmersiveChange = { focusSetupImmersive = it }
                             )
                         }
                         YanjiTab.NOTE -> {
@@ -340,11 +346,27 @@ fun MainNavigation() {
         }
 
         // 暂停也隐藏底栏；结束或放弃时由业务会话清空自动恢复。
-        if (screenStack.isEmpty() && activeFocus == null) {
+        // 专注准备走到末步时同样隐藏，并滑出屏幕 —— 但保持组合着做退场动画，
+        // 直接不渲染会变成「闪现消失」，收不到任何方向感。
+        AnimatedVisibility(
+            visible = screenStack.isEmpty() && activeFocus == null && !focusSetupImmersive,
+            enter = slideInVertically(
+                animationSpec = YanjiMotion.accessibleFiniteTween(
+                    durationMillis = YanjiMotion.DurationStandard,
+                    easing = YanjiMotion.EaseEntering
+                )
+            ) { fullHeight -> fullHeight } + fadeIn(),
+            exit = slideOutVertically(
+                animationSpec = YanjiMotion.accessibleFiniteTween(
+                    durationMillis = YanjiMotion.DurationStandard,
+                    easing = YanjiMotion.EaseExiting
+                )
+            ) { fullHeight -> fullHeight } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
             GlassBottomBar(
                 currentTab = currentTab,
                 onTabSelected = { currentTab = it },
-                modifier = Modifier.align(Alignment.BottomCenter),
                 hazeState = hazeState
             )
         }

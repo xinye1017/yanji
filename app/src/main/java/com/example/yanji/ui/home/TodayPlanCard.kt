@@ -128,8 +128,9 @@ private fun formatTaskMinutes(minutes: Int): String {
  *    两个形状相近的控件挤在 48dp 内，误触成本高；删除又是低频破坏性操作，
  *    不该占据每天都要扫视的高频路径。长按菜单复用本项目已有的单指针替代路径
  *    （见 `NoteSwipeableRow`），不新造交互范式。
- * 2. **整行可点即开始专注。** 原本「开始」是文字按钮，与勾选、删除在同一行里争抢点击目标；
- *    改成整行点击（完成态除外）后，一行只剩两个交互单元：勾选完成、整行开始。
+ * 2. **整行点编辑、右侧 Play 点开始。** 一行里的两个点击目标按语义分开：整行（含长按）
+ *    打开这条计划的编辑面板，右侧 Play 直达专注准备页末步。早期把两者合成「整行即开始」，
+ *    改一条计划的时长或备注就无处下手。
  * 3. **删掉「完成 2 / 5」数字。** 它与进度条、与状态文案表达同一件事，同屏三份计数纯属冗余。
  *    计数交给进度条，状态交给一行可执行的文字。
  */
@@ -429,11 +430,14 @@ private fun PlanProgressSummary(
 /**
  * 单条计划行。
  *
- * 从左到右：完成圈 → 标题 / 学科·时长 → 开始图标。
- * 标题用 weight 自适应并在过长时省略，保证右侧的开始图标永远不被挤走。
+ * 从左到右：完成圈 → 标题 / 学科·时长 → 开始按钮。
+ * 标题用 weight 自适应并在过长时省略，保证右侧的开始按钮永远不被挤走。
  *
- * 整行可点 = 开始专注，**包括已完成的那一行**。
- * 完成状态由「删除线 + 标题变淡 + 圆圈填色」表达。
+ * 两个交互目标各归其位：**整行（含长按菜单）管「这条计划是什么」，右侧 Play 管「现在就做这件事」**。
+ * 曾经整行点击即开始专注，结果想改一条计划的时长或备注时无处下手 —— 「开始」是这条行里
+ * 最高频的动作，但它不该吞掉行内其余全部点击语义。
+ *
+ * 完成态只由「删除线 + 标题变淡 + 圆圈填色」表达，不改变两个入口各自的可用性。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -452,8 +456,8 @@ private fun StudyTaskRow(
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .combinedClickable(
-                onClick = onStart,
-                onClickLabel = "开始专注",
+                onClick = onEdit,
+                onClickLabel = "编辑计划",
                 onLongClick = { menuOpen = true },
                 onLongClickLabel = "更多操作"
             )
@@ -503,19 +507,30 @@ private fun StudyTaskRow(
             )
         }
 
-        // 「开始」用图标而非文字按钮：它与勾选圈、标题并排时，文字会挤压标题，
-        // 而 Play 图标在 56dp 高的行里已足够表意。已完成的行降为静默图标，
-        // 表示「已完成，再练一遍也可以」，而不是一个消失了的能力。
-        Icon(
-            imageVector = RemixIcons.PlayFill,
-            contentDescription = null,
-            tint = if (task.isCompleted) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-            modifier = Modifier.size(18.dp)
-        )
+        // 「开始」：行内唯一的启动入口，因此必须是一个真按钮 —— 自带触控框、涟漪边界
+        // 与读屏标签，而不只是整行点击的视觉提示。与勾选圈同为「40dp 触控 + 更小视觉尺寸」
+        // 的套路数；涟漪裁剪成圆形，避免方形水波纹铺满整行右侧。
+        //
+        // 内层 [androidx.compose.foundation.clickable] 先于整行的 combinedClickable
+        // 消费事件，因此点这里是「开始」，点行的其余位置才是「编辑」。
+        Box(
+            modifier = Modifier
+                .size(TaskTouchTargetSize)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onStart),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = RemixIcons.PlayFill,
+                contentDescription = "开始专注",
+                tint = if (task.isCompleted) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.size(18.dp)
+            )
+        }
 
         DropdownMenu(
             expanded = menuOpen,

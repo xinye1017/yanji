@@ -54,6 +54,8 @@ fun FocusScreen(
      */
     presetRequest: com.example.yanji.data.FocusPresetRequest? = null,
     onClearPresetRequest: (() -> Unit)? = null,
+    /** 准备流程的沉浸式开关：末步为 true，宿主据此把底部浮岛滑出屏幕。 */
+    onImmersiveChange: ((Boolean) -> Unit)? = null,
     viewModel: FocusViewModel = yanjiViewModel { container ->
         FocusViewModel(container.repository, container.statisticsRepository)
     }
@@ -234,7 +236,8 @@ fun FocusScreen(
             // 今日计划行「开始」：带着科目 / 预计时长 / 备注直达最后一步，
             // 由准备流程自己消费（见 QuietFocusSetupContent 的 presetRequest 分支）。
             presetRequest = presetRequest,
-            onPresetApplied = { onClearPresetRequest?.invoke() }
+            onPresetApplied = { onClearPresetRequest?.invoke() },
+            onImmersiveChange = onImmersiveChange
         )
     }
 
