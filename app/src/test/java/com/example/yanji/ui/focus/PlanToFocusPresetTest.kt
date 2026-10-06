@@ -191,6 +191,102 @@ class PlanToFocusPresetTest {
         )
     }
 
+    /**
+     * 一次专注必须能确知「自己在做哪条计划」。
+     *
+     * 用户诉求：让计时的时候能够识别到，这次计时就是在执行计划当中的内容；
+     * 实际使用时长比计划长了也要显示出来。这条链一环都不能断：
+     * 计划行 → 预设 → 准备页 → 会话 → 落库列 → 首页聚合 → 计划行文本。
+     *
+     * 反推（按备注标题 / 学科匹配）在这里被刻意排除：两条同名计划、同一门课的
+     * 两段专注都会让反推张冠李戴，因此必须是显式的 id 关联。
+     */
+    @Test
+    fun focusSessionKnowsWhichPlanItIsExecuting() {
+        val nav = source("app/src/main/java/com/example/yanji/Navigation.kt")
+        val setup = source("app/src/main/java/com/example/yanji/ui/focus/QuietFocusSetupContent.kt")
+        val screen = source("app/src/main/java/com/example/yanji/ui/focus/FocusScreen.kt")
+        val models = source("app/src/main/java/com/example/yanji/data/Models.kt")
+        val entities = source("app/src/main/java/com/example/yanji/data/db/Entities.kt")
+        val daos = source("app/src/main/java/com/example/yanji/data/db/Daos.kt")
+        val homeVm = source("app/src/main/java/com/example/yanji/ui/home/HomeViewModel.kt")
+
+        // 1) 计划 id 随预设一起离开计划行
+        assertTrue(
+            "计划 id 必须随预设一起传过去，否则专注页无从知道在做哪条计划",
+            nav.contains("taskId = task.id")
+        )
+
+        // 2) 准备页持有这份关联，直到用户按下「开始」
+        assertTrue("准备页必须接住 taskId", setup.contains("linkedTaskId = req.taskId"))
+        assertTrue(
+            "按下开始必须把关联交出去，而不是让调用方自己记",
+            setup.contains("onStart = { onStart(linkedTaskId) }")
+        )
+
+        // 3) 用户中途另选学科 = 一次新的意图；宁可不对归因，也不虚增那条计划的投入
+        assertTrue("中途换学科必须断开关联", setup.contains("linkedTaskId = null"))
+
+        // 4) 会话、实体、聚合查询都带 taskId
+        assertTrue(
+            "专注会话必须带 taskId 字段",
+            models.contains("val taskId: String? = null")
+        )
+        assertTrue(
+            "实体必须持久化 taskId",
+            entities.contains("val taskId: String? = null")
+        )
+        assertTrue(
+            "必须存在按计划聚合实际用时的查询",
+            daos.contains("fun observeTaskActualSeconds()")
+        )
+        assertTrue(
+            "聚合只算已完成且挂在计划上的时段",
+            daos.contains("WHERE status = 'COMPLETED' AND taskId IS NOT NULL")
+        )
+        assertTrue(
+            "首页必须订阅这份聚合",
+            homeVm.contains("repo.observeTaskActualSeconds()")
+        )
+
+        // 5) 等通知权限回来这一段不能把关联丢掉
+        assertTrue(
+            "申请通知权限时必须连 taskId 一起暂存",
+            screen.contains("pendingFocusTaskId = taskId")
+        )
+    }
+
+    /**
+     * 首页计划行必须把「实际 / 计划」并排显示，超额时单独一行告警。
+     *
+     * 只看计划时长察觉不到超支，只看实际投入又看不出原定目标 ——
+     * 两个数字必须出现在同一行里。
+     */
+    @Test
+    fun planRowShowsActualAgainstPlannedAndFlagsOverrun() {
+        val row = source("app/src/main/java/com/example/yanji/ui/home/TodayPlanCard.kt")
+        assertTrue(
+            "副标题必须是「实际/计划」的对照写法",
+            row.contains("\"\$actualMinutes/\$plannedMinutes 分钟\"")
+        )
+        assertTrue(
+            "超额必须单独一行告警",
+            row.contains("\"已超 \${overrunSeconds / 60L} 分钟\"")
+        )
+        assertTrue(
+            "告警行用 warning 语义色，不新造颜色",
+            row.contains("color = if (labels.overrun != null) YanjiColors.warning")
+        )
+        assertTrue(
+            "计划行必须能拿到实际用时，否则对照永远是 0",
+            row.contains("actualSeconds = actualSecondsByTaskId[task.id] ?: 0L")
+        )
+        assertTrue(
+            "新计划必须走 onCreated 拿真实 id，否则「添加并开始专注」会把用时记到一个不存在的计划上",
+            row.contains("onAdd(subject, title, minutes) { created ->")
+        )
+    }
+
     private fun findProjectRoot(): File {
         var current: File? = File(".").canonicalFile
         while (current != null) {

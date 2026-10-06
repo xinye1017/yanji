@@ -12,6 +12,16 @@ data class StudySubjectAggregateRow(
     val longestSessionSeconds: Long
 )
 
+/**
+ * 计划 id → 已投入秒数。聚合留在 SQLite，UI 只拿结果做「实际 / 计划」对照。
+ *
+ * 不按日期过滤：关联本身就是精确的，一条计划只属于某一天，它的时段全算它的。
+ */
+data class TaskActualSecondsRow(
+    val taskId: String,
+    val seconds: Long
+)
+
 @Dao
 interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
@@ -48,6 +58,14 @@ interface FocusSessionDao {
             "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive"
     )
     fun observeTotalSeconds(startInclusive: Long, endExclusive: Long): Flow<Long>
+
+    @Query(
+        "SELECT taskId, COALESCE(SUM(durationSeconds), 0) AS seconds " +
+            "FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND taskId IS NOT NULL " +
+            "GROUP BY taskId"
+    )
+    fun observeTaskActualSeconds(): Flow<List<TaskActualSecondsRow>>
 
     @Query("SELECT COUNT(*) FROM focus_sessions")
     suspend fun count(): Int

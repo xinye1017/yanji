@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -598,6 +598,22 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v19 -> v20:
+         * `focus_sessions` 新增 `taskId`，把一次专注挂到「今日计划」的具体某一条上。
+         *
+         * 为什么必须是显式关联列而不是靠 note / 学科反推：两条同名计划、同一门课的两段
+         * 专注都会让反推张冠李戴，而"实际用了多久"必须能回问到确定的计划行。
+         *
+         * 纯 `ADD COLUMN ... TEXT`（可空、无默认值）：SQLite 全版本可用，存量行一律为
+         * NULL —— 升级前开始的计时不可能有归属计划，这与事实一致，不编造归属。
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE focus_sessions ADD COLUMN taskId TEXT")
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -622,7 +638,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
-            MIGRATION_18_19
+            MIGRATION_18_19,
+            MIGRATION_19_20
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

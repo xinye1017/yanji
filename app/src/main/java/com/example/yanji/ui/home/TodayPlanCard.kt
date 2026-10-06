@@ -104,6 +104,35 @@ private fun formatTaskMinutes(minutes: Int): String {
 }
 
 /**
+ * 一条计划的「计划时长 vs 实际投入」文案。纯函数，不读 Compose 状态，便于单测。
+ *
+ * @param plannedMinutes 计划时长，0 表示不限时。
+ * @param actualSeconds 已落库到这条计划上的专注秒数（进行中的会话不计入，
+ *   因此计时中的那几分钟要等结束时才跳到数字上，由调用方另行提示"计时中"）。
+ */
+internal data class PlanTimeLabels(
+    /** 副标题里的对照短句，如 `28/45 分钟`；还没有实际投入时为 null。 */
+    val compare: String?,
+    /** 超额提示，如 `已超 12 分钟`；未超额或不足一分钟时为 null。 */
+    val overrun: String?
+)
+
+internal fun planTimeLabels(plannedMinutes: Int, actualSeconds: Long): PlanTimeLabels {
+    val actualMinutes = actualSeconds / 60L
+    if (plannedMinutes <= 0) {
+        // 不限时的计划没有目标可比，只报实际投入。
+        return PlanTimeLabels(compare = if (actualMinutes > 0) "$actualMinutes 分钟" else null, overrun = null)
+    }
+    if (actualMinutes <= 0) return PlanTimeLabels(compare = null, overrun = null)
+    val overrunSeconds = actualSeconds - plannedMinutes * 60L
+    return PlanTimeLabels(
+        compare = "$actualMinutes/$plannedMinutes 分钟",
+        // 不足一分钟不提示：刚从倒计时归零跑到 59 秒时刷一条「已超 0 分钟」只是噪音。
+        overrun = if (overrunSeconds >= 60L) "已超 ${overrunSeconds / 60L} 分钟" else null
+    )
+}
+
+/**
  * 首页「今日计划」卡片。
  *
  * ## 为什么搬到首页
@@ -133,17 +162,31 @@ private fun formatTaskMinutes(minutes: Int): String {
  *    改一条计划的时长或备注就无处下手。
  * 3. **删掉「完成 2 / 5」数字。** 它与进度条、与状态文案表达同一件事，同屏三份计数纯属冗余。
  *    计数交给进度条，状态交给一行可执行的文字。
+ *
+ * ## 为什么每行要显示「实际 / 计划」
+ *
+ * 计划是**承诺**，专注时段是**兑现**。两者分开看各自都只是半个事实：只看计划时长，
+ * 用户无法察觉一项任务已经悄悄超支；只看实际投入，又看不出原定目标是多少。
+ * 于是行内副标题把两者并成 `28/45 分钟`，超额时再加一行告警。
+ *
+ * 归因不靠猜：专注会话用显式的 `taskId` 列指向计划（DB v20 新增），从计划行「开始」
+ * 启动的计时会带上这个 id，结束时把用时记回那条计划。不做「按备注标题反查」——
+ * 同名计划、同科目多篇都会互相串味。
  */
 @Composable
 internal fun TodayPlanCard(
     tasks: List<StudyTask>,
     subjects: List<Subject>,
-    onAdd: (Subject, String, Int) -> Unit,
+    onAdd: (Subject, String, Int, (StudyTask) -> Unit) -> Unit,
     onToggle: (StudyTask) -> Unit,
     onDelete: (String) -> Unit,
     onStart: (StudyTask) -> Unit,
     modifier: Modifier = Modifier,
     dailyGoalMinutes: Int = 0,
+    /** 计划 id → 已投入秒数。缺项视为 0（尚未开始）。 */
+    actualSecondsByTaskId: Map<String, Long> = emptyMap(),
+    /** 正在计时且属于某条计划的计划 id，用于点亮那一行。 */
+    runningTaskId: String? = null,
     onEdit: ((StudyTask, Subject, String, Int) -> Unit)? = null
 ) {
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
@@ -202,6 +245,8 @@ internal fun TodayPlanCard(
                     }
                     StudyTaskRow(
                         task = task,
+                        actualSeconds = actualSecondsByTaskId[task.id] ?: 0L,
+                        isRunning = task.id == runningTaskId,
                         onToggle = { onToggle(task) },
                         onStart = { onStart(task) },
                         onEdit = {
@@ -228,27 +273,27 @@ internal fun TodayPlanCard(
             },
             onConfirm = { subject, title, minutes, startNow ->
                 val currentEditing = editingTask
-                if (currentEditing != null) {
-                    onEdit?.invoke(currentEditing, subject, title, minutes)
-                } else {
-                    onAdd(subject, title, minutes)
-                }
                 showAddSheet = false
                 editingTask = null
-                if (startNow) {
-                    val taskToStart = currentEditing?.copy(
-                        subjectId = subject.id,
-                        subjectName = subject.name,
-                        title = title,
-                        plannedMinutes = minutes
-                    ) ?: StudyTask(
-                        date = "",
-                        subjectId = subject.id,
-                        subjectName = subject.name,
-                        title = title,
-                        plannedMinutes = minutes
-                    )
-                    onStart(taskToStart)
+                if (currentEditing != null) {
+                    onEdit?.invoke(currentEditing, subject, title, minutes)
+                    if (startNow) {
+                        onStart(
+                            currentEditing.copy(
+                                subjectId = subject.id,
+                                subjectName = subject.name,
+                                title = title,
+                                plannedMinutes = minutes
+                            )
+                        )
+                    }
+                } else {
+                    // 「添加并开始专注」必须等落库后回传的**真实**任务：
+                    // 调用方临时构造的 StudyTask id 与写进库里的对不上，
+                    // 那段专注会挂在一个不存在的计划上，首页这行永远拿不到实际用时。
+                    onAdd(subject, title, minutes) { created ->
+                        if (startNow) onStart(created)
+                    }
                 }
             },
         )
@@ -443,6 +488,8 @@ private fun PlanProgressSummary(
 @Composable
 private fun StudyTaskRow(
     task: StudyTask,
+    actualSeconds: Long,
+    isRunning: Boolean,
     onToggle: () -> Unit,
     onStart: () -> Unit,
     onEdit: () -> Unit,
@@ -497,7 +544,11 @@ private fun StudyTaskRow(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
-            val durationText = if (task.plannedMinutes > 0) "${task.plannedMinutes} 分钟" else "不限时"
+            // 实际投入还没跑过一分钟时，退回只显示计划时长 —— 上面那句「45 分钟」
+            // 是承诺，这里换成「0/45 分钟」只会让每个新计划行都多一份没信息的噪声。
+            val labels = planTimeLabels(task.plannedMinutes, actualSeconds)
+            val durationText = labels.compare
+                ?: if (task.plannedMinutes > 0) "${task.plannedMinutes} 分钟" else "不限时"
             Text(
                 text = "${task.subjectName} · $durationText",
                 style = MaterialTheme.typography.bodySmall,
@@ -505,6 +556,20 @@ private fun StudyTaskRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // 超额优先于「计时中」：超支是用户要立刻处理的信号，而计时中只是解释
+            // 「为什么数字还没涨」。（进行中的会话不计入 actualSeconds，两者极少同时出现。）
+            val statusText = labels.overrun ?: if (isRunning) "计时中" else null
+            if (statusText != null) {
+                Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelMedium,
+                    // 告警用 warning 语义色（不新造颜色）：超支是这条行的即时结论，
+                    // 「计时中」只是状态说明，取主色即可，不必与告警同权重。
+                    color = if (labels.overrun != null) YanjiColors.warning else MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
         }
 
         // 「开始」：行内唯一的启动入口，因此必须是一个真按钮 —— 自带触控框、涟漪边界

@@ -52,6 +52,10 @@ object FocusModes {
 
 /**
  * 从外部页面（如今日计划卡片）请求在专注页预设/启动专注的传参模型。
+ *
+ * [taskId] 是这次计时与「今日计划」那条记录的关联：带上它开始的会话，结束时会把
+ * 用了多少时间记回这条计划，首页计划行才谈得上「实际 / 计划」对照。
+ * 空值表示这次计时不属于任何计划（专注页自己进入、快捷专注、手动补记）。
  */
 @Serializable
 @Immutable
@@ -59,7 +63,8 @@ data class FocusPresetRequest(
     val subjectId: String,
     val subjectName: String,
     val plannedMinutes: Int = 0,
-    val note: String = ""
+    val note: String = "",
+    val taskId: String? = null
 )
 
 /**
@@ -253,6 +258,13 @@ data class FocusSession(
     val pauseCount: Int = 0,
     val mode: String = "正向计时",
     val note: String = "",
+    /**
+     * 这次专注在执行的「今日计划」id；不属于任何计划时为 null。
+     *
+     * 有它才能把实际用时记回具体那条计划上。不靠 note/学科反推匹配：
+     * 两条同名计划、同一门课的两段专注都会让反推张冠李戴。
+     */
+    val taskId: String? = null,
     val status: SessionStatus = SessionStatus.COMPLETED,
     val createdAt: Long = System.currentTimeMillis()
 )

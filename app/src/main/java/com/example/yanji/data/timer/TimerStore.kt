@@ -94,6 +94,7 @@ internal class TimerStore(
                         pauseCount = session.pauseCount,
                         mode = session.mode,
                         note = session.note,
+                        taskId = session.taskId,
                         status = if (session.paused) SessionStatus.PAUSED else SessionStatus.RUNNING
                     )
                 } else {
@@ -143,13 +144,16 @@ internal class TimerStore(
 
     /**
      * 开始一次专注。
+     *
+     * @param taskId 这次专注在执行的「今日计划」id；不属于任何计划时传 null。
      * @return 新建的会话（调用方把 id 交给前台 Service）；已有计时在跑时返回 null。
      */
     suspend fun startFocus(
         subjectId: String,
         subjectName: String,
         note: String,
-        mode: String = FocusModes.COUNT_UP
+        mode: String = FocusModes.COUNT_UP,
+        taskId: String? = null
     ): FocusSession? {
         val now = System.currentTimeMillis()
         val session = FocusSession(
@@ -160,6 +164,7 @@ internal class TimerStore(
             endTime = now,
             durationSeconds = 0,
             note = note,
+            taskId = taskId,
             mode = mode,
             status = SessionStatus.RUNNING
         )
@@ -171,6 +176,7 @@ internal class TimerStore(
                 subjectName = subjectName,
                 mode = mode,
                 note = note,
+                taskId = taskId,
                 targetDurationSeconds = FocusModes.targetSeconds(mode),
                 startedAtEpochMs = now
             )
@@ -293,6 +299,7 @@ internal class TimerStore(
             pauseCount = pauseCount,
             mode = session.mode,
             note = session.note,
+            taskId = session.taskId,
             status = SessionStatus.COMPLETED
         )
         val db = dbProvider() ?: throw IllegalStateException("Database not available")

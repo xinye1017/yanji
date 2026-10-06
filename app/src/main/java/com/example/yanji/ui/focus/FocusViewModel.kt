@@ -78,13 +78,19 @@ class FocusViewModel(
 
     // ---- 动作 ----
 
-    /** 登记专注会话到业务层；返回 null 表示已有计时在跑，调用方负责提示。 */
+    /**
+     * 登记专注会话到业务层；返回 null 表示已有计时在跑，调用方负责提示。
+     *
+     * @param taskId 这次专注在执行的「今日计划」id；从计划行进专注页时带上，
+     *   结束时首页那条计划行才能拿到实际用时并与计划时长对照。
+     */
     suspend fun startFocus(
         subjectId: String,
         subjectName: String,
         note: String,
-        mode: String
-    ): FocusSession? = repo.startFocus(subjectId, subjectName, note, mode)
+        mode: String,
+        taskId: String? = null
+    ): FocusSession? = repo.startFocus(subjectId, subjectName, note, mode, taskId)
 
     /** UI 侧的暂停意图；真实计时事实由前台 Service 维护（落库字段也由 Service 写）。 */
     fun pauseFocus() = repo.pauseFocus()

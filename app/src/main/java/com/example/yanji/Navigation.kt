@@ -296,7 +296,11 @@ fun MainNavigation() {
                                         subjectId = task.subjectId,
                                         subjectName = task.subjectName,
                                         plannedMinutes = task.plannedMinutes,
-                                        note = task.title
+                                        note = task.title,
+                                        // 带上计划 id：准备页末步按下「开始专注」时把这条关联交给
+                                        // ActiveSession，结束落库的时段因此能记回这条计划，
+                                        // 首页那行才能拿实际用时和计划时长对照。
+                                        taskId = task.id
                                     )
                                     currentTab = YanjiTab.FOCUS
                                 }

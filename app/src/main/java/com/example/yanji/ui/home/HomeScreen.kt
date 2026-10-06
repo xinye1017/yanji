@@ -187,31 +187,35 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // Check-In Card
-            CheckInCard(
-                onCheckInSuccess = { checkIn ->
-                    celebratingCheckIn = checkIn
-                }
-            )
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
-            // 2. 今日计划（意图）—— 排在「今日专注学习」（结果）之前，
-            //    首页自上而下即读成：今天打算做什么 → 实际做了多久。
+            // 3. 今日计划 —— 计划是还没发生的事，放在「实际做了多久」的后面：
+            //    先看清今天的结果，再安排下一步。
             TodayPlanCard(
                 tasks = state.todayTasks,
                 subjects = state.subjects,
                 dailyGoalMinutes = (state.settings.dailyGoalHours * 60).toInt(),
-                onAdd = { subject, title, minutes -> viewModel.addStudyTask(subject, title, minutes) },
+                onAdd = { subject, title, minutes, onCreated ->
+                    viewModel.addStudyTask(subject, title, minutes, onCreated)
+                },
                 onEdit = { task, subject, title, minutes -> viewModel.updateStudyTask(task, subject, title, minutes) },
                 onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
                 onDelete = { id -> viewModel.deleteStudyTask(id) },
+                actualSecondsByTaskId = state.actualSecondsByTaskId,
+                runningTaskId = state.runningTaskId,
                 onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() }
             )
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 3. Today's Study Grouped Card (Clickable to DailyStudyDetail)
+            // 4. 每日打卡 —— 签完就折叠成一行，不占主卡位，所以放到最后一张。
+            CheckInCard(
+                onCheckInSuccess = { checkIn -> celebratingCheckIn = checkIn },
+                onTodayCheckInClick = { checkIn -> celebratingCheckIn = checkIn }
+            )
+
+            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+
+            // 2. 今日累计专注时长 —— 首页第二张主卡：今天已经沉下去多少时间是最有
+            //    说服力的一个数字，放在最高频的视线上；进度与科目分布也由它承载。
             YanjiGroupedCard(
                 modifier = Modifier.fillMaxWidth(),
                 cardModifier = Modifier.testTag("home_today_study_card"),
@@ -307,7 +311,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 4. Exam Panorama & Linked Card (iOS SettingsRow pattern)
+            // 5. 模考看板 —— 长期事件，排在每日任务之后；倒计时在首屏即可承接它。
             YanjiGroupedCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -332,7 +336,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-        // 6. Ai Encouragement
+        // 6. AI 鼓励语 —— 收尾一句，只读已有统计，不引入新的数据源。
         // 注意：这里不能对连续天数做 `maxOf(1, ...)` —— 没有任何连续学习记录时
         // 显示"已达成 1 天"属于伪造统计。真实的 0 天就如实呈现，只是换成引导文案。
         val streakDays = state.streakDays

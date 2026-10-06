@@ -21,6 +21,8 @@ data class FocusSessionEntity(
     val pauseCount: Int = 0,
     val mode: String = "正向计时",
     val note: String = "",
+    /** 关联的「今日计划」id；不属于任何计划时为 null（v20 迁移对存量行写入 NULL）。 */
+    val taskId: String? = null,
     val status: String = "COMPLETED",
     val createdAt: Long = System.currentTimeMillis()
 ) {
@@ -36,6 +38,7 @@ data class FocusSessionEntity(
             pauseCount = pauseCount,
             mode = mode,
             note = note,
+            taskId = taskId?.ifBlank { null },
             status = try { SessionStatus.valueOf(status) } catch (e: Exception) { SessionStatus.COMPLETED },
             createdAt = createdAt
         )
@@ -54,6 +57,7 @@ data class FocusSessionEntity(
                 pauseCount = model.pauseCount,
                 mode = model.mode,
                 note = model.note,
+                taskId = model.taskId?.ifBlank { null },
                 status = model.status.name,
                 createdAt = model.createdAt
             )

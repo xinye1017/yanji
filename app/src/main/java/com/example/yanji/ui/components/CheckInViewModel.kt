@@ -14,6 +14,13 @@ import kotlinx.coroutines.flow.stateIn
 data class CheckInUiState(
     val isCheckedInToday: Boolean,
     val currentStreak: Int,
+    /**
+     * 累计签到天数（打卡记录总条数）。
+     *
+     * 折叠态只呈现这一个数字，所以它必须是「一共签了多少天」而不是连续天数：
+     * 后者断签一次就归零，会把三个月的坚持显示成「1 天」。
+     */
+    val totalCheckInDays: Int,
     val past7Days: List<DayCheckInStatus>,
     val todayCheckIn: CheckIn?
 )
@@ -27,10 +34,11 @@ class CheckInViewModel(
 ) : ViewModel() {
 
     val uiState: StateFlow<CheckInUiState> = repo.checkIns
-        .map {
+        .map { checkIns ->
             CheckInUiState(
                 isCheckedInToday = repo.isCheckedInToday(),
                 currentStreak = repo.getCurrentStreak(),
+                totalCheckInDays = checkIns.size,
                 past7Days = repo.getPast7DaysCheckInStatus(),
                 todayCheckIn = repo.getTodayCheckIn()
             )
@@ -41,6 +49,7 @@ class CheckInViewModel(
             initialValue = CheckInUiState(
                 isCheckedInToday = repo.isCheckedInToday(),
                 currentStreak = repo.getCurrentStreak(),
+                totalCheckInDays = repo.checkIns.value.size,
                 past7Days = repo.getPast7DaysCheckInStatus(),
                 todayCheckIn = repo.getTodayCheckIn()
             )

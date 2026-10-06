@@ -154,7 +154,14 @@ fun QuietFocusSetupContent(
     selectedMode: String,
     onSelectMode: (String) -> Unit,
     todayTotalSeconds: Long = 0L,
-    onStart: () -> Unit,
+    /**
+     * 按下「开始专注」。
+     *
+     * @param taskId 这次专注在执行的计划 id；不属于任何计划（正常从第一步走进来）时为 null。
+     *   由本页带着走而不是由调用方记住：预设落地与按下开始之间用户还能改很多字段，
+     *   「到底还在不在执行那条计划」这件事只有本页的全过程看得见。
+     */
+    onStart: (taskId: String?) -> Unit,
     onNavigateToExam: () -> Unit,
     onNavigateToDailyDetail: (String) -> Unit = {},
     onManualLogClick: () -> Unit = {},
@@ -186,12 +193,16 @@ fun QuietFocusSetupContent(
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
         mutableIntStateOf(normalizeQuietDuration(if (minutes > 0) minutes else 45))
     }
+    // 这场计时在执行哪条「今日计划」。只有外部预设（计划行「开始」）能点亮它，
+    // 且 rememberSaveable 保证配置重建后关联不断 —— 一旦开始计时，主事实在
+    // ActiveSession 上，进程死亡也恢复得回来（ActiveSessionRecord 序列化同一字段）。
+    var linkedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // 外部预设落地：跳过「选大类 / 选细分」两步，直接停在最后一步，
     // 并把计划里的科目、预计时长（标题由 FocusScreen 侧作为备注传入）一并填好。
     //
     // 三个字段一律经 [onSelectSubject] / [onSelectMode] / [onNoteChange] 写回上层，
-    // 不在本页另存一份事实；本页只额外同步自己内部才会有的步骤与滚轮位置。
+    // 不在本页另存一份事实；本页只额外同步自己内部才会有的步骤、滚轮位置与计划关联。
     //
     // subjects 进 key：学科目录异步加载，首帧可能还是空表；等目录到位再解析目标学科，
     // 才不会把预设落到一个兜底默认科目上。
@@ -200,6 +211,7 @@ fun QuietFocusSetupContent(
         val resolved = subjects.firstOrNull { it.id == req.subjectId } ?: selectedSubject
         onSelectSubject(resolved)
         selectedCategoryId = resolved.parentId ?: resolved.id
+        linkedTaskId = req.taskId
         if (req.plannedMinutes > 0) {
             val minutes = normalizeQuietDuration(req.plannedMinutes)
             isCountdownMode = true
@@ -296,6 +308,10 @@ fun QuietFocusSetupContent(
                         onQuickStart = onQuickStart,
                         onDeleteQuickStart = onDeleteQuickStart,
                         onCategoryClick = { category ->
+                            // 用户主动另选了一门学科 = 一次新的意图，计划关联到此为止：
+                            // 把这次用时记回原计划会虚增那一条计划的实际投入（零假数据红线）。
+                            // 想接着做那条计划，回计划页再按一次「开始」即可。
+                            linkedTaskId = null
                             selectedCategoryId = category.id
                             val children = subjects.filter { it.parentId == category.id && it.enabled }
                             if (children.isEmpty()) {
@@ -317,6 +333,8 @@ fun QuietFocusSetupContent(
                     QuietModuleStep(
                         modules = subcategories,
                         onModuleClick = { subject ->
+                            // 同 CATEGORY 分支：主动换学科即脱离原计划，宁可不对归因也不虚增。
+                            linkedTaskId = null
                             onSelectSubject(subject)
                             isCountdownMode = true
                             val duration = if (selectedDurationMinutes > 0) selectedDurationMinutes else 45
@@ -351,7 +369,7 @@ fun QuietFocusSetupContent(
                         noteText = noteText,
                         onNoteChange = onNoteChange,
                         onSavePreset = onSavePreset,
-                        onStart = onStart,
+                        onStart = { onStart(linkedTaskId) },
                         // 末步时浮岛已滑出，只需避开系统手势区；
                         // 仍按 112dp 预留会在底栏消失后留下一大片空白。
                         immersive = isImmersive

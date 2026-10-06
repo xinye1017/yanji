@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 19
+    private val CURRENT_VERSION = 20
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -187,7 +187,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_15_16,
         YanjiDatabase.MIGRATION_16_17,
         YanjiDatabase.MIGRATION_17_18,
-        YanjiDatabase.MIGRATION_18_19
+        YanjiDatabase.MIGRATION_18_19,
+        YanjiDatabase.MIGRATION_19_20
     )
 
     /**
@@ -730,6 +731,120 @@ class YanjiMigrationTest {
         assertTrue("study_tasks 应包含 plannedMinutes 列", "plannedMinutes" in columns)
         assertTrue("study_tasks 应包含 isCompleted 列", "isCompleted" in columns)
         assertEquals(0, db.intValue("SELECT COUNT(*) FROM study_tasks"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 19 -> 20 计划归因
+
+    /** v19 的专注记录写入语句（那时还没有 taskId 列）。 */
+    private fun insertFocusAt19(
+        db: SQLiteConnection,
+        id: String,
+        durationSeconds: Long,
+        status: String = "COMPLETED"
+    ) {
+        db.prepare(
+            "INSERT INTO focus_sessions " +
+                "(id, subjectId, subjectName, startTime, endTime, durationSeconds, " +
+                "pausedDurationSeconds, pauseCount, mode, note, status, createdAt) VALUES " +
+                "('$id','math_linear','线性代数',1000,2000,$durationSeconds,0,0,'25分钟专注','','$status',1)"
+        ).use { it.step() }
+    }
+
+    /** v20 起带 taskId 的专注记录写入语句。 */
+    private fun insertFocusAt20(
+        db: SQLiteConnection,
+        id: String,
+        durationSeconds: Long,
+        taskId: String?,
+        status: String = "COMPLETED"
+    ) {
+        val taskExpression = if (taskId == null) "NULL" else "'$taskId'"
+        db.prepare(
+            "INSERT INTO focus_sessions " +
+                "(id, subjectId, subjectName, startTime, endTime, durationSeconds, " +
+                "pausedDurationSeconds, pauseCount, mode, note, taskId, status, createdAt) VALUES " +
+                "('$id','math_linear','线性代数',1000,2000,$durationSeconds,0,0,'25分钟专注','',$taskExpression,'$status',1)"
+        ).use { it.step() }
+    }
+
+    /**
+     * v20 给 `focus_sessions` 加了 `taskId`，把一次专注挂到「今日计划」的具体某一条上。
+     *
+     * 三个不变量：
+     *  1. 存量行一律为 NULL —— 升级前开始的计时不可能有归属计划，**迁移不编造归因**；
+     *  2. 新行可写可读，聚合口径与 [com.example.yanji.data.db.FocusSessionDao.observeTaskActualSeconds]
+     *     完全一致（`COMPLETED` 且 `taskId` 非空才计入）；
+     *  3. 未完成的时段（RUNNING / PAUSED）与不挂计划的时段都不参与聚合。
+     */
+    @Test
+    fun migrate19To20_addsNullableTaskIdColumnWithoutInventingAttribution() {
+        val db19 = helper.createDatabase(19)
+        insertFocusAt19(db19, "legacy-1", durationSeconds = 1800L)
+        db19.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(19))
+
+        // 1) 列存在，且存量行没有归属
+        assertTrue("focus_sessions 应包含 taskId 列", "taskId" in db.columnNames("focus_sessions"))
+        assertEquals(
+            "迁移不得为存量时段编造归属计划",
+            1L,
+            db.longValue(
+                "SELECT CASE WHEN taskId IS NULL THEN 1 ELSE 0 END " +
+                    "FROM focus_sessions WHERE id='legacy-1'"
+            )
+        )
+        assertEquals("存量的其他字段必须原样保留", 1800L, db.longValue("SELECT durationSeconds FROM focus_sessions WHERE id='legacy-1'"))
+
+        // 2) 新增两段挂同一条计划的已完成专注
+        insertFocusAt20(db, "linked-1", 1800L, taskId = "task-1")
+        insertFocusAt20(db, "linked-2", 3600L, taskId = "task-1")
+
+        // 3) 两类不该计入的时段：不挂计划的、还没结束的
+        insertFocusAt20(db, "free-1", 900L, taskId = null)
+        insertFocusAt20(db, "running-1", 300L, taskId = "task-1", status = "RUNNING")
+
+        // 3) 聚合口径与 FocusSessionDao.observeTaskActualSeconds 逐字一致：
+        //    只算已完成且挂着计划的时段 —— 未结束的、不挂计划的都被排除。
+        assertEquals(
+            1,
+            db.intValue(
+                "SELECT COUNT(*) FROM (" +
+                    "SELECT taskId FROM focus_sessions " +
+                    "WHERE status = 'COMPLETED' AND taskId IS NOT NULL GROUP BY taskId)"
+            )
+        )
+        assertEquals(
+            5400L,
+            db.longValue(
+                "SELECT seconds FROM (" +
+                    "SELECT COALESCE(SUM(durationSeconds), 0) AS seconds FROM focus_sessions " +
+                    "WHERE status = 'COMPLETED' AND taskId IS NOT NULL GROUP BY taskId)"
+            )
+        )
+        // 全表确实还有 1800(存量) + 900(未挂计划) + 300(未完成) 没进这个数
+        assertEquals(8400L, db.longValue("SELECT SUM(durationSeconds) FROM focus_sessions"))
+
+        db.close()
+    }
+
+    /** 迁移只加列，绝不把任何现有时段重新贴到某条计划上。 */
+    @Test
+    fun migrate19To20_neverAttributesExistingSessions() {
+        val db19 = helper.createDatabase(19)
+        insertFocusAt19(db19, "legacy-1", durationSeconds = 1800L)
+        insertFocusAt19(db19, "legacy-2", durationSeconds = 2700L)
+        db19.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(19))
+
+        assertEquals(2, db.intValue("SELECT COUNT(*) FROM focus_sessions"))
+        assertEquals(
+            "没有任何时段应当被自动贴到计划上",
+            0,
+            db.intValue("SELECT COUNT(*) FROM focus_sessions WHERE taskId IS NOT NULL")
+        )
         db.close()
     }
 

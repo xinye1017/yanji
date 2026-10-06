@@ -35,6 +35,10 @@ data class HomeUiState(
     val avgExamScore: Double,
     /** 今日计划（意图侧）。与 todaySummary（结果侧）成对构成首页的「今天」叙事。 */
     val todayTasks: List<StudyTask>,
+    /** 计划 id → 已投入秒数。只含真正落到某个计划上的专注时段。 */
+    val actualSecondsByTaskId: Map<String, Long>,
+    /** 正在计时且属于某条计划的会话所属计划 id；没有进行中的计划专注时为 null。 */
+    val runningTaskId: String?,
     /** 可选科目：添加计划时需要按目录过滤可选项。 */
     val subjects: List<Subject>
 )
@@ -44,7 +48,15 @@ private data class TodayFacts(
     val summary: DailyStudySummary,
     val streakDays: Int,
     val tasks: List<StudyTask>,
+    val actualSecondsByTaskId: Map<String, Long>,
+    val runningTaskId: String?,
     val subjects: List<Subject>
+)
+
+/** 计划侧执行进度：已投入时长，以及正在计时的那条计划。 */
+private data class PlanProgress(
+    val actualSecondsByTaskId: Map<String, Long>,
+    val runningTaskId: String?
 )
 
 /**
@@ -73,22 +85,36 @@ class HomeViewModel(
         daysRemaining = daysRemainingFor(repo.settings.value.targetExamDate),
         avgExamScore = averageScore(repo.examSessions.value),
         todayTasks = emptyList(),
+        actualSecondsByTaskId = emptyMap(),
+        runningTaskId = null,
         subjects = repo.subjects.value
     )
 
-    // 今天的两组数据：结果（统计）与意图（计划 + 科目目录）。
+    // 计划侧执行进度：已落库的实际用时 + 正在计时的那条计划。
+    // 先两路合成一个值，是为了不突破 typed combine 的 5 路上限（见 todayFactsFlow）。
+    private val planProgressFlow = combine(
+        repo.observeTaskActualSeconds(),
+        repo.activeFocus
+    ) { actualSecondsByTaskId, activeFocus ->
+        PlanProgress(actualSecondsByTaskId, activeFocus?.taskId)
+    }
+
+    // 今天的两组数据：结果（统计）与意图（计划 + 科目目录 + 计划执行进度）。
     // 先合成一个 todayFacts 再与设置类数据 combine —— typed combine 最多 5 路，
     // 直接堆 6 路会退化到 vararg 版本而丢失类型。
     private val todayFactsFlow = combine(
         todaySummaryFlow,
         weeklySummaryFlow,
         repo.observeStudyTasks(todayIso),
-        repo.subjects
-    ) { todaySummary, weekly, tasks, subjects ->
+        repo.subjects,
+        planProgressFlow
+    ) { todaySummary, weekly, tasks, subjects, progress ->
         TodayFacts(
             summary = todaySummary,
             streakDays = weekly.streakDays,
             tasks = tasks,
+            actualSecondsByTaskId = progress.actualSecondsByTaskId,
+            runningTaskId = progress.runningTaskId,
             subjects = subjects
         )
     }
@@ -107,6 +133,8 @@ class HomeViewModel(
             daysRemaining = daysRemainingFor(settings.targetExamDate),
             avgExamScore = averageScore(exams),
             todayTasks = facts.tasks,
+            actualSecondsByTaskId = facts.actualSecondsByTaskId,
+            runningTaskId = facts.runningTaskId,
             subjects = facts.subjects
         )
     }.stateIn(
@@ -117,19 +145,29 @@ class HomeViewModel(
 
     // ---- 动作 ----
 
-    /** 写入今日计划。标题空串与超范围时长在这里挡住，不让脏数据落库。0 表示不限时。 */
-    fun addStudyTask(subject: Subject, title: String, plannedMinutes: Int) = viewModelScope.launch {
+    /**
+     * 写入今日计划。标题空串与超范围时长在这里挡住，不让脏数据落库。0 表示不限时。
+     *
+     * @param onCreated 落库后回传新建的计划。「添加并开始专注」要用**真实 id** 建
+     *   计划 ↔ 专注关联，不能用调用方临时构造的那条（id 由本层生成，两者对不上）。
+     */
+    fun addStudyTask(
+        subject: Subject,
+        title: String,
+        plannedMinutes: Int,
+        onCreated: (StudyTask) -> Unit = {}
+    ) = viewModelScope.launch {
         val cleanTitle = title.trim()
         if (cleanTitle.isEmpty()) return@launch
-        repo.saveStudyTask(
-            StudyTask(
-                date = todayIso,
-                subjectId = subject.id,
-                subjectName = subject.name,
-                title = cleanTitle,
-                plannedMinutes = if (plannedMinutes <= 0) 0 else plannedMinutes.coerceIn(5, 720)
-            )
+        val task = StudyTask(
+            date = todayIso,
+            subjectId = subject.id,
+            subjectName = subject.name,
+            title = cleanTitle,
+            plannedMinutes = if (plannedMinutes <= 0) 0 else plannedMinutes.coerceIn(5, 720)
         )
+        repo.saveStudyTask(task)
+        onCreated(task)
     }
 
     /** 更新已有今日计划。保留原有 id、date、createdAt 与完成状态。 */

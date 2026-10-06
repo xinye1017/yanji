@@ -335,6 +335,8 @@ class YanjiRepository private constructor() {
      * 除了建立 UI 会话，还会把会话登记到 [ActiveSessionCoordinator]：从此这次计时归业务层所有，
      * 即使 `FocusScreen` 被销毁、用户切到别的 Tab，倒计时结束时的落库也不会丢。
      *
+     * @param taskId 这次专注在执行的「今日计划」id；不属于任何计划时传 null。结束时
+     *   [observeTaskActualSeconds] 会把用时记回该计划。
      * @return 新建的会话，调用方需要把 [FocusSession.id] 传给前台 Service；
      *         若已有正在进行的专注或模考（两者互斥），返回 null 且不改变任何状态。
      */
@@ -342,8 +344,9 @@ class YanjiRepository private constructor() {
         subjectId: String,
         subjectName: String,
         note: String,
-        mode: String = FocusModes.COUNT_UP
-    ): FocusSession? = timerStore.startFocus(subjectId, subjectName, note, mode)
+        mode: String = FocusModes.COUNT_UP,
+        taskId: String? = null
+    ): FocusSession? = timerStore.startFocus(subjectId, subjectName, note, mode, taskId)
 
     /**
      * 登记一场模考到业务层，供前台 Service 完成时落库。
@@ -418,6 +421,16 @@ class YanjiRepository private constructor() {
     suspend fun deleteStudyTask(id: String) {
         requireDatabase().studyTaskDao().deleteById(id)
     }
+
+    /**
+     * 「今日计划」每条计划已投入的秒数（专注时段已落库的部分）。
+     *
+     * 一张 map 覆盖全部计划而不是按 id 逐条查：首页一次要用完整张表，逐条查会变成
+     * N 次订阅。聚合由 SQLite 的 GROUP BY 完成，不把整表明细拉进内存。
+     */
+    fun observeTaskActualSeconds(): Flow<Map<String, Long>> =
+        requireDatabase().focusSessionDao().observeTaskActualSeconds()
+            .map { rows -> rows.associate { it.taskId to it.seconds } }
 
     /** 探测可用模型列表。协议与传输细节见 [com.example.yanji.data.ai.AiClient]。 */
     suspend fun fetchAvailableModels(

@@ -98,6 +98,9 @@ fun FocusScreen(
     var pendingFocusSubjectName by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingFocusMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var pendingFocusNote by rememberSaveable { mutableStateOf("") }
+    // 计划关联必须跟着权限申请这一等一起活：用户是在通知权限框上点的「开始」，
+    // 授权回调回来时不能把「这次专注在做的计划」忘掉。
+    var pendingFocusTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
 
     fun resolveSubject(subjectId: String, subjectName: String): Subject =
@@ -109,13 +112,14 @@ fun FocusScreen(
                     ?: SubjectCatalog.DEFAULT_PRIMARY_COLOR
             )
 
-    fun doLaunchFocus(subject: Subject, mode: String, note: String) {
+    fun doLaunchFocus(subject: Subject, mode: String, note: String, taskId: String? = null) {
         screenScope.launch {
             val session = viewModel.startFocus(
                 subjectId = subject.id,
                 subjectName = subject.name,
                 note = note,
-                mode = mode
+                mode = mode,
+                taskId = taskId
             )
             if (session == null) {
                 Toast.makeText(
@@ -135,12 +139,13 @@ fun FocusScreen(
         pendingFocusSubjectName = null
         pendingFocusMode = FocusModes.POMODORO_25
         pendingFocusNote = ""
+        pendingFocusTaskId = null
     }
 
     fun runPendingFocusLaunch() {
         val subjectId = pendingFocusSubjectId ?: return
         val subject = resolveSubject(subjectId, pendingFocusSubjectName.orEmpty())
-        doLaunchFocus(subject, pendingFocusMode, pendingFocusNote)
+        doLaunchFocus(subject, pendingFocusMode, pendingFocusNote, pendingFocusTaskId)
         clearPendingFocusLaunch()
     }
 
@@ -155,7 +160,7 @@ fun FocusScreen(
         runPendingFocusLaunch()
     }
 
-    fun launchFocus(subject: Subject, mode: String, note: String) {
+    fun launchFocus(subject: Subject, mode: String, note: String, taskId: String? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -163,9 +168,10 @@ fun FocusScreen(
             pendingFocusSubjectName = subject.name
             pendingFocusMode = mode
             pendingFocusNote = note
+            pendingFocusTaskId = taskId
             showNotificationRationale = true
         } else {
-            doLaunchFocus(subject, mode, note)
+            doLaunchFocus(subject, mode, note, taskId)
         }
     }
 
@@ -212,7 +218,7 @@ fun FocusScreen(
             selectedMode = selectedMode,
             onSelectMode = { selectedMode = it },
             todayTotalSeconds = state.todayTotalSeconds,
-            onStart = { launchFocus(selectedSubject, selectedMode, noteText.trim()) },
+            onStart = { taskId -> launchFocus(selectedSubject, selectedMode, noteText.trim(), taskId) },
             onNavigateToExam = onNavigateToExam,
             onNavigateToDailyDetail = onNavigateToDailyDetail,
             onManualLogClick = { showManualLogDialog = true },

@@ -45,6 +45,13 @@ data class ActiveSession(
     val targetDurationSeconds: Long = 0L,
     /** 模考的试卷计划时长，用于复盘展示。 */
     val plannedDurationSeconds: Long = 0L,
+    /**
+     * 这场专注在执行的「今日计划」id；不属于任何计划时为 null。
+     *
+     * 挂在会话上而不是只落在启动那一刻的参数里：进程被杀后由 [ActiveSessionRecord]
+     * 恢复会话，结束时仍然知道该把用时记回哪条计划。
+     */
+    val taskId: String? = null,
     val startedAtEpochMs: Long = System.currentTimeMillis(),
     val accumulatedActiveMs: Long = 0L,
     val pauseCount: Int = 0,
