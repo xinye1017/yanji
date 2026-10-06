@@ -36,7 +36,10 @@ import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.theme.yanjiIsDarkTheme
+import com.example.yanji.ui.components.YanjiCard
+import com.example.yanji.ui.components.YanjiCardVariant
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.example.yanji.theme.YanjiMotion
@@ -89,8 +92,11 @@ private fun applyRubberBand(value: Float, limit: Float, max: Float): Float = whe
  *  - **长按 = 滑动的单指针替代路径**：WCAG 2.2 要求作者自定义拖拽必须有按钮 / 菜单等价物，
  *    否则读屏与运动障碍用户完全够不到「收藏 / 删除」。长按弹出的菜单复用同一对回调。
  *
- * 样式：操作块是**直角方形**，且与整行等高、紧贴边缘 —— 不是浮在行内的圆角胶囊。
- * 方块之外的区域仍是页面底色，条目内容整体平移让位。
+ * 样式：每篇随笔是一张**圆角卡片**（[YanjiCard] + [YanjiCardVariant.Compact]，16dp 圆角、
+ * 容器色取 `MaterialTheme.colorScheme.surface`，即全站统一的卡片背景）。卡片与两侧操作块
+ * 共享同一套 20dp 页边距，因此滑动露出操作块时两者边缘严丝合缝，不会露出一截页面底色。
+ * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 不是浮在行内的圆角胶囊。
+ * 卡片之外是页面底色，卡片整体平移让位。
  */
 @Composable
 fun NoteSwipeableRow(
@@ -157,11 +163,14 @@ fun NoteSwipeableRow(
         modifier = modifier
             .fillMaxWidth()
     ) {
-        // ---- 操作块行：matchParentSize 取整行尺寸，两个 72dp 方块分居左右边缘 ----
+        // 操作块行随卡片一起内缩 20dp 页边距：卡片滑开后，方块的边缘正好落在
+        // 卡片原边缘上，露出的一整条都是操作块底色，不会露出一截页面底色。
         // 注意：不能把 matchParentSize 直接加在方块上——它会把子节点约束固定为整行尺寸，
         // 后面的 .width() 会被 coerce 成整行宽，导致两块重叠、后声明的红块盖住蓝块。
         Row(
-            modifier = Modifier.matchParentSize(),
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -202,12 +211,13 @@ fun NoteSwipeableRow(
             )
         }
 
-        // ---- 行内容：整体平移，露出一侧固定宽度的操作块 ----
-        Box(
+        // ---- 行内容：圆角卡片整体平移，露出一侧固定宽度的操作块 ----
+        YanjiCard(
             modifier = Modifier
                 .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
+                // 与全站卡片同一套页边距：卡片左缘对齐操作块行内缩后的边缘（见上方操作块行）。
+                .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
                 .pointerInput(actionWidthPx, overDragMaxPx, flingVelocityPx) {
                     var estimatedVelocityX = 0f
                     var lastEventTime = 0L
@@ -259,7 +269,10 @@ fun NoteSwipeableRow(
                             )
                         }
                     )
-                }
+                },
+                // 16dp 圆角 + colorScheme.surface 容器色：列表条目卡片档，与全站其它
+                // 卡片同一个基元、同一个底色（见函数上方 KDoc 的样式说明）。
+                variant = YanjiCardVariant.Compact
         ) {
             NoteRowContent(
                 entry = entry,
@@ -374,7 +387,7 @@ private fun NoteRowContent(
                 onLongClick = onLongClick,
                 onLongClickLabel = "更多操作"
             )
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = YanjiSpacing.CardPaddingCompact, vertical = 14.dp),
         verticalAlignment = Alignment.Top
     ) {
         // 中列：时间 + 收藏书签（左）与草稿徽标 / 摘要（右）
@@ -500,10 +513,13 @@ private fun NoteRowContent(
 }
 
 /**
- * 条目之间的分隔线（跨日期分组的**唯一**边界 —— 同日多篇之间不画线）。
+ * 页眉规则线：只在「随笔」大标题下方画一条。
+ *
+ * 列表卡片化之后它不再承担分组边界 —— 每篇随笔的圆角卡片自己就是边界，
+ * 组与组、同日的多篇之间都不再画线；跨日期只靠分组头和它上方的那段间距区分。
  *
  * 用 [YanjiColors.listSeparator]（结构分组线档），不再把 quaternaryLabel
- * 稀释到 50% 凑出 1.48:1：非卡片列表没有卡片边界兜底，这条线本身就是分组线索。
+ * 稀释到 50% 凑出 1.48:1：页眉没有卡片边界兜底，这条线本身就是留白分隔。
  * 与「内部分行线」[YanjiColors.rowDivider] 分属两档，亮暗两侧一一对应。
  */
 @Composable

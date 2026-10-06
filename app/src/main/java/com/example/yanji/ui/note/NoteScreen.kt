@@ -27,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.ui.components.YanjiCard as Card
+import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiPrimaryButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -197,16 +199,20 @@ fun NoteScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
                         // 声明为标题节点：读屏用户可以用「按标题跳转」在页面间移动，
                         // 否则这一屏没有任何可跳转的层级锚点。
                         .semantics { heading() }
                 )
 
-                // 页眉「随笔」与下方分隔线：保持贴身，收紧垂直间距。
+                // 页眉「随笔」与下方规则线：保持贴身，收紧垂直间距。
+                // 规则线与下方随笔卡片取同一套页边距（20dp）—— 卡片化之后
+                // 页眉若整幅通铺，这条线会伸出卡片左右边缘之外，页面就没有一条干净的左缘。
                 Spacer(modifier = Modifier.height(8.dp))
 
-                NoteRowDivider()
+                NoteRowDivider(
+                    modifier = Modifier.padding(horizontal = YanjiSpacing.PageHorizontalPadding)
+                )
 
                 // 分隔线与搜索栏之间必须留一段呼吸：胶囊顶部紧贴 0.8dp 的线时，
                 // 两者会读成同一个元素（此前就是这样，视觉上「重合」）。
@@ -268,16 +274,20 @@ fun NoteScreen(
                     }
                 } else {
                     // 以日期划分：每天一个分组头，组内一天可以不限篇数。
-                    // 非卡片式列表：仅在跨日期（不同分组）前画分隔线，
-                    // 同一天的多篇随笔之间、日期头与当日随笔之间均不再画线。
+                    // 每篇随笔都是一张圆角卡片，卡片本身就是边界：组与组、同日的
+                    // 多篇之间都不再画分隔线，只保留页眉「随笔」标题下那条规则线。
                     filteredGroups.forEachIndexed { groupIndex, group ->
-                        if (groupIndex > 0) {
-                            item(key = "divider-${group.date}", contentType = "note-divider") {
-                                NoteRowDivider()
-                            }
-                        }
                         item(key = "header-${group.date}", contentType = "note-header") {
-                            NoteDayHeader(date = group.date)
+                            NoteDayHeader(
+                                date = group.date,
+                                // 第一组贴着搜索栏，之后各组的间距即「上一组末张卡片
+                                // 与下一个日期」的呼吸：没有分隔线了，这个上间距就是分组线索。
+                                topPadding = if (groupIndex == 0) {
+                                    YanjiSpacing.ItemGap
+                                } else {
+                                    YanjiSpacing.CardGap
+                                }
+                            )
                         }
                         items(
                             count = group.entries.size,
@@ -598,13 +608,15 @@ private fun NoteSearchBar(
     }
 }
 
-/** 无搜索结果时的提示。 */
+/**
+ * 无搜索结果时的提示。
+ */
 @Composable
 private fun NoteNoResultState(query: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
@@ -633,14 +645,14 @@ private fun NoteNoResultState(query: String) {
  * 高度不再写死。药丸连带它那格 48dp 触控槽消失后，原 52dp 里大半是空槽，
  * 日期与当日随笔之间多出一截空白，所以整体收紧。
  *
- * 间距由 `top = 14dp` 单值决定，而不是「固定高度 + 垂直居中」：居中会让日期
- * 上下各留一半（上方贴分隔线只有 ~7.5dp，下方再加行的 14dp 内边距共 ~21.5dp），
- * 上下严重不对称。这里把日期顶到盒子底部，**上方留 14dp、下方 0dp**，
- * 而随笔行自身有 14dp 顶部内边距 —— 于是分隔线到日期、日期到首条随笔
- * 两侧都是 14dp，一上一下对称呼应。
+ * 间距拆成 [topPadding] 与固定 bottom 两段，而不是「固定高度 + 垂直居中」：
+ * 居中会让日期上下各留一半，上下严重不对称。
+ * 卡片化之后 bottom 固定取 [YanjiSpacing.SectionGap]（与全站「分组标题 → 卡片」同档），
+ * 而 [topPadding] 由调用方按「是不是第一组」给 —— 没有分隔线之后，
+ * 这个上间距就是跨日期分组的唯一线索。
  */
 @Composable
-private fun NoteDayHeader(date: String) {
+private fun NoteDayHeader(date: String, topPadding: Dp) {
     Text(
         text = noteDayHeaderLabel(date),
         style = MaterialTheme.typography.titleMedium,
@@ -650,7 +662,12 @@ private fun NoteDayHeader(date: String) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 14.dp)
+            .padding(
+                start = YanjiSpacing.PageHorizontalPadding,
+                end = YanjiSpacing.PageHorizontalPadding,
+                top = topPadding,
+                bottom = YanjiSpacing.SectionGap
+            )
     )
 }
 
@@ -663,17 +680,23 @@ internal fun noteDayHeaderLabel(isoDate: String): String {
     return "${parsed.monthValue}月${parsed.dayOfMonth}日"
 }
 
+/**
+ * 空态：一张分组卡片承载「还没有随笔 + 写随笔」。
+ *
+ * 容器走 [Card]（[YanjiCardVariant.Grouped]）而不是手写 Surface：容器色即
+ * `colorScheme.surface`，与列表里的每篇随笔、与全站其它卡片是同一个底色。
+ * 此前用 `YanjiColors.elevatedSurface` 手写同值容器，两处必须各自跟着主题走。
+ */
 @Composable
 private fun NoteEmptyState(
     onStartRecording: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
-        color = YanjiColors.elevatedSurface
+            .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
+        variant = YanjiCardVariant.Grouped
     ) {
         Column(
             modifier = Modifier
