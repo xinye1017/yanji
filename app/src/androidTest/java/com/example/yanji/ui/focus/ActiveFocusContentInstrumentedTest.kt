@@ -3,6 +3,7 @@ package com.example.yanji.ui.focus
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -22,9 +23,11 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.yanji.YanjiApplication
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.YanjiTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -41,6 +44,21 @@ class ActiveFocusContentInstrumentedTest {
         override val scaleFactor = 0f
     })
 
+    /**
+     * [ActiveFocusContent] reads `LocalAppContainer.current` for focus preferences, so every
+     * composition under test must supply the real application container. Centralised here so
+     * each test keeps a single [composeRule.setContent] call site.
+     */
+    private fun setContent(content: @Composable () -> Unit) {
+        val application =
+            InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as YanjiApplication
+        composeRule.setContent {
+            CompositionLocalProvider(LocalAppContainer provides application.container) {
+                content()
+            }
+        }
+    }
+
     @Test
     fun pauseResumeAndFinishDispatchTheirOwnCallbacks() {
         val session = mutableStateOf(focusSession())
@@ -49,7 +67,7 @@ class ActiveFocusContentInstrumentedTest {
         var resumes = 0
         var finishes = 0
         var cancels = 0
-        composeRule.setContent {
+        setContent {
             YanjiTheme {
                 ActiveFocusContent(
                     session = session.value,
@@ -91,7 +109,7 @@ class ActiveFocusContentInstrumentedTest {
         // abandoningRequiresConfirmationAndCanBeDismissed 覆盖。
         val elapsed = mutableStateOf(30L)
         var cancels = 0
-        composeRule.setContent {
+        setContent {
             YanjiTheme {
                 ActiveFocusContent(
                     session = focusSession(),
@@ -113,7 +131,7 @@ class ActiveFocusContentInstrumentedTest {
     fun abandoningRequiresConfirmationAndCanBeDismissed() {
         var cancels = 0
         val elapsed = mutableStateOf(125L)
-        composeRule.setContent {
+        setContent {
             YanjiTheme {
                 ActiveFocusContent(
                     session = focusSession(),
@@ -141,7 +159,7 @@ class ActiveFocusContentInstrumentedTest {
     @Test
     fun countUpShowsMinutesThenHoursAtOneHourBoundary() {
         val elapsedSeconds = mutableStateOf(3_599L)
-        composeRule.setContent {
+        setContent {
             YanjiTheme {
                 ActiveFocusContent(
                     session = focusSession(),
@@ -164,7 +182,7 @@ class ActiveFocusContentInstrumentedTest {
     @Test
     fun countdownReachesZeroWithoutShowingNegativeTime() {
         val elapsedSeconds = mutableStateOf(1_499L)
-        composeRule.setContent {
+        setContent {
             YanjiTheme {
                 ActiveFocusContent(
                     session = focusSession(mode = FocusModes.POMODORO_25),
@@ -193,7 +211,7 @@ class ActiveFocusContentInstrumentedTest {
         val session = mutableStateOf(focusSession())
         val elapsed = mutableStateOf(3_661L)
         var finishes = 0
-        composeRule.setContent {
+        setContent {
             val deviceDensity = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(deviceDensity, fontScale = 2f)) {
                 YanjiTheme {

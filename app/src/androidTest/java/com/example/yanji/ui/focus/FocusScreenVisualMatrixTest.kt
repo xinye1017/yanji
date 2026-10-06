@@ -16,9 +16,12 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.yanji.YanjiApplication
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.theme.YanjiTheme
 import org.junit.Rule
 import org.junit.Test
@@ -52,21 +55,25 @@ class FocusScreenVisualMatrixTest {
 
     private fun testViewport(width: Dp, height: Dp, fontScale: Float = 1.0f) {
         val elapsedSeconds = mutableStateOf(1800L)
+        val application =
+            InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as YanjiApplication
         composeRule.setContent {
-            val currentDensity = LocalDensity.current.density
-            CompositionLocalProvider(
-                LocalDensity provides Density(currentDensity, fontScale = fontScale)
-            ) {
-                YanjiTheme {
-                    Box(modifier = Modifier.size(width = width, height = height)) {
-                        ActiveFocusContent(
-                            session = session,
-                            elapsedSeconds = elapsedSeconds,
-                            onPause = {},
-                            onResume = {},
-                            onFinish = {},
-                            onCancel = {}
-                        )
+            CompositionLocalProvider(LocalAppContainer provides application.container) {
+                val currentDensity = LocalDensity.current.density
+                CompositionLocalProvider(
+                    LocalDensity provides Density(currentDensity, fontScale = fontScale)
+                ) {
+                    YanjiTheme {
+                        Box(modifier = Modifier.size(width = width, height = height)) {
+                            ActiveFocusContent(
+                                session = session,
+                                elapsedSeconds = elapsedSeconds,
+                                onPause = {},
+                                onResume = {},
+                                onFinish = {},
+                                onCancel = {}
+                            )
+                        }
                     }
                 }
             }
