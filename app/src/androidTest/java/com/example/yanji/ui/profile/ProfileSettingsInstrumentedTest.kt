@@ -224,7 +224,7 @@ class ProfileSettingsInstrumentedTest {
     fun profileSectionsRemainReachableInCompactLightAndDarkLayouts() {
         val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as YanjiApplication
         val container = application.container
-        val viewModel = ProfileViewModel(container.repository)
+        val viewModel = ProfileViewModel(container.repository, container.focusPreferences)
         val darkTheme = mutableStateOf(false)
         composeRule.setContent {
             CompositionLocalProvider(LocalAppContainer provides container) {
