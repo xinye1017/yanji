@@ -5,11 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -34,10 +31,7 @@ import com.example.yanji.theme.YanjiTheme
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiDetailTopBar
-import com.example.yanji.ui.components.GlassSurface
 import com.example.yanji.ui.navigation.GlassBottomBar
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,6 +47,10 @@ import org.junit.runner.RunWith
  * - GlassBottomBar 响应式 Dock、标签与可点击区域
  * - YanjiDetailTopBar 统一返回按钮、标题 Heading、动作区域
  * - YanjiCard 变体在深色/浅色模式下的渲染
+ *
+ * 真实 HazeState 下的玻璃拟态渲染原先也在本类里，已拆到
+ * [HazeGlassSurfaceInstrumentedTest]：它会打没软件渲染的模拟器，进而把同批其余测试
+ * 一起带走，因此必须在 CI 里单独跑（原因与证据见那个类的 KDoc）。
  */
 @RunWith(AndroidJUnit4::class)
 class DesignSystemVisualMatrixInstrumentedTest {
@@ -158,43 +156,5 @@ class DesignSystemVisualMatrixInstrumentedTest {
     @Test
     fun viewport390x844_LargeFontAccessibility() {
         testDesignSystemMatrix(width = 390.dp, height = 844.dp, fontScale = 1.3f, darkTheme = false)
-    }
-
-    @Test
-    fun hazeBackedDockAndSurfaceRenderWithRealHazeState() {
-        composeRule.setContent {
-            YanjiTheme {
-                val hazeState = remember { HazeState() }
-                Box(modifier = Modifier.size(390.dp, 844.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                            .hazeSource(state = hazeState),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        Text("Haze source content")
-                    }
-
-                    GlassSurface(
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
-                        hazeState = hazeState
-                    ) {
-                        Text("Haze glass surface")
-                    }
-
-                    GlassBottomBar(
-                        currentTab = YanjiTab.HOME,
-                        onTabSelected = {},
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        hazeState = hazeState
-                    )
-                }
-            }
-        }
-
-        composeRule.onNodeWithText("Haze source content").assertIsDisplayed()
-        composeRule.onNodeWithText("Haze glass surface").assertIsDisplayed()
-        composeRule.onNodeWithTag("nav_tab_home").assertIsDisplayed().assertHasClickAction()
     }
 }
