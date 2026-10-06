@@ -138,14 +138,14 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           disable-animations: true
-          # -memory 4096: the default guest RAM left too little headroom once the full-screen
-          # haze progressive blur (AGSL/RenderEffect through SwiftShader — hosted runners have no
-          # real GPU) allocated its buffers. Under pressure the emulator process itself is
-          # killed mid-test, which reports as a bare "FAILED" with no stack trace and takes
-          # every subsequent test down with it.
-          # Do NOT add -gpu-memory: measured 2026-10-06, any value large enough to help the blur
-          # also stops the emulator booting at all ("Timeout waiting for emulator to boot").
-          emulator-options: -no-window -gpu swiftshader_indirect -memory 4096 -no-snapshot -noaudio -no-boot-anim
+          # Emulator tuning already ruled out by measurement (2026-10-06) — do not re-try blind:
+          #   -gpu-memory 4096 → emulator never boots ("Timeout waiting for emulator to boot").
+          #   -memory 4096    → boots fine, but hazeBackedDockAndSurfaceRenderWithRealHazeState
+          #                      still kills the emulator. So it is not host memory pressure.
+          # The remaining failure is SwiftShader being unable to back the full-screen haze
+          # progressive blur; it takes the emulator process down, which is why the report shows
+          # a bare FAILED with no stack trace and why every later test is lost.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
       - name: Upload instrumented test report
