@@ -11,13 +11,15 @@ import java.io.File
  * 这里曾经是「整行铺在页面底色上 + 0.8dp 分组线」的非卡片列表，与 App 里其它
  * 所有页面都不一致（其余页面一律走 ui/components 的 YanjiCard 基元）。
  *
- * 守五件事：
+ * 守六件事：
  *  1. 每篇随笔的容器是 `YanjiCard` 的 Compact 档（16dp 圆角 + `colorScheme.surface`）；
  *  2. 行内不再手写页面底色 —— 底色由卡片基元给出，在行里再写一次必然和全站漂移；
  *  3. 卡片与两侧滑动操作块内缩同一套页边距，滑开时才不会露出一截页面底色；
  *  4. 组与组之间不再画分隔线（卡片自己就是边界），页眉标题下那条规则线保留；
  *  5. 圆角裁剪层与页边距分层 —— 同节点挂载会让圆角跑到屏幕两角，操作块带着直角
- *     从卡片四个圆角里漏出来（静止时看起来像「卡片和整行圆角没接上」）。
+ *     从卡片四个圆角里漏出来（静止时看起来像「卡片和整行圆角没接上」）；
+ *  6. 滑开时露出的那一侧由卡片自己的圆角描边 —— 操作底色铺满半行，不画 72dp 竖条，
+ *     否则竖条贴卡片那一侧仍是直角，且卡片圆角与竖条之间会漏出页面底色。
  */
 class NoteListCardDesignTest {
 
@@ -89,6 +91,32 @@ class NoteListCardDesignTest {
         // 操作块与卡片都活在这个裁剪层里，滑开时才被同一个圆角约束
         assertTrue("操作块行必须在裁剪层内", clipAt < row.indexOf("matchParentSize()"))
         assertTrue("卡片必须在裁剪层内", clipAt < row.indexOf("YanjiCard("))
+    }
+
+    @Test
+    fun theRevealSideIsTracedByTheCardsOwnRoundedCorner() {
+        // 用户诉求：「两边的按键出来之后，靠近卡片的一侧还是直角」。
+        // 卡片自己有 16dp 圆角，滑开时它的圆角弧相对卡片外框往里收 16dp。操作底色
+        // 只画 72dp 竖条时：竖条贴卡片那一侧就是一条直角边，而且卡片圆角与竖条之间
+        // 会漏出一小条页面底色（行顶 / 行底各 16dp 宽、行中约 2dp）。
+        // 底色铺满半行后，「卡片 ∪ 操作底色」正好等于整行的圆角矩形 —— 露出的那一侧
+        // 由卡片自己的圆角描边，既没有直角也没有空隙。
+        assertTrue(
+            "露出底色必须是半行宽的 ActionRevealSide，不能再是 72dp 竖条方块",
+            row.contains("ActionRevealSide(") && !row.contains("SquareActionPanel(")
+        )
+        assertTrue(
+            "左右两块底色必须各占半行（weight(1f)）：要盖住卡片 16dp 圆角弧往里收的那一截，",
+            Regex("""ActionRevealSide\(\s*modifier = Modifier\.weight\(1f\)""").containsMatchIn(row)
+        )
+        // 可点区仍是原来那条 72dp 竖条：铺满是给「形状」用的，触控目标不跟着变大。
+        assertTrue("可点区收在外沿 72dp", row.contains("tapWidth = actionWidth"))
+        // 两半底色的接缝落在半行处，只能靠卡片盖住：最大露出 = 72dp + 20% 橡皮筋。
+        // 这条上限一旦被放大到接近半行，两半的接缝就会从卡片底下露出来。
+        assertTrue(
+            "橡皮筋上限必须明显小于半行，否则两半底色的接缝会露出来",
+            row.contains("overDragMaxPx = actionWidthPx * 1.2f")
+        )
     }
 
     @Test

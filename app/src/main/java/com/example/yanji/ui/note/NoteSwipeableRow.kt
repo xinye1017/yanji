@@ -99,11 +99,14 @@ private fun applyRubberBand(value: Float, limit: Float, max: Float): Float = whe
  *  - 页边距与圆角**不能挂在同一个节点上**：Modifier.clip 按节点自身容积取圆角矩形，
  *    两者同链时圆角会被推到屏幕两角，操作块仍是直角，静止时从卡片的四个圆角里漏出
  *    蓝 / 粉色块，看起来像「卡片和整行圆角没接上」；
- *  - 静止时卡片严严实实盖住操作块，四周不留一丝操作块底色；
- *  - 滑开时露出的操作块跟着同一个圆角走，卡片越过这个圆角的部分也由它裁掉。
- * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 圆角刻意由整行裁剪统一
- * 处理，而不是逐个方块单独抹角：后者会在「操作块与卡片交界的拖尾边」留下缺口，
- * 也会让两个 72dp 方块之间露出一条没被盖住的底色。
+ *  - 静止时卡片严严实实盖住操作底色，四周不留一丝；
+ *  - 滑开时露出的那一侧由**卡片自己的圆角**描边：卡片的圆角弧相对外框往里收 16dp，
+ *    所以操作底色必须铺满半行、不能只画 72dp 竖条 —— 只画竖条时竖条贴卡片那一侧仍是
+ *    一条直角边，而且卡片圆角与竖条之间会漏出一小条页面底色（行顶 / 行底各 16dp 宽、
+ *    行中也有约 2dp）。铺满半行后「卡片 ∪ 操作底色」正好等于整行的圆角矩形，
+ *    接缝处既没有直角也没有空隙；
+ *  - 两半底色的接缝落在半行处，永远被卡片盖住：最大露出 = 72dp 操作块再加 20% 橡皮筋
+ *    阻尼 = 86.4dp，加上卡片 16dp 圆角也只到 102.4dp，够不到半行。
  * 卡片之外是页面底色，卡片整体平移让位。
  */
 @Composable
@@ -185,16 +188,22 @@ fun NoteSwipeableRow(
                 .fillMaxWidth()
                 .clip(YanjiCardVariant.Compact.toShape())
         ) {
-            // ---- 操作块行：matchParentSize 取整行尺寸，两个 72dp 方块分居左右边缘 ----
-            // 注意：不能把 matchParentSize 直接加在方块上——它会把子节点约束固定为整行尺寸，
-            // 后面的 .width() 会被 coerce 成整行宽，导致两块重叠、后声明的红块盖住蓝块。
+            // ---- 操作底色行：matchParentSize 取整行尺寸，左右各占半行 ----
+            // 必须铺满半行，不能只画两条 72dp 竖条：卡片自己有 16dp 圆角，滑开时它的
+            // 圆角弧相对卡片外框往里收 16dp。只画竖条的话，竖条贴卡片那一侧就是一条
+            // 直角边，而且卡片圆角与竖条之间会漏出一小条页面底色。铺满半行后，露出
+            // 区域的形状完全由卡片自己的圆角描出来，卡片与底色拼起来正好是整行的
+            // 圆角矩形 —— 接缝处既没有直角也没有空隙。
+            // 两半的接缝落在半行处，永远被卡片盖住，理由见函数上方的样式说明。
+            // 注意：不能把 matchParentSize 直接加在底色块上——它会把子节点约束固定为
+            // 整行尺寸，后面的 weight / width 会被 coerce 成整行宽，两块互相重叠覆盖。
             Row(
-                modifier = Modifier.matchParentSize(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.matchParentSize()
             ) {
-                SquareActionPanel(
-                    width = actionWidth,
+                ActionRevealSide(
+                    modifier = Modifier.weight(1f),
+                    tapWidth = actionWidth,
+                    alignment = Alignment.CenterStart,
                     // 底色：亮暗都用 `primary`。暗色下它被刻意升调成亮蓝（#4F7DF3），
                     // 滑开时是整块高饱和色块，识别度足够。
                     container = MaterialTheme.colorScheme.primary,
@@ -214,9 +223,11 @@ fun NoteSwipeableRow(
                     }
                 )
 
-                // 右：删除块，错误色底 + 删除图标
-                SquareActionPanel(
-                    width = actionWidth,
+                // 右：删除底色，错误色底 + 删除图标
+                ActionRevealSide(
+                    modifier = Modifier.weight(1f),
+                    tapWidth = actionWidth,
+                    alignment = Alignment.CenterEnd,
                     container = MaterialTheme.colorScheme.error,
                     tint = MaterialTheme.colorScheme.onError,
                     icon = RemixIcons.DeleteBinLine,
@@ -327,42 +338,57 @@ fun NoteSwipeableRow(
 }
 
 /**
- * **直角方形**操作块：占满整行高度、紧贴边缘，不使用圆角胶囊。
+ * 半行宽的操作底色：**底色铺满半行**，只有外沿 [tapWidth] 一条是可点的。
+ *
+ * 底色为什么不能只画 [tapWidth] 那么宽：卡片自己有 16dp 圆角，滑开时卡片的圆角弧
+ * 相对卡片外框往里收 16dp。只画竖条的话，竖条贴卡片那一侧就是一条直角边，而且卡片
+ * 圆角与竖条之间会漏出一小条页面底色。铺满半行后，露出区域的形状完全由卡片自己的
+ * 圆角描出来 —— 卡片与底色拼起来正好是整行的圆角矩形。
+ *
+ * 可点区刻意收在 [tapWidth] 而不是铺满半行：触控目标仍是原来那条竖条，不会因为
+ * 「铺满」变成一个横跨半行的按钮（读播报的节点边界也跟着变大）。
  * 只有点击它才会触发对应动作；图标随露出进度淡入。
  */
 @Composable
-private fun SquareActionPanel(
-    width: Dp,
+private fun ActionRevealSide(
+    alignment: Alignment,
     container: Color,
     tint: Color,
     icon: ImageVector,
     contentDescription: String,
     revealProgress: State<Float>,
     onClick: () -> Unit,
+    tapWidth: Dp,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .width(width)
             .fillMaxHeight()
-            .background(container)
-            .clickable(onClick = onClick)
-            // 名称必须挂在**可点节点自己**身上：只写在 Icon 上时，clickable 仍是一个无名按钮，
-            // TalkBack 会先念一个空「按钮」、再单独念一次图标名，焦点被拆成两跳。
-            // mergeDescendants 把图标并进来，焦点落成「收藏 按钮」这一个节点。
-            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center
+            .background(container),
+        contentAlignment = alignment
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
+        Box(
             modifier = Modifier
-                .size(20.dp)
-                .graphicsLayer { alpha = revealProgress.value }
-        )
+                .width(tapWidth)
+                .fillMaxHeight()
+                .clickable(onClick = onClick)
+                // 名称必须挂在**可点节点自己**身上：只写在 Icon 上时，clickable 仍是一个无名按钮，
+                // TalkBack 会先念一个空「按钮」、再单独念一次图标名，焦点被拆成两跳。
+                // mergeDescendants 把图标并进来，焦点落成「收藏 按钮」这一个节点。
+                .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { alpha = revealProgress.value }
+            )
+        }
     }
-    }
+}
 
 /**
  * 条目正文，四列：时间 | 收藏书签 | 摘要 | 状态打分（星级）。
