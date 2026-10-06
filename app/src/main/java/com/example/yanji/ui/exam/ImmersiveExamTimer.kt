@@ -65,7 +65,7 @@ fun ImmersiveExamTimer(
         ) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(YanjiRadius.GroupedCardRadius))
                     .background(if (isPaused) YanjiColors.warningSoft else MaterialTheme.colorScheme.secondaryContainer)
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
@@ -117,7 +117,7 @@ fun ImmersiveExamTimer(
                     modifier = Modifier
                         .weight(1f)
                         .height(54.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
                 ) {
                     Icon(
                         imageVector = if (isPaused) RemixIcons.PlayFill else RemixIcons.PauseFill,
@@ -132,7 +132,7 @@ fun ImmersiveExamTimer(
                     modifier = Modifier
                         .weight(1f)
                         .height(54.dp),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(imageVector = RemixIcons.CheckLine, contentDescription = null)

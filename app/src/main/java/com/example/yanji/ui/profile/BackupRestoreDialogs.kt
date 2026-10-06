@@ -53,7 +53,7 @@ fun ImportConfirmDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp)) // token-exempt: 弹窗内摘要块几何，无同值 token
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(12.dp)
                 ) {
@@ -77,7 +77,7 @@ fun ImportConfirmDialog(
                 )
             }
         },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(20.dp), // token-exempt: 备份弹窗沿用的独立圆角，无同值 token
         containerColor = MaterialTheme.colorScheme.surface
     )
 }
@@ -100,7 +100,7 @@ fun ImportErrorDialog(
         },
         title = { Text("导入未执行", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
         text = { Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface) },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(20.dp), // token-exempt: 导入错误弹窗沿用的独立圆角，无同值 token
         containerColor = MaterialTheme.colorScheme.surface
     )
 }
@@ -136,7 +136,7 @@ fun AboutYanjiDialog(
                 )
             }
         },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(24.dp), // token-exempt: 关于弹窗沿用的独立圆角，无同值 token
         containerColor = MaterialTheme.colorScheme.surface
     )
 }

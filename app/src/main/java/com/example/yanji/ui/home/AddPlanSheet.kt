@@ -362,7 +362,7 @@ private fun FormPage(
                             }
                         ),
                         border = null,
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp) // token-exempt: 最近使用建议 chip 的紧凑几何，无同值 token
                     )
                 }
             }
@@ -396,7 +396,7 @@ private fun FormPage(
                 }
             } else null,
             singleLine = true,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(14.dp), // token-exempt: 标题输入框沿用的独立圆角，无同值 token
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedContainerColor = YanjiColors.fill,
                 focusedContainerColor = YanjiColors.fill,
@@ -428,7 +428,7 @@ private fun FormPage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(3.dp)) // token-exempt: 6dp 进度轨道的半圆端头，几何必须等于高度一半
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (baseRatio > 0f) {
@@ -478,7 +478,7 @@ private fun FormPage(
         Button(
             onClick = { onSubmit(false) },
             enabled = selection != null,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -528,7 +528,7 @@ private fun SubjectField(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(14.dp), // token-exempt: 科目字段沿用的独立圆角，无同值 token
         color = YanjiColors.fill,
         modifier = Modifier
             .fillMaxWidth()
@@ -569,7 +569,7 @@ private fun DurationField(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(14.dp), // token-exempt: 时长字段沿用的独立圆角，无同值 token
         color = YanjiColors.fill,
         modifier = Modifier
             .fillMaxWidth()
@@ -692,7 +692,7 @@ private fun SubjectPickerPage(
                                 activeCategoryItem = cat
                             }
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(10.dp), // token-exempt: 大类选择条目的紧凑几何，无同值 token
                         color = itemBgColor,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -857,7 +857,7 @@ private fun DurationPickerPage(
                         textAlign = TextAlign.Center
                     )
                 },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(YanjiRadius.Small),
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = YanjiColors.fill,
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -880,7 +880,7 @@ private fun DurationPickerPage(
                         textAlign = TextAlign.Center
                     )
                 },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(YanjiRadius.Small),
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = YanjiColors.fill,
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -996,7 +996,7 @@ private fun WheelPicker(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(itemHeight)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(YanjiRadius.Small))
                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
         )
         LazyColumn(

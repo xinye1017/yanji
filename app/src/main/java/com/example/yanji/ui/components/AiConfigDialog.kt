@@ -266,7 +266,7 @@ fun AiConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(22.dp), // token-exempt: 本弹窗沿用的独立圆角，无同值 token
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Row(

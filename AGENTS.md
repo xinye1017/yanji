@@ -82,7 +82,7 @@
 3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
 4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
 5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 设计红线**：`ui/` 层 0 容忍裸 `Color(0x...)` 字面量与静态亮色 Token；裸圆角受棘轮上限约束；暗色背景用 Midnight Blue 系列，**禁止纯黑 `#000000`**；**卡片零边框**：一切卡片容器（`YanjiCard` / `YanjiGroupedCard` / 同级 `Surface` 槽位）一律不设 `BorderStroke`，**深浅色均无描边**，层级只靠表面明度递进与字号字重表达（输入框 / 按钮等需要可辨识边界的控件不受此条约束）；`Modifier.hazeEffect` 必须显式设 `backgroundColor` 垫底（否则真机启动崩溃）。
+6. **UI 设计红线**：`ui/` 层 0 容忍裸 `Color(0x...)` 字面量与静态亮色 Token；**同样 0 容忍裸 `RoundedCornerShape(<N>.dp)` 圆角字面量**——产品级圆角一律引用 `theme/Radius.kt` 的 `YanjiRadius` 语义 token，确属局部几何（图表轨道、进度条端头、无同值 token 的紧凑控件）才可在行尾写 `// token-exempt: <原因>`；暗色背景用 Midnight Blue 系列，**禁止纯黑 `#000000`**；**卡片零边框**：一切卡片容器（`YanjiCard` / `YanjiGroupedCard` / 同级 `Surface` 槽位）一律不设 `BorderStroke`，**深浅色均无描边**，层级只靠表面明度递进与字号字重表达（输入框 / 按钮等需要可辨识边界的控件不受此条约束）；`Modifier.hazeEffect` 必须显式设 `backgroundColor` 垫底（否则真机启动崩溃）。
 7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。

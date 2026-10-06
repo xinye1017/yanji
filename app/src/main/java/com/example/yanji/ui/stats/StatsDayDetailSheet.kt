@@ -98,7 +98,7 @@ fun StatsDayDetailSheet(
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius)
             ) {
                 Text("查看当天记录 →", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }

@@ -129,7 +129,7 @@ fun ExamCard(
             Button(
                 onClick = onStart,
                 colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(YanjiRadius.GroupedCardRadius),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text("开始考试", fontSize = 13.sp, fontWeight = FontWeight.Bold)

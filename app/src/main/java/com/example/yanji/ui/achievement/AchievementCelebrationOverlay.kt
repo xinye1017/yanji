@@ -165,11 +165,11 @@ private fun AchievementCelebrationCard(
                 .clickable { onDismiss() }
                 .shadow(
                     elevation = 16.dp,
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(22.dp), // token-exempt: 顶部浮动通知横幅的独立几何，无同值 token
                     spotColor = accentColor.copy(alpha = 0.4f),
                     ambientColor = Color.Black.copy(alpha = 0.2f)
                 ),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(22.dp), // token-exempt: 同上，必须与 shadow shape 保持一致
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
             border = BorderStroke(
                 width = 1.2.dp,

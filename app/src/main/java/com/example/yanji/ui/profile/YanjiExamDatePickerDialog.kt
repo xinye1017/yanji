@@ -74,7 +74,7 @@ fun YanjiExamDatePickerDialog(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .widthIn(max = 420.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(YanjiRadius.HeroCardRadius),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 10.dp
         ) {

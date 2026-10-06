@@ -51,7 +51,7 @@ fun CheckInCelebrationDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(YanjiRadius.HeroCardRadius))
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(24.dp),
             contentAlignment = Alignment.Center
@@ -186,7 +186,7 @@ fun CheckInCelebrationDialog(
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(14.dp), // token-exempt: 本弹窗按钮沿用的独立圆角，无同值 token
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
                     ) {
                         Text("知道了", fontSize = 14.sp)
@@ -201,7 +201,7 @@ fun CheckInCelebrationDialog(
                             modifier = Modifier
                                 .weight(1.2f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(14.dp), // token-exempt: 同上，两枚按钮必须一致
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = Color.White

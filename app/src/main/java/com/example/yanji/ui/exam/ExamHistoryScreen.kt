@@ -157,7 +157,7 @@ fun ExamHistoryCard(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp)) // token-exempt: 行内时长小徽标的紧凑几何，无同值 token
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {

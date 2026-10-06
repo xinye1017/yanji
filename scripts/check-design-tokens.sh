@@ -5,10 +5,13 @@
 #   颜色的唯一事实源是 app/src/main/java/com/example/yanji/theme/Color.kt；
 #   新增颜色请先在 Color.kt 里起语义名，再引用。
 #
-# 规则 2（棘轮）：ui/ 层裸 `RoundedCornerShape(<N>.dp)` 的数量不得超过 RADIUS_CEILING。
-#   - 允许存在的情形：自定义图表、进度条轨道/填充、以及尚未统一的小尺度容器；
-#   - 计数按「出现次数」而非「行数」：一行两处算两处；
-#   - 数量不允许回涨；把数量降下来之后，请把 RADIUS_CEILING 改成新的实际值；
+# 规则 2（棘轮，已降到 0 容忍）：ui/ 层裸 `RoundedCornerShape(<N>.dp)` 数量不得超过 RADIUS_CEILING。
+#   - RADIUS_CEILING 现为 **0**：ui/ 层已无裸圆角字面量，所有产品级圆角一律走 theme/Radius.kt 的
+#     YanjiRadius 语义 token（取值与原字面量逐一相等，视觉零变化），因此上限直接压到 0；
+#   - 允许存在的情形只剩「局部几何」：自定义图表、进度条轨道/填充、以及确实没有同值 token 的
+#     紧凑控件——这些行必须写 `// token-exempt: <原因>`（必须写原因）。
+#   - 计数按「出现次数」而非「行数」：一行两处算两处；注释里的示例代码也会被计入，
+#     所以注释请引用 token 名（如 RoundedCornerShape(YanjiRadius.Small)）而不是裸数字；
 #   - 行级豁免：在行尾写 `// token-exempt: <原因>`（必须写原因）。
 #     豁免只应用于「确实属于局部几何、而不是产品组件圆角」的地方。
 #
@@ -34,7 +37,7 @@ cd "$(dirname "$0")/.."
 
 UI_DIR="app/src/main/java/com/example/yanji/ui"
 RAW_COLOR_CEILING=0
-RADIUS_CEILING=28
+RADIUS_CEILING=0
 STATIC_COLOR_CEILING=0
 SPACING_CEILING=294
 PADDING_VALUES_CEILING=18

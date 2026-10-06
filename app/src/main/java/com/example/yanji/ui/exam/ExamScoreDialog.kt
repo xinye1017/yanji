@@ -97,7 +97,7 @@ fun ExamScoreDialog(
                 )
             }
         },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
         containerColor = MaterialTheme.colorScheme.surface
     )
 }

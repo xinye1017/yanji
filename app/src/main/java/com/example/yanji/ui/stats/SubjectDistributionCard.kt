@@ -112,7 +112,7 @@ fun SubjectDistributionCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                        // 不要在此处 clip(RoundedCornerShape(YanjiRadius.Small))：容器圆角(12dp=42px)远大于
                         // 底部内边距(8dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
                         // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                         .clickable { onNavigateToSubjectDetail(singleSub.subjectId) }
@@ -179,7 +179,7 @@ fun SubjectDistributionCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                            // 不要在此处 clip(RoundedCornerShape(YanjiRadius.Small))：容器圆角(12dp=42px)远大于
                             // 底部内边距(4dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
                             // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                             .clickable { onNavigateToSubjectDetail(sub.subjectId) }
@@ -218,7 +218,7 @@ fun SubjectDistributionCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            // 不要在此处 clip(RoundedCornerShape(12.dp))：容器圆角(12dp=42px)远大于
+                            // 不要在此处 clip(RoundedCornerShape(YanjiRadius.Small))：容器圆角(12dp=42px)远大于
                             // 底部内边距(4dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
                             // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
                             .clickable { onNavigateToSubjectDetail(sub.subjectId) }

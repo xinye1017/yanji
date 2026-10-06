@@ -228,7 +228,7 @@ fun ManualFocusLogDialog(
                     ) {
                         currentSubcategories.forEach { sub ->
                             val isSubSelected = sub.id == selectedSubjectId
-                            val chipShape = RoundedCornerShape(12.dp)
+                            val chipShape = RoundedCornerShape(YanjiRadius.Small)
                             Surface(
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
@@ -342,7 +342,7 @@ fun ManualFocusLogDialog(
                 ) {
                     DURATION_PRESETS.forEach { mins ->
                         val isPreset = durationMinutes == mins
-                        val chipShape = RoundedCornerShape(8.dp)
+                        val chipShape = RoundedCornerShape(YanjiRadius.ItemRadius)
                         Surface(
                             modifier = Modifier
                                 .weight(1f)

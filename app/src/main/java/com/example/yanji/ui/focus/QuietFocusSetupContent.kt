@@ -418,7 +418,7 @@ private fun QuietFocusHeader(
                     Row(
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
                             .clickable(onClick = onManualLogClick)
                             // 不走 primary 做前景：暗色 primaryContainer 是主色 16% 半透明
                             // （0x294F7DF3），再叠 0.55 alpha 后图标与文字同色相低分离，
@@ -446,7 +446,7 @@ private fun QuietFocusHeader(
                     Row(
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
                             .clickable(onClick = onTodayClick)
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -778,7 +778,7 @@ private fun QuietRhythmStep(
                 .fillMaxWidth()
                 .padding(top = 12.dp)
                 .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Text(
