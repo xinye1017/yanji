@@ -187,33 +187,6 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 3. 今日计划 —— 计划是还没发生的事，放在「实际做了多久」的后面：
-            //    先看清今天的结果，再安排下一步。
-            TodayPlanCard(
-                tasks = state.todayTasks,
-                subjects = state.subjects,
-                dailyGoalMinutes = (state.settings.dailyGoalHours * 60).toInt(),
-                onAdd = { subject, title, minutes, onCreated ->
-                    viewModel.addStudyTask(subject, title, minutes, onCreated)
-                },
-                onEdit = { task, subject, title, minutes -> viewModel.updateStudyTask(task, subject, title, minutes) },
-                onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
-                onDelete = { id -> viewModel.deleteStudyTask(id) },
-                actualSecondsByTaskId = state.actualSecondsByTaskId,
-                runningTaskId = state.runningTaskId,
-                onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() }
-            )
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
-            // 4. 每日打卡 —— 签完就折叠成一行，不占主卡位，所以放到最后一张。
-            CheckInCard(
-                onCheckInSuccess = { checkIn -> celebratingCheckIn = checkIn },
-                onTodayCheckInClick = { checkIn -> celebratingCheckIn = checkIn }
-            )
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
             // 2. 今日累计专注时长 —— 首页第二张主卡：今天已经沉下去多少时间是最有
             //    说服力的一个数字，放在最高频的视线上；进度与科目分布也由它承载。
             YanjiGroupedCard(
@@ -308,6 +281,34 @@ fun HomeScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+
+            // 3. 今日计划 —— 计划是还没发生的事，放在「实际做了多久」的后面：
+            //    先看清今天的结果，再安排下一步。
+            TodayPlanCard(
+                tasks = state.todayTasks,
+                subjects = state.subjects,
+                dailyGoalMinutes = (state.settings.dailyGoalHours * 60).toInt(),
+                onAdd = { subject, title, minutes, onCreated ->
+                    viewModel.addStudyTask(subject, title, minutes, onCreated)
+                },
+                onEdit = { task, subject, title, minutes -> viewModel.updateStudyTask(task, subject, title, minutes) },
+                onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
+                onDelete = { id -> viewModel.deleteStudyTask(id) },
+                actualSecondsByTaskId = state.actualSecondsByTaskId,
+                runningTaskId = state.runningTaskId,
+                onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() }
+            )
+
+            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
+
+            // 4. 每日打卡 —— 签完就折叠成一行「已累计签到 N 天」，不占主卡位，
+            //    紧跟计划之后，模考看板与 AI 鼓励语这类低频内容排在它下面。
+            CheckInCard(
+                onCheckInSuccess = { checkIn -> celebratingCheckIn = checkIn },
+                onTodayCheckInClick = { checkIn -> celebratingCheckIn = checkIn }
+            )
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
