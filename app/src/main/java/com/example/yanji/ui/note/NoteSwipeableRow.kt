@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,6 +41,7 @@ import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.theme.yanjiIsDarkTheme
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
+import com.example.yanji.ui.components.toShape
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.example.yanji.theme.YanjiMotion
@@ -92,10 +94,13 @@ private fun applyRubberBand(value: Float, limit: Float, max: Float): Float = whe
  *  - **长按 = 滑动的单指针替代路径**：WCAG 2.2 要求作者自定义拖拽必须有按钮 / 菜单等价物，
  *    否则读屏与运动障碍用户完全够不到「收藏 / 删除」。长按弹出的菜单复用同一对回调。
  *
- * 样式：每篇随笔是一张**圆角卡片**（[YanjiCard] + [YanjiCardVariant.Compact]，16dp 圆角、
- * 容器色取 `MaterialTheme.colorScheme.surface`，即全站统一的卡片背景）。卡片与两侧操作块
- * 共享同一套 20dp 页边距，因此滑动露出操作块时两者边缘严丝合缝，不会露出一截页面底色。
- * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 不是浮在行内的圆角胶囊。
+ * 样式：整行是一个**圆角矩形**（最外层 Box 一次给足 20dp 页边距与 16dp 圆角裁剪），
+ * 随笔卡片与左右两个操作块都活在这个圆角里，因此完全同形同位：
+ *  - 静止时卡片严严实实盖住操作块，四周不留一丝操作块底色；
+ *  - 滑开时露出的操作块跟着同一个圆角走，不会漏出屏幕边缘的直角方块。
+ * 操作块本身仍是**直角方形**、与卡片等高、紧贴卡片边缘 —— 圆角刻意由外层裁剪统一
+ * 处理，而不是逐个方块单独抹角：后者会在「操作块与卡片交界的拖尾边」留下缺口，
+ * 也会让两个 72dp 方块之间露出一条没被盖住的底色。
  * 卡片之外是页面底色，卡片整体平移让位。
  */
 @Composable
@@ -162,15 +167,18 @@ fun NoteSwipeableRow(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            // 页边距与圆角只在最外层给一次：卡片和两个操作块因此完全同形同位。
+            // 放在内层各自给一遍是不行的 —— 操作块的 matchParentSize 撑满的是整行宽度，
+            // 若只内缩卡片，静止时操作块就会从卡片左右各探出 20dp（直角、且和圆角对不上）。
+            .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
+            // 圆角取卡片变体自己的形状，行容器与卡片永远同一个半径，不会各自漂移。
+            .clip(YanjiCardVariant.Compact.toShape())
     ) {
-        // 操作块行随卡片一起内缩 20dp 页边距：卡片滑开后，方块的边缘正好落在
-        // 卡片原边缘上，露出的一整条都是操作块底色，不会露出一截页面底色。
+        // ---- 操作块行：matchParentSize 取整行尺寸，两个 72dp 方块分居左右边缘 ----
         // 注意：不能把 matchParentSize 直接加在方块上——它会把子节点约束固定为整行尺寸，
         // 后面的 .width() 会被 coerce 成整行宽，导致两块重叠、后声明的红块盖住蓝块。
         Row(
-            modifier = Modifier
-                .matchParentSize()
-                .padding(horizontal = YanjiSpacing.PageHorizontalPadding),
+            modifier = Modifier.matchParentSize(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -216,8 +224,6 @@ fun NoteSwipeableRow(
             modifier = Modifier
                 .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
                 .fillMaxWidth()
-                // 与全站卡片同一套页边距：卡片左缘对齐操作块行内缩后的边缘（见上方操作块行）。
-                .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
                 .pointerInput(actionWidthPx, overDragMaxPx, flingVelocityPx) {
                     var estimatedVelocityX = 0f
                     var lastEventTime = 0L

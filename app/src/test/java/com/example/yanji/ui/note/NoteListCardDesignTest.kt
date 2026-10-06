@@ -52,14 +52,21 @@ class NoteListCardDesignTest {
     }
 
     @Test
-    fun cardAndSwipeActionsShareTheSamePageInset() {
+    fun theRowContainerCarriesTheInsetAndTheCardRadiusOnce() {
+        // 页边距与圆角只能由最外层容器给一次：卡片和操作块因此完全同形同位。
+        // 曾经把页边距分别塞给卡片和操作块行，matchParentSize 撑满的是整行宽度，
+        // 静止时操作块就从卡片左右各探出 20dp（直角，且与卡片圆角对不上）。
         val insets = Regex("""\.padding\(horizontal = YanjiSpacing\.PageHorizontalPadding\)""")
             .findAll(row)
             .count()
+        assertTrue("页边距只能在最外层容器上给一次（实际 $insets 处）", insets == 1)
         assertTrue(
-            "卡片本体与两侧操作块都要内缩同一套页边距（实际 $insets 处），" +
-                "否则滑开会露出操作块与卡片边缘之间的一截页面底色",
-            insets >= 2
+            "整行必须裁剪到卡片变体自己的圆角，露出的操作块才会跟着同一个圆角走",
+            row.contains(".clip(YanjiCardVariant.Compact.toShape())")
+        )
+        assertTrue(
+            "操作块行不得再自己内缩页边距",
+            !row.contains(Regex("""matchParentSize\(\)\s*\.padding"""))
         )
     }
 
