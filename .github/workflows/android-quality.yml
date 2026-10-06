@@ -138,7 +138,14 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # -gpu-memory is required, not tuning: haze renders a full-screen AGSL/RenderEffect
+          # progressive blur through SwiftShader (there is no GPU on a hosted runner), and the
+          # default host-side buffer allocation is not always large enough for it. When the
+          # allocator comes up short the emulator logs
+          #   ERROR | Failed to find ColorBuffer / Failed to bind to texture: invalid color buffer
+          # and then the whole emulator process dies, which fails the test that triggered it
+          # AND every test after it. That is an emulator-resource failure, not a product defect.
+          emulator-options: -no-window -gpu swiftshader_indirect -gpu-memory 4096 -no-snapshot -noaudio -no-boot-anim
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
       - name: Upload instrumented test report
