@@ -53,4 +53,40 @@ class FocusModesMappingTest {
             )
         }
     }
+
+    /**
+     * 125 分钟曾经被解析成 25 分钟：`targetSeconds` 用 `contains("25")` 做子串匹配，
+     * "125分钟专注" 命中了 "25"。专注准备页的时长滚轮上限提到 180 后，
+     * 125 / 145 / 160 都是用户真能选到的档位，必须整段兜住。
+     */
+    @Test
+    fun modesWhoseDigitsContainAStandardDurationAreNotMisParsed() {
+        assertEquals(125 * 60L, FocusModes.targetSeconds(FocusModes.forPlannedMinutes(125)))
+        assertEquals(145 * 60L, FocusModes.targetSeconds(FocusModes.forPlannedMinutes(145)))
+        assertEquals(160 * 60L, FocusModes.targetSeconds(FocusModes.forPlannedMinutes(160)))
+        assertEquals(180 * 60L, FocusModes.targetSeconds(FocusModes.forPlannedMinutes(180)))
+    }
+
+    /**
+     * 专注准备页与今日计划的时长上限同为 180 分钟，整段 25..180（步长 5）
+     * 都必须满足「滚轮显示的分钟数 == 真正启动的计时秒数」。
+     */
+    @Test
+    fun everyFocusWheelDurationRoundTrips() {
+        for (minutes in 25..180 step 5) {
+            val mode = FocusModes.forPlannedMinutes(minutes)
+            assertEquals(
+                "滚轮上的 $minutes 分钟应计时 $minutes 分钟，但模式 $mode 解析成了别处",
+                minutes * 60L,
+                FocusModes.targetSeconds(mode)
+            )
+        }
+    }
+
+    @Test
+    fun nonDurationModesResolveToUnbounded() {
+        assertEquals(0L, FocusModes.targetSeconds(FocusModes.COUNT_UP))
+        assertEquals(0L, FocusModes.targetSeconds("补记专注"))
+        assertEquals(0L, FocusModes.targetSeconds(""))
+    }
 }

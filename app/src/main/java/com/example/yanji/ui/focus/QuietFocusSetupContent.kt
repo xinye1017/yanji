@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
+import com.example.yanji.data.FocusPresetRequest
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.Subject
 
@@ -108,7 +109,10 @@ private data class QuietDurationOption(
 )
 
 private const val QuietDurationMinMinutes = 25
-private const val QuietDurationMaxMinutes = 100
+// 上限与「添加今日计划」的时长滚轮对齐（同为 180 分钟）：
+// 今日计划行「开始」会把计划预计时长直接落到这里，若准备页仍只能表达到 100 分钟，
+// 「计划 120 分钟 → 滚轮停在 100 分钟」就会让用户看到的时长与真正启动的计时不一致。
+private const val QuietDurationMaxMinutes = 180
 private const val QuietDurationStepMinutes = 5
 
 // 滚轮中心双侧光感指示线（左右对称，靠近内部处实体，向外侧羽化渐变透明）
@@ -133,6 +137,12 @@ private fun normalizeQuietDuration(minutes: Int): Int {
  * The restrained focus-preparation flow. It deliberately keeps one visual focus per step:
  * subject, module, then timer. Shared header, progress, spacing, cards, and selected states
  * make the three screens feel like one continuous decision instead of three dashboards.
+ *
+ * ## 一次外部预设（今日计划行「开始」）为什么由这里消费
+ *
+ * 科目 / 时长 / 备注的**事实**由 [FocusScreen] 持有，本页只是经回调写回它们。
+ * 预设请求因此也唯一交给本页消费：一次点击要同时决定「跳到第几步」与「三个字段填什么」，
+ * 拆成父子两处各消费一半，就会出现「科目写回去了、步骤没跳」的半应用状态。
  */
 @Composable
 fun QuietFocusSetupContent(
@@ -151,7 +161,9 @@ fun QuietFocusSetupContent(
     quickStartPresets: List<QuickStartPreset> = emptyList(),
     onSavePreset: () -> Unit = {},
     onQuickStart: (QuickStartPreset) -> Unit = {},
-    onDeleteQuickStart: (String) -> Unit = {}
+    onDeleteQuickStart: (String) -> Unit = {},
+    presetRequest: FocusPresetRequest? = null,
+    onPresetApplied: (() -> Unit)? = null
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -169,6 +181,34 @@ fun QuietFocusSetupContent(
     var selectedDurationMinutes by rememberSaveable {
         val minutes = (FocusModes.targetSeconds(selectedMode) / 60L).toInt()
         mutableIntStateOf(normalizeQuietDuration(if (minutes > 0) minutes else 45))
+    }
+
+    // 外部预设落地：跳过「选大类 / 选细分」两步，直接停在最后一步，
+    // 并把计划里的科目、预计时长（标题由 FocusScreen 侧作为备注传入）一并填好。
+    //
+    // 三个字段一律经 [onSelectSubject] / [onSelectMode] / [onNoteChange] 写回上层，
+    // 不在本页另存一份事实；本页只额外同步自己内部才会有的步骤与滚轮位置。
+    //
+    // subjects 进 key：学科目录异步加载，首帧可能还是空表；等目录到位再解析目标学科，
+    // 才不会把预设落到一个兜底默认科目上。
+    LaunchedEffect(presetRequest, subjects) {
+        val req = presetRequest ?: return@LaunchedEffect
+        val resolved = subjects.firstOrNull { it.id == req.subjectId } ?: selectedSubject
+        onSelectSubject(resolved)
+        selectedCategoryId = resolved.parentId ?: resolved.id
+        if (req.plannedMinutes > 0) {
+            val minutes = normalizeQuietDuration(req.plannedMinutes)
+            isCountdownMode = true
+            selectedDurationMinutes = minutes
+            onSelectMode(FocusModes.forPlannedMinutes(minutes))
+        } else {
+            // 计划选了「不设定时间」→ 同步落到正向计时，让准备页与计划的意图一致。
+            isCountdownMode = false
+            onSelectMode(FocusModes.COUNT_UP)
+        }
+        if (req.note.isNotBlank()) onNoteChange(req.note)
+        currentStep = QuietFocusStep.RHYTHM
+        onPresetApplied?.invoke()
     }
 
     val topCategories = remember(subjects) {

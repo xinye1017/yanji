@@ -143,8 +143,7 @@ internal fun TodayPlanCard(
     onStart: (StudyTask) -> Unit,
     modifier: Modifier = Modifier,
     dailyGoalMinutes: Int = 0,
-    onEdit: ((StudyTask, Subject, String, Int) -> Unit)? = null,
-    onStartFocus: (() -> Unit)? = null
+    onEdit: ((StudyTask, Subject, String, Int) -> Unit)? = null
 ) {
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<StudyTask?>(null) }

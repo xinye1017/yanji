@@ -206,8 +206,7 @@ fun HomeScreen(
                 onEdit = { task, subject, title, minutes -> viewModel.updateStudyTask(task, subject, title, minutes) },
                 onToggle = { task -> viewModel.setStudyTaskCompleted(task.id, !task.isCompleted) },
                 onDelete = { id -> viewModel.deleteStudyTask(id) },
-                onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() },
-                onStartFocus = { onNavigateToFocus() }
+                onStart = { task -> onStartTask?.invoke(task) ?: onNavigateToFocus() }
             )
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))

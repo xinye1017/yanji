@@ -35,19 +35,19 @@ object FocusModes {
         else -> "${minutes}分钟专注"
     }
 
-    /** 正向计时返回 0，表示不限时长；倒计时返回目标秒数。 */
-    fun targetSeconds(mode: String): Long = when {
-        mode.contains("25") -> 1500L
-        mode.contains("45") -> 2700L
-        mode.contains("60") -> 3600L
-        mode.contains("90") -> 5400L
-        mode.contains("分钟") -> {
-            val minutes = Regex("""(\d+)\s*分钟""").find(mode)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-            minutes * 60L
-        }
-        mode == COUNT_UP -> 0L
-        else -> 0L
-    }
+    /**
+     * 模式 → 目标秒数：一律从模式名里解析「N 分钟」；正向计时与解析不到的返回 0。
+     *
+     * 四个标准档位的模式名本身就带着自己的分钟数（`25分钟番茄` … `90分钟专题`），
+     * 因此一条正则就覆盖全部档位，不必为每个档位单列分支。
+     *
+     * 曾经写成 `mode.contains("25") -> 1500` 这类子串判断，`125分钟专注` 会命中 "25"
+     * 而被当成 25 分钟计时。只要时长档位不超过 100 这个 bug 就不可达；专注准备页与
+     * 今日计划的时长上限都放到 180 之后，125/145/160 分钟都成了用户真能选到的值，
+     * 子串匹配的错误计时就从「不可达」变成真会发生。
+     */
+    fun targetSeconds(mode: String): Long =
+        Regex("""(\d+)\s*分钟""").find(mode)?.groupValues?.get(1)?.toLongOrNull()?.times(60L) ?: 0L
 }
 
 /**

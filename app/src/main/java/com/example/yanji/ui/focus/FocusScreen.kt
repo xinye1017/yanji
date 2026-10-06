@@ -46,6 +46,12 @@ fun FocusScreen(
     modifier: Modifier = Modifier,
     onNavigateToDailyDetail: (date: String) -> Unit = {},
     onNavigateToFocusDetail: (sessionId: String) -> Unit = {},
+    /**
+     * 一次「从别处带着预设进来」的请求，如今日计划行的「开始」。
+     *
+     * 本页只负责把它转交给准备流程（[QuietFocusSetupContent]）并在一场计时已在跑时丢弃，
+     * 不在这里就地应用 —— 字段由谁写、步骤跳到哪里，必须由同一个消费方一次做完。
+     */
     presetRequest: com.example.yanji.data.FocusPresetRequest? = null,
     onClearPresetRequest: (() -> Unit)? = null,
     viewModel: FocusViewModel = yanjiViewModel { container ->
@@ -75,19 +81,10 @@ fun FocusScreen(
     var selectedMode by rememberSaveable { mutableStateOf(FocusModes.POMODORO_25) }
     var noteText by rememberSaveable { mutableStateOf("") }
 
-    LaunchedEffect(presetRequest) {
-        presetRequest?.let { req ->
-            if (req.subjectId.isNotBlank()) {
-                selectedSubjectId = req.subjectId
-            }
-            if (req.plannedMinutes > 0) {
-                selectedMode = FocusModes.forPlannedMinutes(req.plannedMinutes)
-            }
-            if (req.note.isNotBlank()) {
-                noteText = req.note
-            }
-            onClearPresetRequest?.invoke()
-        }
+    // 计时进行中时准备流程不参与组合，预设无人消费；直接丢弃，
+    // 免得这段会话结束后又被一次过期的点击改写表单。
+    LaunchedEffect(activeSession?.id) {
+        if (activeSession != null) onClearPresetRequest?.invoke()
     }
 
     var showSummaryDialog by remember { mutableStateOf(false) }
@@ -233,7 +230,11 @@ fun FocusScreen(
                 noteText = preset.note
                 launchFocus(subject, preset.mode, preset.note)
             },
-            onDeleteQuickStart = { id -> viewModel.deleteQuickStartPreset(id) }
+            onDeleteQuickStart = { id -> viewModel.deleteQuickStartPreset(id) },
+            // 今日计划行「开始」：带着科目 / 预计时长 / 备注直达最后一步，
+            // 由准备流程自己消费（见 QuietFocusSetupContent 的 presetRequest 分支）。
+            presetRequest = presetRequest,
+            onPresetApplied = { onClearPresetRequest?.invoke() }
         )
     }
 
