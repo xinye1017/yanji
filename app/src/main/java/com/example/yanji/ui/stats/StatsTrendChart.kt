@@ -1195,6 +1195,10 @@ private fun BarChartView(
                     if (ratio > 0f) {
                         Box(
                             modifier = Modifier
+                                // 柱身钳在 20dp 内：单科周视图仅 2~3 根有值时，满槽柱
+                                // 一根 ~50dp 粗、余下日子整片留白，节奏散。柱槽仍铺满格，
+                                // 收窄的只是柱身本身。
+                                .widthIn(max = 20.dp)
                                 .fillMaxWidth()
                                 // 高度直接随进度变化，**不用 scaleY 模拟**。
                                 // scaleY 会把顶部 6dp 圆角一起压扁（scaleY=0.3 时只剩 1.8dp），

@@ -58,7 +58,7 @@ import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.abs
 
 private val DockHeight = 60.dp
-private val DockIndicatorSize = 44.dp
+private val DockIndicatorSize = 36.dp
 private val DockIndicatorMaxStretch = 4.dp
 private val MinDockWidth = 260.dp
 private val MaxDockWidth = 360.dp
@@ -98,13 +98,20 @@ fun GlassBottomBar(
 
     // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
     // 与胶囊共用同一 blurRadius，保证两层玻璃在交界处没有光学强度断层。
+    //
+    // 防重影铁律：progressive 的 **startIntensity 不得为 0**。
+    // 顶边带是底栏唯一直接透出 hazeSource 的区域，强度 0 = 不模糊 = 原样透出；
+    // 而滚动订阅源里此刻正压在底栏上方的，恰是「今日计划 / 打卡 / 看板」那几张卡，
+    // 用户读起来就是「页面下方把这三块又渲染了一遍」。
+    // 0.35f 起跳把这一带压成"糊住的浅色玻璃"，滚动残影不再成句；
+    // tint 同步加厚一档，双保险。
     val gradientBackdrop = if (hazeState != null && glassTokens.blurRadius > 0.dp) {
         Modifier.hazeEffect(state = hazeState) {
             blurRadius = glassTokens.blurRadius
-            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.22f else 0.18f)))
+            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.32f else 0.28f)))
             noiseFactor = glassTokens.noiseFactor * 0.5f
             progressive = HazeProgressive.verticalGradient(
-                startIntensity = 0f,
+                startIntensity = 0.35f,
                 endIntensity = 1f,
                 preferPerformance = true
             )

@@ -246,6 +246,9 @@ fun StatsScreen(
             // 说清窗口：这张卡始终按近 7 天生成，与上方时间 Tab 无关。
             // 在「本年」视角下尤其要写出来，否则会被读成全年诊断。
             emptyHint = "基于近 7 天专注记录、学科投入与模考深度建模",
+            // 口径尾注常驻（不再只活在空态）：近 7 天滚动窗 + 仅专注统计，
+            // 与顶部 Hero 的"自然周 × 专注+模考"是两套口径，摆到明面上讲。
+            periodScopeNote = "口径：近 7 天滚动 · 仅专注时长",
             report = state.latestReport,
             isAnalyzing = state.isAnalyzing,
             errorMessage = state.analysisError,

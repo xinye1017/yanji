@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.SubjectCatalog
@@ -158,43 +159,76 @@ fun SubjectDistributionCard(
                     )
                 }
             } else if (subjectDistribution.size in 2..5) {
-                // 2~5 个科目：甜甜圈构成环 + 进度列表
+                // 2~5 个科目：甜甜圈构成环 + 右侧逐科标签，**一屏左右分栏**。
+                // 旧版环在上、逐科进度条在下——同一份占比先画成环、再画成条，
+                // 同一份数据在上下半屏各自讲一遍，纵深白翻一倍。分栏后环负责
+                // 「整体构成」这一件事，标签行只补「谁占多少、投了多久」。
                 Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
-                SubjectDonutChart(
-                    subjectDist = subjectDist,
-                    subjectColors = subjectDistribution.mapIndexed { index, sub ->
-                        sub.subjectName to colorFor(index)
-                    }.toMap(),
-                    totalLabel = timeRangeTitle
-                )
-
-                Spacer(modifier = Modifier.height(YanjiSpacing.InlineGap))
-
-                subjectDistribution.forEachIndexed { index, sub ->
-                    val color = colorFor(index)
-                    val subSecs = sub.durationSeconds
-                    val totalSecs = maxOf(1L, subjectDist.values.sum())
-                    val percent = (subSecs.toFloat() / totalSecs).coerceIn(0f, 1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.InlineGap)
+                ) {
+                    SubjectDonutChart(
+                        subjectDist = subjectDist,
+                        subjectColors = subjectDistribution.mapIndexed { index, sub ->
+                            sub.subjectName to colorFor(index)
+                        }.toMap(),
+                        totalLabel = timeRangeTitle,
+                        modifier = Modifier.width(130.dp)
+                    )
 
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // 不要在此处 clip(RoundedCornerShape(YanjiRadius.Small))：容器圆角(12dp=42px)远大于
-                            // 底部内边距(4dp)，会把紧贴底部的进度条左下角切掉，表现为「左端像被截断」。
-                            // 点击与涟漪均由 clickable 自身按节点范围生效，去掉 clip 不影响功能。
-                            .clickable { onNavigateToSubjectDetail(sub.subjectId) }
-                            .padding(vertical = 4.dp)
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGapSmall)
                     ) {
-                        SubjectProgressBar(
-                            name = sub.subjectName,
-                            time = DurationFormatter.formatHoursMinutes(subSecs),
-                            percent = percent,
-                            color = color
-                        )
-                    }
+                        subjectDistribution.forEachIndexed { index, sub ->
+                            val color = colorFor(index)
+                            val subSecs = sub.durationSeconds
+                            val totalSecs = maxOf(1L, subjectDist.values.sum())
+                            val percent = (subSecs * 100 / subjectDist.values.sum().coerceAtLeast(1L)).toInt()
 
-                    if (index < subjectDistribution.size - 1) {
-                        Spacer(modifier = Modifier.height(YanjiSpacing.InnerGap))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigateToSubjectDetail(sub.subjectId) }
+                                    .semantics {
+                                        contentDescription = "${sub.subjectName}，学习时长 ${DurationFormatter.formatHoursMinutes(subSecs)}，占比 $percent%"
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = sub.subjectName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "$percent%",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = color
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = DurationFormatter.formatHoursMinutes(subSecs),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = YanjiColors.textTertiary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             } else {

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import com.example.yanji.data.db.StudySubjectAggregateRow
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -192,12 +193,21 @@ class StudyStatisticsRepository(
     private val repo: YanjiRepository
 ) {
     /**
-     * 「有效学习天数」阈值：当天累计 >= 30min 才算一天。
+     * 「有效学习天数」阈值：当天累计 >= 用户配置分钟数才算一天。
      *
-     * 周 / 月 / 年三个汇总必须共用同一个常量 —— 阈值一旦分叉，
+     * 口径**唯一来源**是 user_settings.validStudyThresholdMinutes（默认 30min）——
+     * AI 学情诊断读的就是这个设置（见 [com.example.yanji.data.ai.StudyDataProvider]）。
+     * 早先这里写死 1800L：用户在设置里改了阈值，统计页的"有效 N 天"纹丝不动，
+     * 与 AI 诊断的同一名词当场对不上账。
+     *
+     * 周 / 月 / 年三个汇总 Flow 都从这个 Flow 派生同一个阈值 —— 阈值一旦分叉，
      * 「有效学习 N 天」在三个视角下就不是同一件事，对比就失去意义。
      */
-    private val activeDayThresholdSeconds = 1800L
+    private val activeDayThresholdFlow: Flow<Long> =
+        repo.settings.map { it.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L }
+
+    /** 汇总构建期的兜底阈值：Flow 尚未吐出首个值时与用户默认值一致。 */
+    private val activeDayThresholdSecondsFallback = 30L * 60L
 
     private fun getSubjectColor(subjectId: String, subjectName: String): String {
         val found = SubjectCatalog.find(subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
@@ -356,9 +366,10 @@ class StudyStatisticsRepository(
         val range = YanjiTime.currentYearRange()
         return combine(
             repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
-        ) { focusList, examList ->
-            buildYearlyStudySummary(focusList, examList)
+            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
+            activeDayThresholdFlow
+        ) { focusList, examList, threshold ->
+            buildYearlyStudySummary(focusList, examList, activeDayThresholdSeconds = threshold)
         }
     }
 
@@ -558,9 +569,10 @@ class StudyStatisticsRepository(
         val range = YanjiTime.weekRange(weeksBack)
         return combine(
             repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
-        ) { focusList, examList ->
-            buildWeeklyStudySummary(focusList, examList, weeksBack)
+            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
+            activeDayThresholdFlow
+        ) { focusList, examList, threshold ->
+            buildWeeklyStudySummary(focusList, examList, weeksBack, activeDayThresholdSeconds = threshold)
         }
     }
 
@@ -568,7 +580,8 @@ class StudyStatisticsRepository(
         val range = YanjiTime.weekRange(weeksBack)
         val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
         val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildWeeklyStudySummary(focusList, examList, weeksBack)
+        val threshold = repo.settings.value.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L
+        return buildWeeklyStudySummary(focusList, examList, weeksBack, activeDayThresholdSeconds = threshold)
     }
 
     /**
@@ -576,12 +589,15 @@ class StudyStatisticsRepository(
      * （回看上一周时，第一根必须是那个周一而不是今天），见 StatsPreviousPeriodTest。
      *
      * @param today 可注入的「今天」，单测靠它把自然周边界钉死，避免跨周时结论漂移。
+     * @param activeDayThresholdSeconds 有效天数阈值（秒）。默认取用户设置默认值 30min；
+     *   Flow 调用方显式传入 [activeDayThresholdFlow] 当前值，与 AI 诊断共用同一口径。
      */
     internal fun buildWeeklyStudySummary(
         focusList: List<FocusSession>,
         examList: List<ExamSession>,
         weeksBack: Long = 0,
-        today: LocalDate = YanjiTime.today()
+        today: LocalDate = YanjiTime.today(),
+        activeDayThresholdSeconds: Long = 30L * 60L
     ): WeeklyStudySummary {
         val monday = today.minusWeeks(weeksBack)
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -669,9 +685,10 @@ class StudyStatisticsRepository(
         val range = YanjiTime.monthRange(monthsBack)
         return combine(
             repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
-        ) { focusList, examList ->
-            buildMonthlyStudySummary(focusList, examList, monthsBack)
+            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
+            activeDayThresholdFlow
+        ) { focusList, examList, threshold ->
+            buildMonthlyStudySummary(focusList, examList, monthsBack, activeDayThresholdSeconds = threshold)
         }
     }
 
@@ -679,7 +696,8 @@ class StudyStatisticsRepository(
         val range = YanjiTime.monthRange(monthsBack)
         val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
         val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildMonthlyStudySummary(focusList, examList, monthsBack)
+        val threshold = repo.settings.value.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L
+        return buildMonthlyStudySummary(focusList, examList, monthsBack, activeDayThresholdSeconds = threshold)
     }
 
     /**
@@ -687,12 +705,14 @@ class StudyStatisticsRepository(
      * （2 月是 28/29 天，回看上月时不能被「本月天数」带偏），见 StatsPreviousPeriodTest。
      *
      * @param today 可注入的「今天」，单测靠它把自然月边界钉死，避免跨月时结论漂移。
+     * @param activeDayThresholdSeconds 有效天数阈值（秒），见 [buildWeeklyStudySummary]。
      */
     internal fun buildMonthlyStudySummary(
         focusList: List<FocusSession>,
         examList: List<ExamSession>,
         monthsBack: Long = 0,
-        today: LocalDate = YanjiTime.today()
+        today: LocalDate = YanjiTime.today(),
+        activeDayThresholdSeconds: Long = 30L * 60L
     ): MonthlyStudySummary {
         val anchor = today.minusMonths(monthsBack)
         val firstDay = anchor.withDayOfMonth(1)
@@ -770,11 +790,13 @@ class StudyStatisticsRepository(
      * 未学习的月份也要占位）需要被 JVM 单测钉住，见 StudyStatisticsRepositoryYearlyTest。
      *
      * @param today 可注入的“今天”，单测靠它把自然年边界钉死，避免跨年时结论漂移。
+     * @param activeDayThresholdSeconds 有效天数阈值（秒），见 [buildWeeklyStudySummary]。
      */
     internal fun buildYearlyStudySummary(
         focusList: List<FocusSession>,
         examList: List<ExamSession>,
-        today: LocalDate = YanjiTime.today()
+        today: LocalDate = YanjiTime.today(),
+        activeDayThresholdSeconds: Long = 30L * 60L
     ): YearlyStudySummary {
         val yearStart = today.withDayOfYear(1)
 

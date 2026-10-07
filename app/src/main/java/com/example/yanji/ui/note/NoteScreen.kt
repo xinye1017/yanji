@@ -316,6 +316,10 @@ fun NoteScreen(
         }
 
         // ---- 右下角圆形悬浮加号：新建随笔（原「记今天」胶囊按钮迁移至此） ----
+        // 呼吸区从 20dp 抬到 34dp：AppContentInsets.BottomBarPadding(112dp) 是给
+        // **列表内容**留的底线，FAB 是浮层，只加 20dp 时它的下边沿离玻璃底栏
+        // 顶边只剩 ~12dp，单手拇指扫过底栏时极易误触。34dp 把浮层与 dock 的
+        // 净距拉到 ~26dp，够放一节指腹，也不再蹭系统返回手势。
         Surface(
             onClick = {
                 openRowId = null
@@ -323,7 +327,7 @@ fun NoteScreen(
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = AppContentInsets.BottomBarPadding + 20.dp)
+                .padding(end = 20.dp, bottom = AppContentInsets.BottomBarPadding + 34.dp)
                 .size(56.dp),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primary,
@@ -348,8 +352,7 @@ fun NoteScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = AppContentInsets.BottomBarPadding + 76.dp)
-        )
-    }
+        )    }
 
     pendingDelete?.let { target ->
         NoteDeleteConfirmDialog(

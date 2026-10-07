@@ -177,6 +177,7 @@ fun ExamScreen(
                     AiReportCard(
                         title = aiReportTitle("学情与模考分析"),
                         emptyHint = "基于已完成的专注、模考与已保存随笔",
+                        periodScopeNote = "口径：近 7 天滚动 · 专注 + 模考 + 随笔",
                         report = latestAiAnalysis,
                         isAnalyzing = isAnalyzingAi,
                         errorMessage = analysisError,

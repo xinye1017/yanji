@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
@@ -136,49 +137,86 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(YanjiSpacing.ItemGap))
 
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (daysRemaining != null) {
-                            RollingNumber(
-                                text = "$daysRemaining",
-                                style = com.example.yanji.theme.YanjiTypography.metricL,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "天",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(bottom = 6.dp)
-                            )
-                        } else {
-                            Text(
-                                text = settings.targetExamDate.ifBlank { "未设置" },
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = if (settings.targetExamDate.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                lineHeight = 44.sp,
-                                modifier = Modifier.padding(bottom = 6.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                    // 倒计时 + 阶段徽标 + 院校专业副标 + 全程进度，收进同一根纵轴。
+                    // 旧版院校/专业孤悬右对齐，与左侧大数字割裂，重量散；
+                    // 且倒计时只是个裸天数，没回答“我在备考哪个阶段”。
+                    //
+                    // 阶段口径（纯函数，无新数据源）：按剩余天数三段切 ——
+                    // >120 基础期、61..120 强化期、<=60 冲刺期。
+                    // 百分比 = (240 - remaining) / 240，240 天是考研全程备考惯例跑道
+                    //（约 8 个月），只呈现紧迫节奏，不落任何库。
+                    val phaseLabel = when {
+                        daysRemaining == null -> null
+                        daysRemaining > 120 -> "基础期"
+                        daysRemaining > 60 -> "强化期"
+                        else -> "冲刺期"
+                    }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = settings.targetSchool.ifBlank { "未设置院校" },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (settings.targetSchool.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = settings.targetMajor.ifBlank { "未设置专业" },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            if (daysRemaining != null) {
+                                RollingNumber(
+                                    text = "$daysRemaining",
+                                    style = com.example.yanji.theme.YanjiTypography.metricL,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "天",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = settings.targetExamDate.ifBlank { "未设置" },
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (settings.targetExamDate.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                                    lineHeight = 44.sp,
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (phaseLabel != null) {
+                                // 阶段徽标：胶囊与主色弱底，取色逻辑同底部导航选中态。
+                                Surface(
+                                    shape = RoundedCornerShape(YanjiRadius.Pill),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                ) {
+                                    Text(
+                                        text = phaseLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+                        Text(
+                            text = "目标院校 ${settings.targetSchool.ifBlank { "未设置" }} · ${settings.targetMajor.ifBlank { "未设置专业" }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        // 阶段进度：天数锚定 examDate 时才画；未设置考期则无跑道可走。
+                        if (daysRemaining != null) {
+                            val runwayDays = 240
+                            val remaining = daysRemaining.coerceIn(0, runwayDays)
+                            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+                            YanjiProgressBar(
+                                progress = (runwayDays - remaining).toFloat() / runwayDays,
+                                color = MaterialTheme.colorScheme.primary,
+                                height = YanjiSpacing.TightGap
                             )
                         }
                     }
@@ -327,7 +365,7 @@ fun HomeScreen(
                         "尚未进行模拟考试，点击发起模考"
                     },
                     icon = RemixIcons.LineChartLine,
-                    iconTint = MaterialTheme.colorScheme.secondary,
+                    iconTint = MaterialTheme.colorScheme.primary,
                     iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                     value = if (avgScore > 0) "均分 ${String.format(Locale.US, "%.1f", avgScore)}" else null,
                     showChevron = true,

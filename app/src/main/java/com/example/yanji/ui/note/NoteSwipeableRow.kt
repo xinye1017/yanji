@@ -418,9 +418,13 @@ private fun NoteRowContent(
         MaterialTheme.typography.bodyMedium.lineHeight.toDp()
     }
 
-    // 星级跟随系统 Dynamic Type 缩放：写成固定 dp 时，2× 字号下相邻正文撑开、
+    // 星级跟随系统 Dynamic Type 缩放：写成固定 dp 时，2× 字号下相邻正文撑开，
     // 星级却纹丝不动，评分会被文字淹没。用 sp 表达基准尺寸，toDp() 会带上当前 fontScale。
     val starSize = with(LocalDensity.current) { 13.sp.toDp() }
+
+    // 心情分微标注：列表页原来只有一排星，用户无从判断 5 颗星说的是心情、精力还是
+    // 复习状态。就近加一个 labelSmall 文本锚点，念法与语义树 contentDescription 一致。
+    val moodScore = entry.moodScore.coerceIn(0, 5)
 
     Row(
         modifier = Modifier
@@ -442,8 +446,8 @@ private fun NoteRowContent(
             // (a) 左：时间
             // 用一层 heightIn(min = bodyLineHeight) + 垂直居中的包裹，让比正文小的
             // labelMedium 时间坐在摘要**首行**上（详见本函数上方关于首行对齐的说明）。
-            // 宽度**固定** 40dp（不再是 widthIn(min=48)）：min 宽会随大字号向右生长，
-            // 同一列表里各行时间列宽度就不再一致，左缘参差。
+            // 宽度**不再固定 40dp**：那是以最长时间文案估的常数槽，短时刻整列吃白；
+            // 改贴内容收缩，省下的纵深全部还给摘要（“每条只见半句话”的病灶之一）。
             Row(
                 modifier = Modifier.heightIn(min = bodyLineHeight),
                 verticalAlignment = Alignment.CenterVertically
@@ -453,11 +457,10 @@ private fun NoteRowContent(
                     style = MaterialTheme.typography.labelMedium,
                     color = YanjiColors.textTertiary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.width(40.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
             }
 
             // (a.5) 收藏书签：留在时间右侧，但占**恒定**的 16dp 槽位。
@@ -477,7 +480,7 @@ private fun NoteRowContent(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
             // (b) 内容
             // 摘要走 stripNoteMarkdown：`**` / `##` / `———` 是样式标记，不该在列表里露出来
@@ -505,7 +508,7 @@ private fun NoteRowContent(
                         text = snippet,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -524,34 +527,46 @@ private fun NoteRowContent(
             }
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
-        // (c) 右：状态打分（与编辑页同一套星形资源）
+        // (c) 右：状态打分 + 心情分微标注（星星与编辑页同一套资源）
         // 恒定画满 5 颗，未点亮的那几颗压到极低透明度当占位：
         // 之前只画点亮的星星，星级 0~5 会让右侧宽度在 0~63dp 之间浮动，
         // 摘要的**右缘**就跟着每一行的心情分变化。占位满格后左右留白恒定。
-        // 星形本身是装饰（contentDescription = null），分数只有这条语义上报读得出。
-        // 星级不参与首行对齐：它是整块图形，右对齐到行顶即可。
-        Row(
+        // 星形本身是装饰（contentDescription = null）。
+        //
+        // 星下加一行「心情 N/5」：列表页原来只有一排星，用户无从判断它说的是
+        // 心情、精力还是复习状态。字段真名是 moodScore，标注就照它念；
+        // 文案与语义树 contentDescription 同源，读屏与可视不再各说各话。
+        Column(
             modifier = Modifier.semantics {
-                contentDescription = "心情评分 ${entry.moodScore.coerceIn(0, 5)} / 5"
+                contentDescription = "心情评分 $moodScore / 5"
             },
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            val lit = entry.moodScore.coerceIn(0, 5)
-            repeat(5) { index ->
-                if (index > 0) Spacer(modifier = Modifier.width(1.dp))
-                Icon(
-                    painter = painterResource(R.drawable.star),
-                    contentDescription = null,
-                    tint = if (index < lit) {
-                        YanjiColors.warning
-                    } else {
-                        YanjiColors.warning.copy(alpha = 0.16f)
-                    },
-                    modifier = Modifier.size(starSize)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val lit = moodScore
+                repeat(5) { index ->
+                    if (index > 0) Spacer(modifier = Modifier.width(1.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.star),
+                        contentDescription = null,
+                        tint = if (index < lit) {
+                            YanjiColors.warning
+                        } else {
+                            YanjiColors.warning.copy(alpha = 0.16f)
+                        },
+                        modifier = Modifier.size(starSize)
+                    )
+                }
             }
+            Text(
+                text = "心情 $moodScore/5",
+                style = MaterialTheme.typography.labelSmall,
+                color = YanjiColors.textTertiary,
+                maxLines = 1
+            )
         }
     }
 }

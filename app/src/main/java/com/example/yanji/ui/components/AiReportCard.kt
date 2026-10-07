@@ -236,11 +236,15 @@ private fun DiagnosticFeaturePill(text: String) {
 /**
  * @param title 头部标题，调用方拼上当前吉祥物名，如「饼饼 · AI 阶段学情诊断」。
  * @param emptyHint 无报告时副标题的窗口口径说明（统计页讲近 7 天，模考页讲模考+随笔）。
+ * @param periodScopeNote **有报告时**随日期行常驻的口径尾注。报告是缓存快照，
+ *   窗口/数据源口径若只在空态出现过，用户对照顶部实时数字就会判定"统计自相矛盾"。
+ *   统计页/模考页窗口不同，由调用方各自钉死，不猜。
  */
 @Composable
 fun AiReportCard(
     title: String,
     emptyHint: String,
+    periodScopeNote: String,
     report: AiAnalysis?,
     isAnalyzing: Boolean,
     errorMessage: String? = null,
@@ -297,7 +301,7 @@ fun AiReportCard(
                         Text(
                             text = if (report != null) {
                                 // 紧凑日期 + 新鲜度：报告是缓存数据，「多久前生成的」比裸周期更有信息量。
-                                "${compactPeriodDate(report.periodStart)} ~ ${compactPeriodDate(report.periodEnd)} · ${reportAgeLabel(report.createdAt)}"
+                                "${compactPeriodDate(report.periodStart)} ~ ${compactPeriodDate(report.periodEnd)} · ${reportAgeLabel(report.createdAt)} · $periodScopeNote"
                             } else {
                                 emptyHint
                             },
