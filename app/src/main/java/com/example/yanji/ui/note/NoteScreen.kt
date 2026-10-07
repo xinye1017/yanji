@@ -5,9 +5,14 @@ import android.app.Activity
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,7 +44,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -108,6 +116,16 @@ fun NoteScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     var isSearchFocused by remember { mutableStateOf(false) }
+    val isAtTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+    val shouldShowSearchBar by remember {
+        derivedStateOf {
+            isAtTop || isSearchFocused
+        }
+    }
 
     // 点空白 / 滚动列表时收起：先收滑开行，再退搜索。
     // 只清 query 与焦点，不依赖 isSearchFocused 状态——焦点真假以系统为准，
@@ -174,80 +192,20 @@ fun NoteScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // ---- 标题栏：钉在列表上方、居中；点击标题或留白收起滑开行与取消搜索 ----
-            // 这一页刻意不换 YanjiPageHeader：组件是左对齐 + SpaceBetween，
-            // 随笔页要的是居中大标题。两者在 App 里并存是有意的分工，不是漏改。
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            cancelSearchAndClearFocus()
-                        }
+        // ---- 列表：整幅通铺到屏幕边缘，向上滚动时穿透渐变页眉羽化消融 ----
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        cancelSearchAndClearFocus()
                     }
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "随笔",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = YanjiColors.primaryLabel,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
-                        // 声明为标题节点：读屏用户可以用「按标题跳转」在页面间移动，
-                        // 否则这一屏没有任何可跳转的层级锚点。
-                        .semantics { heading() }
-                )
-
-                // 页眉「随笔」与下方规则线：保持贴身，收紧垂直间距。
-                // 规则线与下方随笔卡片取同一套页边距（20dp）—— 卡片化之后
-                // 页眉若整幅通铺，这条线会伸出卡片左右边缘之外，页面就没有一条干净的左缘。
-                Spacer(modifier = Modifier.height(8.dp))
-
-                NoteRowDivider(
-                    modifier = Modifier.padding(horizontal = YanjiSpacing.PageHorizontalPadding)
-                )
-
-                // 分隔线与搜索栏之间必须留一段呼吸：胶囊顶部紧贴 0.8dp 的线时，
-                // 两者会读成同一个元素（此前就是这样，视觉上「重合」）。
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-
-            // ---- 搜索框：支持关键词或日期。唯一钉死在列表外的控件。----
-            // 搜索框的点击在 NoteSearchBar 内部同步 requestFocus()，不靠外层状态驱动；
-            // 因此下面列表的「点空白收起」不会把它刚拿到的焦点清掉。
-            // 宽 300dp：窄屏 / 分屏下由内部 fillMaxWidth 自然收窄，不溢出。
-            // 高：视觉胶囊 40dp 画在 48dp 的透明触控槽里 —— 看着更轻薄，
-            // 点击区域仍满足 48dp 最小触控高度。
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                NoteSearchBar(
-                    query = query,
-                    onQueryChange = { query = it },
-                    isFocused = isSearchFocused,
-                    onFocusChange = { isSearchFocused = it },
-                    modifier = Modifier
-                        .widthIn(max = 300.dp)
-                        .height(48.dp)
-                )
-            }
-
-            // ---- 列表：整幅通铺到屏幕边缘，滑块从屏幕边缘滑出；点击列表空白处收起滑开行与取消搜索 ----
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            cancelSearchAndClearFocus()
-                        }
-                    },
-                contentPadding = PaddingValues(bottom = AppContentInsets.BottomBarPadding + 76.dp),
+                },
+            contentPadding = PaddingValues(
+                top = 132.dp, // 顶端展开时让出页眉与搜索框的完整空间
+                bottom = AppContentInsets.BottomBarPadding + 76.dp
+            ),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 if (filteredGroups.isEmpty()) {
@@ -310,6 +268,101 @@ fun NoteScreen(
                                 onDelete = { pendingDelete = entry }
                             )
                         }
+                    }
+                }
+            }
+
+        // ---- 顶部页眉：从上到下透明度逐渐升高的渐变背景 + 居中标题 + 规则线 + 可折叠搜索框 ----
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .zIndex(10f)
+        ) {
+            val bg = MaterialTheme.colorScheme.background
+            // 渐变透明背景层：参考随笔编辑页 TopFadeScrim，从上到下透明度逐渐升高
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                bg.copy(alpha = 0.98f),
+                                bg.copy(alpha = 0.94f),
+                                bg.copy(alpha = 0.80f),
+                                bg.copy(alpha = 0.45f),
+                                bg.copy(alpha = 0.12f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // 页眉内容：点击空白处收起滑开行与取消搜索
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 18.dp) // 给底部渐变留出自然羽化过渡区
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            cancelSearchAndClearFocus()
+                        }
+                    }
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "随笔",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = YanjiColors.primaryLabel,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = YanjiSpacing.PageHorizontalPadding)
+                        // 声明为标题节点：读屏用户可以用「按标题跳转」在页面间移动，
+                        // 否则这一屏没有任何可跳转的层级锚点。
+                        .semantics { heading() }
+                )
+
+                // 页眉「随笔」与下方规则线：保持贴身，收紧垂直间距。
+                // 规则线与下方随笔卡片取同一套页边距（20dp）—— 卡片化之后
+                // 页眉若整幅通铺，这条线会伸出卡片左右边缘之外，页面就没有一条干净的左缘。
+                Spacer(modifier = Modifier.height(8.dp))
+
+                NoteRowDivider(
+                    modifier = Modifier.padding(horizontal = YanjiSpacing.PageHorizontalPadding)
+                )
+
+                // 搜索框：向下滑动页面时自动隐藏，仅滑动到页面顶端时重新展开显示
+                AnimatedVisibility(
+                    visible = shouldShowSearchBar,
+                    enter = expandVertically(
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                    ) + fadeIn(
+                        animationSpec = tween(durationMillis = 200)
+                    ),
+                    exit = shrinkVertically(
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                    ) + fadeOut(
+                        animationSpec = tween(durationMillis = 180)
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        NoteSearchBar(
+                            query = query,
+                            onQueryChange = { query = it },
+                            isFocused = isSearchFocused,
+                            onFocusChange = { isSearchFocused = it },
+                            modifier = Modifier
+                                .widthIn(max = 300.dp)
+                                .height(48.dp)
+                        )
                     }
                 }
             }
