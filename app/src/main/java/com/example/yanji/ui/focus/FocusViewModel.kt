@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.StudyStatisticsRepository
+import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
@@ -15,7 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** 专注页不可变 UiState：科目目录、活跃会话、完成事件与今日累计。 */
+/** 专注页不可变 UiState：科目目录、活跃会话、完成事件、今日累计与今日计划。 */
 data class FocusUiState(
     val subjects: List<Subject>,
     val activeSession: FocusSession?,
@@ -24,7 +25,9 @@ data class FocusUiState(
     /** 今日专注时长（不含模考）。 */
     val todayFocusSeconds: Long,
     /** 今日总学时（专注 + 模考，与统计页"今日"口径一致）。 */
-    val todayTotalSeconds: Long
+    val todayTotalSeconds: Long,
+    /** 今日规划的学习计划列表。 */
+    val todayTasks: List<StudyTask> = emptyList()
 )
 
 /**
@@ -48,20 +51,26 @@ class FocusViewModel(
                 .sortedByDescending { it.createdAt }
         }
 
-    val uiState: StateFlow<FocusUiState> = combine(
+    private val activeFocusTripleFlow = combine(
         repo.subjects,
         repo.activeFocus,
-        repo.lastCompletedFocus,
+        repo.lastCompletedFocus
+    ) { subs, act, last -> Triple(subs, act, last) }
+
+    val uiState: StateFlow<FocusUiState> = combine(
+        activeFocusTripleFlow,
         statsRepo.getDailyStudySummaryFlow(todayIso),
-        customPresetsFlow
-    ) { subjects, active, lastCompleted, todaySummary, presets ->
+        customPresetsFlow,
+        repo.observeStudyTasks(todayIso)
+    ) { (subs, act, last), todaySummary, presets, tasks ->
         FocusUiState(
-            subjects = subjects,
-            activeSession = active,
-            lastCompletedFocus = lastCompleted,
+            subjects = subs,
+            activeSession = act,
+            lastCompletedFocus = last,
             quickStartPresets = presets,
             todayFocusSeconds = repo.getTodayFocusDurationSeconds(),
-            todayTotalSeconds = todaySummary.totalDurationSeconds
+            todayTotalSeconds = todaySummary.totalDurationSeconds,
+            todayTasks = tasks
         )
     }.stateIn(
         scope = viewModelScope,
@@ -72,9 +81,26 @@ class FocusViewModel(
             lastCompletedFocus = repo.lastCompletedFocus.value,
             quickStartPresets = emptyList(),
             todayFocusSeconds = repo.getTodayFocusDurationSeconds(),
-            todayTotalSeconds = statsRepo.getDailyStudySummary(todayIso).totalDurationSeconds
+            todayTotalSeconds = statsRepo.getDailyStudySummary(todayIso).totalDurationSeconds,
+            todayTasks = emptyList()
         )
     )
+
+    suspend fun createStudyTask(
+        subject: Subject,
+        title: String,
+        plannedMinutes: Int
+    ): StudyTask {
+        val task = StudyTask(
+            date = todayIso,
+            subjectId = subject.id,
+            subjectName = subject.name,
+            title = title.trim(),
+            plannedMinutes = plannedMinutes
+        )
+        repo.saveStudyTask(task)
+        return task
+    }
 
     // ---- 动作 ----
 

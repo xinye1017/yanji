@@ -530,45 +530,62 @@ private fun StudyTaskRow(
         Spacer(modifier = Modifier.width(YanjiSpacing.ItemGap))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = task.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
-                color = if (task.isCompleted) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
-            // 实际投入还没跑过一分钟时，退回只显示计划时长 —— 上面那句「45 分钟」
-            // 是承诺，这里换成「0/45 分钟」只会让每个新计划行都多一份没信息的噪声。
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    color = subjectColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(YanjiRadius.ItemRadius)
+                ) {
+                    Text(
+                        text = task.subjectName,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = subjectColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+                    color = if (task.isCompleted) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
             val labels = planTimeLabels(task.plannedMinutes, actualSeconds)
             val durationText = labels.compare
                 ?: if (task.plannedMinutes > 0) "${task.plannedMinutes} 分钟" else "不限时"
-            Text(
-                text = "${task.subjectName} · $durationText",
-                style = MaterialTheme.typography.bodySmall,
-                color = YanjiColors.textTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            // 超额优先于「计时中」：超支是用户要立刻处理的信号，而计时中只是解释
-            // 「为什么数字还没涨」。（进行中的会话不计入 actualSeconds，两者极少同时出现。）
-            val statusText = labels.overrun ?: if (isRunning) "计时中" else null
-            if (statusText != null) {
-                Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.labelMedium,
-                    // 告警用 warning 语义色（不新造颜色）：超支是这条行的即时结论，
-                    // 「计时中」只是状态说明，取主色即可，不必与告警同权重。
-                    color = if (labels.overrun != null) YanjiColors.warning else MaterialTheme.colorScheme.primary,
-                    maxLines = 1
+                    text = durationText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = YanjiColors.textTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                val statusText = labels.overrun ?: if (isRunning) "计时中" else null
+                if (statusText != null) {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (labels.overrun != null) YanjiColors.warning else MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
             }
         }
 

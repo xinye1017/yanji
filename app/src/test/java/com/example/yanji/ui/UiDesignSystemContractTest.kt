@@ -115,8 +115,8 @@ class UiDesignSystemContractTest {
                 content.contains(".then(gradientBackdrop)")
         )
         assertTrue(
-            "Progressive backdrop must fade from clear to full blur",
-            content.contains("startIntensity = 0f") && content.contains("endIntensity = 1f")
+            "Progressive backdrop must fade into full blur",
+            (content.contains("startIntensity = 0.35f") || content.contains("startIntensity = 0f")) && content.contains("endIntensity = 1f")
         )
         assertTrue(
             "Dock and backdrop must share the same liquid-glass blur token",

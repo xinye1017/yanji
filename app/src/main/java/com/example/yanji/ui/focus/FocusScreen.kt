@@ -243,7 +243,11 @@ fun FocusScreen(
             // 由准备流程自己消费（见 QuietFocusSetupContent 的 presetRequest 分支）。
             presetRequest = presetRequest,
             onPresetApplied = { onClearPresetRequest?.invoke() },
-            onImmersiveChange = onImmersiveChange
+            onImmersiveChange = onImmersiveChange,
+            todayTasks = state.todayTasks,
+            onCreateStudyTask = { subject, title, plannedMinutes ->
+                viewModel.createStudyTask(subject, title, plannedMinutes)
+            }
         )
     }
 

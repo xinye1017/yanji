@@ -1,5 +1,7 @@
 package com.example.yanji.ui.focus
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.example.yanji.ui.icons.RemixIcons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -28,12 +30,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +66,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,14 +94,16 @@ import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusPresetRequest
 import com.example.yanji.data.QuickStartPreset
+import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
-
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.ui.components.AppContentInsets
+import com.example.yanji.ui.components.YanjiPrimaryButton
 import com.example.yanji.ui.components.YanjiSegmentedControl
 import com.example.yanji.ui.components.YanjiSegmentedControlVariant
 import com.example.yanji.data.YanjiTime
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private enum class QuietFocusStep {
@@ -174,7 +181,11 @@ fun QuietFocusSetupContent(
     presetRequest: FocusPresetRequest? = null,
     onPresetApplied: (() -> Unit)? = null,
     /** 末步沉浸式开关的上报通道：true 时宿主把底部浮岛滑出屏幕。 */
-    onImmersiveChange: ((Boolean) -> Unit)? = null
+    onImmersiveChange: ((Boolean) -> Unit)? = null,
+    /** 今日规划的计划列表（用于末步关联今日计划）。 */
+    todayTasks: List<StudyTask> = emptyList(),
+    /** 就地创建今日计划的回调。 */
+    onCreateStudyTask: (suspend (Subject, String, Int) -> StudyTask)? = null
 ) {
     val todayIso = remember {
         YanjiTime.todayIso()
@@ -346,6 +357,13 @@ fun QuietFocusSetupContent(
                 }
 
                 QuietFocusStep.RHYTHM -> {
+                    val currentSubjectTasks = remember(todayTasks, selectedSubject) {
+                        todayTasks.filter {
+                            it.subjectId == selectedSubject.id ||
+                                it.subjectName == selectedSubject.name ||
+                                (selectedSubject.parentId != null && it.subjectId == selectedSubject.parentId)
+                        }
+                    }
                     QuietRhythmStep(
                         isCountdownMode = isCountdownMode,
                         selectedDurationMinutes = selectedDurationMinutes,
@@ -372,7 +390,27 @@ fun QuietFocusSetupContent(
                         onStart = { onStart(linkedTaskId) },
                         // 末步时浮岛已滑出，只需避开系统手势区；
                         // 仍按 112dp 预留会在底栏消失后留下一大片空白。
-                        immersive = isImmersive
+                        immersive = isImmersive,
+                        selectedSubject = selectedSubject,
+                        subjectTasks = currentSubjectTasks,
+                        allTodayTasks = todayTasks,
+                        linkedTaskId = linkedTaskId,
+                        onSelectTask = { task ->
+                            if (task == null) {
+                                linkedTaskId = null
+                            } else {
+                                linkedTaskId = task.id
+                                onNoteChange(task.title)
+                                if (task.plannedMinutes > 0) {
+                                    val minutes = normalizeQuietDuration(task.plannedMinutes)
+                                    isCountdownMode = true
+                                    selectedDurationMinutes = minutes
+                                    val matched = QuietDurationOptions.firstOrNull { it.minutes == minutes }
+                                    onSelectMode(matched?.mode ?: "${minutes}分钟专注")
+                                }
+                            }
+                        },
+                        onCreateStudyTask = onCreateStudyTask
                     )
                 }
             }
@@ -699,6 +737,107 @@ private fun QuietModuleStep(
 }
 
 @Composable
+private fun CreateTaskQuickDialog(
+    subject: Subject,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, durationMinutes: Int) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var selectedMinutes by remember { mutableIntStateOf(45) }
+    val presetDurations = remember { listOf(25, 45, 60, 90, 120, 0) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(YanjiRadius.DialogRadius),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                text = "新建今日计划 · ${subject.name}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { if (it.length <= 40) title = it },
+                    label = { Text("计划内容 / 目标") },
+                    placeholder = { Text("例如：完成第三单元练习题") },
+                    singleLine = true,
+                    supportingText = {
+                        if (title.isNotEmpty()) Text("${title.length}/40")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(YanjiRadius.InputRadius)
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "预计时长",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presetDurations.forEach { mins ->
+                            val isSelected = selectedMinutes == mins
+                            val label = if (mins == 0) "不限时" else "${mins}m"
+                            Surface(
+                                onClick = { selectedMinutes = mins },
+                                shape = RoundedCornerShape(YanjiRadius.Small),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    YanjiColors.fill
+                                }
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            YanjiPrimaryButton(
+                text = "创建并关联",
+                enabled = title.isNotBlank(),
+                onClick = {
+                    val finalTitle = title.trim().ifEmpty { "${subject.name}学习" }
+                    onConfirm(finalTitle, selectedMinutes)
+                }
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "取消",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}
+
+@Composable
 private fun QuietRhythmStep(
     isCountdownMode: Boolean,
     selectedDurationMinutes: Int,
@@ -709,8 +848,21 @@ private fun QuietRhythmStep(
     onNoteChange: (String) -> Unit,
     onSavePreset: () -> Unit,
     onStart: () -> Unit,
-    immersive: Boolean = false
+    immersive: Boolean = false,
+    selectedSubject: Subject,
+    subjectTasks: List<StudyTask>,
+    allTodayTasks: List<StudyTask>,
+    linkedTaskId: String?,
+    onSelectTask: (StudyTask?) -> Unit,
+    onCreateStudyTask: (suspend (Subject, String, Int) -> StudyTask)? = null
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    val displayTasks = if (subjectTasks.isNotEmpty()) subjectTasks else allTodayTasks
+    val linkedTask = displayTasks.firstOrNull { it.id == linkedTaskId }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -764,12 +916,175 @@ private fun QuietRhythmStep(
             }
         }
 
+        // 计划关联选择区
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = RemixIcons.TargetLine,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (linkedTask != null) "已关联今日计划" else "选择今日计划",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Surface(
+                    onClick = { showCreateDialog = true },
+                    shape = RoundedCornerShape(YanjiRadius.ItemRadius),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = RemixIcons.AddLine,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "新建计划",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            if (displayTasks.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(displayTasks, key = { it.id }) { task ->
+                        val isSelected = task.id == linkedTaskId
+                        val isCurrentSubject = task.subjectId == selectedSubject.id || task.subjectName == selectedSubject.name
+                        Surface(
+                            onClick = {
+                                if (isSelected) {
+                                    onSelectTask(null)
+                                } else {
+                                    onSelectTask(task)
+                                }
+                            },
+                            shape = RoundedCornerShape(YanjiRadius.Small),
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                YanjiColors.fill
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = RemixIcons.CheckLine,
+                                        contentDescription = "已选中",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                if (!isCurrentSubject) {
+                                    Text(
+                                        text = task.subjectName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else YanjiColors.textTertiary
+                                    )
+                                }
+                                Text(
+                                    text = task.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (task.plannedMinutes > 0) {
+                                    Text(
+                                        text = "${task.plannedMinutes}m",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else YanjiColors.textTertiary
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = RemixIcons.CloseLine,
+                                        contentDescription = "取消关联",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { onSelectTask(null) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    onClick = { showCreateDialog = true },
+                    shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
+                    color = YanjiColors.fill,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${selectedSubject.name} 今日暂无计划，点击新建",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            imageVector = RemixIcons.AddLine,
+                            contentDescription = "新建计划",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         OutlinedTextField(
             value = noteText,
             onValueChange = { value ->
                 if (value.length <= 80) onNoteChange(value)
             },
-            label = { Text("本次目标（可选）") },
+            label = {
+                Text(
+                    text = if (linkedTask != null) "微调本次目标（已关联计划）" else "本次目标（可选）"
+                )
+            },
             placeholder = { Text("例如：二次型 30 道题") },
             singleLine = true,
             supportingText = {
@@ -805,6 +1120,27 @@ private fun QuietRhythmStep(
                 color = Color.White
             )
         }
+    }
+
+    if (showCreateDialog) {
+        CreateTaskQuickDialog(
+            subject = selectedSubject,
+            onDismiss = { showCreateDialog = false },
+            onConfirm = { title, minutes ->
+                showCreateDialog = false
+                if (onCreateStudyTask != null) {
+                    coroutineScope.launch {
+                        try {
+                            val newTask = onCreateStudyTask(selectedSubject, title, minutes)
+                            onSelectTask(newTask)
+                            Toast.makeText(context, "已创建并关联计划「${newTask.title}」", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "创建计划失败", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        )
     }
 }
 
