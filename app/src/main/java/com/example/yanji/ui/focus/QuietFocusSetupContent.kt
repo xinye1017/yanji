@@ -98,6 +98,7 @@ import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.yanjiSubjectColorOf
 import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.YanjiPrimaryButton
 import com.example.yanji.ui.components.YanjiSegmentedControl
@@ -283,9 +284,9 @@ fun QuietFocusSetupContent(
     ) {
         QuietFocusHeader(
             step = currentStep,
-            todayTotalSeconds = todayTotalSeconds,
+            selectedSubject = selectedSubject,
+            onChangeSubject = ::goBack,
             onBack = if (currentStep == QuietFocusStep.CATEGORY) null else ::goBack,
-            onTodayClick = { onNavigateToDailyDetail(todayIso) },
             onManualLogClick = onManualLogClick
         )
 
@@ -421,16 +422,16 @@ fun QuietFocusSetupContent(
 @Composable
 private fun QuietFocusHeader(
     step: QuietFocusStep,
-    todayTotalSeconds: Long,
+    selectedSubject: Subject,
+    onChangeSubject: () -> Unit,
     onBack: (() -> Unit)?,
-    onTodayClick: () -> Unit,
     onManualLogClick: () -> Unit = {}
 ) {
     val stepIndex = step.ordinal + 1
     val headerTitle = when (step) {
         QuietFocusStep.CATEGORY -> "专注准备"
         QuietFocusStep.MODULE -> "选择学科"
-        QuietFocusStep.RHYTHM -> "选择专注时长"
+        QuietFocusStep.RHYTHM -> ""
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -456,70 +457,59 @@ private fun QuietFocusHeader(
                     )
                 }
             }
-            Text(
-                text = headerTitle,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.weight(1f))
 
-            // 只有第一步显示右侧的“补记”和“今日时长”
-            // 第二、三子页取消“补记”与“今日专注时长”
-            if (step == QuietFocusStep.CATEGORY) {
+            if (step == QuietFocusStep.RHYTHM) {
+                val subjectColor = yanjiSubjectColorOf(selectedSubject.name)
                 Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
+                        .clickable(onClick = onChangeSubject)
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
-                            .clickable(onClick = onManualLogClick)
-                            // 不走 primary 做前景：暗色 primaryContainer 是主色 16% 半透明
-                            // （0x294F7DF3），再叠 0.55 alpha 后图标与文字同色相低分离，
-                            // 实测文字仅 3.5:1。改为 M3 配对 primaryContainer 底 +
-                            // onPrimaryContainer 前景（暗色 #7197F7 → 5.0:1，亮色 #2453BF → 6.0:1）。
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = RemixIcons.Edit2Line,
-                            contentDescription = "手动补记专注",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "补记",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(subjectColor)
+                    )
+                    Text(
+                        text = selectedSubject.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Icon(
+                        imageVector = RemixIcons.ArrowDownSLine,
+                        contentDescription = "切换学习科目",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = headerTitle,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
-                    Row(
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(YanjiRadius.ItemRadius))
-                            .clickable(onClick = onTodayClick)
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = RemixIcons.TimeLine,
-                            contentDescription = null,
-                            tint = YanjiColors.textTertiary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "今日 ${DurationFormatter.formatHoursMinutes(todayTotalSeconds)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 只有第一步显示右侧的补记按钮：圆形包围加号的极简图案，去除今日累计时长
+            if (step == QuietFocusStep.CATEGORY) {
+                IconButton(
+                    onClick = onManualLogClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = RemixIcons.AddCircleLine,
+                        contentDescription = "手动补记专注",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
