@@ -242,6 +242,7 @@ open class ActiveSessionCoordinatorCore(
                 startedAtEpochMs = requested.startedAtEpochMs,
                 targetDurationSeconds = requested.targetDurationSeconds
             )
+            val effectivePauseCount = maxOf(requested.pauseCount, oldSnap.pauseCount)
             val newSnap = if (requested.paused) {
                 val runningPart = oldSnap.resumedAtMonotonicMs?.let { clock.nowMs() - it } ?: 0L
                 val newAccum = maxOf(requested.accumulatedActiveMs, oldSnap.accumulatedActiveMs + runningPart)
@@ -249,14 +250,14 @@ open class ActiveSessionCoordinatorCore(
                     phase = TimerPhase.PAUSED,
                     accumulatedActiveMs = newAccum,
                     resumedAtMonotonicMs = null,
-                    pauseCount = requested.pauseCount
+                    pauseCount = effectivePauseCount
                 )
             } else {
                 oldSnap.copy(
                     phase = TimerPhase.RUNNING,
                     accumulatedActiveMs = maxOf(requested.accumulatedActiveMs, oldSnap.accumulatedActiveMs),
                     resumedAtMonotonicMs = clock.nowMs(),
-                    pauseCount = requested.pauseCount
+                    pauseCount = effectivePauseCount
                 )
             }
             val updated = requested.copy(

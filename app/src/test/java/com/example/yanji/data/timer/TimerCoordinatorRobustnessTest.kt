@@ -21,6 +21,8 @@ private class MemoryTimerPersistence : TimerSessionPersistence {
     var savedRecord: ActiveSessionRecord? = null
     var completedFocusSession: ActiveSession? = null
     var completedActualSeconds: Long? = null
+    var completedPauseCount: Int? = null
+    var completedEndEpochMs: Long? = null
     var failSave = false
 
     override suspend fun completeFocus(
@@ -32,6 +34,8 @@ private class MemoryTimerPersistence : TimerSessionPersistence {
     ) {
         completedFocusSession = session
         completedActualSeconds = actualSeconds
+        completedPauseCount = pauseCount
+        completedEndEpochMs = endEpochMs
     }
 
     override suspend fun completeExam(session: ActiveSession, actualSeconds: Long, endEpochMs: Long) {}
@@ -156,5 +160,56 @@ class TimerCoordinatorRobustnessTest {
         assertFalse("Begin must fail when disk persistence fails", started)
         assertEquals(CoordinatorState.IDLE, coordinator.coordinatorState.value)
         assertNull(coordinator.active.value)
+    }
+
+    @Test
+    fun testPauseCountPreservedAcrossUpdatesAndCompletes() = runTest {
+        val clock = FakeClock(1000L)
+        val persistence = MemoryTimerPersistence()
+        val coordinator = ActiveSessionCoordinatorCore(persistence, clock)
+
+        val session = ActiveSession(
+            sessionId = "test_pause_1",
+            kind = ActiveSessionKind.FOCUS,
+            subjectId = "sub_math",
+            subjectName = "数学一",
+            startedAtEpochMs = 1000L
+        )
+
+        assertTrue(coordinator.begin(session))
+        assertEquals(0, coordinator.active.value!!.pauseCount)
+
+        // 第一次暂停
+        coordinator.update { it.copy(paused = true, pauseCount = it.pauseCount + 1) }
+        assertEquals(1, coordinator.active.value!!.pauseCount)
+        assertEquals(1, coordinator.currentTimerSnapshot?.pauseCount)
+
+        // 恢复：即使 transform 没有指定 pauseCount，也不被抹平
+        coordinator.update { it.copy(paused = false) }
+        assertEquals(1, coordinator.active.value!!.pauseCount)
+        assertEquals(1, coordinator.currentTimerSnapshot?.pauseCount)
+
+        // 普通更新，pauseCount 绝不回退
+        coordinator.update { it.copy(accumulatedActiveMs = 120_000L) }
+        assertEquals(1, coordinator.active.value!!.pauseCount)
+        assertEquals(1, coordinator.currentTimerSnapshot?.pauseCount)
+
+        // 第二次暂停
+        coordinator.update { it.copy(paused = true, pauseCount = it.pauseCount + 1) }
+        assertEquals(2, coordinator.active.value!!.pauseCount)
+        assertEquals(2, coordinator.currentTimerSnapshot?.pauseCount)
+
+        // 完成会话，验证保存的会话开始时间、结束时间与暂停次数
+        val endEpoch = 150_000L
+        val completed = coordinator.complete(
+            actualSeconds = 120L,
+            pausedSeconds = 10L,
+            pauseCount = coordinator.active.value!!.pauseCount,
+            endEpochMs = endEpoch
+        )
+        assertTrue(completed)
+        assertEquals(1000L, persistence.completedFocusSession?.startedAtEpochMs)
+        assertEquals(endEpoch, persistence.completedEndEpochMs)
+        assertEquals(2, persistence.completedPauseCount)
     }
 }

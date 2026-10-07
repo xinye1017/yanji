@@ -282,14 +282,20 @@ class FocusTimerService : Service() {
 
     private fun pause() {
         if (machine.snapshot.phase != TimerPhase.RUNNING) return
-        machine.pause()
+        val snap = machine.pause()
         // 暂停即停表：取消 tick 协程并释放唤醒锁，避免息屏后每秒空转 + 持锁耗电。
         timerJob?.cancel()
         releaseWakeLock()
         val elapsed = machine.elapsedSeconds()
         _elapsedSecondsForUi.value = elapsed
         _remainingSecondsForUi.value = machine.remainingSeconds()
-        ActiveSessionCoordinator.update { it.copy(paused = true, accumulatedActiveMs = machine.elapsedMs()) }
+        ActiveSessionCoordinator.update {
+            it.copy(
+                paused = true,
+                accumulatedActiveMs = machine.elapsedMs(),
+                pauseCount = snap.pauseCount
+            )
+        }
         // 语义变化 → 重建通知：禁用 Chronometer，改为静态冻结时间 + 「继续」动作。
         publishSemanticState()
     }

@@ -16,6 +16,7 @@ data class EpochRange(val startInclusive: Long, val endExclusive: Long)
 object YanjiTime {
     val isoDateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.getDefault())
     private val chineseDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINESE)
     private val shortDateWithWeekdayFormatter = DateTimeFormatter.ofPattern("M 月 d 日 · E", Locale.CHINESE)
     private val fullDateWithWeekdayFormatter = DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日 EEEE", Locale.CHINESE)
@@ -111,6 +112,9 @@ object YanjiTime {
 
     fun formatTime(epochMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): String =
         Instant.ofEpochMilli(epochMs).atZone(zoneId).format(timeFormatter)
+
+    fun formatDateTime(epochMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): String =
+        Instant.ofEpochMilli(epochMs).atZone(zoneId).format(dateTimeFormatter)
 
     fun formatChineseDate(epochMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): String =
         Instant.ofEpochMilli(epochMs).atZone(zoneId).format(chineseDateFormatter)

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.yanji.data.DurationFormatter
+import com.example.yanji.data.YanjiTime
 import com.example.yanji.di.yanjiViewModel
 import com.example.yanji.theme.*
 import com.example.yanji.theme.YanjiColors
@@ -162,6 +163,21 @@ fun FocusSessionDetailScreen(
                         modifier = Modifier.padding(vertical = 12.dp),
                         color = YanjiColors.rowDivider
                     )
+                    DetailRowItem(label = "开始时间", value = YanjiTime.formatDateTime(session.startTime))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = YanjiColors.rowDivider
+                    )
+                    DetailRowItem(label = "结束时间", value = YanjiTime.formatDateTime(session.endTime))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = YanjiColors.rowDivider
+                    )
+                    DetailRowItem(label = "专注时长", value = DurationFormatter.formatDetailed(session.durationSeconds))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = YanjiColors.rowDivider
+                    )
                     DetailRowItem(label = "计时模式", value = session.mode)
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
@@ -171,6 +187,16 @@ fun FocusSessionDetailScreen(
                         label = "暂停次数",
                         value = if (session.pauseCount > 0) "${session.pauseCount} 次" else "无暂停 (全程高度专注)"
                     )
+                    if (session.pausedDurationSeconds > 0) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = YanjiColors.rowDivider
+                        )
+                        DetailRowItem(
+                            label = "暂停耗时",
+                            value = DurationFormatter.formatDetailed(session.pausedDurationSeconds)
+                        )
+                    }
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         color = YanjiColors.rowDivider

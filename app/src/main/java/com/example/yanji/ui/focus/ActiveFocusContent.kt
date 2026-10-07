@@ -59,9 +59,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.data.YanjiTime
 import com.example.yanji.data.timer.FocusPreferences
 import com.example.yanji.di.LocalAppContainer
 import com.example.yanji.data.timer.formatFocusClock
@@ -344,18 +346,21 @@ private fun FocusSessionHeader(
             }
         }
 
-        // 第二行：计时状态（位于学科名称下方）
+        // 第二行：计时状态与开始时间（位于学科名称下方）
+        val startTimeText = YanjiTime.formatTime(session.startTime)
+        val statusText = when {
+            isPaused -> if (session.pauseCount > 0) "已暂停 (累计 ${session.pauseCount} 次)" else "已暂停"
+            session.pauseCount > 0 -> "专注中 · 已暂停 ${session.pauseCount} 次"
+            targetSeconds > 0L -> "倒计时专注中"
+            else -> "正向专注中"
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(Modifier.size(6.dp).background(indicatorColor, CircleShape))
             Text(
-                text = when {
-                    isPaused -> "已暂停"
-                    targetSeconds > 0L -> "倒计时"
-                    else -> "计时中"
-                },
+                text = "$startTimeText 开始 · $statusText",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -730,6 +735,14 @@ private fun FocusCancelDialog(
                         Text(
                             text = "已专注 $durationSummary",
                             style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val nowMs = System.currentTimeMillis()
+                        val timeRange = DurationFormatter.formatTimeRange(session.startTime, nowMs)
+                        Text(
+                            text = "起止时间 $timeRange" + if (session.pauseCount > 0) " · 暂停 ${session.pauseCount} 次" else "",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

@@ -27,16 +27,20 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.yanji.data.DurationFormatter
 import com.example.yanji.data.FocusSession
+import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
+import com.example.yanji.theme.yanjiSubjectColor
 import com.example.yanji.ui.components.YanjiPrimaryButton
+import com.example.yanji.ui.icons.RemixIcons
 import kotlinx.coroutines.launch
 
 /**
  * 专注完成弹窗卡片：
  * 1. 顶部流畅播放矢量打勾动画（弹性放大 + 轨迹绘制）；
  * 2. 标题清晰传达“专注记录已保存”；
- * 3. 极简卡片展示投入学科与时长，无多余产品 Logo 与装饰。
+ * 3. 完整呈现投入学科、起止时间区间（开始时间与结束时间）、专注有效时长、中途暂停情况与今日累计。
  */
 @Composable
 fun FocusSummaryDialog(
@@ -60,6 +64,9 @@ fun FocusSummaryDialog(
         totalH > 0 -> "${totalH}小时 ${totalM}分钟"
         else -> "${totalM}分钟"
     }
+
+    val subjectColor = yanjiSubjectColor(session.subjectId)
+    val timeRangeText = DurationFormatter.formatTimeRange(session.startTime, session.endTime)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -93,20 +100,123 @@ fun FocusSummaryDialog(
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = session.subjectName,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // 学科与模式标签
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(subjectColor)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = session.subjectName,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = subjectColor
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(YanjiRadius.Small))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = session.mode,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // 专注时长
                         Text(
                             text = durationText,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
+
+                        HorizontalDivider(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = YanjiColors.rowDivider
+                        )
+
+                        // 起止时间明细行
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = RemixIcons.TimeLine,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "起止时间",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = timeRangeText,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        // 暂停情况明细行
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (session.pauseCount > 0) RemixIcons.PauseFill else RemixIcons.CheckboxCircleLine,
+                                    contentDescription = null,
+                                    tint = if (session.pauseCount > 0) YanjiColors.warning else YanjiColors.success,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "中途暂停",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            val pauseDetail = when {
+                                session.pauseCount > 0 && session.pausedDurationSeconds > 0 ->
+                                    "${session.pauseCount} 次 (耗时 ${DurationFormatter.formatDetailed(session.pausedDurationSeconds)})"
+                                session.pauseCount > 0 ->
+                                    "${session.pauseCount} 次"
+                                else ->
+                                    "全程无暂停"
+                            }
+                            Text(
+                                text = pauseDetail,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = if (session.pauseCount > 0) MaterialTheme.colorScheme.onSurface else YanjiColors.success
+                            )
+                        }
+
                         if (todayFocusSeconds > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = YanjiColors.rowDivider
+                            )
                             Text(
                                 text = "今日已累计专注 $todaySummary",
                                 style = MaterialTheme.typography.bodySmall,

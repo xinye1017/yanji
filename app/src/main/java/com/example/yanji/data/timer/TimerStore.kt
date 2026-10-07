@@ -228,11 +228,17 @@ internal class TimerStore(
     fun pauseFocus() {
         val current = _activeFocus.value ?: return
         if (current.status == SessionStatus.RUNNING) {
+            val nextPauseCount = current.pauseCount + 1
             _activeFocus.value = current.copy(
                 status = SessionStatus.PAUSED,
-                pauseCount = current.pauseCount + 1
+                pauseCount = nextPauseCount
             )
-            ActiveSessionCoordinator.update { it.copy(paused = true) }
+            ActiveSessionCoordinator.update {
+                it.copy(
+                    paused = true,
+                    pauseCount = nextPauseCount
+                )
+            }
         }
     }
 
