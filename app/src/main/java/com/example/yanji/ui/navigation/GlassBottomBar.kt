@@ -64,6 +64,7 @@ private val MinDockWidth = 260.dp
 private val MaxDockWidth = 360.dp
 private val HorizontalMargin = 44.dp
 private val DockBottomGap = 8.dp
+private val BackdropTopPadding = 24.dp
 
 /**
  * 浮动玻璃导航栏：使用 Haze 模糊与原有的轻边缘，表面色与内容卡片保持区别。
@@ -96,34 +97,47 @@ fun GlassBottomBar(
         alpha = if (hasGlass) { if (isDark) 0.80f else 0.82f } else 1f
     )
 
-    // 从悬浮胶囊的上直边开始，向系统导航区逐渐增强模糊。
-    // 与胶囊共用同一 blurRadius，保证两层玻璃在交界处没有光学强度断层。
-    //
-    // 防重影铁律：progressive 的 **startIntensity 不得为 0**。
-    // 顶边带是底栏唯一直接透出 hazeSource 的区域，强度 0 = 不模糊 = 原样透出；
-    // 而滚动订阅源里此刻正压在底栏上方的，恰是「今日计划 / 打卡 / 看板」那几张卡，
-    // 用户读起来就是「页面下方把这三块又渲染了一遍」。
-    // 0.35f 起跳把这一带压成"糊住的浅色玻璃"，滚动残影不再成句；
-    // tint 同步加厚一档，双保险。
+    // 全宽渐变背景底板：从顶端绝对透明（0f 强度与 0 不透明度）通过非线性 S 曲线自然羽化过渡至满强度模糊。
+    // 配合 mask 遮罩与渐变 Tint 画笔，彻底消除顶端水平硬分界线与磨砂突变断层，实现丝滑无感的流动玻璃融合效果。
+    val maxBackdropAlpha = if (isDark) 0.30f else 0.24f
     val gradientBackdrop = if (hazeState != null && glassTokens.blurRadius > 0.dp) {
+        val tintBrush = Brush.verticalGradient(
+            0.00f to Color.Transparent,
+            0.20f to Color.Transparent,
+            0.45f to dockSurfaceColor.copy(alpha = maxBackdropAlpha * 0.15f),
+            0.70f to dockSurfaceColor.copy(alpha = maxBackdropAlpha * 0.55f),
+            0.88f to dockSurfaceColor.copy(alpha = maxBackdropAlpha * 0.88f),
+            1.00f to dockSurfaceColor.copy(alpha = maxBackdropAlpha)
+        )
+        val maskBrush = Brush.verticalGradient(
+            0.00f to Color.Transparent,
+            0.18f to Color.Transparent,
+            0.45f to Color.Black.copy(alpha = 0.28f),
+            0.75f to Color.Black.copy(alpha = 0.82f),
+            1.00f to Color.Black
+        )
         Modifier.hazeEffect(state = hazeState) {
             blurRadius = glassTokens.blurRadius
-            tints = listOf(HazeTint(dockSurfaceColor.copy(alpha = if (isDark) 0.32f else 0.28f)))
+            tints = listOf(HazeTint(brush = tintBrush))
+            mask = maskBrush
             noiseFactor = glassTokens.noiseFactor * 0.5f
             progressive = HazeProgressive.verticalGradient(
-                startIntensity = 0.35f,
+                startIntensity = 0f,
                 endIntensity = 1f,
                 preferPerformance = true
             )
             backgroundColor = Color.Transparent
         }
     } else {
+        val maxFallbackAlpha = if (isDark) 0.36f else 0.26f
         Modifier.background(
             Brush.verticalGradient(
-                listOf(
-                    Color.Transparent,
-                    dockBaseColor.copy(alpha = if (isDark) 0.40f else 0.30f)
-                )
+                0.00f to Color.Transparent,
+                0.20f to Color.Transparent,
+                0.45f to dockBaseColor.copy(alpha = maxFallbackAlpha * 0.15f),
+                0.70f to dockBaseColor.copy(alpha = maxFallbackAlpha * 0.55f),
+                0.88f to dockBaseColor.copy(alpha = maxFallbackAlpha * 0.88f),
+                1.00f to dockBaseColor.copy(alpha = maxFallbackAlpha)
             )
         )
     }
@@ -148,8 +162,8 @@ fun GlassBottomBar(
             .fillMaxWidth()
             .then(gradientBackdrop)
             .navigationBarsPadding()
-            .padding(bottom = DockBottomGap),
-        contentAlignment = Alignment.Center
+            .padding(top = BackdropTopPadding, bottom = DockBottomGap),
+        contentAlignment = Alignment.BottomCenter
     ) {
         val availableWidth = maxWidth - HorizontalMargin * 2
         val dockWidth = availableWidth.coerceIn(MinDockWidth, MaxDockWidth)
