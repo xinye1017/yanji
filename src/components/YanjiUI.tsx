@@ -1,5 +1,5 @@
 /**
- * Yanji shared UI components — React Native / NativeWind.
+ * Yanji shared UI components — React Native.
  *
  * Card rule (AGENTS.md §三.6): card containers have ZERO borders in both light
  * and dark modes. Hierarchy is expressed through surface lightness steps and

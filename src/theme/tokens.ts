@@ -1,5 +1,5 @@
 /**
- * Yanji Design Tokens — React Native / NativeWind side.
+ * Yanji Design Tokens — React Native side.
  *
  * Authority: test-e2e/contracts/theme-tokens.js (machine-asserted) +
  * app/src/main/java/com/example/yanji/theme/*.kt (Compose source of truth).

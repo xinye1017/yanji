@@ -124,7 +124,7 @@ data class StudyDiagnosticSnapshot(
             now: Long = System.currentTimeMillis()
         ): StudyDiagnosticSnapshot {
             val companionName = runCatching {
-                com.example.yanji.theme.MascotThemes.fromStorage(settings.mascotTheme).name
+                com.example.yanji.theme.MascotThemes.displayNameForStorage(settings.mascotTheme)
             }.getOrDefault("卷卷")
             return com.example.yanji.data.ai.DefaultStudyDataProvider().buildSnapshot(
                 periodDays = periodDays,

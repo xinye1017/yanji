@@ -152,12 +152,23 @@ export interface DataChangedEvent {
 // ---------------------------------------------------------------------------
 
 interface YanjiTimerModuleNative {
+  /**
+   * 开始一次专注。
+   *
+   * `mode` 用类型化的 [TimerMode]，不再让调用方拼中文模式名：原生侧的
+   * `FocusModes` 是给 Compose UI 看的展示层词汇，把「正向计时」这种字符串
+   * 跨桥传递曾让 STOPWATCH 在 RN 侧完全不可达。
+   *
+   * `plannedMinutes` 是 `COUNTDOWN` 的目标时长；`STOPWATCH` 不限时长，
+   * 该值被原生侧忽略。
+   */
   startFocus(
     subjectId: string,
     subjectName: string,
-    mode: string,
+    mode: TimerMode,
     note: string,
-    taskId: string | null
+    taskId: string | null,
+    plannedMinutes: number
   ): Promise<boolean>;
   pauseTimer(): Promise<boolean>;
   resumeTimer(): Promise<boolean>;

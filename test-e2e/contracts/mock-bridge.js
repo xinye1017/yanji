@@ -44,10 +44,6 @@ export class MockYanjiBridge {
       targetMajor: '',
       themePreference: 'SYSTEM',
     };
-    // Countdown length in seconds. UserSettings has no duration field, so the
-    // reference bridge takes it from the caller (mirroring the native side, where
-    // FocusModes.targetSeconds parses "N分钟" out of the mode name).
-    this.defaultCountdownSeconds = initialData.defaultCountdownSeconds ?? 25 * 60;
     this.themeState = {
       mode: 'SYSTEM',
       isDark: true, // defaults to dark (Midnight Blue) for quiet focus
@@ -70,21 +66,34 @@ export class MockYanjiBridge {
   }
 
   // --- YanjiTimerModule Interface ---
-  async startFocus(subjectId, subjectName, mode = 'COUNTDOWN', note = '', taskId = null) {
+  /**
+   * Mirrors YanjiTimerModule.startFocus(subjectId, subjectName, mode, note,
+   * taskId, plannedMinutes). `plannedMinutes` is the COUNTDOWN target; the
+   * native side encodes it into the FocusModes name and derives seconds from
+   * it, so the oracle must do the same rather than reading a settings default.
+   */
+  async startFocus(subjectId, subjectName, mode = 'COUNTDOWN', note = '', taskId = null, plannedMinutes = 0) {
     if (this.activeSession) {
       throw new Error('A focus session is already active');
     }
-    const plannedSeconds = mode.toUpperCase() === 'COUNTDOWN' ? this.defaultCountdownSeconds : 0;
+    const normalizedMode = String(mode).toUpperCase();
+    if (normalizedMode !== 'COUNTDOWN' && normalizedMode !== 'STOPWATCH') {
+      throw new Error(`Unknown timer mode '${mode}'`);
+    }
+    const isCountdown = normalizedMode === 'COUNTDOWN';
+    const plannedSeconds = isCountdown ? Math.max(1, Math.floor(plannedMinutes)) * 60 : 0;
     this.activeSession = {
       sessionId: `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       subjectId,
       subjectName,
-      mode: mode.toUpperCase(),
+      mode: normalizedMode,
       startTime: this.virtualClockMs,
       elapsedSeconds: 0,
-      remainingSeconds: mode.toUpperCase() === 'COUNTDOWN' ? plannedSeconds : 0,
+      remainingSeconds: plannedSeconds,
+      targetDurationSeconds: plannedSeconds,
       phase: 'FOCUS',
       isPaused: false,
+      isCountdown,
       note,
       taskId: taskId || null,
     };

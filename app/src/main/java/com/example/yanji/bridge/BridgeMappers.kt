@@ -52,6 +52,29 @@ object BridgeMappers {
         if (targetDurationSeconds > 0L) MODE_COUNTDOWN else MODE_STOPWATCH
 
     /**
+     * 桥接契约模式名 → 原生 `FocusModes` 展示层模式名。
+     *
+     * `COUNTDOWN` 的目标秒数由调用方给出的分钟数决定，所以这里不拍默认档位，
+     * 分钟数通过 [countdownModeForMinutes] 编进模式名——`FocusModes.targetSeconds`
+     * 正是靠模式名里的「N 分钟」解析目标秒数。
+     *
+     * 返回 null 表示调用方传了契约外的值：桥接层**拒绝**而不是猜一个模式，
+     * 猜错会让用户拿到一段长度完全不是自己要求的计时。
+     */
+    fun nativeModeOf(bridgeMode: String, plannedMinutes: Int = 0): String? =
+        when (bridgeMode.uppercase()) {
+            MODE_COUNTDOWN -> countdownModeForMinutes(plannedMinutes)
+            MODE_STOPWATCH -> com.example.yanji.data.FocusModes.COUNT_UP
+            else -> null
+        }
+
+    /**
+     * 分钟数 → 原生模式名：正好落在四个标准档位上复用该档位名，其余走「N分钟专注」。
+     */
+    fun countdownModeForMinutes(minutes: Int): String =
+        com.example.yanji.data.FocusModes.forPlannedMinutes(minutes.coerceAtLeast(1))
+
+    /**
      * 活动会话的桥接载荷（对应 TS `ActiveSessionState`）。
      *
      * 纯数据：字段名与取值范围就是契约本身，可在 JVM 单测里直接断言。

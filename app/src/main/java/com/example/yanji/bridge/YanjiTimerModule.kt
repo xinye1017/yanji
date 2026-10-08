@@ -76,8 +76,13 @@ class YanjiTimerModule(
     /**
      * 开始一次专注。
      *
-     * @param mode 模式名（`正向计时` / `25分钟番茄` / `N分钟专注` 等），
-     *   目标秒数由 [FocusModes.targetSeconds] 解析——不在 JS 侧重算时长。
+     * @param mode 桥接契约的 [BridgeMappers.MODE_COUNTDOWN] / [BridgeMappers.MODE_STOPWATCH]，
+     *   由 JS 侧类型化的 `TimerMode` 传入。这里负责把它翻译成原生
+     *   [FocusModes] 的展示层模式名——「N 分钟」的目标秒数仍由
+     *   [FocusModes.targetSeconds] 解析，JS 不碰时长事实。
+     *
+     *   在此之前 JS 只能拼中文模式名，正计时要传 `"正向计时"` 才拿得到
+     *   `targetSeconds == 0`，于是 `STOPWATCH` 在 RN 侧完全不可达。
      */
     @ReactMethod
     fun startFocus(
@@ -86,16 +91,25 @@ class YanjiTimerModule(
         mode: String,
         note: String,
         taskId: String?,
+        plannedMinutes: Int,
         promise: Promise
     ) {
         val context = reactContext.applicationContext
+        val nativeMode = BridgeMappers.nativeModeOf(mode, plannedMinutes)
+        if (nativeMode == null) {
+            promise.reject(
+                "E_INVALID_MODE",
+                "Unknown timer mode '$mode'; expected ${BridgeMappers.MODE_COUNTDOWN} or ${BridgeMappers.MODE_STOPWATCH}"
+            )
+            return
+        }
         scope.launch {
             val started = com.example.yanji.data.YanjiRepository.getInstance()
                 .startFocus(
                     subjectId = subjectId,
                     subjectName = subjectName,
                     note = note,
-                    mode = mode.ifBlank { FocusModes.COUNT_UP },
+                    mode = nativeMode,
                     taskId = taskId?.takeIf { it.isNotBlank() }
                 )
             if (started == null) {

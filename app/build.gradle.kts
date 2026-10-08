@@ -1,16 +1,8 @@
 plugins {
   alias(libs.plugins.android.application)
-  alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.ksp)
   alias(libs.plugins.androidx.baselineprofile)
-}
-
-// 编译期 Compose 度量：每次重组/跳过情况写到 build/compose_compiler（HTML + .metrics.txt），
-// 用于确认随笔编辑页的热路径还剩多少真实重组。纯构建期产物，不进 APK、不影响运行时行为。
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_compiler")
-    metricsDestination = layout.buildDirectory.dir("compose_compiler")
 }
 
 val releaseSigningStoreFile = providers.environmentVariable("YANJI_SIGNING_STORE_FILE").orNull
@@ -91,7 +83,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
-      compose = true
       aidl = false
       buildConfig = false
       shaders = false
@@ -149,38 +140,15 @@ configurations.configureEach {
 dependencies {
   baselineProfile(project(":baselineprofile"))
   coreLibraryDesugaring(libs.desugar.jdk.libs)
-  val composeBom = platform(libs.androidx.compose.bom)
-  implementation(composeBom)
-  androidTestImplementation(composeBom)
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
-  implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.profileinstaller)
 
   // React Native Add-to-App
   implementation(libs.react.android)
-
-  // Arch Components
-  implementation(libs.androidx.lifecycle.runtime.compose)
-  implementation(libs.androidx.lifecycle.viewmodel.compose)
-
-  // Compose
-  implementation(libs.androidx.compose.ui)
-  implementation("androidx.compose.foundation:foundation")
-  implementation(libs.androidx.compose.ui.tooling.preview)
-  implementation(libs.androidx.compose.material3)
-  implementation(libs.haze)
-  // Markdown：源码编辑由本项目负责，预览交给成熟的 Compose/GFM 渲染器。
-  implementation(libs.markdown.renderer)
-  implementation(libs.markdown.renderer.m3)
-  // Tooling
-  debugImplementation(libs.androidx.compose.ui.tooling)
-  // Instrumented tests
-  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-  debugImplementation(libs.androidx.compose.ui.test.manifest)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

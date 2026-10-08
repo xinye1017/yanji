@@ -29,6 +29,7 @@ build/
 # --- 本地工具状态 ---
 .claude/
 .commandcode/
+.freebuff/
 node_modules/
 
 # --- 备份/快照类文件（含真机数据，绝不入库） ---

@@ -1,6 +1,5 @@
 package com.example.yanji.data
 
-import androidx.compose.runtime.Immutable
 import com.example.yanji.theme.*
 import kotlinx.serialization.Serializable
 import java.util.UUID
@@ -58,7 +57,6 @@ object FocusModes {
  * 空值表示这次计时不属于任何计划（专注页自己进入、快捷专注、手动补记）。
  */
 @Serializable
-@Immutable
 data class FocusPresetRequest(
     val subjectId: String,
     val subjectName: String,
@@ -98,14 +96,13 @@ data class QuickStartPreset(
 /**
  * 轻量学习任务：只服务「今天准备做什么 → 直接开始专注」这条执行链。
  *
- * 刻意不承担通用 Todo 职责：没有优先级、提醒、重复规则、截止时间或子任务。
- *
- * 对 Compose 而言是只读不可变的（字段全 val、无集合字段），故标注 [Immutable]：
- * 编译器可据此把它当稳定类型，避免以 List 传参时跳过失败。反之，含 List/Map 的
- * 领域模型（如 NoteEntry、DayBarData）**不要**标 @Immutable，那等于对编译器撒谎。
+   * 刻意不承担通用 Todo 职责：没有优先级、提醒、重复规则、截止时间或子任务。
+   *
+   * 字段全 val、无集合字段，是只读不可变的扁平数据类；含 List/Map 的领域模型
+   * （如 NoteEntry、DayBarData）则不是。
+
  */
 @Serializable
-@Immutable
 data class StudyTask(
     val id: String = UUID.randomUUID().toString(),
     val date: String,
@@ -119,7 +116,6 @@ data class StudyTask(
 )
 
 @Serializable
-@Immutable
 data class Subject(
     val id: String,
     val name: String,
@@ -246,7 +242,6 @@ enum class SessionStatus {
 }
 
 @Serializable
-@Immutable
 data class FocusSession(
     val id: String,
     val subjectId: String,
@@ -270,7 +265,6 @@ data class FocusSession(
 )
 
 @Serializable
-@Immutable
 data class ExamSession(
     val id: String,
     val subjectId: String,
@@ -389,7 +383,6 @@ data class ChatMessage(
 )
 
 @Serializable
-@Immutable
 data class CheckIn(
     val date: String, // "yyyy-MM-dd"
     val checkInTime: Long = System.currentTimeMillis(),

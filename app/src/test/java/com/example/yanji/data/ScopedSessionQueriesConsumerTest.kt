@@ -1,8 +1,5 @@
 package com.example.yanji.data
 
-import com.example.yanji.ui.detail.FocusSessionDetailViewModel
-import com.example.yanji.ui.exam.ExamViewModel
-import com.example.yanji.ui.profile.ProfileViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest

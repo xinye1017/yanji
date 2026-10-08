@@ -12,7 +12,7 @@
   - `YanjiThemeModule`: Exposes theme mode reading and change events.
   - `YanjiPackage`: Integrates modules into `ReactNativeHost`.
 - **React Native Application (`src/`)**:
-  - React Native 0.87.1 + React 19 + TypeScript 5.8 + NativeWind v4 + Tailwind CSS 3.4.
+  - React Native 0.87.1 + React 19 + TypeScript 5.8. Styling is plain style objects — NativeWind was removed because `className` was never used anywhere, and a second token source (`tailwind.config.js`) had already drifted from `src/theme/tokens.ts`.
   - Design Tokens: Midnight Blue dark mode (no `#000000`), soft blue-gray light mode, card zero-border, `YanjiRadius` scale.
   - Information Architecture: Strict 3-tab navigation (`Today`, `Focus`, `Review`), Settings accessed from Today top-right.
   - Shared Component: Cross-page `RecordMomentModal` saving instantly to Room without interrupting focus timer.
@@ -55,7 +55,10 @@
 ## Interface Contracts
 
 ### `YanjiTimerModule` (Native ↔ JS)
-- `startFocus(subjectId: string, subjectName: string, mode: string, note: string, taskId?: string): Promise<boolean>`
+- `startFocus(subjectId: string, subjectName: string, mode: TimerMode, note: string, taskId?: string | null, plannedMinutes?: number): Promise<boolean>`
+  - `mode` is `'COUNTDOWN' | 'STOPWATCH'`. Chinese `FocusModes` display names never cross the bridge; the native side translates the contract value into a mode name and derives target seconds from it.
+  - `plannedMinutes` is the `COUNTDOWN` target. `STOPWATCH` is unbounded (target seconds `0`) and only ends on an explicit user action, so the value is ignored there.
+  - Rejects with `E_SESSION_ACTIVE` when a session is already running, and `E_INVALID_MODE` for any value outside the two-member vocabulary.
 - `pauseTimer(): Promise<boolean>`
 - `resumeTimer(): Promise<boolean>`
 - `completeTimer(): Promise<boolean>`

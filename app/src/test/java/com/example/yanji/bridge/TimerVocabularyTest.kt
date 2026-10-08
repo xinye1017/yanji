@@ -156,4 +156,59 @@ class TimerVocabularyTest {
         assertEquals(BridgeMappers.MODE_COUNTDOWN, "COUNTDOWN")
         assertEquals(BridgeMappers.MODE_STOPWATCH, "STOPWATCH")
     }
+
+    // ------------------------------------- 反向映射：桥接模式名 → 原生模式名
+
+    @Test
+    fun countdown_encodesRequestedMinutesIntoNativeModeName() {
+        // 目标秒数由 FocusModes.targetSeconds 从模式名的「N 分钟」解析，
+        // 所以分钟数必须真实编进名字，否则 COUNTDOWN 会被当成正计时。
+        assertEquals("25分钟番茄", BridgeMappers.nativeModeOf("COUNTDOWN", 25))
+        assertEquals("45分钟深度", BridgeMappers.nativeModeOf("COUNTDOWN", 45))
+        assertEquals("60分钟小测", BridgeMappers.nativeModeOf("COUNTDOWN", 60))
+        assertEquals("90分钟专题", BridgeMappers.nativeModeOf("COUNTDOWN", 90))
+        assertEquals("125分钟专注", BridgeMappers.nativeModeOf("COUNTDOWN", 125))
+    }
+
+    @Test
+    fun countdown_targetSecondsRoundTripsBackToRequestedMinutes() {
+        listOf(25, 45, 60, 90, 125, 180).forEach { minutes ->
+            val mode = requireNotNull(BridgeMappers.nativeModeOf("COUNTDOWN", minutes))
+            assertEquals(minutes * 60L, com.example.yanji.data.FocusModes.targetSeconds(mode))
+        }
+    }
+
+    @Test
+    fun stopwatch_mapsToUnboundedNativeMode() {
+        // 正计时：目标秒数必须为 0，否则会变成一段有限时长的计时。
+        val mode = requireNotNull(BridgeMappers.nativeModeOf("STOPWATCH", 45))
+        assertEquals("正向计时", mode)
+        assertEquals(0L, com.example.yanji.data.FocusModes.targetSeconds(mode))
+        // 正计时忽略调用方给的分钟数
+        assertEquals("正向计时", BridgeMappers.nativeModeOf("STOPWATCH", 0))
+    }
+
+    @Test
+    fun modeMapping_isCaseInsensitive() {
+        assertEquals("45分钟深度", BridgeMappers.nativeModeOf("countdown", 45))
+        assertEquals("正向计时", BridgeMappers.nativeModeOf("stopwatch", 45))
+    }
+
+    @Test
+    fun unknownMode_isRejectedRatherThanGuessed() {
+        // 中文展示名、已废弃的枚举名、以及任何契约外取值都必须被拒绝：
+        // 猜一个模式会让用户拿到长度完全不是自己要求的计时。
+        listOf("正向计时", "POMODORO", "COUNT_UP", "", "RUNNING", "25分钟番茄").forEach { bad ->
+            assertNull("mode '$bad' must be rejected, not guessed", BridgeMappers.nativeModeOf(bad, 45))
+        }
+    }
+
+    @Test
+    fun nonPositiveCountdownMinutes_areClampedToAtLeastOneMinute() {
+        // 0 或负数会让 targetSeconds 解析成 0，把倒计时静默变成正计时。
+        listOf(0, -30).forEach { bad ->
+            val mode = requireNotNull(BridgeMappers.nativeModeOf("COUNTDOWN", bad))
+            assertEquals(60L, com.example.yanji.data.FocusModes.targetSeconds(mode))
+        }
+    }
 }

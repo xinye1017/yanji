@@ -1,11 +1,17 @@
 package com.example.yanji
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.react.ReactActivity
 import com.example.yanji.data.YanjiRepository
 
+/**
+ * 研迹的唯一 Activity —— 纯 React Native 宿主。
+ *
+ * 曾经这里是 Compose `setContent` 的挂载点，并带一个 `test_achievement`
+ * intent 分支用来在真机上触发成就庆祝动画调试。整套 Compose UI 已随 RN
+ * 重构移除，那个分支全仓库零调用方，随之删除。
+ */
 class MainActivity : ReactActivity() {
 
     override fun getMainComponentName(): String = "YanjiApp"
@@ -14,22 +20,5 @@ class MainActivity : ReactActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         YanjiRepository.init(applicationContext)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
-    }
-
-    private fun handleIntent(intent: Intent?) {
-        val testId = intent?.getStringExtra("test_achievement")
-        if (!testId.isNullOrBlank()) {
-            val container = (application as YanjiApplication).container
-            com.example.yanji.data.achievement.AchievementCatalog.find(testId)?.let { def ->
-                container.repository.emitCelebration(def)
-            }
-            intent.removeExtra("test_achievement")
-        }
     }
 }

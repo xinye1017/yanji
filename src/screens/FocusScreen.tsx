@@ -20,7 +20,7 @@ import {
   onTimerStateChanged,
   onTimerTick,
 } from '../bridge';
-import type { ActiveSessionState, Subject, TimerTickEvent } from '../bridge';
+import type { ActiveSessionState, Subject, TimerMode, TimerTickEvent } from '../bridge';
 import { YanjiPrimaryButton, YanjiSectionHeader } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigation } from '../navigation/NavigationShell';
@@ -44,6 +44,12 @@ function todayIso(): string {
 
 const DURATION_PRESETS = [25, 45, 60, 90] as const;
 
+/** 计时模式选择项：正计时不限时长，倒计时走时长预设。 */
+const TIMER_MODES: ReadonlyArray<{ mode: TimerMode; label: string }> = [
+  { mode: 'COUNTDOWN', label: '倒计时' },
+  { mode: 'STOPWATCH', label: '正计时' },
+];
+
 /** Task the Focus tab will bind the next session to (handed over from Today). */
 interface TaskBinding {
   taskId: string;
@@ -65,6 +71,7 @@ export function FocusScreen(): React.JSX.Element {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
+  const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
@@ -109,6 +116,9 @@ export function FocusScreen(): React.JSX.Element {
     clearFocusPreset();
     const planned = Math.round(focusPreset.plannedMinutes);
     setDurationMinutes(planned >= MIN_MINUTES ? Math.min(MAX_MINUTES, planned) : DEFAULT_MINUTES);
+    // 任务自带计划时长，绑定任务必须走倒计时：正计时不限时长会让
+    // 「实际 / 计划」对照失去意义。
+    setTimerMode('COUNTDOWN');
     setSelectedSubjectId(focusPreset.subjectId);
     setTaskBinding({
       taskId: focusPreset.taskId,
@@ -139,9 +149,10 @@ export function FocusScreen(): React.JSX.Element {
       await YanjiTimerNative.startFocus(
         selectedSubject.id,
         selectedSubject.name,
-        `${durationMinutes}分钟专注`,
+        timerMode,
         '',
-        taskBinding?.taskId ?? null
+        taskBinding?.taskId ?? null,
+        durationMinutes
       );
       setTaskBinding(null);
       await refreshSession();
@@ -155,7 +166,7 @@ export function FocusScreen(): React.JSX.Element {
     } finally {
       setBusy(false);
     }
-  }, [busy, selectedSubject, durationMinutes, taskBinding, refreshSession]);
+  }, [busy, selectedSubject, durationMinutes, timerMode, taskBinding, refreshSession]);
 
   const handlePauseResume = useCallback(async () => {
     try {
@@ -239,14 +250,14 @@ export function FocusScreen(): React.JSX.Element {
             ) : null}
           </View>
 
-          <YanjiSectionHeader title="时长" />
+          <YanjiSectionHeader title="模式" />
           <View style={{ flexDirection: 'row' }}>
-            {DURATION_PRESETS.map(minutes => {
-              const active = minutes === durationMinutes;
+            {TIMER_MODES.map(entry => {
+              const active = entry.mode === timerMode;
               return (
                 <Pressable
-                  key={minutes}
-                  onPress={() => setDurationMinutes(minutes)}
+                  key={entry.mode}
+                  onPress={() => setTimerMode(entry.mode)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   style={{
@@ -264,12 +275,58 @@ export function FocusScreen(): React.JSX.Element {
                       fontWeight: active ? '600' : '400',
                     }}
                   >
-                    {minutes} 分钟
+                    {entry.label}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
+
+          {timerMode === 'COUNTDOWN' ? (
+            <>
+              <YanjiSectionHeader title="时长" />
+              <View style={{ flexDirection: 'row' }}>
+                {DURATION_PRESETS.map(minutes => {
+                  const active = minutes === durationMinutes;
+                  return (
+                    <Pressable
+                      key={minutes}
+                      onPress={() => setDurationMinutes(minutes)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: YanjiRadius.full,
+                        marginRight: YanjiSpacing.sm,
+                        backgroundColor: active ? theme.colors.accentPrimary : theme.colors.bgSurface,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: active ? theme.colors.onAccent : theme.colors.textSecondary,
+                          fontSize: 14,
+                          fontWeight: active ? '600' : '400',
+                        }}
+                      >
+                        {minutes} 分钟
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontSize: 13,
+                marginTop: YanjiSpacing.md,
+              }}
+            >
+              正计时不限时长，随时手动结束
+            </Text>
+          )}
 
           {taskBinding ? (
             <Text

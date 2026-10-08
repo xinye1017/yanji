@@ -66,10 +66,65 @@ export function registerM2Tests() {
     });
 
     it('prevents starting a concurrent second session while one is already running', async () => {
-      await bridge.startFocus('sub-math', '数学', 'COUNTDOWN');
+      await bridge.startFocus('sub-math', '数学', 'COUNTDOWN', '', null, 45);
       await assertRejects(async () => {
-        await bridge.startFocus('sub-eng', '英语', 'COUNTDOWN');
+        await bridge.startFocus('sub-eng', '英语', 'COUNTDOWN', '', null, 45);
       }, /already active/, 'Concurrent startFocus must reject to protect monotonic state');
+    });
+
+    it('verifies COUNTDOWN derives its target from plannedMinutes, not a settings default', async () => {
+      await bridge.startFocus('sub-math', '数学', 'COUNTDOWN', '', null, 45);
+      const active = await bridge.getActiveSession();
+
+      assertEqual(active.mode, 'COUNTDOWN', 'COUNTDOWN mode must be reported verbatim');
+      assertEqual(active.isCountdown, true, 'COUNTDOWN session must set isCountdown');
+      assertEqual(active.remainingSeconds, 45 * 60, 'Target must come from plannedMinutes');
+      assert(BridgeSchemas.isValidActiveSessionState(active), 'Schema must accept the payload');
+    });
+
+    it('verifies STOPWATCH has no target and counts up without auto-completing', async () => {
+      await bridge.startFocus('sub-math', '数学', 'STOPWATCH', '', null, 45);
+      const active = await bridge.getActiveSession();
+
+      assertEqual(active.mode, 'STOPWATCH', 'STOPWATCH mode must be reported verbatim');
+      assertEqual(active.isCountdown, false, 'STOPWATCH must not be a countdown');
+      assertEqual(active.remainingSeconds, 0, 'STOPWATCH has no target to count down from');
+      assertEqual(active.phase, 'FOCUS', 'A running session is always FOCUS');
+
+      // Far past any preset length — an unbounded timer must never self-terminate.
+      bridge.advanceTime(180 * 60);
+      const later = await bridge.getActiveSession();
+      assertEqual(later.mode, 'STOPWATCH', 'STOPWATCH must survive past every preset length');
+      assertEqual(later.remainingSeconds, 0, 'STOPWATCH remaining stays 0, never negative');
+      assertEqual(later.elapsedSeconds, 180 * 60, 'Elapsed keeps accumulating');
+
+      // Only an explicit user action ends it.
+      await bridge.completeTimer();
+      assertEqual(await bridge.getActiveSession(), null, 'STOPWATCH ends only on user action');
+    });
+
+    it('rejects a mode outside the bridge vocabulary instead of guessing one', async () => {
+      await assertRejects(async () => {
+        await bridge.startFocus('sub-math', '数学', '正向计时', '', null, 45);
+      }, /Unknown timer mode/, 'Chinese display names must never cross the bridge');
+
+      await assertRejects(async () => {
+        await bridge.startFocus('sub-math', '数学', 'POMODORO', '', null, 45);
+      }, /Unknown timer mode/, 'Only COUNTDOWN and STOPWATCH are valid');
+    });
+
+    it('verifies STOPWATCH still records real study time on completion', async () => {
+      await bridge.startFocus('sub-math', '数学', 'STOPWATCH', '', null, 45);
+      bridge.advanceTime(90 * 60); // 90 minutes of unbounded focus
+      await bridge.completeTimer();
+
+      const today = new Date().toISOString().split('T')[0];
+      const stats = await bridge.getTodayStats(today);
+      assertEqual(
+        stats.totalFocusSeconds,
+        90 * 60,
+        'A completed STOPWATCH must persist its real accumulated duration'
+      );
     });
   });
 
