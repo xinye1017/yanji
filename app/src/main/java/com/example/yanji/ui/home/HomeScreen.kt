@@ -1,22 +1,16 @@
 package com.example.yanji.ui.home
 
 import com.example.yanji.ui.icons.RemixIcons
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import com.example.yanji.ui.components.YanjiCard
 import com.example.yanji.ui.components.YanjiCardVariant
 import androidx.compose.runtime.*
@@ -40,9 +34,6 @@ import com.example.yanji.ui.components.AppContentInsets
 import com.example.yanji.ui.components.CheckInCard
 import com.example.yanji.ui.components.CheckInCelebrationDialog
 import com.example.yanji.ui.components.AiEncouragementBanner
-import com.example.yanji.ui.components.RollingNumber
-import com.example.yanji.ui.components.YanjiGroupedCard
-import com.example.yanji.ui.components.YanjiSettingsRow
 import com.example.yanji.ui.components.YanjiProgressBar
 
 @Composable
@@ -96,223 +87,101 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(YanjiSpacing.PageTopGap))
 
-            // 1. Countdown Hero Card
+            // 倒计时与今日结果共享一个核心视觉区，专注时长为主要视觉焦点。
             YanjiCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("home_countdown_card"),
+                modifier = Modifier.fillMaxWidth().testTag("home_study_hero"),
                 variant = YanjiCardVariant.Hero
             ) {
                 Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().testTag("home_countdown_card"),
+                        horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGap),
+                        verticalArrangement = Arrangement.spacedBy(YanjiSpacing.TightGap)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            val countdownTitle = if (settings.targetExamDate.length >= 4) {
-                                "${settings.targetExamDate.take(4)} 考研倒计时"
-                            } else {
-                                "考研倒计时"
-                            }
-                            Text(
-                                text = countdownTitle,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                         Text(
-                            text = settings.targetExamDate.ifBlank { "未设置" },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = YanjiColors.textTertiary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(YanjiSpacing.ItemGap))
-
-                    // 倒计时 + 阶段徽标 + 院校专业副标 + 全程进度，收进同一根纵轴。
-                    // 旧版院校/专业孤悬右对齐，与左侧大数字割裂，重量散；
-                    // 且倒计时只是个裸天数，没回答“我在备考哪个阶段”。
-                    //
-                    // 阶段口径（纯函数，无新数据源）：按剩余天数三段切 ——
-                    // >120 基础期、61..120 强化期、<=60 冲刺期。
-                    // 百分比 = (240 - remaining) / 240，240 天是考研全程备考惯例跑道
-                    //（约 8 个月），只呈现紧迫节奏，不落任何库。
-                    val phaseLabel = when {
-                        daysRemaining == null -> null
-                        daysRemaining > 120 -> "基础期"
-                        daysRemaining > 60 -> "强化期"
-                        else -> "冲刺期"
-                    }
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (daysRemaining != null) {
-                                RollingNumber(
-                                    text = "$daysRemaining",
-                                    style = com.example.yanji.theme.YanjiTypography.metricL,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "天",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(bottom = 6.dp)
-                                )
-                            } else {
-                                Text(
-                                    text = settings.targetExamDate.ifBlank { "未设置" },
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (settings.targetExamDate.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                    lineHeight = 44.sp,
-                                    modifier = Modifier.padding(bottom = 6.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.weight(1f))
-                            if (phaseLabel != null) {
-                                // 阶段徽标：胶囊与主色弱底，取色逻辑同底部导航选中态。
-                                Surface(
-                                    shape = RoundedCornerShape(YanjiRadius.Pill),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                ) {
-                                    Text(
-                                        text = phaseLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                        Text(
-                            text = "目标院校 ${settings.targetSchool.ifBlank { "未设置" }} · ${settings.targetMajor.ifBlank { "未设置专业" }}",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = if (settings.targetExamDate.length >= 4) "${settings.targetExamDate.take(4)} 考研倒计时" else "考研倒计时",
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.align(Alignment.CenterVertically)
                         )
-
-                        // 阶段进度：天数锚定 examDate 时才画；未设置考期则无跑道可走。
-                        if (daysRemaining != null) {
-                            val runwayDays = 240
-                            val remaining = daysRemaining.coerceIn(0, runwayDays)
-                            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                            YanjiProgressBar(
-                                progress = (runwayDays - remaining).toFloat() / runwayDays,
-                                color = MaterialTheme.colorScheme.primary,
-                                height = YanjiSpacing.TightGap
-                            )
-                        }
+                        Text(
+                            text = daysRemaining?.let { "$it 天" } ?: settings.targetExamDate.ifBlank { "未设置" },
+                            style = YanjiTypography.title2,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
-
-            // 2. 今日累计专注时长 —— 首页第二张主卡：今天已经沉下去多少时间是最有
-            //    说服力的一个数字，放在最高频的视线上；进度与科目分布也由它承载。
-            YanjiGroupedCard(
-                modifier = Modifier.fillMaxWidth(),
-                cardModifier = Modifier.testTag("home_today_study_card"),
-                onClick = { onNavigateToDailyDetail(todayIso) }
-            ) {
-                Column(modifier = Modifier.padding(YanjiSpacing.CardPadding)) {
                     Text(
-                        text = "今日专注学习",
-                        style = MaterialTheme.typography.titleMedium,
-                        // 与「今日计划」「每日打卡」同为 16sp / Bold：
-                        // 三条主卡标题同一字号同一字重，扫首页时是同一层级的三件事。
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "${settings.targetSchool.ifBlank { "目标院校未设置" }} · ${settings.targetMajor.ifBlank { "专业未设置" }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom
+                    // 详情入口仅包住统计区，科目入口保留独立的触控语义。
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("home_today_study_card")
+                            .clickable(
+                                role = Role.Button,
+                                onClickLabel = "查看今日学习详情",
+                                onClick = { onNavigateToDailyDetail(todayIso) }
+                            )
                     ) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            val durationText = if (todayHours > 0) "${todayHours}h ${todayMins}m" else "${todayMins}m"
-                            RollingNumber(
-                                text = durationText,
-                                style = com.example.yanji.theme.YanjiTypography.title1,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = if (settings.dailyGoalHours > 0f) "达成 ${(progress * 100).toInt()}%" else "达成 -",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = if (progress >= 1f && settings.dailyGoalHours > 0f) YanjiColors.success else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
-                        }
                         Text(
-                            text = if (settings.dailyGoalHours > 0f) {
-                                val h = if (settings.dailyGoalHours % 1f == 0f) settings.dailyGoalHours.toInt().toString() else settings.dailyGoalHours.toString()
-                                "日目标 $h 小时"
-                            } else {
-                                "日目标 未设置"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            text = "今日专注学习",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+                        Text(
+                            text = if (todayHours > 0) "${todayHours}h ${todayMins}m" else "${todayMins}m",
+                            style = YanjiTypography.metricL,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+                        val goalColor = if (goalSecs > 0 && progress >= 1f) YanjiColors.success else MaterialTheme.colorScheme.primary
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGap),
+                            verticalArrangement = Arrangement.spacedBy(YanjiSpacing.TightGap)
+                        ) {
+                            Text(
+                                text = if (goalSecs > 0) "达成 ${(progress * 100).toInt()}%" else "日目标未设置",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = goalColor
+                            )
+                            if (goalSecs > 0) {
+                                val goalLabel = if (goalHours % 1f == 0f) goalHours.toInt().toString() else goalHours.toString()
+                                Text(
+                                    text = "日目标 $goalLabel 小时",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (goalSecs > 0) {
+                            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGap))
+                            YanjiProgressBar(progress = progress, color = goalColor)
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // 与学科时长分布共用同一胶囊进度条。
-                    val goalProgressColor = if (progress >= 1f && settings.dailyGoalHours > 0f) {
-                        YanjiColors.success
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    }
-                    YanjiProgressBar(progress = progress, color = goalProgressColor)
 
                     if (state.todaySummary.subjectDistribution.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        // Subject breakdown (Dynamic Single Source of Truth, Clickable, FlowRow responsive)
-                        Text(
-                            text = "今日科目时长分布",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
                         Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGapSmall),
+                            verticalArrangement = Arrangement.spacedBy(YanjiSpacing.TightGap)
                         ) {
-                            state.todaySummary.subjectDistribution.forEach { (subName, secs) ->
-                                // 学科显示色由当前伙伴主题专属色阶体系与稳定槽位解析
+                            state.todaySummary.subjectDistribution.forEach { (name, secs) ->
                                 SubjectTimeChip(
-                                    name = subName,
+                                    name = name,
                                     time = DurationFormatter.formatHoursMinutes(secs),
-                                    color = com.example.yanji.theme.yanjiSubjectColorOf(subName),
-                                    modifier = Modifier.clickable { onNavigateToSubjectDetail(subName) }
+                                    color = yanjiSubjectColorOf(name),
+                                    modifier = Modifier.clickable { onNavigateToSubjectDetail(name) }
                                 )
                             }
                         }
@@ -350,30 +219,46 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
-            // 5. 模考看板 —— 长期事件，排在每日任务之后；倒计时在首屏即可承接它。
-            YanjiGroupedCard(
+            // 低频模考只保留记录行，不再占一个独立卡片。
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("home_exam_card")
+                    .clickable(role = Role.Button, onClickLabel = "查看模考记录", onClick = onNavigateToExamHistory)
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = YanjiSpacing.CardPadding, vertical = YanjiSpacing.ItemGap),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGap)
             ) {
-                YanjiSettingsRow(
-                    title = "模考看板 · 近期成绩",
-                    subtitle = if (examSessions.isNotEmpty()) {
-                        val recentStr = examSessions.take(2).joinToString("，") { "${it.subjectName.take(4)} ${it.score?.toInt() ?: 0}分" }
-                        "已完成 ${examSessions.size} 次模拟 · $recentStr"
-                    } else {
-                        "尚未进行模拟考试，点击发起模考"
-                    },
-                    icon = RemixIcons.LineChartLine,
-                    iconTint = MaterialTheme.colorScheme.primary,
-                    iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    value = if (avgScore > 0) "均分 ${String.format(Locale.US, "%.1f", avgScore)}" else null,
-                    showChevron = true,
-                    onClick = onNavigateToExamHistory
+                Icon(
+                    imageVector = RemixIcons.LineChartLine,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "模考看板",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = when {
+                            examSessions.isEmpty() -> "尚无模考记录"
+                            avgScore > 0 -> "${examSessions.size} 次模拟 · 均分 ${String.format(Locale.US, "%.1f", avgScore)}"
+                            else -> "${examSessions.size} 次模拟"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = RemixIcons.ArrowRightSLine,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.height(YanjiSpacing.CardGap))
 
         // 6. AI 鼓励语 —— 收尾一句，只读已有统计，不引入新的数据源。
         // 注意：这里不能对连续天数做 `maxOf(1, ...)` —— 没有任何连续学习记录时
@@ -381,14 +266,14 @@ fun HomeScreen(
         val streakDays = state.streakDays
         AiEncouragementBanner(
             message = if (todaySecs > 0) {
-                "今天已经积累 ${todayHours} 小时 ${todayMins} 分钟。专注的轨迹正在清晰留下，不急不躁，按部就班。"
+                "今天的每一段专注，都在让你靠近目标。"
             } else {
-                "研迹已经为你准备好，开始你的第一段专注吧，每一步都算数。"
+                "从今天的第一项计划开始，每一步都算数。"
             },
             subMessage = if (streakDays > 0) {
                 "连续有效学习已达成 $streakDays 天"
             } else {
-                "还没有连续学习记录 · 今天开始第一段专注吧"
+                null
             },
             onClick = onNavigateToStats
         )

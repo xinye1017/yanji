@@ -60,8 +60,6 @@ import com.example.yanji.theme.YanjiColors
 import com.example.yanji.theme.YanjiRadius
 import com.example.yanji.theme.YanjiSpacing
 import com.example.yanji.theme.yanjiSubjectColorOf
-import com.example.yanji.ui.components.YanjiCard
-import com.example.yanji.ui.components.YanjiCardVariant
 import com.example.yanji.ui.components.YanjiProgressBar
 import com.example.yanji.ui.icons.RemixIcons
 
@@ -132,47 +130,7 @@ internal fun planTimeLabels(plannedMinutes: Int, actualSeconds: Long): PlanTimeL
     )
 }
 
-/**
- * 首页「今日计划」卡片。
- *
- * ## 为什么搬到首页
- *
- * 今日计划是**意图**（今天打算做什么），首页的「今日专注学习」是**结果**（实际做了多久）——
- * 同一件事的两面。此前意图侧留在专注准备页，结果侧在首页，开屏时看到的是结果，
- * 「今天要做什么」要切 tab 才找得到。首页一天要回答的第一个问题是「今天做什么」，
- * 而不是「我现在选哪门课」。
- *
- * ## 为什么是分组列表而不是一叠任务卡
- *
- * 早期实现给每条任务单独一张 [YanjiCard]。首页已有倒计时、打卡、今日专注、模考四张卡，
- * 再叠 N 张任务卡会退化成「卡片墙」：每条任务各带描边与内边距，行与行之间没有视觉分组，
- * 用户得靠边框去找「一件事」的边界。
- *
- * 现在与同页「模考看板」保持同一种 iOS Grouped Inset 结构：一张容器 + 发丝分行，
- * 行间靠 [YanjiColors.rowDivider] 而非边框区分。层级交给字号字重与学科色承担，容器本身保持安静。
- *
- * ## 三处刻意的取舍
- *
- * 1. **删除从行内图标移到长按菜单。** 原设计每行右侧挂垃圾桶，与「开始」并排，
- *    两个形状相近的控件挤在 48dp 内，误触成本高；删除又是低频破坏性操作，
- *    不该占据每天都要扫视的高频路径。长按菜单复用本项目已有的单指针替代路径
- *    （见 `NoteSwipeableRow`），不新造交互范式。
- * 2. **整行点编辑、右侧 Play 点开始。** 一行里的两个点击目标按语义分开：整行（含长按）
- *    打开这条计划的编辑面板，右侧 Play 直达专注准备页末步。早期把两者合成「整行即开始」，
- *    改一条计划的时长或备注就无处下手。
- * 3. **删掉「完成 2 / 5」数字。** 它与进度条、与状态文案表达同一件事，同屏三份计数纯属冗余。
- *    计数交给进度条，状态交给一行可执行的文字。
- *
- * ## 为什么每行要显示「实际 / 计划」
- *
- * 计划是**承诺**，专注时段是**兑现**。两者分开看各自都只是半个事实：只看计划时长，
- * 用户无法察觉一项任务已经悄悄超支；只看实际投入，又看不出原定目标是多少。
- * 于是行内副标题把两者并成 `28/45 分钟`，超额时再加一行告警。
- *
- * 归因不靠猜：专注会话用显式的 `taskId` 列指向计划（DB v20 新增），从计划行「开始」
- * 启动的计时会带上这个 id，结束时把用时记回那条计划。不做「按备注标题反查」——
- * 同名计划、同科目多篇都会互相串味。
- */
+/** 今日计划以开放式列表紧随核心统计区，行内保留编辑、完成与开始入口。 */
 @Composable
 internal fun TodayPlanCard(
     tasks: List<StudyTask>,
@@ -192,70 +150,68 @@ internal fun TodayPlanCard(
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<StudyTask?>(null) }
 
-    YanjiCard(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("home_today_plan_card"),
-        variant = YanjiCardVariant.Grouped
+            .testTag("home_today_plan_card")
+            .padding(bottom = YanjiSpacing.ItemGap)
     ) {
-        Column(modifier = Modifier.padding(top = YanjiSpacing.CardPaddingCompact, bottom = 12.dp)) {
-            TodayPlanHeader(onAdd = {
+        TodayPlanHeader(onAdd = {
+            editingTask = null
+            showAddSheet = true
+        })
+
+        if (tasks.isEmpty()) {
+            EmptyPlanHint(onClick = {
                 editingTask = null
                 showAddSheet = true
             })
+        } else {
+            val completed = tasks.count { it.isCompleted }
+            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+            PlanProgressSummary(tasks = tasks, runningTaskId = runningTaskId)
+            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
+            YanjiProgressBar(
+                progress = completed.toFloat() / tasks.size,
+                // 全部完成时转绿，与首页「达成 100%」用同一个 success 语义色。
+                color = if (completed == tasks.size) {
+                    YanjiColors.success
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                height = YanjiSpacing.TightGap,
+                modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding)
+            )
+            Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
 
-            if (tasks.isEmpty()) {
-                EmptyPlanHint(onClick = {
-                    editingTask = null
-                    showAddSheet = true
-                })
-            } else {
-                val completed = tasks.count { it.isCompleted }
-                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                PlanProgressSummary(tasks = tasks)
-                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-                YanjiProgressBar(
-                    progress = completed.toFloat() / tasks.size,
-                    // 全部完成时转绿，与首页「达成 100%」用同一个 success 语义色。
-                    color = if (completed == tasks.size) {
-                        YanjiColors.success
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    height = YanjiSpacing.TightGap,
-                    modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding)
-                )
-                Spacer(modifier = Modifier.height(YanjiSpacing.ItemGapSmall))
-
-                tasks.forEachIndexed { index, task ->
-                    if (index > 0) {
-                        // 分割线内缩到**文字列**的起点，与标题左缘严格对齐。
-                        // 若只对齐卡片内边距，线会从勾选圈下方横穿过去，
-                        // 视觉上像在给上一行的标题划删除线。
-                        // 起点按行内实际排版推：左内边距(含溢出回补) + 触控框 + 间隙。
-                        HorizontalDivider(
-                            modifier = Modifier.padding(
-                                start = (YanjiSpacing.CardPadding - TaskTouchTargetOverhang) +
-                                    TaskTouchTargetSize +
-                                    YanjiSpacing.ItemGap
-                            ),
-                            thickness = 0.6.dp,
-                            color = YanjiColors.rowDivider
-                        )
-                    }
-                    StudyTaskRow(
-                        task = task,
-                        actualSeconds = actualSecondsByTaskId[task.id] ?: 0L,
-                        isRunning = task.id == runningTaskId,
-                        onToggle = { onToggle(task) },
-                        onStart = { onStart(task) },
-                        onEdit = {
-                            editingTask = task
-                            showAddSheet = true
-                        },
-                        onDelete = { onDelete(task.id) }
+            tasks.forEachIndexed { index, task ->
+                if (index > 0) {
+                    // 分割线内缩到**文字列**的起点，与标题左缘严格对齐。
+                    // 若只对齐卡片内边距，线会从勾选圈下方横穿过去，
+                    // 视觉上像在给上一行的标题划删除线。
+                    // 起点按行内实际排版推：左内边距(含溢出回补) + 触控框 + 间隙。
+                    HorizontalDivider(
+                        modifier = Modifier.padding(
+                            start = (YanjiSpacing.CardPadding - TaskTouchTargetOverhang) +
+                                TaskTouchTargetSize +
+                                YanjiSpacing.ItemGap
+                        ),
+                        thickness = 0.6.dp,
+                        color = YanjiColors.rowDivider
                     )
                 }
+                StudyTaskRow(
+                    task = task,
+                    actualSeconds = actualSecondsByTaskId[task.id] ?: 0L,
+                    isRunning = task.id == runningTaskId,
+                    onToggle = { onToggle(task) },
+                    onStart = { onStart(task) },
+                    onEdit = {
+                        editingTask = task
+                        showAddSheet = true
+                    },
+                    onDelete = { onDelete(task.id) }
+                )
             }
         }
     }
@@ -300,20 +256,7 @@ internal fun TodayPlanCard(
     }
 }
 
-/**
- * 卡片头：图标 + 标题 + 添加按钮。
- *
- * 靶心图标（[RemixIcons.TargetLine]）表达「今天要打到哪」，与相邻「每日打卡」的
- * 火焰图标形成同一套「图标即卡片主题」的读法 —— 用户扫过首页时，图标比文字更快
- * 认出这张卡是关于计划的。沿用打卡卡的 32dp 色调圆底 + 18dp 图标写法，
- * 两张相邻卡因此出自同一套排版规则。
- *
- * 取 Line 而非 Fill：靶心的三圈同心圆在 18dp 下，Fill 会糊成一个实心点。
- *
- * 标题用 `titleMedium`（16sp）但字重取 [FontWeight.Bold]，与「每日打卡」一致 ——
- * 两条卡片标题同字号同字重，扫首页时是同一层级的两件事，而不是一主一次。
- * 副标题状态文案由 [PlanProgressSummary] 承担。
- */
+/** 开放式列表标题与添加入口，不再使用彩色图标底座。 */
 @Composable
 private fun TodayPlanHeader(onAdd: () -> Unit) {
     Row(
@@ -322,25 +265,10 @@ private fun TodayPlanHeader(onAdd: () -> Unit) {
             .padding(horizontal = YanjiSpacing.CardPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = RemixIcons.TargetLine,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "今日计划",
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -348,128 +276,76 @@ private fun TodayPlanHeader(onAdd: () -> Unit) {
     }
 }
 
-/** 添加按钮：调性容器 + 主色图标，比裸 TextButton 更容易在扫视中被找到。 */
+/** 文本按钮保留清晰的添加入口与标准触控尺寸。 */
 @Composable
 private fun AddPlanButton(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(YanjiRadius.Small),
-        color = MaterialTheme.colorScheme.primaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = RemixIcons.AddLine,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(14.dp)
-            )
-            Text(
-                text = "添加",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
+    TextButton(onClick = onClick) {
+        Icon(
+            imageVector = RemixIcons.AddLine,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(YanjiSpacing.TightGap))
+        Text("添加")
     }
 }
 
-/**
- * 空态：现代卡片式引导，点击即可唤出添加计划面板。
- *
- * 底色取 [YanjiColors.fill]（iOS 式次级填充，比 [YanjiColors.inputFill] 浅一档）。
- * 空态是「等用户来填」的引导槽而非输入控件，整块压在白色卡片上，
- * 要的是暗示形而不抢层级。取浅一档是真机反馈
- * “inputFill #DEE4EC 蓝灰调太重”后的回调。
- *
- * 不设任何描边（AGENTS.md §三.6 卡片零边框）：深浅色均靠「底色 + 圆角形状」
- * 把槽位显出来，层级交给表面明度递进，不靠 outline。
- *
- * 不取 M3 `surfaceContainerHigh`：亮色槽位未在本主题赋值，它会回落到 M3 基线
- * 紫中性 #ECE6F0，铺在白卡上整块泛紫，与表单其余填充色明显不是一家。
- */
+/** 没有计划时用普通文字行引导添加，避免空态再套一张卡。 */
 @Composable
 private fun EmptyPlanHint(onClick: () -> Unit = {}) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(YanjiRadius.CompactCardRadius),
-        color = YanjiColors.fill,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = YanjiSpacing.CardPadding,
-                vertical = YanjiSpacing.ItemGapSmall
-            )
+            .clickable(role = Role.Button, onClickLabel = "添加今日计划", onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = YanjiSpacing.CardPadding, vertical = YanjiSpacing.ItemGap)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = RemixIcons.AddLine,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "规划今日第一项任务",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "写下今天要做的事，之后可以从这里直接开始专注。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        Text(
+            text = "规划今日第一项任务",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(YanjiSpacing.TightGap))
+        Text(
+            text = "写下要做的事，从这里开始专注。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
-/**
- * 进度区：一句状态 + 一条与全站共用的胶囊进度条。
- *
- * 结合件数与预计时长，直观感知剩余负担。
- * 全部完成时改用 success 语义色，与首页进度条达成 100% 时一致。
- */
+/** 先回答下一步做什么，再给出剩余负担；进行中的计划优先显示。 */
 @Composable
 private fun PlanProgressSummary(
-    tasks: List<StudyTask>
+    tasks: List<StudyTask>,
+    runningTaskId: String?
 ) {
-    val completed = tasks.count { it.isCompleted }
-    val total = tasks.size
-    val remaining = total - completed
-    val remainingMinutes = tasks.filter { !it.isCompleted }.sumOf { it.plannedMinutes }
-    val totalMinutes = tasks.sumOf { it.plannedMinutes }
-
-    val remainingTimeText = if (remainingMinutes > 0) " (约 ${formatTaskMinutes(remainingMinutes)})" else ""
-    val completedTimeText = if (totalMinutes > 0) " · 共完成 ${formatTaskMinutes(totalMinutes)}" else ""
-
-    Text(
-        text = when {
-            remaining == 0 -> "今天的事都做完了$completedTimeText"
-            completed == 0 -> "还有 $remaining 件待完成$remainingTimeText"
-            else -> "还剩 $remaining 件$remainingTimeText · 已完成 $completed 件"
-        },
-        modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding),
-        style = MaterialTheme.typography.bodySmall,
-        color = if (remaining == 0) YanjiColors.success else MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    val runningTask = tasks.firstOrNull { it.id == runningTaskId }
+    val pendingTasks = tasks.filter { !it.isCompleted }
+    val nextTask = runningTask ?: pendingTasks.firstOrNull()
+    val remainingMinutes = pendingTasks.sumOf { it.plannedMinutes }
+    Column(modifier = Modifier.padding(horizontal = YanjiSpacing.CardPadding)) {
+        Text(
+            text = when {
+                runningTask != null -> "正在专注 · ${runningTask.title}"
+                nextTask != null -> "下一项 · ${nextTask.title}"
+                else -> "今日计划已全部完成"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = if (nextTask == null) YanjiColors.success else MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (pendingTasks.isNotEmpty()) {
+            val remainingTime = if (remainingMinutes > 0) " · 约 ${formatTaskMinutes(remainingMinutes)}" else ""
+            Text(
+                text = "剩余 ${pendingTasks.size} 项$remainingTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 /**

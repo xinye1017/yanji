@@ -22,10 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,27 +63,22 @@ fun CheckInCard(
         durationMillis = YanjiMotion.DurationFast
     )
 
-    YanjiCard(
-        modifier = modifier.fillMaxWidth(),
-        variant = YanjiCardVariant.Standard
-    ) {
-        // SizeTransform 默认 clip = true：收起时旧内容被容器裁掉，看起来是向上收进
-        // 卡片里，而不是溢出盖住下面的卡片。只用淡入淡出、不加位移 —— 折叠不是翻页，
-        // 位移会让 7 日条和汇总行互相穿插。
-        AnimatedContent(
-            targetState = state.isCheckedInToday,
-            transitionSpec = {
-                (fadeIn(foldFadeSpec) togetherWith fadeOut(foldFadeSpec)).using(SizeTransform())
-            },
-            label = "CheckInCardFold",
-            modifier = Modifier.fillMaxWidth()
-        ) { checkedInToday ->
-            if (checkedInToday) {
-                CheckInSummary(
-                    days = state.totalCheckInDays,
-                    onClick = { state.todayCheckIn?.let(onTodayCheckInClick) }
-                )
-            } else {
+    AnimatedContent(
+        targetState = state.isCheckedInToday,
+        transitionSpec = {
+            (fadeIn(foldFadeSpec) togetherWith fadeOut(foldFadeSpec)).using(SizeTransform())
+        },
+        label = "CheckInCardFold",
+        modifier = modifier.fillMaxWidth()
+    ) { checkedInToday ->
+        if (checkedInToday) {
+            // 完成后撤掉卡片背景，只留一行可重新查看的签到状态。
+            CheckInSummary(
+                days = state.totalCheckInDays,
+                onClick = { state.todayCheckIn?.let(onTodayCheckInClick) }
+            )
+        } else {
+            YanjiCard(modifier = Modifier.fillMaxWidth(), variant = YanjiCardVariant.Standard) {
                 CheckInPrompt(
                     state = state,
                     onCheckIn = {
@@ -257,15 +249,7 @@ private fun CheckInPrompt(
     }
 }
 
-/**
- * 已签到形态：一行累计天数，卡片的最安静状态。
- *
- * 数字用累计签到天数而不是连续天数：后者断签一次就归零，会把三个月的坚持显示成
- * 「1 天」。连续天数在庆祝弹窗里已经有了（`已连续打卡 N 天`），这里不重复。
- *
- * 整行可点，只是沿用原来「今日已签」角标的能力：再看一次今天的打卡卡片。
- * 右侧那颗勾就是那个角标去掉文字后剩下的图形，顺带也说明了这行为什么能点。
- */
+/** 已签后仅显示一行轻量状态，累计天数与庆祝入口沿用真实记录。 */
 @Composable
 private fun CheckInSummary(days: Int, onClick: () -> Unit) {
     Row(
@@ -276,71 +260,28 @@ private fun CheckInSummary(days: Int, onClick: () -> Unit) {
                 onClickLabel = "查看今日打卡卡片",
                 onClick = onClick
             )
-            .padding(horizontal = YanjiSpacing.CardPadding, vertical = YanjiSpacing.CardPaddingCompact),
-        verticalAlignment = Alignment.CenterVertically
+            .heightIn(min = 48.dp)
+            .padding(horizontal = YanjiSpacing.CardPadding, vertical = YanjiSpacing.ItemGapSmall),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(YanjiSpacing.ItemGapSmall)
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = RemixIcons.FireFill,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(YanjiSpacing.ItemGapSmall))
-        // 一个 Text 承载三种字号，靠共享基线对齐；拆成多个 Text 就得处理
-        // 22sp 与 14sp 的行盒底边对齐问题，标签会被顶上去。
-        Text(
-            text = buildAnnotatedString {
-                withStyle(
-                    SpanStyle(
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                ) {
-                    append("已累计签到 ")
-                }
-                withStyle(
-                    SpanStyle(
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                ) {
-                    append("$days")
-                }
-                withStyle(
-                    SpanStyle(
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                ) {
-                    append(" 天")
-                }
-            }
+        Icon(
+            imageVector = RemixIcons.CheckLine,
+            contentDescription = null,
+            tint = YanjiColors.success,
+            modifier = Modifier.size(18.dp)
         )
-        Spacer(modifier = Modifier.weight(1f))
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(YanjiColors.success.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = RemixIcons.CheckLine,
-                contentDescription = null,
-                tint = YanjiColors.success,
-                modifier = Modifier.size(13.dp)
-            )
-        }
+        Text(
+            text = "今日已打卡 · 累计 $days 天",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Icon(
+            imageVector = RemixIcons.ArrowRightSLine,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
