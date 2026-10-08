@@ -90,7 +90,11 @@ export function registerTier4Tests() {
       // 5. Night Settings: Check preferences & return
       // -------------------------------------------------------------
       const settings = await bridge.getUserSettings();
-      assertEqual(settings.focusDurationMinutes, 45);
+      assertEqual(settings.examDate, '2026-12-26', 'Exam target date must round-trip');
+      assert(
+        !('focusDurationMinutes' in settings) && !('breakDurationMinutes' in settings),
+        'UserSettings must not expose fabricated focus/break duration fields'
+      );
     });
   });
 

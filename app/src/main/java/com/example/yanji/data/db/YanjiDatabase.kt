@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -614,6 +614,23 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v20 → v21：`journal_entries` 新增 `sessionId`，把快速记录持久地挂到某次专注上。
+         *
+         * 为什么必须有这一列：此前 `sessionId` 只被注入保存回调的响应体，
+         * 每一条读取路径（`getNotes` / `getNotesForDate` / `getDailyTimeline`）都发出空串，
+         * 于是「记录此刻自动关联正在进行的专注」在第一次读取之后就不可见了。
+         *
+         * 纯 `ADD COLUMN ... TEXT`（可空、无默认值）：SQLite 全版本可用，存量行一律为
+         * NULL —— 升级前的记录不可能有时段归属，这与事实一致，**不编造归属**。
+         * 同样刻意不用 `ALTER TABLE ... DROP COLUMN`（minSdk 24 真机 SQLite < 3.35 不支持）。
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE journal_entries ADD COLUMN sessionId TEXT")
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -639,7 +656,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_16_17,
             MIGRATION_17_18,
             MIGRATION_18_19,
-            MIGRATION_19_20
+            MIGRATION_19_20,
+            MIGRATION_20_21
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

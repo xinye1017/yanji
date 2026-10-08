@@ -42,7 +42,7 @@ export function registerTier2Tests() {
   describe('Tier 2: Timer Threshold & Lifecycle Boundaries', () => {
     it('verifies countdown timer reaching 00:00:00 clamps remainingSeconds to 0 and does not underflow', async () => {
       await bridge.startFocus('sub-math', '数学', 'COUNTDOWN');
-      const plannedSeconds = bridge.userSettings.focusDurationMinutes * 60;
+      const plannedSeconds = bridge.defaultCountdownSeconds;
 
       // Advance by more than planned time
       bridge.advanceTime(plannedSeconds + 600);

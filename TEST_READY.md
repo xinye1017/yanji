@@ -38,7 +38,9 @@ The comprehensive, requirement-driven, opaque-box E2E test suite for the React N
   ▶ Tier 1: Feature 15 — Cross-page "Record Moment" Instant Modal (2 tests) -> PASS
   ▶ Tier 1: Feature 16 — Non-interrupting Record Moment during Focus (1 test) -> PASS
   ▶ Tier 1: Feature 17 — Review Screen Deterministic Daily Timeline (2 tests) -> PASS
-  ▶ Tier 1: Feature 18 — Review Screen 7-Day Trend & Subject Breakdown (1 test) -> PASS
+  > Tier 1: Feature 18 — Review Screen 7-Day Trend & Subject Breakdown (1 test) -> PASS
+  > Tier 1: Feature 18b — ReviewStats rolling N-day window (no future bars) (3 tests) -> PASS
+  > Tier 1: Feature 18c — NoteEntry.sessionId is a nullable string (2 tests) -> PASS
   ▶ Tier 1: Feature 19 — Clean AI Capability Placeholder (1 test) -> PASS
   ▶ Tier 1: Feature 20 — E2E Test Suite Pass (Tiers 1-4) (1 test) -> PASS
   ▶ Tier 1: Feature 21 — Adversarial Coverage Hardening (Tier 5) (2 tests) -> PASS
@@ -64,16 +66,16 @@ The comprehensive, requirement-driven, opaque-box E2E test suite for the React N
 ======================================================================
                        E2E TEST EXECUTION SUMMARY
 ======================================================================
- ✔ Tier 1    : 41/41 passed (100.0%) [Failed: 0, Skipped: 0]
+ ✔ Tier 1    : 54/54 passed (100.0%) [Failed: 0, Skipped: 0]
  ✔ Tier 2    : 9/9 passed (100.0%) [Failed: 0, Skipped: 0]
  ✔ Tier 3    : 4/4 passed (100.0%) [Failed: 0, Skipped: 0]
  ✔ Tier 4    : 3/3 passed (100.0%) [Failed: 0, Skipped: 0]
 ----------------------------------------------------------------------
- Total Tests: 57
- Passed:      57
+ Total Tests: 70
+ Passed:      70
  Failed:      0
  Skipped:     0
- Total Time:  0.02s
+ Total Time:  0.05s
 ======================================================================
 Result: ALL TESTS PASSED (100% SUCCESS)
 ```
@@ -84,11 +86,11 @@ Result: ALL TESTS PASSED (100% SUCCESS)
 
 | Tier | Category | Test Suites | Total Tests | Pass Count | Pass Rate | Status |
 |---|---|---|---|---|---|---|
-| **Tier 1** | Feature Coverage (Feat 1–21) | 5 suites (`m1` to `m5`) | 41 | 41 | 100.0% | **READY** |
+| **Tier 1** | Feature Coverage (Feat 1–21) | 6 suites (`m1` to `m5`, `m8`) | 54 | 54 | 100.0% | **READY** |
 | **Tier 2** | Boundary & Corner Cases | 5 suites (`boundaries.test.js`) | 9 | 9 | 100.0% | **READY** |
 | **Tier 3** | Cross-Feature Interactions | 4 suites (`interactions.test.js`) | 4 | 4 | 100.0% | **READY** |
 | **Tier 4** | Real-World Workflows | 3 suites (`workflows.test.js`) | 3 | 3 | 100.0% | **READY** |
-| **Total** | Full Suite | 17 suites | 57 | 57 | 100.0% | **READY** |
+| **Total** | Full Suite | 18 suites | 70 | 70 | 100.0% | **READY** |
 
 ---
 

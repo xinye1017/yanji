@@ -110,9 +110,14 @@ export function registerM2Tests() {
       const settings = await bridge.getUserSettings();
       assert(BridgeSchemas.isValidUserSettings(settings), 'Settings must match UserSettings schema');
 
-      await bridge.updateUserSettings({ focusDurationMinutes: 60 });
+      await bridge.updateUserSettings({ targetMajor: '计算机科学与技术' });
       const updated = await bridge.getUserSettings();
-      assertEqual(updated.focusDurationMinutes, 60, 'focusDurationMinutes should update to 60');
+      assertEqual(updated.targetMajor, '计算机科学与技术', 'targetMajor should update');
+
+      // focusDurationMinutes / breakDurationMinutes were removed from the
+      // contract: UserSettings has no such fields, so no value is legitimate.
+      assert(!('focusDurationMinutes' in updated), 'focusDurationMinutes must not be part of UserSettings');
+      assert(!('breakDurationMinutes' in updated), 'breakDurationMinutes must not be part of UserSettings');
     });
 
     it('verifies exam countdown returns valid days calculation', async () => {

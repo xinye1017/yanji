@@ -28,10 +28,28 @@ export const YanjiColors = {
     accentPrimary: '#356AE6',
     accentStrong: '#2453BF',
     accentSoft: '#EAF1FF',
-    /** Semantic colors. */
-    success: '#2F9E6D',
-    warning: '#E67E22',
-    danger: '#D64545',
+    /**
+     * Foreground on `accentPrimary` (Compose: YanjiOnPrimary #FFFFFF).
+     * Measured 4.82:1 on #356AE6 — passes WCAG 1.4.3.
+     */
+    onAccent: '#FFFFFF',
+    /**
+     * Modal / sheet scrim. RN-local: Compose has no scrim token (Material
+     * `scrim` is only used as a shadow colour in GlassBottomBar.kt:220), so
+     * this is a deliberate RN decision.
+     */
+    scrim: 'rgba(0,0,0,0.32)',
+    /**
+     * Semantic colours — the "text/icon" tier, so they are set for >=4.5:1.
+     * Authority: app/src/main/java/com/example/yanji/theme/Color.kt:105-111,
+     * which RETIRED the previous values (#2F9E6D / #E67E22 / #D64545) with
+     * measured failures (success 3.37, warning 2.64, danger 4.15).
+     * Measured here: #17784F 5.47/4.97, #9A6100 5.14/4.67, #BE3232 5.69/5.16
+     * (white card / page #F2F4F7). Do not drift these back.
+     */
+    success: '#17784F',
+    warning: '#9A6100',
+    danger: '#BE3232',
     /** Field/control boundary color (WCAG 1.4.11 ≥3:1) — inputs/buttons only. */
     fieldBorder: '#7E8DA1',
   },
@@ -51,6 +69,20 @@ export const YanjiColors = {
     accentPrimary: '#4F7DF3',
     accentStrong: '#7197F7',
     accentSoft: '#294F7DF3',
+    /**
+     * Foreground on `accentPrimary` (Compose: YanjiDarkOnPrimary #0D111A).
+     * Deliberately dark, not white: the dark accent is raised to #4F7DF3 for
+     * legibility on the Midnight-Blue background, and white on it measures only
+     * 3.78:1 (Color.kt:205-212 documents 2.56–3.78:1 across the five mascot
+     * themes). #0D111A measures 5.00:1 and is the existing background token.
+     */
+    onAccent: '#0D111A',
+    /**
+     * Heavier scrim than light mode: a 0.32 black veil composites to ~#090C11
+     * on the #0D111A background, which barely separates the sheet. 0.56 gives
+     * the floating layer real presence. RN-local decision (no Compose source).
+     */
+    scrim: 'rgba(0,0,0,0.56)',
     success: '#34D399',
     warning: '#FBBF24',
     danger: '#F87171',

@@ -514,6 +514,15 @@ class YanjiRepository private constructor() {
      */
     fun addOrUpdateNote(entry: NoteEntry) = noteStore.addOrUpdate(entry)
 
+    /**
+     * [addOrUpdateNote] 的**可等待**版本：返回时写入已经落库。
+     *
+     * 桥接层 `saveQuickNote` 依赖这个语义：promise 必须在 Room 行真实存在之后才 resolve，
+     * 否则 JS 侧紧接着读取会漏掉刚保存的记录。UI 侧的 `saveNote` 不需要等待，继续用
+     * [addOrUpdateNote]。
+     */
+    suspend fun addOrUpdateNoteAndAwait(entry: NoteEntry) = noteStore.addOrUpdateAndAwait(entry)
+
     /** 切换随笔收藏标记（历史页向右滑 / 编辑页收藏按钮）。 */
     fun setNoteFavorite(id: String, favorite: Boolean) = noteStore.setFavorite(id, favorite)
 

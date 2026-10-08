@@ -139,7 +139,12 @@ data class NoteEntryEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val isFavorite: Int = 0, // v15 新增：0/1，随笔收藏标记
-    val isDraft: Int = 0 // v16 新增：0/1，随笔草稿标记（0=已保存，1=草稿）
+    val isDraft: Int = 0, // v16 新增：0/1，随笔草稿标记（0=已保存，1=草稿）
+    /**
+     * v21 新增：关联的专注会话 id。可空、无默认值 ——
+     * 存量行一律为 NULL：升级前的记录不可能有时段归属，**迁移不编造归属**。
+     */
+    val sessionId: String? = null
 ) {
     fun toDomainModel(): NoteEntry {
         return NoteEntry(
@@ -156,7 +161,8 @@ data class NoteEntryEntity(
             createdAt = createdAt,
             updatedAt = updatedAt,
             isFavorite = isFavorite != 0,
-            isDraft = isDraft != 0
+            isDraft = isDraft != 0,
+            sessionId = sessionId?.ifBlank { null }
         )
     }
 
@@ -176,7 +182,8 @@ data class NoteEntryEntity(
                 createdAt = model.createdAt,
                 updatedAt = model.updatedAt,
                 isFavorite = if (model.isFavorite) 1 else 0,
-                isDraft = if (model.isDraft) 1 else 0
+                isDraft = if (model.isDraft) 1 else 0,
+                sessionId = model.sessionId?.ifBlank { null }
             )
         }
     }

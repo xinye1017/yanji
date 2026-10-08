@@ -310,7 +310,16 @@ data class NoteEntry(
     /** 收藏标记（v15 新增）。历史页向右滑即可切换。 */
     val isFavorite: Boolean = false,
     /** 草稿标记（v16 新增）。已保存随笔为 false，暂存草稿为 true。 */
-    val isDraft: Boolean = false
+    val isDraft: Boolean = false,
+    /**
+     * 关联的专注会话 id；未绑定时为 null。
+     *
+     * v21 起持久化到 `journal_entries.sessionId`：快速记录与「正在进行的那次专注」
+     * 的绑定关系必须能被每一次读取看到，而不是只活在保存回调里。
+     * 由 JS 侧解析后作为参数传入（见 `RecordMomentModal.tsx`），桥接层**不自行反查**
+     * 活动会话——那会让"绑哪一场"出现第二个事实来源。
+     */
+    val sessionId: String? = null
 )
 
 @Serializable

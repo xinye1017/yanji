@@ -10,11 +10,16 @@ export function registerM3Tests() {
   describe('Tier 1: Feature 9 — Design Tokens (Midnight Blue, Radius, Zero-Border)', () => {
     it('verifies dark mode palette is Midnight Blue and forbids #000000 pure black', () => {
       const darkBg = YanjiThemeTokens.colors.dark.bgPrimary;
-      assertEqual(darkBg, '#0B132B', 'Dark mode primary background must be Midnight Blue #0B132B');
+      assertEqual(darkBg, '#0D111A', 'Dark mode primary background must be Midnight Blue #0D111A');
 
       const validation = YanjiThemeTokens.validateBackgroundColor('#000000', true);
       assertEqual(validation.valid, false, 'Validation must reject #000000 in dark mode');
       assert(validation.error.includes('#000000'), 'Error must explicitly identify pure black violation');
+
+      // No shipped dark surface may ever be pure black.
+      for (const [key, value] of Object.entries(YanjiThemeTokens.colors.dark)) {
+        assert(value !== '#000000' && value !== '#000', 'Dark token ' + key + ' must never be pure black');
+      }
     });
 
     it('verifies card containers mandate ZERO borders in both light and dark themes', () => {
@@ -27,7 +32,7 @@ export function registerM3Tests() {
     });
 
     it('verifies all radius tokens adhere to semantic YanjiRadius scale', () => {
-      const allowedRadius = [4, 8, 12, 16, 24, 9999];
+      const allowedRadius = [4, 8, 12, 16, 24, 28, 9999];
       for (const r of allowedRadius) {
         const res = YanjiThemeTokens.validateRadiusToken(r);
         assertEqual(res.valid, true, `Radius ${r} must be valid`);
@@ -35,6 +40,9 @@ export function registerM3Tests() {
 
       const invalidCheck = YanjiThemeTokens.validateRadiusToken(15);
       assertEqual(invalidCheck.valid, false, 'Arbitrary radius (15px) must be rejected');
+
+      // 28 is a first-class step (Radius.kt HeroCardRadius / SheetRadius), not an exemption.
+      assertEqual(YanjiThemeTokens.radius.xxl, 28, 'xxl step must be 28 (HeroCardRadius / SheetRadius)');
     });
   });
 
@@ -77,8 +85,8 @@ export function registerM3Tests() {
     it('verifies settings updates persist exam target date and theme preference cleanly', () => {
       const mockSettings = {
         examDate: '2026-12-26',
-        targetScore: 400,
-        focusDurationMinutes: 45,
+        targetSchool: '',
+        targetMajor: '',
         themePreference: 'SYSTEM',
       };
 

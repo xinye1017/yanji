@@ -60,6 +60,27 @@ internal class NoteStore(
     }
 
     /**
+     * [addOrUpdate] 的**可等待**版本：返回时 Room 写入已经落库。
+     *
+     * 存在的理由：`addOrUpdate` 自己 `launch`，桥接层 `saveQuickNote` 会在行还不存在时就
+     * resolve，JS 侧紧接着的读取会漏掉这条记录。这里把同一条归一化规则原样搬过来
+     * （按 id 保留首次 `createdAt`、刷新 `updatedAt`），只是把执行权交还调用方。
+     *
+     * 仍然**只写 Room**：内存列表由 `bind()` 的 DAO Flow 回灌，不会出现双写。
+     * [onAchievementEvent] 是 NoteStore 的私有回调，因此可等待写路径也必须放在这里。
+     */
+    suspend fun addOrUpdateAndAwait(entry: NoteEntry) {
+        val dao = dbProvider()?.noteEntryDao() ?: return
+        val existing = dao.getById(entry.id)
+        val normalized = entry.copy(
+            createdAt = existing?.createdAt ?: entry.createdAt,
+            updatedAt = System.currentTimeMillis()
+        )
+        dao.insert(NoteEntryEntity.fromDomainModel(normalized))
+        onAchievementEvent?.invoke(AchievementEvent.NoteCreated(normalized))
+    }
+
+    /**
      * 切换收藏。只更新 `isFavorite` 与 `updatedAt`，不改正文与 `createdAt`。
      */
     fun setFavorite(id: String, favorite: Boolean) {

@@ -1,6 +1,6 @@
 # 研迹 (Yanji) · 考研学习管理与心流伴侣
 
-<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=20 roomLibrary=2.8.4 -->
+<!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=21 roomLibrary=2.8.4 -->
 
 <p align="center">
   <img src="app/src/main/res/drawable/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />

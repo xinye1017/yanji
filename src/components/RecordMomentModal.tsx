@@ -85,7 +85,7 @@ export function RecordMomentModal({
         style={{
           flex: 1,
           justifyContent: 'flex-end',
-          backgroundColor: 'rgba(0,0,0,0.32)',
+          backgroundColor: theme.colors.scrim,
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
@@ -134,12 +134,19 @@ export function RecordMomentModal({
           ) : null}
 
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: YanjiSpacing.lg }}>
-            <Pressable onPress={handleClose} style={{ paddingVertical: 10, paddingHorizontal: 16 }}>
+            <Pressable
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="取消"
+              style={{ paddingVertical: 10, paddingHorizontal: 16 }}
+            >
               <Text style={{ color: theme.colors.textSecondary, fontSize: 15 }}>取消</Text>
             </Pressable>
             <Pressable
               onPress={handleSave}
               disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel={saving ? '保存中' : '保存'}
               style={{
                 paddingVertical: 10,
                 paddingHorizontal: 20,
@@ -149,7 +156,7 @@ export function RecordMomentModal({
                 opacity: saving ? 0.6 : 1,
               }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+              <Text style={{ color: theme.colors.onAccent, fontSize: 15, fontWeight: '600' }}>
                 {saving ? '保存中' : '保存'}
               </Text>
             </Pressable>

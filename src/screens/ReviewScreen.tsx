@@ -12,7 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative, onDataChanged } from '../bridge';
-import type { DailyTimeline, ReviewStats } from '../bridge';
+import type { DailyTimeline, ReviewStats, StudyTask } from '../bridge';
 import { YanjiCard, YanjiEmptyState, YanjiSectionHeader } from '../components/YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
@@ -52,6 +52,7 @@ export function ReviewScreen(): React.JSX.Element {
   const [date, setDate] = useState(todayIso);
   const [timeline, setTimeline] = useState<DailyTimeline | null>(null);
   const [stats, setStats] = useState<ReviewStats | null>(null);
+  const [dayTasks, setDayTasks] = useState<StudyTask[]>([]);
 
   const refresh = useCallback(async (targetDate: string) => {
     try {
@@ -61,6 +62,7 @@ export function ReviewScreen(): React.JSX.Element {
       ]);
       setTimeline(day);
       setStats(review);
+      setDayTasks(await YanjiDataNative.getTodayTasks(targetDate));
     } catch {
       // Keep the previous snapshot rather than inventing entries.
     }
@@ -92,6 +94,11 @@ export function ReviewScreen(): React.JSX.Element {
   const hasRecords =
     !!timeline &&
     (timeline.sessions.length > 0 || timeline.completedTasks.length > 0 || timeline.notes.length > 0);
+
+  const completedTaskCount = useMemo(
+    () => dayTasks.filter(task => task.completed).length,
+    [dayTasks]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
@@ -213,6 +220,19 @@ export function ReviewScreen(): React.JSX.Element {
           <YanjiEmptyState title="暂无统计数据" />
         ) : (
           <YanjiCard>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                paddingBottom: YanjiSpacing.md,
+              }}
+            >
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>日均专注时长</Text>
+              <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                {stats ? formatMinutes(stats.dailyAverageMinutes * 60) : '—'}
+              </Text>
+            </View>
             {trendEntries.map(entry => {
               const max = Math.max(...trendEntries.map(e => e.minutes), 1);
               return (
@@ -265,6 +285,26 @@ export function ReviewScreen(): React.JSX.Element {
                   </Text>
                 </View>
               ))}
+            </YanjiCard>
+          </>
+        ) : null}
+        {dayTasks.length > 0 ? (
+          <>
+            <YanjiSectionHeader title="任务完成" />
+            <YanjiCard>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>已完成</Text>
+                <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                  {completedTaskCount} / {dayTasks.length}
+                </Text>
+              </View>
             </YanjiCard>
           </>
         ) : null}

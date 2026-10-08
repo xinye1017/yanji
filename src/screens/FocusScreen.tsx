@@ -23,6 +23,7 @@ import {
 import type { ActiveSessionState, Subject, TimerTickEvent } from '../bridge';
 import { YanjiPrimaryButton, YanjiSectionHeader } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing, YanjiTypography } from '../theme/tokens';
 
@@ -43,6 +44,18 @@ function todayIso(): string {
 
 const DURATION_PRESETS = [25, 45, 60, 90] as const;
 
+/** Task the Focus tab will bind the next session to (handed over from Today). */
+interface TaskBinding {
+  taskId: string;
+  subjectId: string;
+  title: string;
+}
+
+/** Bounds for a duration preset handed over from a task's planned minutes. */
+const MIN_MINUTES = 5;
+const MAX_MINUTES = 180;
+const DEFAULT_MINUTES = 45;
+
 export function FocusScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
   const [date] = useState(todayIso);
@@ -51,9 +64,12 @@ export function FocusScreen(): React.JSX.Element {
   const [tick, setTick] = useState<TimerTickEvent | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-  const [durationMinutes, setDurationMinutes] = useState(45);
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
   const [recordOpen, setRecordOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
+  const { focusPreset, clearFocusPreset } = useNavigation();
 
   const refreshSession = useCallback(async () => {
     try {
@@ -78,6 +94,7 @@ export function FocusScreen(): React.JSX.Element {
     const unsubTick = onTimerTick(event => setTick(event));
     const unsubState = onTimerStateChanged(event => {
       setSession(event.session);
+      setStartError(null);
       void refreshSession();
     });
     return () => {
@@ -85,6 +102,21 @@ export function FocusScreen(): React.JSX.Element {
       unsubState();
     };
   }, [refreshSession]);
+
+  // ---- Task handed over from the Today tab -------------------------------
+  useEffect(() => {
+    if (!focusPreset) return;
+    clearFocusPreset();
+    const planned = Math.round(focusPreset.plannedMinutes);
+    setDurationMinutes(planned >= MIN_MINUTES ? Math.min(MAX_MINUTES, planned) : DEFAULT_MINUTES);
+    setSelectedSubjectId(focusPreset.subjectId);
+    setTaskBinding({
+      taskId: focusPreset.taskId,
+      subjectId: focusPreset.subjectId,
+      title: focusPreset.title,
+    });
+    setStartError(null);
+  }, [focusPreset, clearFocusPreset]);
 
   const selectedSubject = useMemo(
     () => subjects.find(s => s.id === selectedSubjectId) ?? null,
@@ -102,21 +134,28 @@ export function FocusScreen(): React.JSX.Element {
   const handleStart = useCallback(async () => {
     if (busy || !selectedSubject) return;
     setBusy(true);
+    setStartError(null);
     try {
       await YanjiTimerNative.startFocus(
         selectedSubject.id,
         selectedSubject.name,
         `${durationMinutes}分钟专注`,
         '',
-        null
+        taskBinding?.taskId ?? null
       );
+      setTaskBinding(null);
       await refreshSession();
-    } catch {
-      // A concurrent session or native error — the state event will resynchronise.
+    } catch (error) {
+      const code = (error as { code?: string } | null | undefined)?.code;
+      setStartError(
+        code === 'E_SESSION_ACTIVE' ? '已有专注正在进行，先结束或放弃当前会话' : '启动失败，请重试'
+      );
+      // Resynchronise from the authoritative native state.
+      await refreshSession();
     } finally {
       setBusy(false);
     }
-  }, [busy, selectedSubject, durationMinutes, refreshSession]);
+  }, [busy, selectedSubject, durationMinutes, taskBinding, refreshSession]);
 
   const handlePauseResume = useCallback(async () => {
     try {
@@ -164,7 +203,14 @@ export function FocusScreen(): React.JSX.Element {
               return (
                 <Pressable
                   key={subject.id}
-                  onPress={() => setSelectedSubjectId(subject.id)}
+                  onPress={() => {
+                    setSelectedSubjectId(subject.id);
+                    // A session bound to a different task must not silently
+                    // pick up this subject.
+                    setTaskBinding(prev =>
+                      prev && prev.subjectId === subject.id ? prev : null
+                    );
+                  }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   style={{
@@ -213,7 +259,7 @@ export function FocusScreen(): React.JSX.Element {
                 >
                   <Text
                     style={{
-                      color: active ? '#FFFFFF' : theme.colors.textSecondary,
+                      color: active ? theme.colors.onAccent : theme.colors.textSecondary,
                       fontSize: 14,
                       fontWeight: active ? '600' : '400',
                     }}
@@ -225,6 +271,14 @@ export function FocusScreen(): React.JSX.Element {
             })}
           </View>
 
+          {taskBinding ? (
+            <Text
+              style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: YanjiSpacing.sm }}
+            >
+              将关联任务：{taskBinding.title}
+            </Text>
+          ) : null}
+
           <View style={{ marginTop: YanjiSpacing.xxl }}>
             <YanjiPrimaryButton
               label={busy ? '启动中' : '开始专注'}
@@ -232,6 +286,14 @@ export function FocusScreen(): React.JSX.Element {
               disabled={busy || !selectedSubject}
             />
           </View>
+
+          {startError ? (
+            <Text
+              style={{ color: theme.colors.danger, fontSize: 13, marginTop: YanjiSpacing.md }}
+            >
+              {startError}
+            </Text>
+          ) : null}
 
           <Pressable
             onPress={() => setRecordOpen(true)}

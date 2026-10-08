@@ -86,7 +86,7 @@ export function SettingsScreen(): React.JSX.Element {
                 >
                   <Text
                     style={{
-                      color: active ? '#FFFFFF' : theme.colors.textSecondary,
+                      color: active ? theme.colors.onAccent : theme.colors.textSecondary,
                       fontSize: 14,
                       fontWeight: active ? '600' : '400',
                     }}
@@ -114,21 +114,6 @@ export function SettingsScreen(): React.JSX.Element {
             }}
           >
             {settings?.examDate && settings.examDate.length > 0 ? settings.examDate : '未设置'}
-          </Text>
-        </YanjiCard>
-
-        <YanjiSectionHeader title="默认专注" />
-        <YanjiCard>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>单次专注时长</Text>
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontSize: 17,
-              fontWeight: '600',
-              marginTop: 4,
-            }}
-          >
-            {settings ? `${settings.focusDurationMinutes} 分钟` : '—'}
           </Text>
         </YanjiCard>
 

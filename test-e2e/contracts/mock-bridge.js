@@ -1,4 +1,10 @@
 /**
+ * Threshold for counting a day as "active" in the rolling review window.
+ * Mirrors StudyStatisticsRepository.activeDayThresholdSeconds (30 min).
+ */
+const ACTIVE_DAY_THRESHOLD_MINUTES = 30;
+
+/**
  * Yanji E2E Test Suite - Reference Bridge Oracle & In-Memory Driver
  * Implements authoritative Room DB & ActiveSessionCoordinator behavior
  * derived from PROJECT.md § Interface Contracts.
@@ -29,13 +35,19 @@ export class MockYanjiBridge {
       { id: 'sub-pol', name: '政治', color: '#E07A5F' },
       { id: 'sub-cs', name: '专业课', color: '#9B5DE5' },
     ];
+    // Mirrors the domain UserSettings (Models.kt). There is deliberately no
+    // focusDurationMinutes / breakDurationMinutes: those fields do not exist in
+    // the domain model, so any value would be fabricated (§三.3).
     this.userSettings = initialData.userSettings ? { ...initialData.userSettings } : {
       examDate: '2026-12-26',
-      targetScore: 400,
-      focusDurationMinutes: 45,
-      breakDurationMinutes: 10,
+      targetSchool: '',
+      targetMajor: '',
       themePreference: 'SYSTEM',
     };
+    // Countdown length in seconds. UserSettings has no duration field, so the
+    // reference bridge takes it from the caller (mirroring the native side, where
+    // FocusModes.targetSeconds parses "N分钟" out of the mode name).
+    this.defaultCountdownSeconds = initialData.defaultCountdownSeconds ?? 25 * 60;
     this.themeState = {
       mode: 'SYSTEM',
       isDark: true, // defaults to dark (Midnight Blue) for quiet focus
@@ -62,7 +74,7 @@ export class MockYanjiBridge {
     if (this.activeSession) {
       throw new Error('A focus session is already active');
     }
-    const plannedSeconds = this.userSettings.focusDurationMinutes * 60;
+    const plannedSeconds = mode.toUpperCase() === 'COUNTDOWN' ? this.defaultCountdownSeconds : 0;
     this.activeSession = {
       sessionId: `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       subjectId,
@@ -286,30 +298,65 @@ export class MockYanjiBridge {
     return this.subjects.map(s => ({ ...s }));
   }
 
+  /**
+   * Rolling N-day window (mirrors YanjiTime.lastDaysRange(days)).
+   *
+   * Semantics that the native side must honour and this reference oracle enforces:
+   *  - days is honoured: exactly N keys, from (today - (N-1)) through today.
+   *  - Keys are local-calendar yyyy-MM-dd, derived by shifting the local date,
+   *    never by subtracting 24h multiples (that drifts across DST).
+   *  - No future-dated keys: tomorrow can never appear, even with a zero value.
+   *  - No calendar-week clipping: the window is not aligned to Monday.
+   *  - Sessions outside the window contribute to nothing.
+   *  - Zero days with data is reported as 0, never faked (activeDays / average).
+   */
   async getReviewStats(days = 7) {
+    const windowDays = Math.max(1, Math.floor(days));
     const dailyFocusMinutes = {};
     const subjectDistribution = {};
     let totalMinutes = 0;
+    let activeDays = 0;
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(this.virtualClockMs - i * 86400000).toISOString().split('T')[0];
+    const windowDates = [];
+    for (let i = windowDays - 1; i >= 0; i--) {
+      const d = this._isoDateAt(this.virtualClockMs, -i);
+      windowDates.push(d);
       dailyFocusMinutes[d] = 0;
     }
 
     for (const session of this.sessionRecords) {
-      if (dailyFocusMinutes[session.date] !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(dailyFocusMinutes, session.date)) {
         dailyFocusMinutes[session.date] += session.durationMinutes;
+        subjectDistribution[session.subjectName] =
+          (subjectDistribution[session.subjectName] || 0) + session.durationMinutes;
+        totalMinutes += session.durationMinutes;
       }
-      subjectDistribution[session.subjectName] = (subjectDistribution[session.subjectName] || 0) + session.durationMinutes;
-      totalMinutes += session.durationMinutes;
+    }
+
+    // An "active day" is a day with at least 30 minutes of recorded study,
+    // matching StudyStatisticsRepository.activeDayThresholdSeconds.
+    for (const d of windowDates) {
+      if (dailyFocusMinutes[d] >= ACTIVE_DAY_THRESHOLD_MINUTES) activeDays++;
     }
 
     return {
-      days,
+      days: windowDays,
       dailyFocusMinutes,
       subjectDistribution,
       totalFocusHours: parseFloat((totalMinutes / 60).toFixed(1)),
+      dailyAverageMinutes: Math.round(totalMinutes / windowDates.length),
+      activeDays,
     };
+  }
+
+  /** Local-calendar yyyy-MM-dd shifted by deltaDays (never UTC-shifted). */
+  _isoDateAt(epochMs, deltaDays) {
+    const d = new Date(epochMs);
+    d.setDate(d.getDate() + deltaDays);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   async getDailyTimeline(date) {

@@ -11,6 +11,7 @@ import { registerM2Tests } from './tier1-features/m2-native-bridge.test.js';
 import { registerM3Tests } from './tier1-features/m3-design-navigation.test.js';
 import { registerM4Tests } from './tier1-features/m4-today-focus-moment.test.js';
 import { registerM5Tests } from './tier1-features/m5-review-ai-e2e.test.js';
+import { registerShippedTokenTests } from './tier1-features/m8-shipped-tokens.test.js';
 import { registerTier2Tests } from './tier2-boundaries/boundaries.test.js';
 import { registerTier3Tests } from './tier3-interactions/interactions.test.js';
 import { registerTier4Tests } from './tier4-workflows/workflows.test.js';
@@ -23,6 +24,7 @@ async function main() {
   registerM3Tests();
   registerM4Tests();
   registerM5Tests();
+  registerShippedTokenTests();
 
   // Register Tier 2: Boundary & Corner Cases
   harness.setTier('Tier 2');

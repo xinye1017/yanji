@@ -13,7 +13,7 @@ import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 export type ThemeMode = 'SYSTEM' | 'LIGHT' | 'DARK';
 
-export type TimerPhase = 'IDLE' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export type TimerPhase = 'FOCUS' | 'BREAK' | 'IDLE';
 
 export type TimerMode = 'COUNTDOWN' | 'STOPWATCH';
 
@@ -50,7 +50,8 @@ export interface NoteEntry {
   timestamp: number;
   content: string;
   isFavorite: boolean;
-  sessionId: string;
+  /** Focus session id, or null when the note is not bound to a session. Never empty string. */
+  sessionId: string | null;
 }
 
 export interface TodayStats {
@@ -101,8 +102,6 @@ export interface UserSettings {
   examDate: string;
   targetSchool: string;
   targetMajor: string;
-  focusDurationMinutes: number;
-  breakDurationMinutes: number;
   themePreference: ThemeMode;
 }
 

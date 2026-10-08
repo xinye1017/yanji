@@ -74,7 +74,7 @@ export function YanjiPrimaryButton({
     >
       <Text
         style={{
-          color: disabled ? theme.colors.textDisabled : '#FFFFFF',
+          color: disabled ? theme.colors.textDisabled : theme.colors.onAccent,
           fontSize: 16,
           fontWeight: '600',
         }}

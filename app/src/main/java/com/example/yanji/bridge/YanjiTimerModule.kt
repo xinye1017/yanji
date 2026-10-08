@@ -160,7 +160,7 @@ class YanjiTimerModule(
                 val paused = snapshot.phase == TimerPhase.PAUSED
                 if (lastEmittedPaused == paused && paused) return@collectLatest
                 lastEmittedPaused = paused
-                emitTick(elapsed, remainingOf(snapshot.targetDurationSeconds, elapsed), snapshot.phase, paused, session)
+                emitTick(elapsed, remainingOf(snapshot.targetDurationSeconds, elapsed), paused, session)
             }
         }
     }
@@ -173,14 +173,15 @@ class YanjiTimerModule(
     private fun emitTick(
         elapsedSeconds: Long,
         remainingSeconds: Long,
-        phase: TimerPhase,
         isPaused: Boolean,
         session: ActiveSession
     ) {
         val payload = Arguments.createMap().apply {
             putDouble("elapsedSeconds", elapsedSeconds.toDouble())
             putDouble("remainingSeconds", remainingSeconds.toDouble())
-            putString("phase", phase.name)
+            // 与 ActiveSessionState.phase 同一套词汇表（FOCUS/BREAK/IDLE），
+            // 暂停只由 isPaused 承载，绝不外泄 TimerPhase 枚举名。
+            putString("phase", BridgeMappers.tickPhase(hasSession = true))
             putBoolean("isPaused", isPaused)
         }
         emit(EVENT_TIMER_TICK, payload)
@@ -204,28 +205,35 @@ class YanjiTimerModule(
         emit(EVENT_TIMER_STATE_CHANGED, payload)
     }
 
+    /**
+     * 活动会话载荷（TS `ActiveSessionState`）。
+     *
+     * 契约取值：
+     *  - `phase` ∈ {FOCUS, BREAK, IDLE}，会话存在时恒为 FOCUS（暂停也由 isPaused 承载）；
+     *  - `mode` ∈ {COUNTDOWN, STOPWATCH}，由 `targetDurationSeconds > 0` 推导，
+     *    **绝不**把中文展示名（`正向计时`）透传过桥。
+     *
+     * 纯语义在 [BridgeMappers.sessionFields]，这里只装配 WritableMap。
+     */
     private fun activeSessionMap(
         session: ActiveSession,
         elapsedSeconds: Long,
         remainingSeconds: Long
-    ): WritableMap = Arguments.createMap().apply {
-        putString("sessionId", session.sessionId)
-        putString("subjectId", session.subjectId)
-        putString("subjectName", session.subjectName)
-        putString("mode", session.mode)
-        putString("taskId", session.taskId)
-        putDouble("startTime", session.startedAtEpochMs.toDouble())
-        putDouble("elapsedSeconds", elapsedSeconds.toDouble())
-        putDouble("remainingSeconds", remainingSeconds.toDouble())
-        putString("phase", sessionPhase(session))
-        putBoolean("isPaused", session.paused)
-        putBoolean("isCountdown", session.targetDurationSeconds > 0L)
-    }
-
-    private fun sessionPhase(session: ActiveSession): String = when {
-        session.paused -> TimerPhase.PAUSED.name
-        session.targetDurationSeconds > 0L -> "COUNTDOWN"
-        else -> "STOPWATCH"
+    ): WritableMap {
+        val fields = BridgeMappers.sessionFields(session, elapsedSeconds, remainingSeconds)
+        return Arguments.createMap().apply {
+            putString("sessionId", fields.sessionId)
+            putString("subjectId", fields.subjectId)
+            putString("subjectName", fields.subjectName)
+            putString("mode", fields.mode)
+            putString("taskId", fields.taskId)
+            putDouble("startTime", fields.startTime)
+            putDouble("elapsedSeconds", fields.elapsedSeconds)
+            putDouble("remainingSeconds", fields.remainingSeconds)
+            putString("phase", fields.phase)
+            putBoolean("isPaused", fields.isPaused)
+            putBoolean("isCountdown", fields.isCountdown)
+        }
     }
 
     private fun emit(eventName: String, payload: WritableMap) {
@@ -239,9 +247,12 @@ class YanjiTimerModule(
         const val EVENT_TIMER_TICK = "onTimerTick"
         const val EVENT_TIMER_STATE_CHANGED = "onTimerStateChanged"
 
-        /** 会话阶段常量（与 BridgeSchemas 契约一致）。 */
-        const val PHASE_FOCUS = "FOCUS"
-        const val PHASE_BREAK = "BREAK"
-        const val PHASE_IDLE = "IDLE"
+        /**
+         * 会话阶段常量（与 BridgeSchemas 契约一致）。
+         * 真实定义见 [BridgeMappers] —— 这里只做转发，避免出现第二份词汇表。
+         */
+        const val PHASE_FOCUS = BridgeMappers.PHASE_FOCUS
+        const val PHASE_BREAK = BridgeMappers.PHASE_BREAK
+        const val PHASE_IDLE = BridgeMappers.PHASE_IDLE
     }
 }

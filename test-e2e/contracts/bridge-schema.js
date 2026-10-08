@@ -42,7 +42,11 @@ export const BridgeSchemas = {
       typeof obj.date === 'string' &&
       typeof obj.timestamp === 'number' &&
       typeof obj.content === 'string' &&
-      typeof obj.isFavorite === 'boolean'
+      typeof obj.isFavorite === 'boolean' &&
+      // Contract (BATCH_FIX_PLAN / PROJECT.md): sessionId is a nullable string.
+      // null means the note is not bound to a focus session. Empty string is NOT a
+      // valid representation of "unbound" - it must be null.
+      (obj.sessionId === null || (typeof obj.sessionId === 'string' && obj.sessionId.length > 0))
     );
   },
 
@@ -64,7 +68,9 @@ export const BridgeSchemas = {
       typeof obj.days === 'number' &&
       typeof obj.dailyFocusMinutes === 'object' &&
       typeof obj.subjectDistribution === 'object' &&
-      typeof obj.totalFocusHours === 'number'
+      typeof obj.totalFocusHours === 'number' &&
+      typeof obj.dailyAverageMinutes === 'number' &&
+      typeof obj.activeDays === 'number'
     );
   },
 
@@ -80,10 +86,15 @@ export const BridgeSchemas = {
 
   isValidUserSettings(obj) {
     if (!obj || typeof obj !== 'object') return false;
+    // focusDurationMinutes / breakDurationMinutes were removed: the domain
+    // UserSettings has no such fields, so any value would be fabricated.
+    // Reject payloads that still carry them rather than silently tolerating drift.
     return (
       typeof obj.examDate === 'string' &&
-      typeof obj.focusDurationMinutes === 'number' &&
-      typeof obj.breakDurationMinutes === 'number' &&
+      typeof obj.targetSchool === 'string' &&
+      typeof obj.targetMajor === 'string' &&
+      !('focusDurationMinutes' in obj) &&
+      !('breakDurationMinutes' in obj) &&
       (obj.themePreference === 'SYSTEM' || obj.themePreference === 'LIGHT' || obj.themePreference === 'DARK')
     );
   },

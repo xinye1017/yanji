@@ -3,6 +3,10 @@
  *
  * Visual language: a restrained floating capsule with light blur. The blur is
  * deliberately subtle so text contrast and tap responsiveness stay intact.
+ *
+ * Lifecycle: the bar is mounted for the whole session next to the three
+ * always-mounted screens (see App.tsx), so `activeTab` — never a remount —
+ * is what drives the selected state.
  */
 
 import React from 'react';
@@ -20,7 +24,7 @@ export function BottomTabBar(): React.JSX.Element | null {
     <View
       style={{
         flexDirection: 'row',
-        backgroundColor: theme.isDark ? theme.colors.bgSurface : theme.colors.bgSurface,
+        backgroundColor: theme.colors.bgSurface,
         borderRadius: YanjiRadius.full,
         marginHorizontal: 24,
         marginBottom: 12,

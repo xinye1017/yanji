@@ -71,7 +71,7 @@
 - `createTask(date: string, subjectId: string, subjectName: string, title: string, plannedMinutes: number): Promise<StudyTask>`
 - `toggleTask(taskId: string, completed: boolean): Promise<boolean>`
 - `deleteTask(taskId: string): Promise<boolean>`
-- `saveQuickNote(content: string, date: string, sessionId?: string): Promise<NoteEntry>`
+- `saveQuickNote(content: string, date: string, sessionId?: string | null): Promise<NoteEntry>`
 - `getNotes(page: number, limit: number): Promise<NoteEntry[]>`
 - `getNotesForDate(date: string): Promise<NoteEntry[]>`
 - `toggleFavoriteNote(noteId: string): Promise<boolean>`
@@ -84,6 +84,18 @@
 - `getExamCountdown(): Promise<{ examDate: string, daysRemaining: number }>`
 - Events:
   - `onDataChanged(event: { type: 'tasks' | 'notes' | 'sessions' | 'settings' })`
+#### Shared type contracts
+- `TimerPhase = 'FOCUS' | 'BREAK' | 'IDLE'` — the only phase vocabulary across the bridge. A paused countdown is still `FOCUS` with `isPaused: true`; it is never a separate `PAUSED` phase.
+- `TimerMode = 'COUNTDOWN' | 'STOPWATCH'` — timer mode. Planned seconds come from the mode name (FocusModes.targetSeconds), not from UserSettings.
+- `NoteEntry.sessionId: string | null` — the focus session the note is bound to, or `null` when the note is not bound to a session. It is never an empty string.
+- `UserSettings` fields: `examDate`, `targetSchool`, `targetMajor`, `themePreference`. There is deliberately **no** `focusDurationMinutes` / `breakDurationMinutes` — the domain UserSettings has no such fields, so any value would be fabricated.
+- `ReviewStats` fields: `days`, `dailyFocusMinutes`, `subjectDistribution`, `totalFocusHours`, `dailyAverageMinutes`, `activeDays`.
+  - getReviewStats(days) returns a **rolling N-day window**: exactly days entries, from (today - (days - 1)) through today.
+  - Keys are local-calendar yyyy-MM-dd, produced by shifting the local date — never by subtracting 24h multiples (which drifts across DST).
+  - No future-dated keys: tomorrow can never appear, not even as a zero-valued bar.
+  - No calendar-week clipping: the window is not aligned to Monday, so the x-axis does not drift with the weekday.
+  - activeDays counts days with at least 30 recorded minutes. A window with no data reports activeDays: 0 and dailyAverageMinutes: 0, never a faked value.
+  - dailyAverageMinutes is totalMinutes / days, rounded.
 
 ### `YanjiThemeModule` (Native ↔ JS)
 - `getThemePreference(): Promise<{ mode: 'SYSTEM' | 'LIGHT' | 'DARK', isDark: boolean }>`

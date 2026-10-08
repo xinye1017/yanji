@@ -5,6 +5,7 @@
 import { describe, it, beforeEach } from '../framework/harness.js';
 import { assert, assertEqual, assertDeepEqual } from '../framework/assertions.js';
 import { MockYanjiBridge } from '../contracts/mock-bridge.js';
+import { BridgeSchemas } from '../contracts/bridge-schema.js';
 
 export function registerM5Tests() {
   let bridge;
@@ -67,6 +68,117 @@ export function registerM5Tests() {
       assertEqual(stats.totalFocusHours, 1.5, 'Total focus hours should be 1.5 (90 minutes / 60)');
       assertEqual(stats.subjectDistribution['数学'], 60);
       assertEqual(stats.subjectDistribution['英语'], 30);
+    });
+  });
+
+  describe('Tier 1: Feature 18b — ReviewStats rolling N-day window (no future bars)', () => {
+    it('emits exactly days keys ending today, with no future-dated keys', async () => {
+      const days = 7;
+      const stats = await bridge.getReviewStats(days);
+      const keys = Object.keys(stats.dailyFocusMinutes);
+
+      assertEqual(keys.length, days, 'Rolling window must contain exactly days keys');
+
+      const today = bridge._isoDateAt(bridge.virtualClockMs, 0);
+      const sorted = [...keys].sort();
+      assertEqual(sorted[sorted.length - 1], today, 'Window must end on today');
+
+      // No key may be in the future — a zero-valued tomorrow bar is still a violation.
+      for (const key of keys) {
+        assert(key <= today, 'Key ' + key + ' is future-dated; future zero bars are forbidden');
+      }
+    });
+
+    it('honours days for a different window size and clips no calendar week', async () => {
+      const stats30 = await bridge.getReviewStats(30);
+      assertEqual(Object.keys(stats30.dailyFocusMinutes).length, 30, '30-day window must yield 30 keys');
+
+      const stats1 = await bridge.getReviewStats(1);
+      assertEqual(Object.keys(stats1.dailyFocusMinutes).length, 1, '1-day window must yield 1 key');
+      assertEqual(stats1.days, 1, 'Reported days must honour the requested window');
+
+      // No calendar-week clipping: a 3-day window starting mid-week must not be
+      // expanded back to Monday, which would make the x-axis drift with the weekday.
+      const stats3 = await bridge.getReviewStats(3);
+      assertEqual(Object.keys(stats3.dailyFocusMinutes).length, 3, '3-day window must stay 3 days wide');
+    });
+
+    it('excludes sessions outside the window and reports dailyAverageMinutes / activeDays', async () => {
+      // 40 minutes of study. Only a day with >= 30 minutes counts as active, so
+      // activeDays must be 1 and the daily average must be 40 / 2 = 20.
+      await bridge.startFocus('sub-math', '数学', 'STOPWATCH');
+      bridge.advanceTime(2400);
+      await bridge.completeTimer();
+
+      const stamped = bridge.sessionRecords[bridge.sessionRecords.length - 1].date;
+      const stats = await bridge.getReviewStats(2);
+      assertEqual(stats.days, 2, 'A 2-day window must report days = 2');
+      assertEqual(
+        Object.prototype.hasOwnProperty.call(stats.dailyFocusMinutes, stamped),
+        true,
+        'The recorded day must be part of the window'
+      );
+      assertEqual(stats.dailyFocusMinutes[stamped], 40, 'The recorded day must carry the full 40 minutes');
+      assertEqual(stats.activeDays, 1, 'Only the day with >= 30 minutes counts as active');
+      assertEqual(stats.dailyAverageMinutes, 20, 'Average is totalMinutes / windowDays (40 / 2)');
+
+      // Sessions older than the window must not leak into the totals.
+      bridge.sessionRecords.push({
+        id: 'ancient',
+        subjectId: 'sub-cs',
+        subjectName: '专业课',
+        mode: 'STOPWATCH',
+        startTime: Date.now() - 400 * 86400000,
+        durationMinutes: 999,
+        elapsedSeconds: 999 * 60,
+        taskId: null,
+        date: '2000-01-01',
+      });
+      const clipped = await bridge.getReviewStats(2);
+      assertEqual(clipped.totalFocusHours, 0.7, 'Sessions outside the window must be excluded');
+      assertEqual(Object.keys(clipped.dailyFocusMinutes).length, 2, 'Out-of-window records must not create keys');
+    });
+  });
+
+  describe('Tier 1: Feature 18c — NoteEntry.sessionId is a nullable string', () => {
+    it('accepts a bound session id and an explicit null, and rejects empty string', async () => {
+      const bound = {
+        id: 'n1',
+        date: '2026-10-08',
+        timestamp: 1,
+        content: 'x',
+        isFavorite: false,
+        sessionId: 'session_1',
+      };
+      const unbound = { ...bound, id: 'n2', sessionId: null };
+      const empty = { ...bound, id: 'n3', sessionId: '' };
+
+      assert(BridgeSchemas.isValidNoteEntry(bound), 'A bound sessionId must validate');
+      assert(BridgeSchemas.isValidNoteEntry(unbound), 'null sessionId must validate');
+      assert(
+        !BridgeSchemas.isValidNoteEntry(empty),
+        'Empty string is not a valid representation of "unbound" — it must be null'
+      );
+    });
+
+    it('round-trips sessionId through the mock so reads see the binding', async () => {
+      const today = '2026-10-08';
+      await bridge.startFocus('sub-math', '数学', 'STOPWATCH');
+      const session = await bridge.getActiveSession();
+
+      const saved = await bridge.saveQuickNote('绑定会话的随笔', today, session.sessionId);
+      assertEqual(saved.sessionId, session.sessionId, 'Saved note must persist the session binding');
+
+      const readBack = await bridge.getNotesForDate(today);
+      assertEqual(readBack[0].sessionId, session.sessionId, 'Read path must return the persisted sessionId');
+      assert(BridgeSchemas.isValidNoteEntry(readBack[0]), 'Read-back note must satisfy the contract');
+
+      // With no session running, a note has no binding and must stay null - it must
+      // never degrade to an empty string.
+      await bridge.completeTimer();
+      const free = await bridge.saveQuickNote('未绑定的随笔', today, null);
+      assertEqual(free.sessionId, null, 'A note saved outside any session must keep null');
+      assert(BridgeSchemas.isValidNoteEntry(free), 'An unbound note must still satisfy the contract');
     });
   });
 

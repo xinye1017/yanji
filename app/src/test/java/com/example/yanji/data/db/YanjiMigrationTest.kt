@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 20
+    private val CURRENT_VERSION = 21
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -188,7 +188,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_16_17,
         YanjiDatabase.MIGRATION_17_18,
         YanjiDatabase.MIGRATION_18_19,
-        YanjiDatabase.MIGRATION_19_20
+        YanjiDatabase.MIGRATION_19_20,
+        YanjiDatabase.MIGRATION_20_21
     )
 
     /**
@@ -848,6 +849,137 @@ class YanjiMigrationTest {
         db.close()
     }
 
+    // ---------------------------------------------------------------- 20 -> 21 记录归属时段
+
+    /**
+     * v20 给 `journal_entries` 加了 `sessionId`，把「记录此刻」持久地挂到某次专注上。
+     *
+     * 修复的缺陷（challenger_m25_1 P0-4）：此前这个绑定只活在保存回调的响应体里，
+     * 每一条读取路径都发出空串 —— 第一次读取之后归属关系就不可见了。
+     *
+     * 三个不变量：
+     *  1. 存量行一律为 NULL —— 升级前的记录不可能有时段归属，**迁移不编造归属**；
+     *  2. 新行可写可读：绑定与未绑定两种形态都能落库并被读回；
+     *  3. 空串不是合法值 —— 契约要求 `string | null`。
+     */
+    @Test
+    fun migrate20To21_addsNullableSessionIdColumnWithoutInventingBindings() {
+        val db20 = helper.createDatabase(20)
+        db20.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft) VALUES " +
+                "('legacy-j','2026-09-21','旧记录','原始正文',5,5,5,'','','复盘',111,222,0,0)"
+        ).use { it.step() }
+        db20.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(20))
+
+        // 1) 列存在，且存量行没有归属
+        assertTrue("journal_entries 应包含 sessionId 列", "sessionId" in db.columnNames("journal_entries"))
+        assertEquals(
+            "迁移不得为存量记录编造时段归属",
+            1L,
+            db.longValue(
+                "SELECT CASE WHEN sessionId IS NULL THEN 1 ELSE 0 END " +
+                    "FROM journal_entries WHERE id='legacy-j'"
+            )
+        )
+        assertEquals("存量的其他字段必须原样保留", "原始正文", db.textValue("SELECT content FROM journal_entries WHERE id='legacy-j'"))
+        assertEquals(111L, db.longValue("SELECT createdAt FROM journal_entries WHERE id='legacy-j'"))
+
+        // 2) 两种新形态：绑定时段 / 不绑定时段
+        insertNoteRowAt21(db, "bound-j", "2026-10-08", "绑定时段", 1000L, sessionId = "focus-42")
+        insertNoteRowAt21(db, "free-j", "2026-10-08", "未绑定时段", 2000L, sessionId = null)
+
+        assertEquals("focus-42", db.textValue("SELECT sessionId FROM journal_entries WHERE id='bound-j'"))
+        assertEquals(
+            "未绑定的记录必须是 NULL，绝不是空串",
+            1L,
+            db.longValue(
+                "SELECT CASE WHEN sessionId IS NULL THEN 1 ELSE 0 END " +
+                    "FROM journal_entries WHERE id='free-j'"
+            )
+        )
+
+        // 3) 空串不是合法值：可以直接按 id 反查绑定的记录
+        assertEquals(
+            1,
+            db.intValue("SELECT COUNT(*) FROM journal_entries WHERE sessionId = 'focus-42'")
+        )
+
+        db.close()
+    }
+
+    /** 迁移只加列，绝不把任何现有时段重新贴到某条记录上。 */
+    @Test
+    fun migrate20To21_neverBindsExistingNotesToASession() {
+        val db20 = helper.createDatabase(20)
+        db20.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft) VALUES " +
+                "('legacy-a','2026-09-20','A','正文A',5,5,5,'','','',111,222,0,0)"
+        ).use { it.step() }
+        db20.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft) VALUES " +
+                "('legacy-b','2026-09-21','B','正文B',5,5,5,'','','',333,444,0,0)"
+        ).use { it.step() }
+        db20.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(20))
+
+        assertEquals(2, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals(
+            "没有任何现存的记录应当被自动绑到某个时段上",
+            0,
+            db.intValue("SELECT COUNT(*) FROM journal_entries WHERE sessionId IS NOT NULL")
+        )
+        db.close()
+    }
+
+    /** 19 → 20 → 21 连续两跳之后，任务归因与记录归属两个新列互不干扰。 */
+    @Test
+    fun migrate19To21_chainLeavesBothNewColumnsNullableAndDataIntact() {
+        val db19 = helper.createDatabase(19)
+        insertFocusAt19(db19, "legacy-1", durationSeconds = 1800L)
+        db19.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft) VALUES " +
+                "('legacy-j','2026-09-21','旧记录','原始正文',5,5,5,'','','复盘',111,222,0,0)"
+        ).use { it.step() }
+        db19.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(19))
+
+        // 两列都存在且都为 NULL
+        assertTrue("focus_sessions.taskId 应存在", "taskId" in db.columnNames("focus_sessions"))
+        assertTrue("journal_entries.sessionId 应存在", "sessionId" in db.columnNames("journal_entries"))
+        assertEquals(
+            1L,
+            db.longValue("SELECT CASE WHEN taskId IS NULL THEN 1 ELSE 0 END FROM focus_sessions WHERE id='legacy-1'")
+        )
+        assertEquals(
+            1L,
+            db.longValue("SELECT CASE WHEN sessionId IS NULL THEN 1 ELSE 0 END FROM journal_entries WHERE id='legacy-j'")
+        )
+
+        // 存量数据仍然可读
+        assertEquals(1800L, db.longValue("SELECT durationSeconds FROM focus_sessions WHERE id='legacy-1'"))
+        assertEquals("原始正文", db.textValue("SELECT content FROM journal_entries WHERE id='legacy-j'"))
+
+        // 迁移之后两种新写入都能落地
+        insertFocusAt20(db, "linked-1", 3600L, taskId = "task-1")
+        insertNoteRowAt21(db, "bound-j", "2026-10-08", "绑定时段", 1000L, sessionId = "focus-7")
+        assertEquals("task-1", db.textValue("SELECT taskId FROM focus_sessions WHERE id='linked-1'"))
+        assertEquals("focus-7", db.textValue("SELECT sessionId FROM journal_entries WHERE id='bound-j'"))
+
+        db.close()
+    }
+
     // ---------------------------------------------------------------- 不造数据
 
     @Test
@@ -950,6 +1082,34 @@ class YanjiMigrationTest {
             statement.bindLong(4, createdAt)
             statement.bindLong(5, createdAt)
             statement.bindLong(6, isDraft.toLong())
+            statement.step()
+        }
+    }
+
+    /**
+     * v21 起带 `sessionId` 的随笔写入语句。传 null 表示这条记录不绑定任何时段，
+     * 与桥接层 `saveQuickNote` 在 JS 侧解析不到活动会话时的落库形态一致。
+     */
+    private fun insertNoteRowAt21(
+        db: SQLiteConnection,
+        id: String,
+        date: String,
+        title: String,
+        createdAt: Long,
+        sessionId: String?
+    ) {
+        db.prepare(
+            "INSERT INTO journal_entries " +
+                "(id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft, sessionId) VALUES " +
+                "(?, ?, ?, '', 3, 3, 3, '', '', '', ?, ?, 0, 0, ?)"
+        ).use { statement ->
+            statement.bindText(1, id)
+            statement.bindText(2, date)
+            statement.bindText(3, title)
+            statement.bindLong(4, createdAt)
+            statement.bindLong(5, createdAt)
+            if (sessionId == null) statement.bindNull(6) else statement.bindText(6, sessionId)
             statement.step()
         }
     }

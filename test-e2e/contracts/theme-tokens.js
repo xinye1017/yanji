@@ -8,30 +8,48 @@
  */
 
 export const YanjiThemeTokens = {
+  /**
+   * Authoritative palette. Mirrors src/theme/tokens.ts (RN) and
+   * app/src/main/java/com/example/yanji/theme/Color.kt (Compose).
+   *
+   * Semantic light values adopt Compose's retired-replacement numbers
+   * (success #17784F / warning #9A6100 / danger #BE3232) — the previous
+   * #2F9E6D / #E67E22 / #D64545 failed WCAG and were formally retired.
+   */
   colors: {
-    dark: {
-      bgPrimary: '#0B132B',    // Deep midnight base
-      bgSurface: '#1C2541',    // Surface elevation 1
-      bgElevated: '#3A506B',   // Surface elevation 2
-      textPrimary: '#F8FAFC',
-      textSecondary: '#94A3B8',
-      accentPrimary: '#48CAE4', // Quiet teal/cyan
-    },
     light: {
-      bgPrimary: '#F8FAFC',    // Soft slate/blue-gray base
+      bgPrimary: '#F2F4F7',      // Soft blue-gray page background
       bgSurface: '#FFFFFF',
-      bgElevated: '#F1F5F9',
-      textPrimary: '#0F172A',
-      textSecondary: '#64748B',
-      accentPrimary: '#0284C7',
+      bgElevated: '#F1F5FB',
+      textPrimary: '#172033',
+      textSecondary: '#5A6473',
+      accentPrimary: '#356AE6',  // Restrained blue accent
+      onAccent: '#FFFFFF',       // Matches YanjiOnPrimary
+      success: '#17784F',
+      warning: '#9A6100',
+      danger: '#BE3232',
+    },
+    dark: {
+      bgPrimary: '#0D111A',      // Midnight Blue base (never #000000)
+      bgSurface: '#151B28',
+      bgElevated: '#1D2536',
+      textPrimary: '#F0F4FC',
+      textSecondary: '#94A3B8',
+      accentPrimary: '#4F7DF3',  // Raised for dark-background contrast
+      onAccent: '#0D111A',       // Matches YanjiDarkOnPrimary — white on the raised dark primary fails WCAG
+      success: '#34D399',
+      warning: '#FBBF24',
+      danger: '#F87171',
     },
   },
+  /** YanjiRadius semantic scale — raw dp literals are forbidden at call sites. */
   radius: {
     xs: 4,
     sm: 8,
     md: 12,
     lg: 16,
     xl: 24,
+    xxl: 28, // HeroCardRadius / SheetRadius (Radius.kt)
     full: 9999,
   },
   cardRules: {
