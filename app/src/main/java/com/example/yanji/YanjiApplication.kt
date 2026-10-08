@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.di.AppContainer
 import com.example.yanji.di.DefaultAppContainer
+import com.example.yanji.bridge.YanjiPackage
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
@@ -18,7 +19,8 @@ class YanjiApplication : Application(), ReactApplication {
         override fun getUseDeveloperSupport(): Boolean = false
 
         override fun getPackages(): List<ReactPackage> = listOf(
-            MainReactPackage()
+            MainReactPackage(),
+            YanjiPackage()
         )
 
         override fun getJSMainModuleName(): String = "index"

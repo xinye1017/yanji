@@ -45,10 +45,10 @@
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | RN Add-to-App Infra & Build System | package.json, TypeScript, NativeWind, Gradle integration, ReactApplication, ReactActivity, themes.xml, asset bundling | none | IN_PROGRESS (worker_m1_1) |
-| 2 | Native Bridge Layer & Contracts | YanjiTimerModule, YanjiDataModule, YanjiThemeModule, YanjiPackage, TypeScript bridge definitions | M1 | PLANNED |
-| 3 | Design System & Navigation Shell | Tailwind/NativeWind config, theme tokens, 3-tab bottom bar, Settings screen | M1, M2 | PLANNED |
-| 4 | Today, Focus & Record Moment Views | TodayScreen (overview, CTA, tasks), FocusScreen (timer, modes), RecordMomentModal (cross-page, non-pausing) | M2, M3 | PLANNED |
+| 1 | RN Add-to-App Infra & Build System | package.json, TypeScript, NativeWind, Gradle integration, ReactApplication, ReactActivity, themes.xml, asset bundling | none | ✅ COMPLETE |
+| 2 | Native Bridge Layer & Contracts | YanjiTimerModule, YanjiDataModule, YanjiThemeModule, YanjiPackage, TypeScript bridge definitions | M1 | ✅ COMPLETE |
+| 3 | Design System & Navigation Shell | Tailwind/NativeWind config, theme tokens, 3-tab bottom bar, Settings screen | M1, M2 | ✅ COMPLETE |
+| 4 | Today, Focus & Record Moment Views | TodayScreen (overview, CTA, tasks), FocusScreen (timer, modes), RecordMomentModal (cross-page, non-pausing) | M2, M3 | ✅ COMPLETE |
 | 5 | Review View & Historical Timeline | ReviewScreen (daily timeline, 7-day trend, subject breakdown, AI expansion slot) | M2, M3 | PLANNED |
 | Final | E2E Test Suite & Adversarial Hardening | Pass 100% of E2E test suite (Tiers 1-4) + Tier 5 adversarial coverage hardening | M4, M5, TEST_READY | PLANNED |
 

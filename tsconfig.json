@@ -15,6 +15,10 @@
     "resolveJsonModule": true
   },
   "include": [
+    "App.tsx",
+    "index.js",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     "**/*.ts",
     "**/*.tsx",
     "nativewind-env.d.ts"
