@@ -160,6 +160,9 @@ dependencies {
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.profileinstaller)
 
+  // React Native Add-to-App
+  implementation(libs.react.android)
+
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

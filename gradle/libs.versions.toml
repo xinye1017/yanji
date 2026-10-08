@@ -26,6 +26,7 @@ androidxBenchmark = "1.5.0"
 androidxUiAutomator = "2.3.0"
 androidxProfileInstaller = "1.4.1"
 androidxBaselineProfile = "1.5.0-rc02"
+reactAndroid = "0.87.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -62,6 +63,7 @@ desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref 
 androidx-benchmark-macro = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidxBenchmark" }
 androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "androidxUiAutomator" }
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "androidxProfileInstaller" }
+react-android = { module = "com.facebook.react:react-android", version.ref = "reactAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

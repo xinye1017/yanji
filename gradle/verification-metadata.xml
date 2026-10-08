@@ -3,6 +3,13 @@
    <configuration>
       <verify-metadata>true</verify-metadata>
       <verify-signatures>false</verify-signatures>
+      <trusted-artifacts>
+         <trust group="com.facebook.*" regex="true" reason="React Native and Facebook prebuilt libraries"/>
+         <trust group="androidx.*" regex="true" reason="AndroidX libraries"/>
+         <trust group="com.squareup.*" regex="true" reason="Square OkHttp and Okio"/>
+         <trust group="com.parse.bolts" reason="Parse bolts tasks"/>
+         <trust group="org.jetbrains.kotlin" name="kotlin-annotations-jvm" reason="Kotlin annotations"/>
+      </trusted-artifacts>
    </configuration>
    <components>
       <component group="androidx.activity" name="activity" version="1.13.0">
