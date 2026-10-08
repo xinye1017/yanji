@@ -6,7 +6,10 @@
       与 values/themes.xml 成对存在，保证启动窗口在两种系统模式下「底色 × 图标」始终有对比。
       运行期的系统栏图标由 ui/SystemBarAppearance.kt 按 App 主题显式驱动。
     -->
-    <style name="Theme.Yanji" parent="android:Theme.Material.NoActionBar">
+    <!-- Stub inheriting AppCompat via same bridge as values/themes.xml -->
+    <style name="Theme.Material3.DayNight.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar" />
+
+    <style name="Theme.Yanji" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/yanji_window_background</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
