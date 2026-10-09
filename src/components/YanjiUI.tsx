@@ -27,7 +27,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Rect } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Line, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
@@ -446,35 +446,37 @@ export function YanjiProgressRing({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiMiniBarChart — SVG column chart, honest about empty data
+// YanjiStackedBarChart — SVG column chart stacked by subject, honest about
+// empty data and about days that have not happened yet
 // ---------------------------------------------------------------------------
 
-export function YanjiMiniBarChart({
-  data,
+export interface YanjiStackedBarChartColumn {
+  totalMinutes: number;
+  segments: ReadonlyArray<{ color: string; minutes: number }>;
+}
+
+export function YanjiStackedBarChart({
+  columns,
   width = 240,
   height = 56,
   gap = 4,
-  color,
-  highlightColor,
-  highlightIndex,
+  averageMinutes,
+  averageLabel,
   emptyLabel,
 }: {
-  data: number[];
+  columns: ReadonlyArray<YanjiStackedBarChartColumn>;
   width?: number;
   height?: number;
   gap?: number;
-  color?: string;
-  highlightColor?: string;
-  /** Column to emphasise (e.g. today). */
-  highlightIndex?: number;
+  /** Dashed reference line, in the same minutes scale as the columns. */
+  averageMinutes?: number;
+  averageLabel?: string;
   emptyLabel?: string;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
-  const barColor = color ?? theme.colors.bgElevated;
-  const activeColor = highlightColor ?? theme.colors.accentPrimary;
-  const max = Math.max(1, ...data);
+  const max = Math.max(1, ...columns.map(column => column.totalMinutes));
 
-  if (data.length === 0) {
+  if (columns.length === 0) {
     return (
       <View style={{ width, height, justifyContent: 'flex-end' }}>
         <YanjiHairline style={{ marginBottom: 0 }} />
@@ -483,7 +485,7 @@ export function YanjiMiniBarChart({
             style={{
               marginTop: 8,
               color: theme.colors.textTertiary,
-              fontSize: 12,
+              ...theme.typography.caption,
               textAlign: 'center',
             }}
           >
@@ -494,29 +496,98 @@ export function YanjiMiniBarChart({
     );
   }
 
-  const barWidth = Math.max(2, (width - gap * (data.length - 1)) / data.length);
+  const barWidth = Math.max(2, (width - gap * (columns.length - 1)) / columns.length);
+  const scale = height / max;
+  const averageY =
+    averageMinutes !== undefined && averageMinutes > 0
+      ? Math.max(0, Math.min(height, height - averageMinutes * scale))
+      : null;
 
   return (
-    <Svg width={width} height={height}>
-      {data.map((value, index) => {
-        // Every column keeps a visible minimum so a zero day is still a slot,
-        // not a gap — but it must not read as "a little work happened".
-        const ratio = value <= 0 ? 0 : Math.max(0.06, value / max);
-        const barHeight = Math.max(2, ratio * height);
-        const isActive = highlightIndex === index;
-        return (
-          <Rect
-            key={index}
-            x={index * (barWidth + gap)}
-            y={height - barHeight}
-            width={barWidth}
-            height={barHeight}
-            rx={Math.min(3, barWidth / 2)}
-            fill={isActive ? activeColor : barColor}
+    <View style={{ width, height }}>
+      <Svg width={width} height={height}>
+        {columns.map((column, index) => {
+          const x = index * (barWidth + gap);
+          // A zero day keeps a visible slot so the axis never lies about which
+          // day is which — but it must not read as "a little work happened".
+          if (column.totalMinutes <= 0) {
+            return (
+              <Rect
+                key={index}
+                x={x}
+                y={height - 2}
+                width={barWidth}
+                height={2}
+                rx={Math.min(3, barWidth / 2)}
+                fill={theme.colors.bgElevated}
+              />
+            );
+          }
+          const barHeight = column.totalMinutes * scale;
+          // One rounded clip per column: segment boundaries stay crisp while
+          // the column silhouette keeps the same soft top as a single bar.
+          const clipId = `yanji-trend-col-${index}`;
+          let cursor = height;
+          return (
+            <G key={index}>
+              <Defs>
+                <ClipPath id={clipId}>
+                  <Rect
+                    x={x}
+                    y={height - barHeight}
+                    width={barWidth}
+                    height={barHeight}
+                    rx={Math.min(3, barWidth / 2)}
+                  />
+                </ClipPath>
+              </Defs>
+              <G clipPath={`url(#${clipId})`}>
+                {column.segments.map((segment, segmentIndex) => {
+                  const segmentHeight = segment.minutes * scale;
+                  cursor -= segmentHeight;
+                  return (
+                    <Rect
+                      key={segmentIndex}
+                      x={x}
+                      y={cursor}
+                      width={barWidth}
+                      height={segmentHeight}
+                      fill={segment.color}
+                    />
+                  );
+                })}
+              </G>
+            </G>
+          );
+        })}
+        {averageY !== null ? (
+          <Line
+            x1={0}
+            y1={averageY}
+            x2={width}
+            y2={averageY}
+            stroke={theme.colors.textTertiary}
+            strokeWidth={1}
+            strokeDasharray="3 3"
           />
-        );
-      })}
-    </Svg>
+        ) : null}
+      </Svg>
+      {averageY !== null && averageLabel ? (
+        <Text
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: Math.max(0, averageY - 15),
+            paddingHorizontal: 3,
+            backgroundColor: theme.colors.bgSurface,
+            color: theme.colors.textTertiary,
+            ...theme.typography.axisLabel,
+          }}
+        >
+          {averageLabel}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 

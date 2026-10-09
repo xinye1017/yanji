@@ -30,8 +30,8 @@ import {
   YanjiHairline,
   YanjiIcon,
   YanjiIconButton,
-  YanjiMiniBarChart,
   YanjiSectionHeader,
+  YanjiStackedBarChart,
 } from '../components/YanjiUI';
 import { YanjiPieChart } from '../components/YanjiPieChart';
 import { SessionNoteModal } from '../components/SessionNoteModal';
@@ -41,16 +41,19 @@ import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
 import {
   buildTimelineEntries,
+  buildTrendColumns,
   computeAxisLabelsLayout,
   countElapsedDays,
   countWorkedDays,
   dayHasRecords,
-  findTodayColumn,
   formatClockFromEpoch,
   formatDailyAverageDuration,
   formatDuration,
   formatMonthDaySlash,
   formatPercent,
+  peakTrendDay,
+  periodDelta,
+  previousWindowArgs,
   relativeDayLabel,
   stepForwardWithinToday,
   todayIso,
@@ -88,6 +91,8 @@ export function ReviewScreen(): React.JSX.Element {
   const [overview, setOverview] = useState<ReviewOverview | null>(null);
   const [dayTasks, setDayTasks] = useState<StudyTask[]>([]);
   const [scope, setScope] = useState<ReviewScope>('ROLLING_7');
+  /** The previous window's total, for the「较上一周期」line. */
+  const [prevTotalSeconds, setPrevTotalSeconds] = useState<number | null>(null);
   /** Measured width of the trend-chart column, so the SVG matches its labels. */
   const [chartWidth, setChartWidth] = useState(0);
   const [noteTarget, setNoteTarget] = useState<{
@@ -104,14 +109,17 @@ export function ReviewScreen(): React.JSX.Element {
 
   const refresh = useCallback(async (targetDate: string, targetScope: ReviewScope) => {
     try {
-      const [day, stats, tasks] = await Promise.all([
+      const previous = previousWindowArgs(targetScope, targetDate);
+      const [day, stats, tasks, prev] = await Promise.all([
         YanjiDataNative.getDailyTimeline(targetDate),
         YanjiDataNative.getReviewOverview(targetScope, 0, targetDate),
         YanjiDataNative.getTodayTasks(targetDate),
+        YanjiDataNative.getReviewOverview(previous.scope, previous.periodsBack, previous.anchorDate),
       ]);
       setTimeline(day);
       setOverview(stats);
       setDayTasks(tasks);
+      setPrevTotalSeconds(prev.totalSeconds);
     } catch {
       // Keep the previous snapshot rather than inventing entries.
     }
@@ -157,12 +165,17 @@ export function ReviewScreen(): React.JSX.Element {
   const workedDays = countWorkedDays(days);
   /** Days that have already happened — the denominator matching `workedDays`. */
   const elapsedDays = countElapsedDays(days);
-  /** The chart column for today, when today falls inside the window at all. */
-  const todayColumn = findTodayColumn(days);
+  /** The chart's columns: elapsed days only, each stacked by subject. */
+  const columns = useMemo(
+    () => buildTrendColumns(days, overview?.subjectDistribution ?? []),
+    [days, overview]
+  );
+  const peak = peakTrendDay(columns);
+  const delta = periodDelta(overview?.totalSeconds ?? 0, prevTotalSeconds);
   /** Exact collision-free positioned axis labels */
   const axisLabelItems = useMemo(
-    () => computeAxisLabelsLayout(days, chartWidth),
-    [days, chartWidth]
+    () => computeAxisLabelsLayout(columns, chartWidth),
+    [columns, chartWidth]
   );
 
   return (
@@ -395,13 +408,31 @@ export function ReviewScreen(): React.JSX.Element {
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
-                alignItems: 'baseline',
+                alignItems: 'center',
                 paddingBottom: YanjiSpacing.md,
               }}
             >
-              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-                {overview?.label}
-              </Text>
+              <View>
+                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                  {overview?.label}
+                </Text>
+                <Text
+                  style={[
+                    theme.typography.meta,
+                    {
+                      color:
+                        delta.tone === 'up'
+                          ? theme.colors.success
+                          : delta.tone === 'down'
+                            ? theme.colors.danger
+                            : theme.colors.textTertiary,
+                      marginTop: 2,
+                    },
+                  ]}
+                >
+                  {delta.label}
+                </Text>
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                 <Text
                   style={[
@@ -433,11 +464,12 @@ export function ReviewScreen(): React.JSX.Element {
               accessibilityRole="image"
               accessibilityLabel={trendAccessibilityLabel(overview)}
             >
-              <YanjiMiniBarChart
-                data={days.map(day => day.durationSeconds)}
+              <YanjiStackedBarChart
+                columns={columns}
                 width={chartWidth}
                 height={TREND_CHART_HEIGHT}
-                highlightIndex={todayColumn ? days.indexOf(todayColumn) : undefined}
+                averageMinutes={overview ? overview.dailyAverageSeconds / 60 : undefined}
+                averageLabel="日均"
                 emptyLabel="暂无统计数据"
               />
 
@@ -463,6 +495,17 @@ export function ReviewScreen(): React.JSX.Element {
                   </Text>
                 ))}
               </View>
+
+              {peak ? (
+                <Text
+                  style={[
+                    theme.typography.meta,
+                    { color: theme.colors.textTertiary, marginTop: YanjiSpacing.xs },
+                  ]}
+                >
+                  最长的一天 {peak.dayLabel} · {formatDuration(peak.totalMinutes * 60)}
+                </Text>
+              ) : null}
             </View>
 
             <YanjiHairline style={{ marginTop: YanjiSpacing.md }} />
@@ -477,13 +520,23 @@ export function ReviewScreen(): React.JSX.Element {
 
         {overview && overview.subjectDistribution.length > 0 ? (
           <>
-            <YanjiSectionHeader title="科目分布" />
+            {/* The distribution follows the trend scope above; say which one, or
+                the pie silently changes when the user switches 7天 / 本月. */}
+            <YanjiSectionHeader
+              title="科目分布"
+              rightAction={
+                <Text style={[theme.typography.caption, { color: theme.colors.textTertiary }]}>
+                  {overview.label}
+                </Text>
+              }
+            />
             <YanjiCard style={{ padding: YanjiSpacing.lg }}>
-              {/* Modern SVG Pie / Donut Chart */}
               <YanjiPieChart
                 slices={overview.subjectDistribution}
                 size={144}
                 innerRadiusRatio={0.55}
+                centerTitle={formatDuration(overview.totalSeconds)}
+                centerCaption="总时长"
                 style={{ marginVertical: YanjiSpacing.xs }}
               />
 

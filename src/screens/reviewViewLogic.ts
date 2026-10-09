@@ -12,7 +12,14 @@
  * No React and no React Native imports live here on purpose.
  */
 
-import type { DailyTimeline, DailyTimelineSession, StudyTask } from '../bridge';
+import type {
+  DailyTimeline,
+  DailyTimelineSession,
+  ReviewPeriodDay,
+  ReviewScope,
+  ReviewSubjectSlice,
+  StudyTask,
+} from '../bridge';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -164,11 +171,110 @@ export function countElapsedDays(days: ReadonlyArray<{ isFuture: boolean }>): nu
   return days.filter(day => !day.isFuture).length;
 }
 
-/** The chart column for today, when today falls inside the window at all. */
-export function findTodayColumn<T extends { date: string; isToday: boolean }>(
-  days: readonly T[]
-): T | null {
-  return days.find(day => day.isToday) ?? null;
+// ---------------------------------------------------------------------------
+// The trend chart's columns
+// ---------------------------------------------------------------------------
+
+export interface TrendColumnSegment {
+  subjectId: string;
+  color: string;
+  minutes: number;
+}
+
+export interface TrendColumn {
+  date: string;
+  dayLabel: string;
+  isToday: boolean;
+  totalMinutes: number;
+  segments: TrendColumnSegment[];
+}
+
+/**
+ * The chart's columns: elapsed days only, each stacked by subject.
+ *
+ * Future cells are dropped instead of drawn as empty stubs — a day that has not
+ * happened yet cannot hold a record, and 21 stubs made「本月」read as noise.
+ *
+ * Segment order follows `distribution` (already minutes-desc), so one subject
+ * keeps one colour and one vertical order across every column and the legend.
+ * Heights are integer minutes because `dailyMinutes` is the only per-day
+ * per-subject source the bridge ships; mixing it with raw seconds would let a
+ * column's stack disagree with its own legend row.
+ */
+export function buildTrendColumns(
+  days: ReadonlyArray<ReviewPeriodDay>,
+  distribution: ReadonlyArray<ReviewSubjectSlice>
+): TrendColumn[] {
+  return days
+    .filter(day => !day.isFuture)
+    .map(day => {
+      const segments = distribution
+        .map(
+          (slice): TrendColumnSegment => ({
+            subjectId: slice.subjectId,
+            color: slice.subjectColor,
+            minutes: slice.dailyMinutes[day.date] ?? 0,
+          })
+        )
+        .filter(segment => segment.minutes > 0);
+      return {
+        date: day.date,
+        dayLabel: day.dayLabel,
+        isToday: day.isToday,
+        totalMinutes: segments.reduce((sum, segment) => sum + segment.minutes, 0),
+        segments,
+      };
+    });
+}
+
+/** The single tallest column — the caption under the chart names it. */
+export function peakTrendDay(columns: ReadonlyArray<TrendColumn>): TrendColumn | null {
+  const worked = columns.filter(column => column.totalMinutes > 0);
+  if (worked.length === 0) return null;
+  return worked.reduce((a, b) => (b.totalMinutes > a.totalMinutes ? b : a));
+}
+
+export interface PeriodDelta {
+  /** Signed whole minutes; 0 when the two periods match after rounding. */
+  deltaMinutes: number;
+  label: string;
+  /** null when there is nothing to compare against, so no tone is applied. */
+  tone: 'up' | 'down' | 'flat' | null;
+}
+
+/**
+ * 「较上一周期」— the one number that answers "am I improving?".
+ *
+ * A duration delta, not a percent: a percent is meaningless when the previous
+ * period was empty, and a study journal reads better in hours and minutes.
+ */
+export function periodDelta(currentSeconds: number, previousSeconds: number | null): PeriodDelta {
+  if (previousSeconds === null || previousSeconds <= 0) {
+    return { deltaMinutes: 0, label: '上一周期没有记录', tone: null };
+  }
+  const deltaMinutes = Math.round(currentSeconds / 60) - Math.round(previousSeconds / 60);
+  if (deltaMinutes === 0) return { deltaMinutes: 0, label: '与上一周期持平', tone: 'flat' };
+  const sign = deltaMinutes > 0 ? '+' : '-';
+  return {
+    deltaMinutes,
+    label: `较上一周期 ${sign}${formatDuration(Math.abs(deltaMinutes) * 60)}`,
+    tone: deltaMinutes > 0 ? 'up' : 'down',
+  };
+}
+
+/**
+ * Which window counts as "the previous period" for a given scope.
+ *
+ * Rolling windows slide by their own span; calendar scopes step one whole
+ * week / month back through the bridge's existing `periodsBack`.
+ */
+export function previousWindowArgs(
+  scope: ReviewScope,
+  anchorDate: string
+): { scope: ReviewScope; periodsBack: number; anchorDate: string } {
+  if (scope === 'ROLLING_7') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -7) };
+  if (scope === 'ROLLING_30') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -30) };
+  return { scope, periodsBack: 1, anchorDate };
 }
 
 export function formatMonthDaySlash(iso: string): string {

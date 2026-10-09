@@ -10,6 +10,9 @@ export interface YanjiPieChartProps {
   size?: number;
   innerRadiusRatio?: number;
   emptyLabel?: string;
+  /** Shown in the donut hole, e.g. the window's total study time. */
+  centerTitle?: string;
+  centerCaption?: string;
   style?: ViewStyle;
 }
 
@@ -22,6 +25,8 @@ export function YanjiPieChart({
   size = 140,
   innerRadiusRatio = 0.55,
   emptyLabel = '暂无数据',
+  centerTitle,
+  centerCaption,
   style,
 }: YanjiPieChartProps): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -91,7 +96,10 @@ export function YanjiPieChart({
       ]}
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`科目分布图，共 ${validSlices.length} 个学科`}
+      accessibilityLabel={
+        `科目分布图，共 ${validSlices.length} 个学科` +
+        (centerTitle ? `，总时长 ${centerTitle}` : '')
+      }
     >
       <Svg width={size} height={size}>
         {pieData.length === 1 ? (
@@ -111,6 +119,35 @@ export function YanjiPieChart({
           </G>
         )}
       </Svg>
+      {centerTitle ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              ...theme.typography.valueStrong,
+              fontVariant: ['tabular-nums'],
+              textAlign: 'center',
+            }}
+          >
+            {centerTitle}
+          </Text>
+          {centerCaption ? (
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                ...theme.typography.axisLabel,
+                marginTop: 2,
+                textAlign: 'center',
+              }}
+            >
+              {centerCaption}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }

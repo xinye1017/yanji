@@ -240,21 +240,78 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.countElapsedDays([]), 0, 'An empty window has no elapsed days');
     });
 
-    it('locates today in the window only when today is actually inside it', () => {
-      const inWindow = [
-        { date: '2026-10-07', isToday: false },
-        { date: '2026-10-08', isToday: true },
+    it('stacks each elapsed day by subject and drops days that have not happened', () => {
+      const days = [
+        { date: '2026-10-07', dayLabel: '10-07', isToday: false, isFuture: false, durationSeconds: 4800 },
+        { date: '2026-10-08', dayLabel: '10-08', isToday: true, isFuture: false, durationSeconds: 0 },
+        { date: '2026-10-09', dayLabel: '10-09', isToday: false, isFuture: true, durationSeconds: 0 },
       ];
-      assertEqual(
-        logic.findTodayColumn(inWindow).date,
-        '2026-10-08',
-        'Must find today when the window contains it'
+      const distribution = [
+        {
+          subjectId: 'math', subjectName: '数学', subjectColor: '#111111', minutes: 80, share: 0.8,
+          dailyMinutes: { '2026-10-07': 60, '2026-10-08': 0, '2026-10-09': 0 },
+        },
+        {
+          subjectId: 'eng', subjectName: '英语', subjectColor: '#222222', minutes: 20, share: 0.2,
+          dailyMinutes: { '2026-10-07': 20, '2026-10-08': 0, '2026-10-09': 0 },
+        },
+      ];
+
+      const columns = logic.buildTrendColumns(days, distribution);
+
+      assertEqual(columns.length, 2, 'The future cell must never become a column');
+      assertEqual(columns[0].totalMinutes, 80, 'A column sums its own segments');
+      assertDeepEqual(
+        columns[0].segments.map(s => s.subjectId),
+        ['math', 'eng'],
+        'Segment order follows the distribution so one subject keeps one colour'
       );
-      assertEqual(
-        logic.findTodayColumn([{ date: '2026-09-01', isToday: false }]),
-        null,
-        'A past-week window contains no today column and must report null, not crash'
-      );
+      assertEqual(columns[1].totalMinutes, 0, 'A zero day keeps its slot with no segments');
+      assertEqual(columns[1].segments.length, 0);
+    });
+
+    it('names the tallest day and stays silent when nothing was studied', () => {
+      const columns = [
+        { date: 'a', dayLabel: '10-06', isToday: false, totalMinutes: 133, segments: [] },
+        { date: 'b', dayLabel: '10-08', isToday: true, totalMinutes: 40, segments: [] },
+      ];
+      assertEqual(logic.peakTrendDay(columns).dayLabel, '10-06');
+      assertEqual(logic.peakTrendDay([{ ...columns[1], totalMinutes: 0 }]), null);
+    });
+
+    it('compares against the previous period in whole minutes, not percent', () => {
+      assertEqual(logic.periodDelta(7200, 3600).label, '较上一周期 +1 小时');
+      assertEqual(logic.periodDelta(7200, 3600).tone, 'up');
+      assertEqual(logic.periodDelta(3600, 7200).label, '较上一周期 -1 小时');
+      assertEqual(logic.periodDelta(3600, 7200).tone, 'down');
+      assertEqual(logic.periodDelta(3600, 3600).label, '与上一周期持平');
+      assertEqual(logic.periodDelta(3600, 3600).tone, 'flat');
+      assertEqual(logic.periodDelta(3600, 0).label, '上一周期没有记录');
+      assertEqual(logic.periodDelta(3600, 0).tone, null, 'Nothing to compare against carries no tone');
+      assertEqual(logic.periodDelta(3600, null).tone, null);
+    });
+
+    it('slides rolling windows back by their own span and calendar scopes by one period', () => {
+      assertDeepEqual(logic.previousWindowArgs('ROLLING_7', '2026-10-10'), {
+        scope: 'ROLLING_7',
+        periodsBack: 0,
+        anchorDate: '2026-10-03',
+      });
+      assertDeepEqual(logic.previousWindowArgs('ROLLING_30', '2026-10-10'), {
+        scope: 'ROLLING_30',
+        periodsBack: 0,
+        anchorDate: '2026-09-10',
+      });
+      assertDeepEqual(logic.previousWindowArgs('CALENDAR_WEEK', '2026-10-10'), {
+        scope: 'CALENDAR_WEEK',
+        periodsBack: 1,
+        anchorDate: '2026-10-10',
+      });
+      assertDeepEqual(logic.previousWindowArgs('CALENDAR_MONTH', '2026-10-10'), {
+        scope: 'CALENDAR_MONTH',
+        periodsBack: 1,
+        anchorDate: '2026-10-10',
+      });
     });
   });
 
