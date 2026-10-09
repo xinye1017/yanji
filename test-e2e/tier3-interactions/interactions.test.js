@@ -87,7 +87,7 @@ export function registerTier3Tests() {
       assertEqual(cta.label, '继续专注');
 
       // 3. User switches to Review tab
-      const reviewOverview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const reviewOverview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       // The active session is not a completed record yet, so it must not leak into
       // the review totals — the Review tab shows 0 until completion.
       assertEqual(reviewOverview.totalSeconds, 0, 'An in-flight session must not count as study time');

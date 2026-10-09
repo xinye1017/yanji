@@ -5,7 +5,7 @@
  */
 
 /** 回顾页时间粒度白名单：与 TS `ReviewScope` / Kotlin `BridgeMappers.REVIEW_SCOPES` 逐字一致。 */
-const REVIEW_SCOPES = ['ROLLING_7', 'ROLLING_30', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
+const REVIEW_SCOPES = ['TODAY', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
 
 export const BridgeSchemas = {
   isValidActiveSessionState(obj) {

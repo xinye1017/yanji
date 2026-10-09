@@ -238,15 +238,13 @@ object BridgeMappers {
         }
     }
 
-    /** 回顾页时间粒度的词汇表：**只有这四个值**（与 TS `ReviewScope` 逐字一致）。 */
-    const val SCOPE_ROLLING_7 = "ROLLING_7"
-    const val SCOPE_ROLLING_30 = "ROLLING_30"
+    /** 回顾页时间粒度的词汇表：**只有这三个值**（与 TS `ReviewScope` 逐字一致）。 */
+    const val SCOPE_TODAY = "TODAY"
     const val SCOPE_CALENDAR_WEEK = "CALENDAR_WEEK"
     const val SCOPE_CALENDAR_MONTH = "CALENDAR_MONTH"
 
     val REVIEW_SCOPES: List<String> = listOf(
-        SCOPE_ROLLING_7,
-        SCOPE_ROLLING_30,
+        SCOPE_TODAY,
         SCOPE_CALENDAR_WEEK,
         SCOPE_CALENDAR_MONTH
     )
@@ -324,18 +322,14 @@ object BridgeMappers {
 
     /**
      * 一天的横轴标签（口径由 scope 决定，不猜、不回退到另一种粒度）：
-     *  - 滚动窗口 → `MM-DD`；
-     *  - 自然周 → `周一`…`周日`；
-     *  - 自然月 → `D日`。
+     *  - 单日 / 自然月 → `D日`；
+     *  - 自然周 → `周一`…`周日`。
      */
     fun reviewDayLabel(scope: String, dateIso: String): String = when (scope) {
-        // 滚动口径是 `MM-DD`（5..10），不是 `substringAfterLast('-')` 的 `DD`——
-        // 只截最后一段会让 7 天窗口里 10-02 与 11-02 的横轴标签长得一模一样。
-        SCOPE_ROLLING_7, SCOPE_ROLLING_30 -> dateIso.substring(5).takeIf { it.length == 5 } ?: dateIso
+        SCOPE_TODAY, SCOPE_CALENDAR_MONTH -> "${parseIsoOrNull(dateIso)?.dayOfMonth ?: 1}日"
         SCOPE_CALENDAR_WEEK -> WEEKDAY_LABELS[
             (parseIsoOrNull(dateIso)?.dayOfWeek?.value ?: 1).coerceIn(1, 7) - 1
         ]
-        SCOPE_CALENDAR_MONTH -> "${parseIsoOrNull(dateIso)?.dayOfMonth ?: 1}日"
         else -> dateIso
     }
 
@@ -354,9 +348,8 @@ object BridgeMappers {
      * 两条如实原则：
      * - 自然周**如实显示首尾两个日期**（跨月也照实：「10月30日 - 11月5日」），
      *   绝不折算成「第 N 周」——那会让跨月周的视觉区间与实际数据区间对不上；
-     * - 滚动窗口只有**终点确实是今天**时才配叫「最近 N 天」。窗口以调用方传入的锚点
-     *   为终点，用户翻了日期后锚点就落在过去；此时照抄「最近 7 天」等于用一个假区间
-     *   标题去描述一段真区间，所以改为如实报首尾日期。
+     * - 单日窗口只有**那一天确实是今天**时才配叫「今天」。用户翻了日期后窗口落在
+     *   过去，照抄「今天」等于用一个假标题描述一段真区间，所以如实报日期。
      *
      * 未知 scope 返回空串：[YanjiDataModule] 在调用前已按白名单 reject，
      * 空串只是「不该走到这里」的显式标记，不是兜底文案。
@@ -367,13 +360,12 @@ object BridgeMappers {
         dates: List<java.time.LocalDate>,
         todayIso: String
     ): String = when (scope) {
-        SCOPE_ROLLING_7, SCOPE_ROLLING_30 -> {
-            val start = dates.firstOrNull()
-            val end = dates.lastOrNull()
+        SCOPE_TODAY -> {
+            val day = dates.firstOrNull()
             when {
-                start == null || end == null -> ""
-                end == parseIsoOrNull(todayIso) -> "最近 ${dates.size} 天"
-                else -> "${monthDayLabel(start)} - ${monthDayLabel(end)}"
+                day == null -> ""
+                day == parseIsoOrNull(todayIso) -> "今天"
+                else -> monthDayLabel(day)
             }
         }
         // 如实显示首尾两个日期，跨月也照实；不折算成「第 N 周」。

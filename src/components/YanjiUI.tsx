@@ -27,7 +27,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, ClipPath, Defs, G, Line, Rect } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
@@ -569,6 +569,128 @@ export function YanjiStackedBarChart({
             stroke={theme.colors.textTertiary}
             strokeWidth={1}
             strokeDasharray="3 3"
+          />
+        ) : null}
+      </Svg>
+      {averageY !== null && averageLabel ? (
+        <Text
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: Math.max(0, averageY - 15),
+            paddingHorizontal: 3,
+            backgroundColor: theme.colors.bgSurface,
+            color: theme.colors.textTertiary,
+            ...theme.typography.axisLabel,
+          }}
+        >
+          {averageLabel}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiLineChart — smoothed line with a soft area, for windows where one column
+// per point would turn into noise (a whole month, or one day's 24 hours)
+// ---------------------------------------------------------------------------
+
+export function YanjiLineChart({
+  values,
+  width = 240,
+  height = 56,
+  averageValue,
+  averageLabel,
+  peakIndex,
+  emptyLabel,
+}: {
+  values: ReadonlyArray<number>;
+  width?: number;
+  height?: number;
+  averageValue?: number;
+  averageLabel?: string;
+  /** Point to mark with a dot (the busiest day / hour). */
+  peakIndex?: number;
+  emptyLabel?: string;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const max = Math.max(0, ...values);
+
+  if (values.length === 0 || max <= 0) {
+    return (
+      <View style={{ width, height, justifyContent: 'flex-end' }}>
+        <YanjiHairline style={{ marginBottom: 0 }} />
+        {emptyLabel ? (
+          <Text
+            style={{
+              marginTop: 8,
+              color: theme.colors.textTertiary,
+              ...theme.typography.caption,
+              textAlign: 'center',
+            }}
+          >
+            {emptyLabel}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+
+  const scale = height / max;
+  const step = values.length > 1 ? width / (values.length - 1) : 0;
+  const points = values.map((value, index) => ({
+    x: values.length > 1 ? index * step : width / 2,
+    y: height - value * scale,
+  }));
+
+  // Midpoint quadratics: straight segments read as a zigzag at 30 points, while
+  // a heavy spline would invent peaks the data never had.
+  let linePath = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const midX = (points[i].x + points[i + 1].x) / 2;
+    const midY = (points[i].y + points[i + 1].y) / 2;
+    linePath += ` Q ${points[i].x} ${points[i].y} ${midX} ${midY}`;
+  }
+  linePath += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+
+  const averageY =
+    averageValue !== undefined && averageValue > 0
+      ? Math.max(0, Math.min(height, height - averageValue * scale))
+      : null;
+  const peak = peakIndex !== undefined ? points[peakIndex] : undefined;
+
+  return (
+    <View style={{ width, height }}>
+      <Svg width={width} height={height}>
+        <Path d={areaPath} fill={theme.colors.accentPrimary} fillOpacity={0.14} />
+        <Path
+          d={linePath}
+          stroke={theme.colors.accentPrimary}
+          strokeWidth={2}
+          strokeLinecap="round"
+          fill="none"
+        />
+        {averageY !== null ? (
+          <Line
+            x1={0}
+            y1={averageY}
+            x2={width}
+            y2={averageY}
+            stroke={theme.colors.textTertiary}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        ) : null}
+        {peak ? (
+          <Circle
+            cx={peak.x}
+            cy={peak.y}
+            r={3.5}
+            fill={theme.colors.accentPrimary}
+            stroke={theme.colors.bgSurface}
+            strokeWidth={2}
           />
         ) : null}
       </Svg>

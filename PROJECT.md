@@ -80,7 +80,7 @@
 - `toggleFavoriteNote(noteId: string): Promise<boolean>`
 - `deleteNote(noteId: string): Promise<boolean>`
 - `getSubjects(): Promise<Subject[]>`
-- `getReviewOverview(scope: ReviewScope, periodsBack: number): Promise<ReviewOverview>`
+- `getReviewOverview(scope: ReviewScope, periodsBack: number, anchorDate?: string | null): Promise<ReviewOverview>`
 - `updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>`
 - `deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>`
 - `getDailyTimeline(date: string): Promise<DailyTimeline>`
@@ -95,12 +95,13 @@
 - `NoteEntry.sessionId: string | null` — the focus session the note is bound to, or `null` when the note is not bound to a session. It is never an empty string.
 - `UserSettings` fields: `examDate`, `targetSchool`, `targetMajor`, `themePreference`. There is deliberately **no** `focusDurationMinutes` / `breakDurationMinutes` — the domain UserSettings has no such fields, so any value would be fabricated.
 - `ReviewOverview` fields: `scope`, `periodsBack`, `label`, `windowDays`, `days[]`, `totalSeconds`, `dailyAverageSeconds`, `examCount`, `subjectDistribution[]`.
-  - `ReviewScope = 'ROLLING_7' | 'ROLLING_30' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH'`. Anything else is rejected (`E_INVALID_SCOPE`) rather than guessed; `periodsBack` is forced to 0 for the rolling scopes and means "weeks back" / "months back" for the calendar ones.
+  - `ReviewScope = 'TODAY' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH'`. Anything else is rejected (`E_INVALID_SCOPE`) rather than guessed; `periodsBack` is forced to 0 for `TODAY` and means "weeks back" / "months back" for the calendar ones. `anchorDate` (default today) selects which day / week / month the window covers.
   - `windowDays === days.length`, and `days` is ascending (early → late) local-calendar `yyyy-MM-dd`, produced by shifting the local date — never by subtracting 24h multiples (which drifts across DST).
-  - `ROLLING_*` is a **rolling N-day window** ending today: no future-dated cells, not even as zero-valued bars, and no calendar-week clipping, so the x-axis does not drift with the weekday. `CALENDAR_WEEK` starts on Monday; `CALENDAR_MONTH` covers the real month length.
-  - Each `ReviewPeriodDay` carries `date`, `dayLabel`, `durationSeconds`, `isToday`, `isFuture`. Cells after today are flagged `isFuture` with zero seconds rather than being dropped, so a calendar view keeps its shape.
+  - `TODAY` is a **single-day window** on the anchor. `CALENDAR_WEEK` starts on Monday; `CALENDAR_MONTH` covers the real month length.
+  - `dailyAverageSeconds` divides by the **elapsed** days (`!isFuture`), not by `windowDays`: a calendar week/month window runs out to Sunday / the last of the month, and dividing by cells that have not happened yet dilutes the average into a number nobody can explain.
+  - Each `ReviewPeriodDay` carries `date`, `dayLabel`, `durationSeconds`, `isToday`, `isFuture`. Cells after today are flagged `isFuture` with zero seconds rather than being dropped, so a calendar view keeps its shape; the chart itself renders elapsed days only.
   - Durations are carried in **seconds** throughout; the single seconds → minutes conversion happens after summing. Truncating per row first loses the remainder once per day and once per subject.
-  - Each `ReviewSubjectSlice` carries `subjectId`, `subjectName`, `subjectColor`, `minutes`, `share` (0..1) and `dailyMinutes` (one key per window day, including zero days). `subjectId` is the normalised `SubjectCatalog.subcategoryBucketId` bucket and `subjectName` its display name, matching the subject statistics elsewhere — keying by the raw session name splits one category across several rows.
+  - Each `ReviewSubjectSlice` carries `subjectId`, `subjectName`, `subjectColor`, `minutes`, `share` (0..1) and `dailyMinutes` (one key per window day, including zero days). `subjectId` is the normalised `SubjectCatalog.subcategoryBucketId` bucket and `subjectName` its display name, matching the subject statistics elsewhere — keying by the raw session name splits one category across several rows. `dailyMinutes` is what the week view's per-subject stacked columns are built from, so one subject keeps one colour across chart and legend.
   - `subjectDistribution` is sorted by `minutes` descending, ties broken by `subjectId`, so repeated reads of the same data render in the same order.
   - `dailyAverageSeconds` divides by the window length, not by the number of days with records.
   - The former `activeDays` field is **removed**: its threshold lives in a user setting that neither the settings UI nor the bridge exposes, so rendering it would put an unexplainable streak counter on the page.

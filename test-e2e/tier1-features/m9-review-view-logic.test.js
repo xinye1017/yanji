@@ -291,16 +291,11 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.periodDelta(3600, null).tone, null);
     });
 
-    it('slides rolling windows back by their own span and calendar scopes by one period', () => {
-      assertDeepEqual(logic.previousWindowArgs('ROLLING_7', '2026-10-10'), {
-        scope: 'ROLLING_7',
+    it('steps the single-day window back one day and calendar scopes by one period', () => {
+      assertDeepEqual(logic.previousWindowArgs('TODAY', '2026-10-10'), {
+        scope: 'TODAY',
         periodsBack: 0,
-        anchorDate: '2026-10-03',
-      });
-      assertDeepEqual(logic.previousWindowArgs('ROLLING_30', '2026-10-10'), {
-        scope: 'ROLLING_30',
-        periodsBack: 0,
-        anchorDate: '2026-09-10',
+        anchorDate: '2026-10-09',
       });
       assertDeepEqual(logic.previousWindowArgs('CALENDAR_WEEK', '2026-10-10'), {
         scope: 'CALENDAR_WEEK',
@@ -312,6 +307,31 @@ export function registerReviewViewLogicTests() {
         periodsBack: 1,
         anchorDate: '2026-10-10',
       });
+    });
+
+    it('spreads a session across the hours it actually touches', () => {
+      // 13:40–15:10 is 20m in 13时, 60m in 14时, 10m in 15时. Attributing the
+      // whole session to its start hour would put 90 minutes at 13时 and lie
+      // about when the day's focus happened.
+      const buckets = logic.buildHourBuckets([
+        { startTime: at(2026, 10, 8, 13, 40), durationSeconds: 90 * 60 },
+      ]);
+
+      assertEqual(buckets.length, 24, 'A day always renders all 24 hour slots');
+      assertEqual(buckets[13].minutes, 20);
+      assertEqual(buckets[14].minutes, 60);
+      assertEqual(buckets[15].minutes, 10);
+      assertEqual(
+        buckets.reduce((sum, bucket) => sum + bucket.minutes, 0),
+        90,
+        'The hours must add back up to the session length'
+      );
+      assertEqual(logic.peakHourBucket(buckets).hour, 14, 'The busiest hour is the full one');
+      assertEqual(
+        logic.peakHourBucket(buckets.map(b => ({ ...b, minutes: 0 }))),
+        null,
+        'An empty day has no busiest hour and must report null, not hour 0'
+      );
     });
   });
 
@@ -361,7 +381,7 @@ export function registerReviewViewLogicTests() {
       bridge.advanceTime(1800);
       await bridge.completeTimer();
 
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       const windowDates = overview.days.map(day => day.date);
 
       for (const slice of overview.subjectDistribution) {

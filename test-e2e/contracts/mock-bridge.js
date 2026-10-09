@@ -1,5 +1,5 @@
 /** 回顾页的时间粒度白名单：只有这四个值（与 TS `ReviewScope` 逐字一致）。 */
-const REVIEW_SCOPES = ['ROLLING_7', 'ROLLING_30', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
+const REVIEW_SCOPES = ['TODAY', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
 
 const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
@@ -327,13 +327,13 @@ export class MockYanjiBridge {
    * 科目归一刻意**不**实现：mock 按记录自身的 `subjectId` / `subjectName` 分桶，
    * 它要锁的是「排序 / 截断 / 窗口」三条口径，不是 Kotlin `SubjectCatalog` 的分类学。
    */
-  async getReviewOverview(scope = 'ROLLING_7', periodsBack = 0, anchorDate = null) {
+  async getReviewOverview(scope = 'TODAY', periodsBack = 0, anchorDate = null) {
     if (!REVIEW_SCOPES.includes(scope)) {
       throw new Error(`Invalid review scope: ${scope}`);
     }
     const back = Number.isFinite(periodsBack) ? Math.max(0, Math.floor(periodsBack)) : 0;
-    // 滚动窗口不看 periodsBack：终点为 anchorDate（或今天），不存在「往前第几个窗口」。
-    const resolvedBack = scope === 'ROLLING_7' || scope === 'ROLLING_30' ? 0 : back;
+    // 单日窗口不看 periodsBack：就是锚点那一天，不存在「往前第几个窗口」。
+    const resolvedBack = scope === 'TODAY' ? 0 : back;
 
     const dates = this._reviewWindowDates(scope, resolvedBack, anchorDate);
     const todayIso = this._isoDateAt(this.virtualClockMs, 0);
@@ -456,13 +456,8 @@ export class MockYanjiBridge {
       ? this._localDateFromIso(anchorDate)
       : new Date(this.virtualClockMs);
 
-    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') {
-      const span = scope === 'ROLLING_7' ? 7 : 30;
-      const dates = [];
-      for (let i = span - 1; i >= 0; i--) {
-        dates.push(this._isoOfLocalDate(this._shiftLocalDate(anchor, -i)));
-      }
-      return dates;
+    if (scope === 'TODAY') {
+      return [this._isoOfLocalDate(anchor)];
     }
 
     if (scope === 'CALENDAR_WEEK') {
@@ -490,30 +485,29 @@ export class MockYanjiBridge {
     return dates;
   }
 
-  /** 横轴标签：滚动窗口 → `MM-DD`，自然周 → `周一…周日`，自然月 → `D日`。 */
+  /** 横轴标签：单日 / 自然月 → `D日`，自然周 → `周一…周日`。 */
   _reviewDayLabel(scope, dateIso) {
-    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') return dateIso.slice(5);
     if (scope === 'CALENDAR_WEEK') {
       const d = this._localDateFromIso(dateIso);
       return WEEKDAY_LABELS[(d.getDay() + 6) % 7];
     }
-    if (scope === 'CALENDAR_MONTH') return `${Number(dateIso.slice(8, 10))}日`;
+    if (scope === 'TODAY' || scope === 'CALENDAR_MONTH') {
+      return `${Number(dateIso.slice(8, 10))}日`;
+    }
     return dateIso;
   }
 
   /**
    * 窗口标题。自然周如实显示首尾日期（跨月也照实），不折算成「第 N 周」。
-   * 滚动窗口只在终点确实是今天时才写「最近 N 天」：锚点落在过去时照抄这个标题，
-   * 等于用假区间描述真区间（与 Kotlin `BridgeMappers.reviewScopeLabel` 同口径）。
+   * 单日窗口只在那一天确实是今天时才写「今天」：锚点落在过去时照抄这个标题，
+   * 等于用假标题描述真区间（与 Kotlin `BridgeMappers.reviewScopeLabel` 同口径）。
    */
   _reviewScopeLabel(scope, dates, todayIso) {
     const first = dates[0];
     const last = dates[dates.length - 1];
     if (!first || !last) return '';
-    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') {
-      return last === todayIso
-        ? `最近 ${dates.length} 天`
-        : `${this._monthDayLabel(first)} - ${this._monthDayLabel(last)}`;
+    if (scope === 'TODAY') {
+      return first === todayIso ? '今天' : this._monthDayLabel(first);
     }
     if (scope === 'CALENDAR_WEEK') {
       return `${this._monthDayLabel(first)} - ${this._monthDayLabel(last)}`;

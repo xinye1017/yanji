@@ -30,6 +30,7 @@ import {
   YanjiHairline,
   YanjiIcon,
   YanjiIconButton,
+  YanjiLineChart,
   YanjiSectionHeader,
   YanjiStackedBarChart,
 } from '../components/YanjiUI';
@@ -40,6 +41,7 @@ import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
 import {
+  buildHourBuckets,
   buildTimelineEntries,
   buildTrendColumns,
   computeAxisLabelsLayout,
@@ -51,6 +53,8 @@ import {
   formatDuration,
   formatMonthDaySlash,
   formatPercent,
+  lineCenters,
+  peakHourBucket,
   peakTrendDay,
   periodDelta,
   previousWindowArgs,
@@ -77,11 +81,13 @@ const SUBJECT_DOT_SIZE = 8;
 /** Vertical padding of the trend scope pills. */
 const SCOPE_PILL_PADDING_V = 3;
 const SCOPES: ReadonlyArray<{ scope: ReviewScope; label: string }> = [
-  { scope: 'ROLLING_7', label: '7 天' },
-  { scope: 'ROLLING_30', label: '30 天' },
+  { scope: 'TODAY', label: '今天' },
   { scope: 'CALENDAR_WEEK', label: '本周' },
   { scope: 'CALENDAR_MONTH', label: '本月' },
 ];
+
+/** Hour ticks under the single-day curve; all 24 would crowd the axis. */
+const HOUR_TICKS = [0, 6, 12, 18];
 
 export function ReviewScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -90,7 +96,7 @@ export function ReviewScreen(): React.JSX.Element {
   const [timeline, setTimeline] = useState<DailyTimeline | null>(null);
   const [overview, setOverview] = useState<ReviewOverview | null>(null);
   const [dayTasks, setDayTasks] = useState<StudyTask[]>([]);
-  const [scope, setScope] = useState<ReviewScope>('ROLLING_7');
+  const [scope, setScope] = useState<ReviewScope>('TODAY');
   /** The previous window's total, for the「较上一周期」line. */
   const [prevTotalSeconds, setPrevTotalSeconds] = useState<number | null>(null);
   /** Measured width of the trend-chart column, so the SVG matches its labels. */
@@ -172,10 +178,21 @@ export function ReviewScreen(): React.JSX.Element {
   );
   const peak = peakTrendDay(columns);
   const delta = periodDelta(overview?.totalSeconds ?? 0, prevTotalSeconds);
-  /** Exact collision-free positioned axis labels */
+  /** The single-day view: how the selected day's focus sits across its 24 hours. */
+  const hourBuckets = useMemo(
+    () => (scope === 'TODAY' ? buildHourBuckets(timeline?.sessions ?? []) : []),
+    [scope, timeline]
+  );
+  const peakHour = peakHourBucket(hourBuckets);
+  const hourCenters = useMemo(() => lineCenters(24, chartWidth), [chartWidth]);
+  /** Exact collision-free positioned axis labels. The month curve spaces its
+      points edge-to-edge, so its labels sit on line centers, not bar centers. */
   const axisLabelItems = useMemo(
-    () => computeAxisLabelsLayout(columns, chartWidth),
-    [columns, chartWidth]
+    () =>
+      computeAxisLabelsLayout(columns, chartWidth, {
+        centers: scope === 'CALENDAR_MONTH' ? lineCenters(columns.length, chartWidth) : undefined,
+      }),
+    [columns, chartWidth, scope]
   );
 
   return (
@@ -433,25 +450,29 @@ export function ReviewScreen(): React.JSX.Element {
                   {delta.label}
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text
-                  style={[
-                    theme.typography.caption,
-                    { color: theme.colors.textTertiary, marginRight: 6 },
-                  ]}
-                >
-                  平均学习时长
-                </Text>
-                <Text
-                  style={{
-                    color: theme.colors.textPrimary,
-                    ...theme.typography.valueStrong,
-                    fontVariant: ['tabular-nums'],
-                  }}
-                >
-                  {overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}
-                </Text>
-              </View>
+              {/* A single day has no "daily average" — the day sheet above already
+                  carries its total, so the header keeps only the comparison. */}
+              {scope === 'TODAY' ? null : (
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text
+                    style={[
+                      theme.typography.caption,
+                      { color: theme.colors.textTertiary, marginRight: 6 },
+                    ]}
+                  >
+                    平均学习时长
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.colors.textPrimary,
+                      ...theme.typography.valueStrong,
+                      fontVariant: ['tabular-nums'],
+                    }}
+                  >
+                    {overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* The chart is measured, not given a magic width: it must line up
@@ -464,39 +485,92 @@ export function ReviewScreen(): React.JSX.Element {
               accessibilityRole="image"
               accessibilityLabel={trendAccessibilityLabel(overview)}
             >
-              <YanjiStackedBarChart
-                columns={columns}
-                width={chartWidth}
-                height={TREND_CHART_HEIGHT}
-                averageMinutes={overview ? overview.dailyAverageSeconds / 60 : undefined}
-                averageLabel="日均"
-                emptyLabel="暂无统计数据"
-              />
+              {scope === 'TODAY' ? (
+                <YanjiLineChart
+                  values={hourBuckets.map(bucket => bucket.minutes)}
+                  width={chartWidth}
+                  height={TREND_CHART_HEIGHT}
+                  peakIndex={peakHour ? peakHour.hour : undefined}
+                  emptyLabel="暂无统计数据"
+                />
+              ) : scope === 'CALENDAR_MONTH' ? (
+                <YanjiLineChart
+                  values={columns.map(column => column.totalMinutes)}
+                  width={chartWidth}
+                  height={TREND_CHART_HEIGHT}
+                  averageValue={overview ? overview.dailyAverageSeconds / 60 : undefined}
+                  averageLabel="日均"
+                  peakIndex={peak ? columns.indexOf(peak) : undefined}
+                  emptyLabel="暂无统计数据"
+                />
+              ) : (
+                <YanjiStackedBarChart
+                  columns={columns}
+                  width={chartWidth}
+                  height={TREND_CHART_HEIGHT}
+                  averageMinutes={overview ? overview.dailyAverageSeconds / 60 : undefined}
+                  averageLabel="日均"
+                  emptyLabel="暂无统计数据"
+                />
+              )}
 
-              {/* Day labels sit under the chart, aligned to their column. Each
-                  label is placed at its exact bar center and guaranteed not to
+              {/* Axis labels sit under the chart, aligned to their point. Each
+                  label is placed at its exact center and guaranteed not to
                   collide or truncate. */}
-              <View style={{ height: 16, marginTop: YanjiSpacing.sm, width: chartWidth || '100%' }}>
-                {axisLabelItems.map(item => (
-                  <Text
-                    key={item.date}
-                    numberOfLines={1}
-                    style={{
-                      position: 'absolute',
-                      left: item.left,
-                      width: item.width,
-                      textAlign: 'center',
-                      color: item.isToday ? theme.colors.accentPrimary : theme.colors.textTertiary,
-                      fontVariant: ['tabular-nums'],
-                      ...theme.typography.axisLabel,
-                    }}
-                  >
-                    {item.dayLabel}
-                  </Text>
-                ))}
-              </View>
+              {scope === 'TODAY' ? (
+                <View style={{ height: 16, marginTop: YanjiSpacing.sm, width: chartWidth || '100%' }}>
+                  {HOUR_TICKS.map(hour => (
+                    <Text
+                      key={hour}
+                      numberOfLines={1}
+                      style={{
+                        position: 'absolute',
+                        left: Math.max(0, Math.min(chartWidth - 38, (hourCenters[hour] ?? 0) - 19)),
+                        width: 38,
+                        textAlign: 'center',
+                        color: theme.colors.textTertiary,
+                        fontVariant: ['tabular-nums'],
+                        ...theme.typography.axisLabel,
+                      }}
+                    >
+                      {hour}时
+                    </Text>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ height: 16, marginTop: YanjiSpacing.sm, width: chartWidth || '100%' }}>
+                  {axisLabelItems.map(item => (
+                    <Text
+                      key={item.date}
+                      numberOfLines={1}
+                      style={{
+                        position: 'absolute',
+                        left: item.left,
+                        width: item.width,
+                        textAlign: 'center',
+                        color: item.isToday ? theme.colors.accentPrimary : theme.colors.textTertiary,
+                        fontVariant: ['tabular-nums'],
+                        ...theme.typography.axisLabel,
+                      }}
+                    >
+                      {item.dayLabel}
+                    </Text>
+                  ))}
+                </View>
+              )}
 
-              {peak ? (
+              {scope === 'TODAY' ? (
+                peakHour ? (
+                  <Text
+                    style={[
+                      theme.typography.meta,
+                      { color: theme.colors.textTertiary, marginTop: YanjiSpacing.xs },
+                    ]}
+                  >
+                    最专注的时段 {peakHour.hour}时 · {formatDuration(peakHour.minutes * 60)}
+                  </Text>
+                ) : null
+              ) : peak ? (
                 <Text
                   style={[
                     theme.typography.meta,
@@ -508,13 +582,20 @@ export function ReviewScreen(): React.JSX.Element {
               ) : null}
             </View>
 
-            <YanjiHairline style={{ marginTop: YanjiSpacing.md }} />
+            {scope === 'TODAY' ? null : (
+              <>
+                <YanjiHairline style={{ marginTop: YanjiSpacing.md }} />
 
-            <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.md }}>
-              <ReviewStat label="累计" value={overview ? formatDuration(overview.totalSeconds) : '—'} />
-              <ReviewStat label="有记录" value={`${workedDays} / ${elapsedDays} 天`} />
-              <ReviewStat label="模考" value={`${overview?.examCount ?? 0} 场`} />
-            </View>
+                <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.md }}>
+                  <ReviewStat
+                    label="累计"
+                    value={overview ? formatDuration(overview.totalSeconds) : '—'}
+                  />
+                  <ReviewStat label="有记录" value={`${workedDays} / ${elapsedDays} 天`} />
+                  <ReviewStat label="模考" value={`${overview?.examCount ?? 0} 场`} />
+                </View>
+              </>
+            )}
           </YanjiCard>
         )}
 

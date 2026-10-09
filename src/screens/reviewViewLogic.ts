@@ -265,16 +265,65 @@ export function periodDelta(currentSeconds: number, previousSeconds: number | nu
 /**
  * Which window counts as "the previous period" for a given scope.
  *
- * Rolling windows slide by their own span; calendar scopes step one whole
+ * The single-day window steps back one day; calendar scopes step one whole
  * week / month back through the bridge's existing `periodsBack`.
  */
 export function previousWindowArgs(
   scope: ReviewScope,
   anchorDate: string
 ): { scope: ReviewScope; periodsBack: number; anchorDate: string } {
-  if (scope === 'ROLLING_7') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -7) };
-  if (scope === 'ROLLING_30') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -30) };
+  if (scope === 'TODAY') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -1) };
   return { scope, periodsBack: 1, anchorDate };
+}
+
+// ---------------------------------------------------------------------------
+// The single-day view: how one day's focus sits across its 24 hours
+// ---------------------------------------------------------------------------
+
+export interface HourBucket {
+  hour: number;
+  minutes: number;
+}
+
+/**
+ * 一天 24 个小时格子的专注分钟数。
+ *
+ * 跨小时的会话按重叠秒数摊进每个小时（13:40–15:10 同时落在 13 / 14 / 15 时）。
+ * 只记开始小时会让曲线在整点处凭空尖峰，并把时长记错时段。
+ */
+export function buildHourBuckets(
+  sessions: ReadonlyArray<{ startTime: number; durationSeconds: number }>
+): HourBucket[] {
+  const msByHour = new Array<number>(24).fill(0);
+  for (const session of sessions) {
+    let remainingMs = session.durationSeconds * 1000;
+    let cursor = session.startTime;
+    while (remainingMs > 0) {
+      const start = new Date(cursor);
+      const boundary = new Date(cursor);
+      boundary.setHours(start.getHours() + 1, 0, 0, 0);
+      const inHourMs = Math.min(remainingMs, Math.max(0, boundary.getTime() - cursor));
+      msByHour[start.getHours()] += inHourMs;
+      remainingMs -= inHourMs;
+      cursor = boundary.getTime();
+    }
+  }
+  return msByHour.map((ms, hour) => ({ hour, minutes: Math.round(ms / 60_000) }));
+}
+
+/** 一天里最专注的小时，用于曲线下的注记。 */
+export function peakHourBucket(buckets: ReadonlyArray<HourBucket>): HourBucket | null {
+  const worked = buckets.filter(bucket => bucket.minutes > 0);
+  if (worked.length === 0) return null;
+  return worked.reduce((a, b) => (b.minutes > a.minutes ? b : a));
+}
+
+/** 折线图第 i 个点的 x 中心：首尾贴边，中间等距。 */
+export function lineCenters(count: number, width: number): number[] {
+  if (count <= 0 || width <= 0) return [];
+  if (count === 1) return [width / 2];
+  const step = width / (count - 1);
+  return Array.from({ length: count }, (_, index) => index * step);
 }
 
 export function formatMonthDaySlash(iso: string): string {
@@ -350,6 +399,8 @@ export function computeAxisLabelsLayout<
     labelWidth?: number;
     gap?: number;
     minSpacing?: number;
+    /** X centers of the plotted points; defaults to bar-column centers. */
+    centers?: ReadonlyArray<number>;
   }
 ): PlacedAxisLabel[] {
   if (days.length === 0 || chartWidth <= 0) return [];
@@ -361,8 +412,10 @@ export function computeAxisLabelsLayout<
   const barWidth = Math.max(2, (chartWidth - gap * (days.length - 1)) / days.length);
 
   const getClampedLeft = (index: number) => {
-    const barCenterX = index * (barWidth + gap) + barWidth / 2;
-    return Math.max(0, Math.min(chartWidth - labelWidth, barCenterX - labelWidth / 2));
+    const centerX = options?.centers
+      ? options.centers[index]
+      : index * (barWidth + gap) + barWidth / 2;
+    return Math.max(0, Math.min(chartWidth - labelWidth, centerX - labelWidth / 2));
   };
 
   const candidateIndices: number[] = [];

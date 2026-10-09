@@ -91,13 +91,13 @@ export function registerM5Tests() {
       bridge.advanceTime(1800);
       await bridge.completeTimer();
 
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
-      assertEqual(overview.scope, 'ROLLING_7');
-      assertEqual(overview.periodsBack, 0, 'Rolling windows are always anchored to today');
-      assertEqual(overview.label, '最近 7 天');
-      assertEqual(overview.windowDays, 7);
+      const overview = await bridge.getReviewOverview('TODAY', 0);
+      assertEqual(overview.scope, 'TODAY');
+      assertEqual(overview.periodsBack, 0, 'The single-day window carries no period offset');
+      assertEqual(overview.label, '今天');
+      assertEqual(overview.windowDays, 1);
       assertEqual(overview.totalSeconds, 90 * 60, 'totalSeconds keeps raw seconds: 60m + 30m');
-      assertEqual(overview.dailyAverageSeconds, Math.floor((90 * 60) / 7), 'A rolling window ends today, so all 7 days are elapsed');
+      assertEqual(overview.dailyAverageSeconds, 90 * 60, 'A one-day window averages to itself');
       assertEqual(overview.examCount, 0, 'Focus sessions are not mock exams');
 
       const math = overview.subjectDistribution.find(s => s.subjectId === 'sub-math');
@@ -110,61 +110,34 @@ export function registerM5Tests() {
     });
   });
 
-  describe('Tier 1: Feature 18a — ReviewOverview rolling windows (no future days, no week clipping)', () => {
-    it('emits exactly 7 ascending days ending today, with no future-dated day', async () => {
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+  describe('Tier 1: Feature 18a — ReviewOverview single-day window (no future day, no offset)', () => {
+    it('emits exactly the anchored day, never a future-dated one', async () => {
+      const overview = await bridge.getReviewOverview('TODAY', 0);
       const today = bridge._isoDateAt(bridge.virtualClockMs, 0);
 
-      assertEqual(overview.days.length, 7, 'Rolling window must contain exactly 7 days');
+      assertEqual(overview.days.length, 1, 'The single-day window holds exactly one day');
       assertEqual(overview.windowDays, overview.days.length, 'windowDays must equal days.length');
-
-      const dates = overview.days.map(d => d.date);
-      assertDeepEqual(dates, [...dates].sort(), 'days must be ascending by local-calendar date');
-      assertEqual(dates[dates.length - 1], today, 'Window must end on today');
-      assertEqual(overview.days.filter(d => d.isToday).length, 1, 'Exactly one day is today');
-      assertEqual(overview.days[overview.days.length - 1].isToday, true, 'The last day is today');
-      assertEqual(overview.days[0].date, bridge._isoDateAt(bridge.virtualClockMs, -6), 'Window starts 6 days back');
-
-      // No day may be in the future — a zero-valued tomorrow bar is still a violation.
-      for (const day of overview.days) {
-        assertEqual(day.isFuture, false, day.date + ' must not be future-dated');
-        assert(day.date <= today, day.date + ' is after today; future days are forbidden');
-      }
+      assertEqual(overview.days[0].date, today, 'The window is the anchored day');
+      assertEqual(overview.days[0].isToday, true, 'Anchored at today, the one day is today');
+      assertEqual(overview.days[0].isFuture, false, 'Today is never future-dated');
     });
 
-    it('forces periodsBack to 0 on rolling scopes and clips no calendar week', async () => {
-      const today = bridge._isoDateAt(bridge.virtualClockMs, 0);
+    it('forces periodsBack to 0 and labels a past anchor with its real date', async () => {
+      const withBack = await bridge.getReviewOverview('TODAY', 30);
+      assertEqual(withBack.periodsBack, 0, 'TODAY forces periodsBack = 0');
+      assertEqual(withBack.days[0].date, bridge._isoDateAt(bridge.virtualClockMs, 0));
 
-      const withBack = await bridge.getReviewOverview('ROLLING_7', 30);
-      assertEqual(withBack.periodsBack, 0, 'ROLLING_* forces periodsBack = 0');
-      assertEqual(withBack.days[withBack.days.length - 1].date, today, 'periodsBack must not slide the window');
-
-      const r30 = await bridge.getReviewOverview('ROLLING_30', 0);
-      assertEqual(r30.windowDays, 30, '30-day window must yield 30 days');
-      assertEqual(r30.label, '最近 30 天');
-      assertEqual(r30.days[0].date, bridge._isoDateAt(bridge.virtualClockMs, -29));
-      assertEqual(r30.days[29].date, today);
-
-      // No calendar-week clipping: 30 consecutive local-calendar days, never
-      // snapped back to a Monday (that would make the axis drift with the weekday).
-      const dates = r30.days.map(d => d.date);
-      assertEqual(new Set(dates).size, 30, 'Rolling window must never repeat a date key');
-      assertDeepEqual(dates, [...dates].sort(), 'Rolling window must stay ascending');
-    });
-
-    it('labels a rolling window with real dates once the anchor sits in the past', async () => {
-      // 回顾页把选中日期当锚点传下来，所以滚动窗口并不总是「以今天为终点」。
+      // 回顾页把选中日期当锚点传下来，所以单日窗口并不总是今天。
       const b = new MockYanjiBridge({ virtualClockMs: new Date(2026, 9, 10, 12, 0, 0).getTime() });
 
-      const anchored = await b.getReviewOverview('ROLLING_7', 0, '2026-09-15');
-      assertEqual(anchored.days[0].date, '2026-09-09', 'The window runs 6 days back from the anchor');
-      assertEqual(anchored.days[6].date, '2026-09-15', 'The window ends on the anchor, not on today');
-      // 照抄「最近 7 天」等于用一个假区间标题去描述一段真区间。
-      assertEqual(anchored.label, '9月9日 - 9月15日');
+      const anchored = await b.getReviewOverview('TODAY', 0, '2026-09-15');
+      assertEqual(anchored.days[0].date, '2026-09-15', 'The window is the anchor, not today');
+      // 照抄「今天」等于用一个假标题去描述一段真区间。
+      assertEqual(anchored.label, '9月15日');
 
-      const current = await b.getReviewOverview('ROLLING_7', 0);
-      assertEqual(current.days[6].date, '2026-10-10');
-      assertEqual(current.label, '最近 7 天', 'A window that really ends today still earns the relative label');
+      const current = await b.getReviewOverview('TODAY', 0);
+      assertEqual(current.days[0].date, '2026-10-10');
+      assertEqual(current.label, '今天', 'When the anchor really is today, it earns the label');
     });
   });
 
@@ -322,12 +295,12 @@ export function registerM5Tests() {
       await bridge.completeTimer();
 
       const today = bridge._isoDateAt(bridge.virtualClockMs, 0);
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('TODAY', 0);
 
       const todayBar = overview.days.find(d => d.date === today);
       assertEqual(todayBar.durationSeconds, 1559, 'Per-day seconds must stay raw');
       assertEqual(overview.totalSeconds, 1559, 'totalSeconds must stay raw');
-      assertEqual(overview.dailyAverageSeconds, Math.floor(1559 / 7), 'The average keeps its own floor');
+      assertEqual(overview.dailyAverageSeconds, 1559, 'A one-day window averages to itself');
 
       const math = overview.subjectDistribution.find(s => s.subjectId === 'sub-math');
       assertEqual(math.minutes, 25, 'Only the slice floors seconds to minutes: 1559 / 60 = 25');
@@ -343,7 +316,7 @@ export function registerM5Tests() {
       bridge.sessionRecords.push(recordAt('sub-math', '数学', today, 59));
       bridge.sessionRecords.push(recordAt('sub-math', '数学', yesterday, 59));
 
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       const math = overview.subjectDistribution.find(s => s.subjectId === 'sub-math');
 
       assertEqual(overview.totalSeconds, 118, 'Seconds add up before any division');
@@ -368,8 +341,8 @@ export function registerM5Tests() {
       bridge.advanceTime(1200);
       await bridge.completeTimer();
 
-      const first = await bridge.getReviewOverview('ROLLING_7', 0);
-      const second = await bridge.getReviewOverview('ROLLING_7', 0);
+      const first = await bridge.getReviewOverview('TODAY', 0);
+      const second = await bridge.getReviewOverview('TODAY', 0);
 
       assertDeepEqual(
         first.subjectDistribution.map(s => s.subjectId),
@@ -390,7 +363,7 @@ export function registerM5Tests() {
       bridge.advanceTime(1800);
       await bridge.completeTimer();
 
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       const dayDates = overview.days.map(d => d.date).sort();
 
       assertEqual(overview.subjectDistribution.length, 1);
@@ -405,7 +378,7 @@ export function registerM5Tests() {
     });
 
     it('reports a complete, NaN-free zero state when the window has no records', async () => {
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
 
       assertEqual(overview.totalSeconds, 0);
       assertEqual(Number.isNaN(overview.totalSeconds), false, 'totalSeconds must never be NaN');
@@ -419,7 +392,7 @@ export function registerM5Tests() {
       // 0 while share must stay a real fraction, not NaN from a 0/0.
       const tiny = new MockYanjiBridge();
       tiny.sessionRecords.push(recordAt('sub-math', '数学', tiny._isoDateAt(tiny.virtualClockMs, 0), 30));
-      const tinyOverview = await tiny.getReviewOverview('ROLLING_7', 0);
+      const tinyOverview = await tiny.getReviewOverview('TODAY', 0);
       assertEqual(tinyOverview.subjectDistribution[0].minutes, 0, '30s is 0 whole minutes');
       assertEqual(tinyOverview.subjectDistribution[0].share, 1, 'Share uses seconds, so it stays 1');
       assertEqual(Number.isNaN(tinyOverview.subjectDistribution[0].share), false);
@@ -430,14 +403,14 @@ export function registerM5Tests() {
       bridge.advanceTime(2400);
       await bridge.completeTimer();
 
-      const before = await bridge.getReviewOverview('ROLLING_7', 0);
+      const before = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       assertEqual(before.totalSeconds, 2400);
 
       bridge.sessionRecords.push(
         recordAt('sub-cs', '专业课', bridge._isoDateAt(bridge.virtualClockMs, -400), 999 * 60)
       );
 
-      const after = await bridge.getReviewOverview('ROLLING_7', 0);
+      const after = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       assertEqual(after.totalSeconds, 2400, 'Sessions outside the window must not leak into totals');
       assertEqual(after.days.length, 7, 'Out-of-window records must not create days');
       assertEqual(after.subjectDistribution.length, 1, 'An out-of-window subject gets no slice');
@@ -455,7 +428,7 @@ export function registerM5Tests() {
       bridge.sessionRecords.push(exam);
       bridge.sessionRecords.push(recordAt('sub-pol', '政治', bridge._isoDateAt(bridge.virtualClockMs, -60), 60 * 60, true));
 
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('TODAY', 0);
       assertEqual(overview.examCount, 1, 'Only exams inside the window are counted');
       assertEqual(overview.totalSeconds, 30 * 60 + 90 * 60, 'Exam seconds count towards the same total');
     });
@@ -523,7 +496,7 @@ export function registerM5Tests() {
       unsubscribe();
 
       // A deleted record drops out of the overview totals.
-      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const overview = await bridge.getReviewOverview('TODAY', 0);
       assertEqual(overview.totalSeconds, 0, 'A deleted record must leave the window totals');
       assertDeepEqual(overview.subjectDistribution, []);
     });

@@ -204,7 +204,7 @@ class BridgeMappersTest {
         val slice = BridgeMappers.SubjectSecondsSlice("math_linear", "线性代数", almostHalfHour)
 
         val overview = BridgeMappers.reviewOverviewFields(
-            scope = BridgeMappers.SCOPE_ROLLING_7,
+            scope = BridgeMappers.SCOPE_CALENDAR_WEEK,
             periodsBack = 0,
             windowDates = dates,
             todayIso = "2026-10-08",
@@ -234,7 +234,7 @@ class BridgeMappersTest {
         val zeroSlice = BridgeMappers.SubjectSecondsSlice("english", "英语一", 0L)
 
         val overview = BridgeMappers.reviewOverviewFields(
-            scope = BridgeMappers.SCOPE_ROLLING_7,
+            scope = BridgeMappers.SCOPE_CALENDAR_WEEK,
             periodsBack = 0,
             windowDates = dates,
             todayIso = "2026-10-08",
@@ -261,7 +261,7 @@ class BridgeMappersTest {
         val totals = perDay.map { it.copy(seconds = it.seconds * dates.size) }
 
         val overview = BridgeMappers.reviewOverviewFields(
-            scope = BridgeMappers.SCOPE_ROLLING_7,
+            scope = BridgeMappers.SCOPE_CALENDAR_WEEK,
             periodsBack = 0,
             windowDates = dates,
             todayIso = "2026-10-08",
@@ -286,7 +286,7 @@ class BridgeMappersTest {
             BridgeMappers.SubjectSecondsSlice("math", "数学一", 1200L)
         )
         fun build(): List<String> = BridgeMappers.reviewOverviewFields(
-            scope = BridgeMappers.SCOPE_ROLLING_7,
+            scope = BridgeMappers.SCOPE_CALENDAR_WEEK,
             periodsBack = 0,
             windowDates = dates,
             todayIso = "2026-10-08",
@@ -310,7 +310,7 @@ class BridgeMappersTest {
         val slice = BridgeMappers.SubjectSecondsSlice("major_data_structure", "数据结构", 3600L)
 
         val overview = BridgeMappers.reviewOverviewFields(
-            scope = BridgeMappers.SCOPE_ROLLING_7,
+            scope = BridgeMappers.SCOPE_CALENDAR_WEEK,
             periodsBack = 0,
             windowDates = dates,
             todayIso = "2026-10-08",
@@ -337,18 +337,11 @@ class BridgeMappersTest {
         val week = (5..11).map { java.time.LocalDate.of(2026, 10, it) }
         // 自然月 2026-10
         val month = (1..5).map { java.time.LocalDate.of(2026, 10, it) }
-        // 滚动窗口各自的真实长度，终点都落在今天 2026-10-11。
         val today = java.time.LocalDate.of(2026, 10, 11)
-        val rolling7 = List(7) { today.minusDays((6 - it).toLong()) }
-        val rolling30 = List(30) { today.minusDays((29 - it).toLong()) }
 
         assertEquals(
-            "最近 7 天",
-            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, rolling7, "2026-10-11")
-        )
-        assertEquals(
-            "最近 30 天",
-            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_30, 0, rolling30, "2026-10-11")
+            "今天",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_TODAY, 0, listOf(today), "2026-10-11")
         )
         assertEquals(
             "10月5日 - 10月11日",
@@ -361,14 +354,14 @@ class BridgeMappersTest {
     }
 
     @Test
-    fun reviewScopeLabel_reportsRealDatesWhenARollingWindowIsAnchoredInThePast() {
-        // 用户把日期翻到 9 月 15 日，滚动窗口就是 9 月 9 日–15 日。
-        // 照抄「最近 7 天」等于用一个假区间标题描述一段真区间。
-        val anchored = List(7) { java.time.LocalDate.of(2026, 9, 15).minusDays((6 - it).toLong()) }
+    fun reviewScopeLabel_reportsTheRealDateWhenTheSingleDayIsInThePast() {
+        // 用户把日期翻到 9 月 15 日，单日窗口就是那一天。
+        // 照抄「今天」等于用一个假标题描述一段真区间。
+        val anchored = java.time.LocalDate.of(2026, 9, 15)
 
         assertEquals(
-            "9月9日 - 9月15日",
-            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, anchored, "2026-10-10")
+            "9月15日",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_TODAY, 0, listOf(anchored), "2026-10-10")
         )
     }
 
@@ -401,7 +394,7 @@ class BridgeMappersTest {
         // 滚动口径是 MM-DD，日历月口径是「D日」——两者绝不可串
         assertEquals("1日", overview.days.first().dayLabel)
         assertEquals("3日", overview.days[2].dayLabel)
-        assertEquals("10-01", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_ROLLING_7, "2026-10-01"))
+        assertEquals("1日", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_TODAY, "2026-10-01"))
         val future = overview.days.filter { it.isFuture }
         assertEquals(listOf("2026-10-04", "2026-10-05"), future.map { it.date })
         assertTrue(future.all { it.durationSeconds == 0L })
@@ -418,6 +411,6 @@ class BridgeMappersTest {
     fun reviewDayLabel_usesWeekdayNamesForCalendarWeek() {
         assertEquals("周一", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, "2026-10-05"))
         assertEquals("周日", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, "2026-10-11"))
-        assertEquals("10-09", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_ROLLING_7, "2026-10-09"))
+        assertEquals("9日", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_TODAY, "2026-10-09"))
     }
 }

@@ -66,18 +66,17 @@ export interface TodayStats {
 /**
  * 回顾页的趋势窗口。
  *
- * - `ROLLING_7` / `ROLLING_30`：以 `anchorDate`（缺省为今天）为终点的滚动窗口
- *   （不是自然周），这样柱状图的横轴不会随星期几漂移。
+ * - `TODAY`：`anchorDate`（缺省为今天）那一天的单日窗口。
  * - `CALENDAR_WEEK`：自然周（周一起、周日止），`periodsBack` = 0 表示本周。
  * - `CALENDAR_MONTH`：自然月，`periodsBack` = 0 表示本月。
  */
-export type ReviewScope = 'ROLLING_7' | 'ROLLING_30' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH';
+export type ReviewScope = 'TODAY' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH';
 
 /** 窗口里的一天。日历视图里今天之后的格子 `isFuture` 为 true 且时长恒为 0。 */
 export interface ReviewPeriodDay {
   /** ISO date `yyyy-MM-dd`，本地日历。 */
   date: string;
-  /** `ROLLING_*` 为 `MM-DD`；自然周为「周一」…；自然月为 `D日`。 */
+  /** 单日 / 自然月为「D日」；自然周为「周一」…。 */
   dayLabel: string;
   durationSeconds: number;
   isToday: boolean;
@@ -258,7 +257,7 @@ interface YanjiDataModuleNative {
    *
    * `scope` 不在白名单内时原生侧 reject（`E_INVALID_SCOPE`），不做猜测回落。
    * `periodsBack` 只对 `CALENDAR_*` 有意义，滚动窗口强制为 0。
-   * `anchorDate`（缺省为今天）决定窗口落在哪：滚动窗口以它为终点向前推，
+   * `anchorDate`（缺省为今天）决定窗口落在哪：`TODAY` 就是那一天，
    * `CALENDAR_*` 用它选出是哪一周 / 哪一月。
    */
   getReviewOverview(

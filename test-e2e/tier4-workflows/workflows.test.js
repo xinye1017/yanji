@@ -81,10 +81,10 @@ export function registerTier4Tests() {
       assertEqual(timeline.notes.length, 1, 'Timeline must show 1 note');
 
       // Trend & Subject Breakdown check
-      const reviewOverview = await bridge.getReviewOverview('ROLLING_7', 0);
+      const reviewOverview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       assertEqual(reviewOverview.totalSeconds, 105 * 60, '105 minutes kept as raw seconds');
       assertEqual(reviewOverview.windowDays, 7);
-      assertEqual(reviewOverview.days.length, 7, 'The rolling trend still renders a full 7-day axis');
+      assertEqual(reviewOverview.days.length, 7, 'A natural week still renders a full 7-day axis');
 
       const mathSlice = reviewOverview.subjectDistribution.find(s => s.subjectName === '数学');
       const engSlice = reviewOverview.subjectDistribution.find(s => s.subjectName === '英语');
