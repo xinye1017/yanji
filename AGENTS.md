@@ -9,6 +9,29 @@
 
 ## 一、核心架构与工程原则
 
+### 当前运行架构：React Native + Kotlin（Yanji 2.0）
+
+**默认按此架构开展工作，不再从历史 Compose 页面推断当前 UI 技术栈。** 只有任务涉及架构升级，或下列权威文件出现变化时，才重新核对相关层。截图与旧文档用于参考，运行代码和构建配置决定事实。
+
+| 层 | 当前职责 | 权威入口 |
+| :--- | :--- | :--- |
+| UI | React Native + React + TypeScript，页面、组件、导航与视觉动画 | `package.json`、`App.tsx`、`src/screens/**`、`src/components/**`、`src/navigation/**` |
+| JavaScript 引擎 | Hermes，由 Android 宿主加载 | `YanjiApplication.kt`、`gradle/libs.versions.toml` |
+| 渲染架构 | Fabric / New Architecture，Bridgeless 宿主 | `gradle.properties`、`YanjiApplication.kt`、`MainActivity.kt` |
+| 原生业务 | Kotlin：计时、通知、数据查询与业务写入；RN 通过桥接调用 | `app/src/main/java/com/example/yanji/bridge/**`、`src/bridge/**`、原生业务包 |
+| 持久化 | Room 是唯一业务事实源；RN 不另建数据库或计时事实 | `app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt` |
+| 当前 UI 主题 | RN 语义 Token 与主题 Provider；导航玻璃材质集中在独立 Token 中 | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、`src/theme/liquidGlass.ts` |
+
+React Native 与 React 的版本以 `package.json` 为准，原生构件版本以 Version Catalog 为准，避免在指南中复制易漂移数值。历史 Compose 页面及其材质实现不属于当前运行 UI，不能直接拿来修复 RN 页面。
+
+**原生库接入方式**：本项目是 Android Add-to-App，`:app` 未应用 React Native app Gradle 插件；第三方库按既有流程手工链接。新增含 Fabric 组件的库需同步更新 `settings.gradle.kts`、`app/build.gradle.kts` 的依赖与 codegen 任务、`YanjiApplication.kt` 的 Package 注册，以及 `app/src/main/jni/{CMakeLists.txt,OnLoad.cpp}` 的 C++ 编译与组件描述符注册。不能仅安装 npm 包后就宣称接入完成。
+
+**前端交付顺序**：先执行 `npm run typecheck` 与必要的针对性检查，再执行 `npm run bundle:android` 生成 APK 所用 JS bundle，最后执行 `gradlew.bat assembleDebug`。单独 Gradle 编译不会自动刷新 JS bundle；不得把旧 bundle 的安装误报为新 UI 已交付。
+
+**原生构建并发**：Gradle worker 数由 `gradle.properties` 限制；各 Android 模块的 CMake/Ninja 编译任务池由根 `build.gradle.kts` 统一限制。不得为了提速覆盖这些限制，避免多 ABI 构建同时启动数十个 `clang++` 导致内存耗尽。
+
+### 工程原则
+
 - **不要为了保持向后兼容而妥协**。对于已经过时的实现路径，直接删除，而不是额外添加兼容层、回退方案（fallback）或迁移逻辑（migration）。
 - **选择能够完整满足当前需求的最简单实现**。避免为了假想中的未来需求而提前设计抽象层、配置项或间接层。
 - **以逐层迭代的方式构建系统**。先实现一个能够端到端正常工作的最小版本，然后在这个已经可用的产品上，一层一层增加新的能力。永远不要为了尚未完成的复杂设计，而牺牲一个已经能够正常工作的产品。

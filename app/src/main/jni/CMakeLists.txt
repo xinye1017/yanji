@@ -100,6 +100,7 @@ set(YANJI_RN_AUTOLINKED_LIBRARIES
     react-native-reanimated:rnreanimated
     react-native-svg:rnsvg
     react-native-safe-area-context:safeareacontext
+    react-native-blur-overlay:RNBlurOverlaySpec
 )
 
 set(YANJI_RN_CODEGEN_SRCS)

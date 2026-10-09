@@ -18,6 +18,8 @@
 import React, { useEffect } from 'react';
 import { BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurTarget } from 'react-native-blur-overlay';
+import { YanjiLiquidGlass } from './src/theme/liquidGlass';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
 import { NavigationProvider, useNavigation } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
@@ -84,7 +86,7 @@ function AppShell(): React.JSX.Element {
     <View testID="app-shell" style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={{ flex: 1, paddingTop: topInset }}>
+      <BlurTarget id={YanjiLiquidGlass.targetId} style={{ flex: 1, paddingTop: topInset }}>
         {/* Keep the safe-area padding outside the absolute-positioning parent. */}
         <View testID="tab-content" style={{ flex: 1 }}>
           <TabPane testID="pane-today" active={activeTab === 'today'}>
@@ -97,7 +99,7 @@ function AppShell(): React.JSX.Element {
             <ReviewScreen />
           </TabPane>
         </View>
-      </View>
+      </BlurTarget>
 
       <BottomTabBar />
 

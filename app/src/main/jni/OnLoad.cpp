@@ -20,6 +20,7 @@
 #include <react/renderer/components/rnreanimated/ComponentDescriptors.h>
 #include <react/renderer/components/rnsvg/ComponentDescriptors.h>
 #include <react/renderer/components/safeareacontext/ComponentDescriptors.h>
+#include <react/renderer/components/RNBlurOverlaySpec/ComponentDescriptors.h>
 
 namespace facebook::react {
 
@@ -33,6 +34,8 @@ void registerComponents(
   rnreanimated_registerComponentDescriptorsFromCodegen(registry);
   rnsvg_registerComponentDescriptorsFromCodegen(registry);
   safeareacontext_registerComponentDescriptorsFromCodegen(registry);
+  registry->add(concreteComponentDescriptorProvider<SajjadBlurOverlayComponentDescriptor>());
+  registry->add(concreteComponentDescriptorProvider<SajjadBlurTargetComponentDescriptor>());
 }
 
 std::shared_ptr<TurboModule> cxxModuleProvider(

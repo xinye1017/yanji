@@ -33,6 +33,7 @@ import {
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
 function formatClock(totalSeconds: number): string {
@@ -76,6 +77,7 @@ const RING_THICKNESS = 10;
 
 export function FocusScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
+  const { contentPadding } = useBottomTabLayout();
   const [date] = useState(todayIso);
 
   const [session, setSession] = useState<ActiveSessionState | null>(null);
@@ -234,8 +236,8 @@ export function FocusScreen(): React.JSX.Element {
           contentContainerStyle={{
             paddingHorizontal: YanjiSpacing.page,
             paddingTop: YanjiSpacing.md,
-            // The tab bar reserves its own height outside this ScrollView.
-            paddingBottom: YanjiSpacing.xxl,
+            // Content scrolls behind the dock; its final action can clear the glass.
+            paddingBottom: contentPadding,
           }}
         >
           <Text

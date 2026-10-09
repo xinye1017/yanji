@@ -71,7 +71,31 @@ extra.set("yanjiNdkVersion", yanjiNdkVersion)
 // 套一层生成的装饰类，它不实现 com.android.build.gradle.LibraryExtension，强类型转换会直接
 // ClassCastException。属性名与 :app 的 android.ndkVersion 是同一个。
 subprojects {
+  fun limitNativeCompilation() {
+    extensions.getByName("android").withGroovyBuilder {
+      getProperty("defaultConfig").withGroovyBuilder {
+        getProperty("externalNativeBuild").withGroovyBuilder {
+          getProperty("cmake").withGroovyBuilder {
+            "arguments"(
+              "-DCMAKE_JOB_POOLS=yanji_compile=2",
+              "-DCMAKE_JOB_POOL_COMPILE=yanji_compile",
+              "-DCMAKE_JOB_POOL_LINK=yanji_compile"
+            )
+          }
+        }
+      }
+    }
+  }
+  plugins.withId("com.android.application") { limitNativeCompilation() }
+  // Third-party libraries may declare their own AGP buildscript dependency.
+  // Keep it on the same catalog version as the app and the root plugin classpath.
+  buildscript.configurations.configureEach {
+    if (name == "classpath") {
+      resolutionStrategy.force("com.android.tools.build:gradle:${rootProject.libs.versions.androidGradlePlugin.get()}")
+    }
+  }
   plugins.withId("com.android.library") {
+    limitNativeCompilation()
     extensions.getByName("android").withGroovyBuilder {
       setProperty("ndkVersion", yanjiNdkVersion)
     }

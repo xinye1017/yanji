@@ -161,7 +161,8 @@ tasks.matching { it.name.startsWith("configureCMake") }.configureEach {
         ":react-native-worklets:generateCodegenArtifactsFromSchema",
         ":react-native-reanimated:generateCodegenArtifactsFromSchema",
         ":react-native-svg:generateCodegenArtifactsFromSchema",
-        ":react-native-safe-area-context:generateCodegenArtifactsFromSchema"
+        ":react-native-safe-area-context:generateCodegenArtifactsFromSchema",
+        ":react-native-blur-overlay:generateCodegenArtifactsFromSchema"
     )
 }
 
@@ -203,6 +204,7 @@ dependencies {
   implementation(project(":react-native-worklets"))
   implementation(project(":react-native-svg"))
   implementation(project(":react-native-safe-area-context"))
+  implementation(project(":react-native-blur-overlay"))
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

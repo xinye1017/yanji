@@ -23,6 +23,7 @@ import {
   YanjiSectionHeader,
 } from '../components/YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
 function todayIso(): string {
@@ -57,6 +58,7 @@ function formatMinutes(totalSeconds: number): string {
 
 export function ReviewScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
+  const { contentPadding } = useBottomTabLayout();
   const [date, setDate] = useState(todayIso);
   const [timeline, setTimeline] = useState<DailyTimeline | null>(null);
   const [stats, setStats] = useState<ReviewStats | null>(null);
@@ -120,8 +122,8 @@ export function ReviewScreen(): React.JSX.Element {
         contentContainerStyle={{
           paddingHorizontal: YanjiSpacing.page,
           paddingTop: YanjiSpacing.md,
-          // The tab bar reserves its own height outside this ScrollView.
-          paddingBottom: YanjiSpacing.xxl,
+          // Content scrolls behind the dock; its final action can clear the glass.
+          paddingBottom: contentPadding,
         }}
       >
         <Text

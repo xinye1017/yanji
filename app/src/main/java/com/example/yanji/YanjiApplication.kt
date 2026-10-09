@@ -18,6 +18,7 @@ import com.horcrux.svg.SvgPackage
 import com.swmansion.reanimated.ReanimatedPackage
 import com.swmansion.worklets.WorkletsPackage
 import com.th3rdwave.safeareacontext.SafeAreaContextPackage
+import com.bluroverly.SajjadBlurOverlayPackage
 
 /**
  * 研迹 Application —— React Native 新架构（Bridgeless）宿主。
@@ -35,7 +36,8 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
                 ReanimatedPackage(),
                 WorkletsPackage(),
                 SvgPackage(),
-                SafeAreaContextPackage()
+                SafeAreaContextPackage(),
+                SajjadBlurOverlayPackage()
             )
 
             override fun getJSMainModuleName(): String = "index"

@@ -1,7 +1,7 @@
 /**
  * Yanji bottom tab bar — exactly three destinations.
  *
- * Visual language: a floating sheet lifted clear of the desk, with the selected
+ * Visual language: a floating glass lens over the real page, with the selected
  * destination marked by a soft accent pill that slides between slots on a
  * spring. Lifecycle: the bar is mounted for the whole session next to the three
  * always-mounted screens (see App.tsx), so `activeTab` — never a remount — is
@@ -10,18 +10,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import BlurOverlay from 'react-native-blur-overlay';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  useReducedMotion,
   withSpring,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, TABS } from './NavigationShell';
 import type { TabKey } from './NavigationShell';
 import { YanjiIcon } from '../components/YanjiUI';
 import type { YanjiIconName } from '../components/icons';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiTouch } from '../theme/tokens';
+import { YanjiLiquidGlass } from '../theme/liquidGlass';
+import { useBottomTabLayout } from './useBottomTabLayout';
 
 /** Tab glyph, kept here rather than in the shared registry: it is navigation-local. */
 const TAB_ICONS: Record<TabKey, YanjiIconName> = {
@@ -30,12 +33,14 @@ const TAB_ICONS: Record<TabKey, YanjiIconName> = {
   review: 'review',
 };
 
-/** Inner padding of the capsule, matching the `padding: 5` on the row below. */
-const CAPSULE_PADDING = 5;
+/** Shared capsule inset keeps the selection aligned with the measured slots. */
+const CAPSULE_PADDING = YanjiLiquidGlass.padding;
 
 export function BottomTabBar(): React.JSX.Element {
   const theme = useYanjiTheme();
-  const insets = useSafeAreaInsets();
+  const { height, bottom } = useBottomTabLayout();
+  const reduceMotion = useReducedMotion();
+  const material = theme.isDark ? YanjiLiquidGlass.dark : YanjiLiquidGlass.light;
   const { activeTab, selectTab } = useNavigation();
 
   const [slotWidth, setSlotWidth] = useState(0);
@@ -56,8 +61,8 @@ export function BottomTabBar(): React.JSX.Element {
 
   const offset = useSharedValue(index);
   useEffect(() => {
-    offset.value = withSpring(index, theme.motion.spring.snappy);
-  }, [index, offset, theme.motion.spring.snappy]);
+    offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
+  }, [index, offset, reduceMotion, theme.motion.spring.snappy]);
 
   const pillStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value * slotWidth }],
@@ -67,84 +72,103 @@ export function BottomTabBar(): React.JSX.Element {
     <View
       testID="bottom-tab-bar"
       style={{
-        paddingHorizontal: theme.spacing.lg,
-        paddingBottom: Math.max(insets.bottom, theme.spacing.md),
-        paddingTop: theme.spacing.sm,
-        backgroundColor: theme.colors.bgPrimary,
+        position: 'absolute',
+        left: theme.spacing.lg,
+        right: theme.spacing.lg,
+        bottom,
+        height,
+        borderRadius: height / 2,
+        ...theme.shadow.floating(theme.isDark),
       }}
     >
-      <View
-        onLayout={onRowLayout}
-        style={[
-          {
+      <BlurOverlay
+        visible
+        blurMode="glass"
+        blurTargetId={YanjiLiquidGlass.targetId}
+        glassVariant="clear"
+        glassTint={material.tint}
+        blurRadius={YanjiLiquidGlass.blurRadius}
+        downsampling={YanjiLiquidGlass.downsampling}
+        maxUpdateFps={YanjiLiquidGlass.maxUpdateFps}
+        saturation={YanjiLiquidGlass.saturation}
+        interactive={!reduceMotion}
+        fadeDuration={0}
+        style={{ borderRadius: height / 2, overflow: 'hidden' }}
+      >
+        <View
+          onLayout={onRowLayout}
+          style={{
             flexDirection: 'row',
-            backgroundColor: theme.colors.bgFloating,
+            width: '100%',
+            height,
             borderRadius: YanjiRadius.full,
             padding: CAPSULE_PADDING,
-          },
-          theme.shadow.floating(theme.isDark),
-        ]}
-      >
-        {/* Sliding selection pill — behind the labels, one slot wide. */}
-        {slotWidth > 0 ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: 'absolute',
-                top: CAPSULE_PADDING,
-                bottom: CAPSULE_PADDING,
-                left: CAPSULE_PADDING,
-                width: slotWidth,
-                borderRadius: YanjiRadius.full,
-                backgroundColor: theme.colors.accentSoft,
-              },
-              pillStyle,
-            ]}
-          />
-        ) : null}
+          }}
+        >
+          {/* Sliding selection pill — behind the labels, one slot wide. */}
+          {slotWidth > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: 'absolute',
+                  top: CAPSULE_PADDING,
+                  bottom: CAPSULE_PADDING,
+                  left: CAPSULE_PADDING,
+                  width: slotWidth,
+                  borderRadius: YanjiRadius.full,
+                  backgroundColor: material.selection,
+                },
+                pillStyle,
+              ]}
+            />
+          ) : null}
 
-        {TABS.map((tab, tabIndex) => {
-          const isActive = tabIndex === index;
-          return (
-            <Pressable
-              key={tab.key}
-              testID={`tab-${tab.key}`}
-              onPress={() => selectTab(tab.key as TabKey)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={tab.label}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: YanjiRadius.full,
-                minHeight: YanjiTouch.min,
-              }}
-            >
-              <YanjiIcon
-                name={TAB_ICONS[tab.key]}
-                size={17}
-                color={isActive ? theme.colors.accentPrimary : theme.colors.textSecondary}
-              />
-              <Text
+          {TABS.map((tab, tabIndex) => {
+            const isActive = tabIndex === index;
+            const foreground = isActive && !theme.isDark
+              ? theme.colors.accentStrong : theme.colors.textPrimary;
+            return (
+              <Pressable
+                key={tab.key}
+                testID={`tab-${tab.key}`}
+                onPress={() => selectTab(tab.key as TabKey)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={tab.label}
                 style={{
-                  fontSize: 14,
-                  marginLeft: 6,
-                  fontWeight: isActive ? '700' : '500',
-                  color: isActive ? theme.colors.accentPrimary : theme.colors.textSecondary,
-                  letterSpacing: 0.2,
+                  flex: 1,
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: YanjiLiquidGlass.itemPadding,
+                  paddingHorizontal: CAPSULE_PADDING,
+                  borderRadius: YanjiRadius.full,
+                  minHeight: YanjiTouch.min,
                 }}
               >
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <YanjiIcon
+                  name={TAB_ICONS[tab.key]}
+                  size={YanjiLiquidGlass.iconSize}
+                  color={foreground}
+                />
+                <Text
+                  style={{
+                    fontSize: YanjiLiquidGlass.labelSize,
+                    lineHeight: YanjiLiquidGlass.labelLineHeight,
+                    marginTop: YanjiLiquidGlass.labelGap,
+                    fontWeight: isActive ? '700' : '500',
+                    color: foreground,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurOverlay>
     </View>
   );
 }
