@@ -158,3 +158,32 @@ export function findTodayColumn<T extends { date: string; isToday: boolean }>(
 ): T | null {
   return days.find(day => day.isToday) ?? null;
 }
+
+/**
+ * Which axis labels to draw for a window.
+ *
+ * A 31-day month splits the chart into ~30px columns on a phone, which cannot
+ * hold a「28日」label — rendering all of them produced an unreadable wall of
+ * overlapping text. Crowded windows therefore keep every Nth label, but never
+ * drop today: an unlabelled column is ambiguous, and the chart's whole job is
+ * saying which day held the work.
+ */
+export function axisLabels<T extends { date: string; dayLabel: string; isToday: boolean }>(
+  days: readonly T[]
+): T[] {
+  const stride = axisLabelStride(days.length);
+  return days.filter((day, index) => index % stride === 0 || day.isToday);
+}
+
+/**
+ * Every Nth label.
+ *
+ * The threshold is about pixels, not days: on the device's 1256px-wide card a
+ * column is ~35px at 30 days and ~30px at 31 — nearly identical, so both need
+ * thinning. Weekly windows have ~95px columns and keep every label.
+ */
+function axisLabelStride(dayCount: number): number {
+  if (dayCount <= 14) return 1;
+  if (dayCount <= 20) return 2;
+  return 5;
+}

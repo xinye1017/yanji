@@ -39,6 +39,7 @@ import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
 import {
+  axisLabels,
   buildTimelineEntries,
   countWorkedDays,
   dayHasRecords,
@@ -97,7 +98,7 @@ export function ReviewScreen(): React.JSX.Element {
   const [pendingDelete, setPendingDelete] = useState<{
     sessionId: string;
     isExam: boolean;
-    title: string;
+    subjectName: string;
   } | null>(null);
   /** Expanded subject row, revealing that subject's per-day split. */
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
@@ -163,6 +164,8 @@ export function ReviewScreen(): React.JSX.Element {
   const workedDays = countWorkedDays(days);
   /** The chart column for today, when today falls inside the window at all. */
   const todayColumn = findTodayColumn(days);
+  /** Dates whose axis label survives the density thinning, today always kept. */
+  const labelledDates = new Set(axisLabels(days).map(day => day.date));
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
@@ -313,7 +316,7 @@ export function ReviewScreen(): React.JSX.Element {
                         setPendingDelete({
                           sessionId: entry.session.id,
                           isExam: entry.session.isExam,
-                          title: entry.session.title,
+                          subjectName: entry.session.subjectName,
                         })
                       }
                     />
@@ -411,22 +414,35 @@ export function ReviewScreen(): React.JSX.Element {
                 emptyLabel="暂无统计数据"
               />
 
-              {/* Day labels sit under the chart, aligned to their column. */}
+              {/* Day labels sit under the chart, aligned to their column. A
+                  31-day month gives each column ~30px, which cannot hold「28日」
+                  — labelling every day turned the axis into an unreadable wall. */}
               <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.sm }}>
-                {days.map(day => (
-                  <Text
-                    key={day.date}
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      color: day.isToday ? theme.colors.accentPrimary : theme.colors.textTertiary,
-                      fontVariant: ['tabular-nums'],
-                      ...theme.typography.axisLabel,
-                    }}
-                  >
-                    {day.dayLabel}
-                  </Text>
-                ))}
+                {days.map(day => {
+                  if (!labelledDates.has(day.date)) {
+                    // Keep the cell so labels stay aligned with the bars above.
+                    return <View key={day.date} style={{ flex: 1 }} />;
+                  }
+                  return (
+                    <Text
+                      key={day.date}
+                      // A thinned column is still only ~30px wide; without these
+                      // two props「10日」wraps into「1」/「0日」 and reads as noise.
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      style={{
+                        flex: 1,
+                        textAlign: 'center',
+                        color: day.isToday ? theme.colors.accentPrimary : theme.colors.textTertiary,
+                        fontVariant: ['tabular-nums'],
+                        ...theme.typography.axisLabel,
+                      }}
+                    >
+                      {day.dayLabel}
+                    </Text>
+                  );
+                })}
               </View>
             </View>
 
@@ -497,11 +513,13 @@ export function ReviewScreen(): React.JSX.Element {
             position: 'absolute',
             left: YanjiSpacing.page,
             right: YanjiSpacing.page,
-            bottom: YanjiSpacing.xxl,
+            // Sit above the floating tab bar: a fixed offset put the confirm
+            // buttons behind the glass capsule, so 删除 was unreachable.
+            bottom: contentPadding + YanjiSpacing.sm,
           }}
         >
           <Text style={[theme.typography.body, { color: theme.colors.textPrimary }]}>
-            删除「{pendingDelete.title}」这条记录？
+            删除「{pendingDelete.subjectName}」这条记录？
           </Text>
           <Text
             style={[
@@ -622,9 +640,11 @@ function SessionRow({
         onPress={onEdit}
         accessibilityRole="button"
         accessibilityLabel={
-          `${session.title}，${session.isExam ? '模考' : '专注'}，` +
-          `${formatClockFromEpoch(session.startTime)}起，` +
-          `时长${formatDuration(session.durationSeconds)}，` +
+          // The subject, not session.title: title falls back to the note text once
+          // one is written, so a labelled row would announce the note twice.
+          `${session.subjectName}${session.isExam ? ' 模考' : ' 专注'}，` +
+          `${formatClockFromEpoch(session.startTime)} 起，` +
+          `时长 ${formatDuration(session.durationSeconds)}，` +
           (session.isExam ? '模考暂不支持编辑随笔' : session.note ? `随笔：${session.note}` : '添加随笔')
         }
         style={{ flex: 1 }}
@@ -657,7 +677,10 @@ function SessionRow({
       </Pressable>
       <YanjiIconButton
         icon="delete"
-        accessibilityLabel={`删除记录 ${session.title}`}
+        accessibilityLabel={
+          `删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，` +
+          `${formatDuration(session.durationSeconds)}`
+        }
         onPress={onDelete}
         iconSize={16}
       />

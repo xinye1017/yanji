@@ -309,4 +309,54 @@ export function registerReviewViewLogicTests() {
       }
     });
   });
+
+  describe('Tier 1: Review view logic — axis labels thin out on crowded windows', () => {
+    it('keeps every label on a 7-day window', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      const days = Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-10-0${i + 1}`,
+        dayLabel: `0${i + 1}日`,
+        isToday: i === 6,
+      }));
+      assertEqual(logic.axisLabels(days).length, 7, 'A week must label every column');
+    });
+
+    it('thins a 31-day month but never drops today', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      const days = Array.from({ length: 31 }, (_, i) => ({
+        date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+        dayLabel: `${i + 1}日`,
+        isToday: i === 30,
+      }));
+
+      const labelled = logic.axisLabels(days);
+      // On the real device every「N日」was drawn in a ~30px column and the axis
+      // became an unreadable wall of overlapping text.
+      assert(labelled.length < 31, 'A 31-day month must not label every single day');
+      assert(labelled.length >= 6, 'Thinning must still leave enough labels to read the axis');
+
+      const labelledDates = labelled.map(day => day.date);
+      assert(
+        labelledDates.includes(days[30].date),
+        'Today must always be labelled, otherwise the highlighted column is ambiguous'
+      );
+      assertEqual(labelled[0].date, days[0].date, 'The window must start on a labelled column');
+      assertEqual(new Set(labelledDates).size, labelledDates.length, 'Labels must not repeat a date');
+    });
+
+    it('thins a 30-day window too, because its columns are just as narrow', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      const days = Array.from({ length: 30 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        dayLabel: String(i + 1),
+        isToday: false,
+      }));
+      // A 30-day column is ~35px against a 31-day column's ~30px: close enough
+      // that labelling every one of them overlaps the same way.
+      assert(
+        logic.axisLabels(days).length < 30,
+        '30 columns are just as crowded as 31 and must be thinned the same way'
+      );
+    });
+  });
 }
