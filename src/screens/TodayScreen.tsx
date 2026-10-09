@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
   YanjiDataNative,
   YanjiTimerNative,
@@ -37,21 +37,13 @@ import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { formatDuration } from './reviewViewLogic';
 
 function todayIso(): string {
   const now = new Date();
   const month = `${now.getMonth() + 1}`.padStart(2, '0');
   const day = `${now.getDate()}`.padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function formatDuration(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  if (hours > 0) return `${hours} 小时 ${minutes} 分`;
-  if (minutes > 0) return `${minutes} 分钟`;
-  if (totalSeconds > 0) return `${Math.floor(totalSeconds)} 秒`;
-  return '暂无记录';
 }
 
 export function TodayScreen(): React.JSX.Element {
@@ -73,6 +65,7 @@ export function TodayScreen(): React.JSX.Element {
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -96,6 +89,16 @@ export function TodayScreen(): React.JSX.Element {
       setActiveSession(null);
     }
   }, []);
+
+  /** Pull-to-refresh: refetch both snapshots; the spinner stops even on failure. */
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refresh(), refreshSession()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh, refreshSession]);
 
   useEffect(() => {
     void refresh();
@@ -128,17 +131,28 @@ export function TodayScreen(): React.JSX.Element {
   /** One restrained primary action, resolved from real state. */
   const primaryAction = useMemo(() => {
     if (activeSession) {
-      return { label: '继续专注', icon: 'focus' as const, onPress: () => selectTab('focus') };
+      return {
+        label: '继续专注',
+        hint: null as string | null,
+        icon: 'focus' as const,
+        onPress: () => selectTab('focus'),
+      };
     }
     const pending = tasks.find(t => !t.completed);
     if (pending) {
       return {
-        label: `继续学习 · ${pending.title}`,
+        label: '继续学习',
+        hint: pending.title,
         icon: 'play' as const,
         onPress: () => startFromTask(pending),
       };
     }
-    return { label: '开始专注', icon: 'play' as const, onPress: () => selectTab('focus') };
+    return {
+      label: '开始专注',
+      hint: null,
+      icon: 'play' as const,
+      onPress: () => selectTab('focus'),
+    };
   }, [activeSession, tasks, selectTab, startFromTask]);
 
   const toggleTask = useCallback(
@@ -183,6 +197,14 @@ export function TodayScreen(): React.JSX.Element {
       <ScrollView
         testID="scroll-today"
         style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={theme.colors.accentPrimary}
+            colors={[theme.colors.accentPrimary]}
+          />
+        }
         contentContainerStyle={{
           paddingHorizontal: YanjiSpacing.page,
           paddingTop: YanjiSpacing.md,
@@ -211,7 +233,7 @@ export function TodayScreen(): React.JSX.Element {
             <Text
               style={[
                 theme.typography.caption,
-                { color: theme.colors.textTertiary, marginTop: 3 },
+                { color: theme.colors.textTertiary, marginTop: YanjiSpacing.xs },
               ]}
             >
               {formattedDate}
@@ -241,7 +263,7 @@ export function TodayScreen(): React.JSX.Element {
             {countdown && countdown.daysRemaining > 0 ? (
               <YanjiBadge
                 icon="target"
-                label={`距考研 ${countdown.daysRemaining} 天`}
+                label={`距考试 ${countdown.daysRemaining} 天`}
               />
             ) : null}
           </View>
@@ -262,12 +284,14 @@ export function TodayScreen(): React.JSX.Element {
           <Text
             style={[
               theme.typography.caption,
-              { color: theme.colors.textTertiary, marginTop: 6 },
+              { color: theme.colors.textTertiary, marginTop: YanjiSpacing.xs },
             ]}
           >
-            {stats && stats.totalFocusSeconds === 0
-              ? '不足 1 分钟的专注不会被记录'
-              : '静心专注，每一分钟都有意义'}
+            {stats === null
+              ? '正在读取…'
+              : stats.totalFocusSeconds === 0
+                ? '今天还没有专注记录'
+                : '静心专注，每一分钟都有意义'}
           </Text>
 
           <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
@@ -283,13 +307,28 @@ export function TodayScreen(): React.JSX.Element {
           </View>
         </YanjiCard>
 
-        {/* The one primary action */}
+        {/* The one primary action — label stays fixed; a long task name goes below */}
         <View style={{ marginTop: YanjiSpacing.lg }}>
           <YanjiBreathButton
             icon={primaryAction.icon}
             label={primaryAction.label}
             onPress={primaryAction.onPress}
           />
+          {primaryAction.hint ? (
+            <Text
+              numberOfLines={1}
+              style={[
+                theme.typography.caption,
+                {
+                  color: theme.colors.textTertiary,
+                  textAlign: 'center',
+                  marginTop: YanjiSpacing.sm,
+                },
+              ]}
+            >
+              {primaryAction.hint}
+            </Text>
+          ) : null}
         </View>
 
         {/* Today's tasks — one sheet, hairline-separated rows, not a card wall */}
@@ -304,22 +343,21 @@ export function TodayScreen(): React.JSX.Element {
                 flexDirection: 'row',
                 alignItems: 'center',
                 backgroundColor: theme.colors.bgSurface,
-                paddingVertical: 5,
-                paddingLeft: 10,
-                paddingRight: 12,
+                paddingVertical: YanjiSpacing.xs,
+                paddingLeft: YanjiSpacing.sm,
+                paddingRight: YanjiSpacing.md,
                 borderRadius: YanjiRadius.full,
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <View style={{ marginRight: 4 }}>
+              <View style={{ marginRight: YanjiSpacing.xs }}>
                 <YanjiIcon name="add" size={13} color={theme.colors.accentPrimary} />
               </View>
               <Text
-                style={{
-                  color: theme.colors.accentPrimary,
-                  fontSize: 13,
-                  fontWeight: '600',
-                }}
+                style={[
+                  theme.typography.caption,
+                  { color: theme.colors.accentPrimary, fontWeight: '600' },
+                ]}
               >
                 添加
               </Text>
@@ -346,15 +384,15 @@ export function TodayScreen(): React.JSX.Element {
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      paddingVertical: 12,
-                      paddingHorizontal: 16,
+                      paddingVertical: YanjiSpacing.md,
+                      paddingHorizontal: YanjiSpacing.lg,
                     }}
                   >
                     <Pressable
                       onPress={() => void toggleTask(task)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: task.completed }}
-                      hitSlop={10}
+                      hitSlop={12}
                       style={{
                         width: 22,
                         height: 22,
@@ -388,14 +426,19 @@ export function TodayScreen(): React.JSX.Element {
                       style={{ flex: 1 }}
                     >
                       <Text
-                        style={{
-                          color: task.completed
-                            ? theme.colors.textTertiary
-                            : theme.colors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: task.completed ? '400' : '500',
-                          textDecorationLine: task.completed ? 'line-through' : 'none',
-                        }}
+                        style={[
+                          task.completed
+                            ? theme.typography.body
+                            : theme.typography.bodyStrong,
+                          {
+                            color: task.completed
+                              ? theme.colors.textTertiary
+                              : theme.colors.textPrimary,
+                            textDecorationLine: task.completed
+                              ? 'line-through'
+                              : 'none',
+                          },
+                        ]}
                       >
                         {task.title}
                       </Text>
@@ -403,29 +446,33 @@ export function TodayScreen(): React.JSX.Element {
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginTop: 5,
+                          marginTop: YanjiSpacing.xs,
                         }}
                       >
                         <View
                           style={{
                             backgroundColor: theme.colors.accentSoft,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
+                            paddingHorizontal: YanjiSpacing.xs,
+                            paddingVertical: YanjiSpacing.xs,
                             borderRadius: YanjiRadius.xs,
-                            marginRight: 6,
+                            marginRight: YanjiSpacing.sm,
                           }}
                         >
                           <Text
-                            style={{
-                              color: theme.colors.accentPrimary,
-                              fontSize: 11,
-                              fontWeight: '600',
-                            }}
+                            style={[
+                              theme.typography.label,
+                              { color: theme.colors.accentPrimary, letterSpacing: 0 },
+                            ]}
                           >
                             {task.subjectName}
                           </Text>
                         </View>
-                        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>
+                        <Text
+                          style={[
+                            theme.typography.meta,
+                            { color: theme.colors.textTertiary },
+                          ]}
+                        >
                           计划 {task.plannedMinutes} 分钟
                           {task.actualMinutes > 0
                             ? ` · 已专注 ${task.actualMinutes} 分钟`
@@ -441,14 +488,16 @@ export function TodayScreen(): React.JSX.Element {
                           accessibilityRole="button"
                           accessibilityLabel={`确认删除 · ${task.title}`}
                           hitSlop={8}
-                          style={{ paddingVertical: 6, paddingLeft: 8 }}
+                          style={{
+                            paddingVertical: YanjiSpacing.sm,
+                            paddingLeft: YanjiSpacing.sm,
+                          }}
                         >
                           <Text
-                            style={{
-                              color: theme.colors.danger,
-                              fontSize: 13,
-                              fontWeight: '600',
-                            }}
+                            style={[
+                              theme.typography.caption,
+                              { color: theme.colors.danger, fontWeight: '600' },
+                            ]}
                           >
                             删除
                           </Text>
@@ -458,10 +507,16 @@ export function TodayScreen(): React.JSX.Element {
                           accessibilityRole="button"
                           accessibilityLabel="取消删除"
                           hitSlop={8}
-                          style={{ paddingVertical: 6, paddingLeft: 8 }}
+                          style={{
+                            paddingVertical: YanjiSpacing.sm,
+                            paddingLeft: YanjiSpacing.sm,
+                          }}
                         >
                           <Text
-                            style={{ color: theme.colors.textSecondary, fontSize: 13 }}
+                            style={[
+                              theme.typography.caption,
+                              { color: theme.colors.textSecondary },
+                            ]}
                           >
                             取消
                           </Text>
@@ -488,8 +543,8 @@ export function TodayScreen(): React.JSX.Element {
             marginTop: YanjiSpacing.lg,
             flexDirection: 'row',
             alignItems: 'center',
-            paddingVertical: 14,
-            paddingHorizontal: 16,
+            paddingVertical: YanjiSpacing.md,
+            paddingHorizontal: YanjiSpacing.lg,
           }}
         >
           <Pressable
@@ -513,20 +568,18 @@ export function TodayScreen(): React.JSX.Element {
             </View>
             <View style={{ flex: 1 }}>
               <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontSize: 14,
-                  fontWeight: '600',
-                }}
+                style={[
+                  theme.typography.rowTitleStrong,
+                  { color: theme.colors.textPrimary },
+                ]}
               >
                 记录此刻
               </Text>
               <Text
-                style={{
-                  color: theme.colors.textTertiary,
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
+                style={[
+                  theme.typography.meta,
+                  { color: theme.colors.textTertiary, marginTop: YanjiSpacing.xs },
+                ]}
               >
                 随手记下当下的灵感与心得
               </Text>
@@ -539,18 +592,17 @@ export function TodayScreen(): React.JSX.Element {
             accessibilityLabel="写心得"
             style={({ pressed }) => ({
               backgroundColor: theme.colors.accentSoft,
-              paddingVertical: 6,
-              paddingHorizontal: 12,
+              paddingVertical: YanjiSpacing.sm,
+              paddingHorizontal: YanjiSpacing.md,
               borderRadius: YanjiRadius.full,
               opacity: pressed ? 0.7 : 1,
             })}
           >
             <Text
-              style={{
-                color: theme.colors.accentPrimary,
-                fontSize: 12,
-                fontWeight: '600',
-              }}
+              style={[
+                theme.typography.meta,
+                { color: theme.colors.accentPrimary, fontWeight: '600' },
+              ]}
             >
               写心得
             </Text>
@@ -584,13 +636,14 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
         {label}
       </Text>
       <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontSize: 17,
-          fontWeight: '600',
-          marginTop: 2,
-          fontVariant: ['tabular-nums'],
-        }}
+        style={[
+          theme.typography.valueStrong,
+          {
+            color: theme.colors.textPrimary,
+            marginTop: YanjiSpacing.xs,
+            fontVariant: ['tabular-nums'],
+          },
+        ]}
       >
         {value}
       </Text>
