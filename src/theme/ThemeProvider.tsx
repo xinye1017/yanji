@@ -9,7 +9,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
-import { YanjiColors, YanjiRadius, YanjiSpacing, YanjiTypography } from './tokens';
+import {
+  YanjiColors,
+  YanjiMotion,
+  YanjiRadius,
+  YanjiShadow,
+  YanjiSpacing,
+  YanjiTouch,
+  YanjiTypography,
+} from './tokens';
 import type { ThemeMode } from '../bridge';
 
 export interface YanjiTheme {
@@ -19,6 +27,9 @@ export interface YanjiTheme {
   radius: typeof YanjiRadius;
   spacing: typeof YanjiSpacing;
   typography: typeof YanjiTypography;
+  touch: typeof YanjiTouch;
+  motion: typeof YanjiMotion;
+  shadow: typeof YanjiShadow;
 }
 
 const ThemeContext = createContext<YanjiTheme | null>(null);
@@ -61,6 +72,9 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
     radius: YanjiRadius,
     spacing: YanjiSpacing,
     typography: YanjiTypography,
+    touch: YanjiTouch,
+    motion: YanjiMotion,
+    shadow: YanjiShadow,
   };
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;

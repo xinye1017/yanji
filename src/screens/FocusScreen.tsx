@@ -21,11 +21,19 @@ import {
   onTimerTick,
 } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode, TimerTickEvent } from '../bridge';
-import { YanjiPrimaryButton, YanjiSectionHeader } from '../components/YanjiUI';
+import {
+  YanjiBreathButton,
+  YanjiChip,
+  YanjiIcon,
+  YanjiPrimaryButton,
+  YanjiProgressRing,
+  YanjiSectionHeader,
+  YanjiStepper,
+} from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing, YanjiTypography } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
 function formatClock(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
@@ -61,6 +69,10 @@ interface TaskBinding {
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 180;
 const DEFAULT_MINUTES = 45;
+
+/** Diameter of the running-session progress ring, in dp. */
+const RING_SIZE = 248;
+const RING_THICKNESS = 10;
 
 export function FocusScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -141,6 +153,20 @@ export function FocusScreen(): React.JSX.Element {
 
   const isPaused = session?.isPaused ?? false;
 
+  /**
+   * Countdown progress, derived only from what the native layer already
+   * reports: elapsed + remaining is the planned total. Stopwatch sessions have
+   * no planned total, so they get no ring rather than a fabricated one.
+   */
+  const ringProgress = useMemo(() => {
+    if (!session || !session.isCountdown) return null;
+    const elapsed = tick?.elapsedSeconds ?? session.elapsedSeconds;
+    const remaining = Math.max(0, tick?.remainingSeconds ?? session.remainingSeconds);
+    const total = elapsed + remaining;
+    if (total <= 0) return null;
+    return elapsed / total;
+  }, [session, tick]);
+
   const handleStart = useCallback(async () => {
     if (busy || !selectedSubject) return;
     setBusy(true);
@@ -202,49 +228,39 @@ export function FocusScreen(): React.JSX.Element {
   if (!session) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-        <ScrollView contentContainerStyle={{ padding: YanjiSpacing.xl, paddingBottom: 120 }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: 26, fontWeight: '700' }}>
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: YanjiSpacing.page,
+            paddingTop: YanjiSpacing.md,
+            paddingBottom: 120,
+          }}
+        >
+          <Text
+            style={[
+              theme.typography.pageTitle,
+              { color: theme.colors.textPrimary, letterSpacing: -0.4 },
+            ]}
+          >
             专注
           </Text>
 
           <YanjiSectionHeader title="科目" />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {subjects.map(subject => {
-              const active = subject.id === selectedSubjectId;
-              return (
-                <Pressable
-                  key={subject.id}
-                  onPress={() => {
-                    setSelectedSubjectId(subject.id);
-                    // A session bound to a different task must not silently
-                    // pick up this subject.
-                    setTaskBinding(prev =>
-                      prev && prev.subjectId === subject.id ? prev : null
-                    );
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: YanjiRadius.full,
-                    marginRight: YanjiSpacing.sm,
-                    marginBottom: YanjiSpacing.sm,
-                    backgroundColor: active ? theme.colors.accentSoft : theme.colors.bgSurface,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? theme.colors.accentPrimary : theme.colors.textSecondary,
-                      fontSize: 14,
-                      fontWeight: active ? '600' : '400',
-                    }}
-                  >
-                    {subject.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {subjects.map(subject => (
+              <YanjiChip
+                key={subject.id}
+                label={subject.name}
+                selected={subject.id === selectedSubjectId}
+                onPress={() => {
+                  setSelectedSubjectId(subject.id);
+                  // A session bound to a different task must not silently
+                  // pick up this subject.
+                  setTaskBinding(prev =>
+                    prev && prev.subjectId === subject.id ? prev : null
+                  );
+                }}
+              />
+            ))}
             {subjects.length === 0 ? (
               <Text style={{ color: theme.colors.textTertiary, fontSize: 13 }}>暂无可用科目</Text>
             ) : null}
@@ -252,92 +268,76 @@ export function FocusScreen(): React.JSX.Element {
 
           <YanjiSectionHeader title="模式" />
           <View style={{ flexDirection: 'row' }}>
-            {TIMER_MODES.map(entry => {
-              const active = entry.mode === timerMode;
-              return (
-                <Pressable
-                  key={entry.mode}
-                  onPress={() => setTimerMode(entry.mode)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: YanjiRadius.full,
-                    marginRight: YanjiSpacing.sm,
-                    backgroundColor: active ? theme.colors.accentPrimary : theme.colors.bgSurface,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? theme.colors.onAccent : theme.colors.textSecondary,
-                      fontSize: 14,
-                      fontWeight: active ? '600' : '400',
-                    }}
-                  >
-                    {entry.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {TIMER_MODES.map(entry => (
+              <YanjiChip
+                key={entry.mode}
+                label={entry.label}
+                selected={entry.mode === timerMode}
+                onPress={() => setTimerMode(entry.mode)}
+                style={{ marginRight: 0, paddingHorizontal: 20 }}
+              />
+            ))}
           </View>
 
           {timerMode === 'COUNTDOWN' ? (
             <>
               <YanjiSectionHeader title="时长" />
-              <View style={{ flexDirection: 'row' }}>
-                {DURATION_PRESETS.map(minutes => {
-                  const active = minutes === durationMinutes;
-                  return (
-                    <Pressable
-                      key={minutes}
-                      onPress={() => setDurationMinutes(minutes)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 14,
-                        borderRadius: YanjiRadius.full,
-                        marginRight: YanjiSpacing.sm,
-                        backgroundColor: active ? theme.colors.accentPrimary : theme.colors.bgSurface,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: active ? theme.colors.onAccent : theme.colors.textSecondary,
-                          fontSize: 14,
-                          fontWeight: active ? '600' : '400',
-                        }}
-                      >
-                        {minutes} 分钟
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {DURATION_PRESETS.map(minutes => (
+                  <YanjiChip
+                    key={minutes}
+                    label={`${minutes} 分钟`}
+                    selected={minutes === durationMinutes}
+                    onPress={() => setDurationMinutes(minutes)}
+                  />
+                ))}
+              </View>
+              <View style={{ marginTop: YanjiSpacing.sm }}>
+                <YanjiStepper
+                  label="自定义时长"
+                  value={durationMinutes}
+                  onChange={setDurationMinutes}
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  step={5}
+                  suffix=" 分钟"
+                />
               </View>
             </>
           ) : (
             <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontSize: 13,
-                marginTop: YanjiSpacing.md,
-              }}
+              style={[
+                theme.typography.caption,
+                { color: theme.colors.textTertiary, marginTop: YanjiSpacing.md },
+              ]}
             >
               正计时不限时长，随时手动结束
             </Text>
           )}
 
           {taskBinding ? (
-            <Text
-              style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: YanjiSpacing.sm }}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginTop: YanjiSpacing.md,
+              }}
             >
-              将关联任务：{taskBinding.title}
-            </Text>
+              <YanjiIcon name="tasks" size={14} color={theme.colors.textTertiary} />
+              <Text
+                style={[
+                  theme.typography.caption,
+                  { color: theme.colors.textTertiary, marginLeft: 6 },
+                ]}
+              >
+                将关联任务：{taskBinding.title}
+              </Text>
+            </View>
           ) : null}
 
           <View style={{ marginTop: YanjiSpacing.xxl }}>
-            <YanjiPrimaryButton
+            <YanjiBreathButton
+              icon="play"
               label={busy ? '启动中' : '开始专注'}
               onPress={handleStart}
               disabled={busy || !selectedSubject}
@@ -346,19 +346,16 @@ export function FocusScreen(): React.JSX.Element {
 
           {startError ? (
             <Text
-              style={{ color: theme.colors.danger, fontSize: 13, marginTop: YanjiSpacing.md }}
+              style={[
+                theme.typography.caption,
+                { color: theme.colors.danger, marginTop: YanjiSpacing.md },
+              ]}
             >
               {startError}
             </Text>
           ) : null}
 
-          <Pressable
-            onPress={() => setRecordOpen(true)}
-            accessibilityRole="button"
-            style={{ marginTop: YanjiSpacing.xl, paddingVertical: YanjiSpacing.md }}
-          >
-            <Text style={{ color: theme.colors.accentPrimary, fontSize: 14 }}>＋ 记录此刻</Text>
-          </Pressable>
+          <RecordMomentLink onPress={() => setRecordOpen(true)} />
         </ScrollView>
 
         <RecordMomentModal
@@ -373,51 +370,88 @@ export function FocusScreen(): React.JSX.Element {
   // ---- Running / paused state -------------------------------------------
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: YanjiSpacing.xl }}>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: 15 }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: YanjiSpacing.page,
+        }}
+      >
+        <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
           {session.subjectName}
         </Text>
 
-        <Text
-          style={{
-            color: theme.colors.textPrimary,
-            fontSize: YanjiTypography.timerDisplay.fontSize,
-            fontWeight: YanjiTypography.timerDisplay.fontWeight,
-            lineHeight: YanjiTypography.timerDisplay.lineHeight,
-            marginTop: YanjiSpacing.sm,
-            fontVariant: ['tabular-nums'],
-          }}
-        >
-          {formatClock(displaySeconds)}
-        </Text>
+        <View style={{ marginTop: YanjiSpacing.lg }}>
+          <YanjiProgressRing
+            progress={ringProgress ?? 0}
+            size={RING_SIZE}
+            thickness={RING_THICKNESS}
+            color={isPaused ? theme.colors.textDisabled : theme.colors.accentPrimary}
+          >
+            <Text
+              style={[
+                theme.typography.timerDisplay,
+                {
+                  color: theme.colors.textPrimary,
+                  fontVariant: ['tabular-nums'],
+                },
+              ]}
+            >
+              {formatClock(displaySeconds)}
+            </Text>
+          </YanjiProgressRing>
+        </View>
 
-        <Text style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: YanjiSpacing.xs }}>
-          {isPaused ? '已暂停' : session.isCountdown ? '倒计时' : '正计时'}
+        <Text
+          style={[
+            theme.typography.caption,
+            { color: theme.colors.textTertiary, marginTop: YanjiSpacing.md },
+          ]}
+        >
+          {isPaused
+            ? '已暂停'
+            : session.isCountdown
+            ? ringProgress === null
+              ? '倒计时'
+              : `剩余 ${Math.round((1 - ringProgress) * 100)}%`
+            : '正计时'}
         </Text>
 
         <View style={{ marginTop: YanjiSpacing.xxl, alignSelf: 'stretch' }}>
           <YanjiPrimaryButton
+            icon={isPaused ? 'play' : 'pause'}
             label={isPaused ? '恢复' : '暂停'}
             onPress={handlePauseResume}
           />
         </View>
 
-        <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.lg, alignSelf: 'stretch' }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            marginTop: YanjiSpacing.md,
+            alignSelf: 'stretch',
+          }}
+        >
           <View style={{ flex: 1, marginRight: YanjiSpacing.sm }}>
-            <YanjiPrimaryButton label="结束" onPress={handleComplete} />
+            <YanjiPrimaryButton
+              icon="check"
+              label="结束"
+              variant="secondary"
+              onPress={handleComplete}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: YanjiSpacing.sm }}>
-            <YanjiPrimaryButton label="放弃" onPress={handleDiscard} />
+            <YanjiPrimaryButton
+              icon="delete"
+              label="放弃"
+              variant="secondary"
+              onPress={handleDiscard}
+            />
           </View>
         </View>
 
-        <Pressable
-          onPress={() => setRecordOpen(true)}
-          accessibilityRole="button"
-          style={{ marginTop: YanjiSpacing.xl, paddingVertical: YanjiSpacing.md }}
-        >
-          <Text style={{ color: theme.colors.accentPrimary, fontSize: 14 }}>＋ 记录此刻</Text>
-        </Pressable>
+        <RecordMomentLink onPress={() => setRecordOpen(true)} />
       </View>
 
       <RecordMomentModal
@@ -426,5 +460,44 @@ export function FocusScreen(): React.JSX.Element {
         onClose={() => setRecordOpen(false)}
       />
     </View>
+  );
+}
+
+/**
+ * Secondary "record this moment" affordance. Uses the danger-free secondary
+ * tier (not the primary) so it never competes with the timer controls.
+ */
+function RecordMomentLink({ onPress }: { onPress: () => void }): React.JSX.Element {
+  const theme = useYanjiTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="记录此刻"
+      hitSlop={8}
+      style={({ pressed }) => ({
+        marginTop: YanjiSpacing.xl,
+        paddingVertical: YanjiSpacing.md,
+        paddingHorizontal: YanjiSpacing.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: YanjiRadius.full,
+        backgroundColor: theme.colors.bgSurface,
+        minHeight: YanjiTouch.min,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <YanjiIcon name="compose" size={15} color={theme.colors.accentPrimary} />
+      <Text
+        style={{
+          color: theme.colors.accentPrimary,
+          fontSize: 14,
+          fontWeight: '600',
+          marginLeft: 6,
+        }}
+      >
+        记录此刻
+      </Text>
+    </Pressable>
   );
 }

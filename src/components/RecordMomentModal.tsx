@@ -17,10 +17,16 @@ import {
   Platform,
   Pressable,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
+import {
+  YanjiHairline,
+  YanjiIcon,
+  YanjiIconButton,
+  YanjiPrimaryButton,
+  YanjiTextInput,
+} from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
@@ -89,77 +95,92 @@ export function RecordMomentModal({
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
-        <View
-          style={{
-            backgroundColor: theme.colors.bgSurface,
-            borderTopLeftRadius: YanjiRadius.xxl,
-            borderTopRightRadius: YanjiRadius.xxl,
-            padding: YanjiSpacing.xl,
-            paddingBottom: YanjiSpacing.xxl,
-          }}
-        >
-          <Text
-            style={{
-              color: theme.colors.textPrimary,
-              fontSize: 17,
-              fontWeight: '600',
-              marginBottom: YanjiSpacing.md,
-            }}
-          >
-            记录此刻
-          </Text>
 
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="现在的想法、卡点或收获…"
-            placeholderTextColor={theme.colors.textTertiary}
-            multiline
-            autoFocus
+        {/* The sheet: a floating page with a grabber, the input well sunk into it */}
+        <View
+          style={[
+            {
+              backgroundColor: theme.colors.bgFloating,
+              borderTopLeftRadius: YanjiRadius.xxl,
+              borderTopRightRadius: YanjiRadius.xxl,
+              paddingHorizontal: YanjiSpacing.xl,
+              paddingTop: YanjiSpacing.md,
+              paddingBottom: YanjiSpacing.xxl,
+            },
+            theme.shadow.floating(theme.isDark),
+          ]}
+        >
+          <View
             style={{
-              minHeight: 96,
-              maxHeight: 200,
-              backgroundColor: theme.colors.bgElevated,
-              borderRadius: YanjiRadius.md,
-              padding: YanjiSpacing.md,
-              color: theme.colors.textPrimary,
-              fontSize: 15,
-              lineHeight: 22,
-              textAlignVertical: 'top',
+              alignSelf: 'center',
+              width: 36,
+              height: 4,
+              borderRadius: YanjiRadius.full,
+              backgroundColor: theme.colors.hairline,
+              marginBottom: YanjiSpacing.md,
             }}
           />
 
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: YanjiSpacing.md,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <YanjiIcon name="compose" size={17} color={theme.colors.accentPrimary} />
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: '600',
+                  marginLeft: YanjiSpacing.sm,
+                }}
+              >
+                记录此刻
+              </Text>
+            </View>
+            <YanjiIconButton
+              icon="close"
+              accessibilityLabel="取消"
+              onPress={handleClose}
+              size={36}
+              iconSize={16}
+              tone="filled"
+            />
+          </View>
+
+          <YanjiTextInput
+            value={text}
+            onChangeText={setText}
+            placeholder="现在的想法、卡点或收获…"
+            multiline
+            accessibilityLabel="记录内容"
+            style={{ minHeight: 96, maxHeight: 200 }}
+          />
+
           {error ? (
-            <Text style={{ color: theme.colors.danger, fontSize: 13, marginTop: 8 }}>{error}</Text>
+            <Text
+              style={[
+                theme.typography.caption,
+                { color: theme.colors.danger, marginTop: YanjiSpacing.sm },
+              ]}
+            >
+              {error}
+            </Text>
           ) : null}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: YanjiSpacing.lg }}>
-            <Pressable
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel="取消"
-              style={{ paddingVertical: 10, paddingHorizontal: 16 }}
-            >
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 15 }}>取消</Text>
-            </Pressable>
-            <Pressable
+          <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
+
+          <View style={{ marginTop: YanjiSpacing.lg }}>
+            <YanjiPrimaryButton
+              icon="check"
+              label={saving ? '保存中' : '保存'}
               onPress={handleSave}
               disabled={saving}
-              accessibilityRole="button"
-              accessibilityLabel={saving ? '保存中' : '保存'}
-              style={{
-                paddingVertical: 10,
-                paddingHorizontal: 20,
-                marginLeft: YanjiSpacing.sm,
-                borderRadius: YanjiRadius.md,
-                backgroundColor: theme.colors.accentPrimary,
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              <Text style={{ color: theme.colors.onAccent, fontSize: 15, fontWeight: '600' }}>
-                {saving ? '保存中' : '保存'}
-              </Text>
-            </Pressable>
+            />
           </View>
         </View>
       </KeyboardAvoidingView>

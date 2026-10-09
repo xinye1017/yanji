@@ -19,19 +19,18 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative } from '../bridge';
 import type { Subject } from '../bridge';
-import { YanjiCard, YanjiPrimaryButton, YanjiSectionHeader } from './YanjiUI';
+import {
+  YanjiBreathButton,
+  YanjiChip,
+  YanjiHairline,
+  YanjiIcon,
+  YanjiIconButton,
+  YanjiStepper,
+  YanjiTextInput,
+} from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
@@ -140,46 +139,6 @@ export function TaskEditorModal({
     }
   }, [date, minutes, onClose, onSaved, selectedSubject, title]);
 
-  const chip = (
-    label: string,
-    active: boolean,
-    onPress: () => void
-  ): React.JSX.Element => (
-    <Pressable
-      key={label}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      style={{
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-        borderRadius: YanjiRadius.full,
-        marginRight: YanjiSpacing.sm,
-        marginBottom: YanjiSpacing.sm,
-        backgroundColor: active ? theme.colors.accentSoft : theme.colors.bgElevated,
-      }}
-    >
-      <Text
-        style={{
-          color: active ? theme.colors.accentPrimary : theme.colors.textSecondary,
-          fontSize: 14,
-          fontWeight: active ? '600' : '400',
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-
-  const stepStyle = {
-    width: 36,
-    height: 36,
-    borderRadius: YanjiRadius.full,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    backgroundColor: theme.colors.bgElevated,
-  };
-
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -188,153 +147,184 @@ export function TaskEditorModal({
       >
         <ScrollView
           contentContainerStyle={{
-            padding: YanjiSpacing.xl,
+            paddingHorizontal: YanjiSpacing.page,
+            paddingTop: YanjiSpacing.lg,
             paddingBottom: YanjiSpacing.xxl,
           }}
         >
           <View
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
           >
-            <Text style={{ color: theme.colors.textPrimary, fontSize: 24, fontWeight: '700' }}>
+            <Text
+              style={[
+                theme.typography.pageTitle,
+                { color: theme.colors.textPrimary, letterSpacing: -0.4 },
+              ]}
+            >
               添加任务
             </Text>
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
+            <YanjiIconButton
+              icon="close"
               accessibilityLabel="取消"
-              style={{ padding: 8 }}
-            >
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 15 }}>取消</Text>
-            </Pressable>
+              onPress={onClose}
+              tone="filled"
+            />
           </View>
 
-          <YanjiSectionHeader title="任务" />
-          <YanjiCard>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="今天要做什么"
-              placeholderTextColor={theme.colors.textTertiary}
-              style={{
-                backgroundColor: theme.colors.bgElevated,
-                borderRadius: YanjiRadius.md,
-                padding: YanjiSpacing.md,
-                color: theme.colors.textPrimary,
-                fontSize: 15,
-              }}
-            />
-          </YanjiCard>
+          {/*
+            One sheet, hairline-divided sections, instead of three separate
+            cards: the whole point of "单个弹层中完成" is that the layer reads as
+            a single page of paper, not as a stack of boxes.
+          */}
+          <View
+            style={{
+              backgroundColor: theme.colors.bgSurface,
+              borderRadius: YanjiRadius.xl,
+              marginTop: YanjiSpacing.lg,
+              paddingHorizontal: YanjiSpacing.lg,
+            }}
+          >
+            <Field label="任务">
+              <YanjiTextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="今天要做什么"
+                accessibilityLabel="任务名称"
+              />
+            </Field>
 
-          <YanjiSectionHeader title="学科" />
-          <YanjiCard>
-            {selectedCategory ? (
-              <>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text
-                    style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}
-                  >
-                    {selectedCategory.name}
-                  </Text>
-                  <Pressable
-                    onPress={() => {
-                      setCategoryId(null);
-                      setSubjectId(null);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="更换学科大类"
-                    style={{ padding: 6 }}
-                  >
-                    <Text style={{ color: theme.colors.accentPrimary, fontSize: 13 }}>更换</Text>
-                  </Pressable>
-                </View>
-                {children.length > 0 ? (
+            <YanjiHairline />
+
+            <Field label="学科">
+              {selectedCategory ? (
+                <>
                   <View
                     style={{
                       flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      marginTop: YanjiSpacing.md,
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
                     }}
                   >
-                    {children.map(child =>
-                      chip(child.name, child.id === subjectId, () => setSubjectId(child.id))
-                    )}
+                    <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                      {selectedCategory.name}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setCategoryId(null);
+                        setSubjectId(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="更换学科大类"
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                    >
+                      <YanjiIcon name="reset" size={13} color={theme.colors.accentPrimary} />
+                      <Text
+                        style={{
+                          color: theme.colors.accentPrimary,
+                          fontSize: 13,
+                          marginLeft: 4,
+                        }}
+                      >
+                        更换
+                      </Text>
+                    </Pressable>
                   </View>
-                ) : (
-                  <Text
-                    style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: YanjiSpacing.sm }}
-                  >
-                    该学科没有子类
-                  </Text>
-                )}
-              </>
-            ) : (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {categories.map(category =>
-                  chip(category.name, false, () => pickCategory(category))
-                )}
-                {categories.length === 0 ? (
-                  <Text style={{ color: theme.colors.textTertiary, fontSize: 13 }}>暂无可用学科</Text>
-                ) : null}
-              </View>
-            )}
-          </YanjiCard>
-
-          <YanjiSectionHeader title="时长" />
-          <YanjiCard>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {DURATION_PRESETS.map(preset =>
-                chip(`${preset} 分钟`, preset === minutes, () => setMinutes(preset))
+                  {children.length > 0 ? (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        marginTop: YanjiSpacing.md,
+                      }}
+                    >
+                      {children.map(child => (
+                        <YanjiChip
+                          key={child.id}
+                          label={child.name}
+                          selected={child.id === subjectId}
+                          onPress={() => setSubjectId(child.id)}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        theme.typography.caption,
+                        { color: theme.colors.textTertiary, marginTop: YanjiSpacing.sm },
+                      ]}
+                    >
+                      该学科没有子类
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {categories.map(category => (
+                    <YanjiChip
+                      key={category.id}
+                      label={category.name}
+                      onPress={() => pickCategory(category)}
+                    />
+                  ))}
+                  {categories.length === 0 ? (
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: 13 }}>
+                      暂无可用学科
+                    </Text>
+                  ) : null}
+                </View>
               )}
-            </View>
-            <View
-              style={{ flexDirection: 'row', alignItems: 'center', marginTop: YanjiSpacing.md }}
-            >
-              <Text style={{ flex: 1, color: theme.colors.textSecondary, fontSize: 13 }}>自定义</Text>
-              <Pressable
-                onPress={() => setMinutes(m => Math.max(MIN_MINUTES, m - STEP_MINUTES))}
-                accessibilityRole="button"
-                accessibilityLabel="减少五分钟"
-                style={stepStyle}
-              >
-                <Text style={{ color: theme.colors.textPrimary, fontSize: 16 }}>−</Text>
-              </Pressable>
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontSize: 15,
-                  fontWeight: '600',
-                  marginHorizontal: YanjiSpacing.md,
-                  minWidth: 64,
-                  textAlign: 'center',
-                }}
-              >
-                {minutes} 分钟
-              </Text>
-              <Pressable
-                onPress={() => setMinutes(m => Math.min(MAX_MINUTES, m + STEP_MINUTES))}
-                accessibilityRole="button"
-                accessibilityLabel="增加五分钟"
-                style={stepStyle}
-              >
-                <Text style={{ color: theme.colors.textPrimary, fontSize: 16 }}>＋</Text>
-              </Pressable>
-            </View>
-          </YanjiCard>
+            </Field>
+
+            <YanjiHairline />
+
+            <Field label="时长">
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {DURATION_PRESETS.map(preset => (
+                  <YanjiChip
+                    key={preset}
+                    label={`${preset} 分钟`}
+                    selected={preset === minutes}
+                    onPress={() => setMinutes(preset)}
+                  />
+                ))}
+              </View>
+              <View style={{ marginTop: YanjiSpacing.sm }}>
+                <YanjiStepper
+                  label="自定义时长"
+                  value={minutes}
+                  onChange={setMinutes}
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  step={STEP_MINUTES}
+                  suffix=" 分钟"
+                />
+              </View>
+            </Field>
+          </View>
 
           {error ? (
-            <Text style={{ color: theme.colors.danger, fontSize: 13, marginTop: YanjiSpacing.md }}>
+            <Text
+              style={[
+                theme.typography.caption,
+                { color: theme.colors.danger, marginTop: YanjiSpacing.md },
+              ]}
+            >
               {error}
             </Text>
           ) : null}
 
           <View style={{ marginTop: YanjiSpacing.xl }}>
-            <YanjiPrimaryButton
+            <YanjiBreathButton
+              icon="check"
               label={saving ? '保存中' : '保存任务'}
               onPress={handleSave}
               disabled={saving}
@@ -343,5 +333,29 @@ export function TaskEditorModal({
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+/** One labelled field inside the task-editor sheet. */
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  return (
+    <View style={{ paddingVertical: YanjiSpacing.lg }}>
+      <Text
+        style={[
+          theme.typography.label,
+          { color: theme.colors.textTertiary, marginBottom: YanjiSpacing.sm },
+        ]}
+      >
+        {label}
+      </Text>
+      {children}
+    </View>
   );
 }

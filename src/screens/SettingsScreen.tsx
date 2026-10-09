@@ -6,10 +6,10 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
 import type { ThemeMode, UserSettings } from '../bridge';
-import { YanjiCard, YanjiSectionHeader, YanjiPrimaryButton } from '../components/YanjiUI';
+import { YanjiChip, YanjiIconButton, YanjiPrimaryButton, YanjiSectionHeader } from '../components/YanjiUI';
 import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
@@ -57,53 +57,73 @@ export function SettingsScreen(): React.JSX.Element {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: YanjiSpacing.xl, paddingBottom: 120 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: 24, fontWeight: '700' }}>设置</Text>
-          <Pressable onPress={closeSettings} accessibilityRole="button" accessibilityLabel="返回" style={{ padding: 8 }}>
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 15 }}>完成</Text>
-          </Pressable>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: YanjiSpacing.page,
+          paddingTop: YanjiSpacing.md,
+          paddingBottom: 120,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Text
+            style={[
+              theme.typography.pageTitle,
+              { color: theme.colors.textPrimary, letterSpacing: -0.4 },
+            ]}
+          >
+            设置
+          </Text>
+          <YanjiIconButton
+            icon="close"
+            accessibilityLabel="完成"
+            onPress={closeSettings}
+            tone="filled"
+          />
         </View>
 
         <YanjiSectionHeader title="外观" />
-        <YanjiCard>
+        <View
+          style={{
+            backgroundColor: theme.colors.bgSurface,
+            borderRadius: YanjiRadius.xl,
+            padding: 18,
+          }}
+        >
           <View style={{ flexDirection: 'row' }}>
-            {THEME_OPTIONS.map(option => {
-              const active = option.mode === mode;
-              return (
-                <Pressable
-                  key={option.mode}
-                  onPress={() => void handleThemeChange(option.mode)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: YanjiRadius.full,
-                    marginRight: YanjiSpacing.sm,
-                    backgroundColor: active ? theme.colors.accentPrimary : theme.colors.bgElevated,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? theme.colors.onAccent : theme.colors.textSecondary,
-                      fontSize: 14,
-                      fontWeight: active ? '600' : '400',
-                    }}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {THEME_OPTIONS.map(option => (
+              <YanjiChip
+                key={option.mode}
+                label={option.label}
+                selected={option.mode === mode}
+                onPress={() => void handleThemeChange(option.mode)}
+                style={{ marginRight: 0, paddingHorizontal: 18 }}
+              />
+            ))}
           </View>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: YanjiSpacing.md }}>
+          <Text
+            style={[
+              theme.typography.caption,
+              { color: theme.colors.textTertiary, marginTop: YanjiSpacing.md },
+            ]}
+          >
             研迹只读取系统深浅色，不会修改你的系统设置。
           </Text>
-        </YanjiCard>
+        </View>
 
         <YanjiSectionHeader title="备考" />
-        <YanjiCard>
+        <View
+          style={{
+            backgroundColor: theme.colors.bgSurface,
+            borderRadius: YanjiRadius.xl,
+            padding: 18,
+          }}
+        >
           <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>目标考试日期</Text>
           <Text
             style={{
@@ -115,10 +135,10 @@ export function SettingsScreen(): React.JSX.Element {
           >
             {settings?.examDate && settings.examDate.length > 0 ? settings.examDate : '未设置'}
           </Text>
-        </YanjiCard>
+        </View>
 
         <View style={{ marginTop: YanjiSpacing.xxl }}>
-          <YanjiPrimaryButton label="返回今天" onPress={closeSettings} />
+          <YanjiPrimaryButton label="返回今天" icon="today" onPress={closeSettings} />
         </View>
       </ScrollView>
     </View>

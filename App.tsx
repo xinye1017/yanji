@@ -1,7 +1,7 @@
 /**
  * Yanji 2.0 root component.
  *
- * Composition order (outermost → innermost):
+ * Composition order (outermost -> innermost):
  *   YanjiThemeProvider      resolves light/dark from the native preference
  *     NavigationProvider    three-tab shell state + overlay state
  *       AppShell            keeps every tab screen mounted and overlays
@@ -15,7 +15,8 @@
  */
 
 import React, { useEffect } from 'react';
-import { BackHandler, Platform, StatusBar, View } from 'react-native';
+import { BackHandler, StatusBar, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
 import { NavigationProvider, useNavigation } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
@@ -25,9 +26,15 @@ import { TodayScreen } from './src/screens/TodayScreen';
 import { YanjiThemeProvider, useYanjiTheme } from './src/theme/ThemeProvider';
 
 /**
- * A tab screen that stays mounted. Inactive panes are hidden with
- * `display: 'none'` instead of being unmounted, so their local state (drafts,
+ * A tab screen that stays mounted. Inactive panes are faded out and made
+ * non-interactive rather than `display: 'none'`, so their local state (drafts,
  * selections) survives tab switches.
+ *
+ * `display: 'none'` is avoided deliberately: it removes the pane from layout
+ * entirely, which would tear down the inner ScrollView's offset and would also
+ * drop the pane's accessibility subtree. An opacity fade plus
+ * `pointerEvents="none"` keeps the tree intact while costing nothing, because
+ * all three panes are always mounted anyway.
  */
 function TabPane({
   active,
@@ -36,11 +43,22 @@ function TabPane({
   active: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
-  return <View style={{ flex: 1, display: active ? 'flex' : 'none' }}>{children}</View>;
+  return (
+    <View
+      style={{ flex: 1, opacity: active ? 1 : 0 }}
+      pointerEvents={active ? 'auto' : 'none'}
+      // Keep the hidden pane out of the a11y tree so TalkBack does not read it.
+      accessibilityElementsHidden={!active}
+      importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
+    >
+      {children}
+    </View>
+  );
 }
 
 function AppShell(): React.JSX.Element {
   const theme = useYanjiTheme();
+  const insets = useSafeAreaInsets();
   const { activeTab, settingsOpen, taskEditorOpen, closeSettings, closeTaskEditor } =
     useNavigation();
 
@@ -60,13 +78,17 @@ function AppShell(): React.JSX.Element {
     return () => subscription.remove();
   }, [taskEditorOpen, settingsOpen, closeSettings, closeTaskEditor]);
 
-  const topInset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 38) : 44;
+  // Safe-area insets replace the old hardcoded 38/44: on a notched or
+  // punch-hole device the old value either clipped the title or wasted a
+  // centimetre of paper. The status bar itself stays translucent so the page
+  // background runs to the top edge.
+  const topInset = insets.top;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary, paddingTop: topInset }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, paddingTop: topInset }}>
         <TabPane active={activeTab === 'today'}>
           <TodayScreen />
         </TabPane>
@@ -102,9 +124,11 @@ function AppShell(): React.JSX.Element {
 export default function App(): React.JSX.Element {
   return (
     <YanjiThemeProvider>
-      <NavigationProvider>
-        <AppShell />
-      </NavigationProvider>
+      <SafeAreaProvider>
+        <NavigationProvider>
+          <AppShell />
+        </NavigationProvider>
+      </SafeAreaProvider>
     </YanjiThemeProvider>
   );
 }

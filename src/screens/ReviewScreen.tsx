@@ -10,10 +10,18 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative, onDataChanged } from '../bridge';
 import type { DailyTimeline, ReviewStats, StudyTask } from '../bridge';
-import { YanjiCard, YanjiEmptyState, YanjiSectionHeader } from '../components/YanjiUI';
+import {
+  YanjiCard,
+  YanjiEmptyState,
+  YanjiHairline,
+  YanjiIcon,
+  YanjiIconButton,
+  YanjiMiniBarChart,
+  YanjiSectionHeader,
+} from '../components/YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
@@ -53,6 +61,8 @@ export function ReviewScreen(): React.JSX.Element {
   const [timeline, setTimeline] = useState<DailyTimeline | null>(null);
   const [stats, setStats] = useState<ReviewStats | null>(null);
   const [dayTasks, setDayTasks] = useState<StudyTask[]>([]);
+  /** Measured width of the trend-chart column, so the SVG matches its labels. */
+  const [chartWidth, setChartWidth] = useState(0);
 
   const refresh = useCallback(async (targetDate: string) => {
     try {
@@ -100,124 +110,193 @@ export function ReviewScreen(): React.JSX.Element {
     [dayTasks]
   );
 
+  const isToday = date === todayIso();
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: YanjiSpacing.xl, paddingBottom: 120 }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: 26, fontWeight: '700' }}>回顾</Text>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: YanjiSpacing.page,
+          paddingTop: YanjiSpacing.md,
+          paddingBottom: 120,
+        }}
+      >
+        <Text
+          style={[
+            theme.typography.pageTitle,
+            { color: theme.colors.textPrimary, letterSpacing: -0.4 },
+          ]}
+        >
+          回顾
+        </Text>
 
-        {/* Date navigation */}
+        {/* Date navigation — a small sheet the day label sits in */}
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            alignSelf: 'center',
             marginTop: YanjiSpacing.lg,
+            backgroundColor: theme.colors.bgSurface,
+            borderRadius: YanjiRadius.full,
+            paddingVertical: 4,
+            paddingHorizontal: 6,
+            minWidth: 200,
           }}
         >
-          <Pressable
-            onPress={() => setDate(prev => shiftIsoDate(prev, -1))}
-            accessibilityRole="button"
+          <YanjiIconButton
+            icon="back"
             accessibilityLabel="前一天"
-            style={{ padding: 8 }}
-          >
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 18 }}>‹</Text>
-          </Pressable>
+            onPress={() => setDate(prev => shiftIsoDate(prev, -1))}
+            iconSize={17}
+          />
           <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
             {timeline?.formattedDate ?? date}
           </Text>
-          <Pressable
-            onPress={() => setDate(prev => shiftIsoDate(prev, 1))}
-            accessibilityRole="button"
+          <YanjiIconButton
+            icon="forward"
             accessibilityLabel="后一天"
-            style={{ padding: 8 }}
-          >
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 18 }}>›</Text>
-          </Pressable>
+            onPress={() => setDate(prev => shiftIsoDate(prev, 1))}
+            iconSize={17}
+          />
         </View>
 
-        {/* Layer 1 — the day's record */}
+        {/* The day's record */}
         <YanjiSectionHeader title="这一天的记录" />
         {!hasRecords ? (
-          <YanjiEmptyState title="这一天还没有记录" hint="专注、任务与想法都会出现在这里" />
+          <YanjiCard variant="sunken">
+            <YanjiEmptyState
+              icon="calendar"
+              title="这一天还没有记录"
+              hint="专注、任务与想法都会出现在这里"
+            />
+          </YanjiCard>
         ) : (
           <View>
-            <YanjiCard>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>当日专注</Text>
+            <YanjiCard variant="hero">
+              <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
+                当日专注
+              </Text>
               <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontSize: 24,
-                  fontWeight: '700',
-                  marginTop: 4,
-                }}
+                style={[
+                  theme.typography.display,
+                  {
+                    color: theme.colors.textPrimary,
+                    marginTop: YanjiSpacing.sm,
+                    fontVariant: ['tabular-nums'],
+                  },
+                ]}
               >
                 {timeline ? formatMinutes(timeline.totalDurationSeconds) : '—'}
               </Text>
             </YanjiCard>
 
-            {timeline?.sessions.map(session => (
-              <View
-                key={session.id}
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  paddingVertical: 10,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.textPrimary, fontSize: 14 }}>
-                    {session.subjectName}
-                    {session.isExam ? ' · 模考' : ''}
-                  </Text>
-                  <Text style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: 2 }}>
-                    {formatClockFromEpoch(session.startTime)} 起 · {session.mode}
-                  </Text>
+            {/* Sessions / tasks / notes as hairline-separated rows of one sheet */}
+            <YanjiCard style={{ marginTop: YanjiSpacing.md, padding: 0 }}>
+              {timeline?.sessions.map((session, index) => (
+                <View key={session.id}>
+                  {index > 0 ? <YanjiHairline inset={16} /> : null}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: 14 }}>
+                        {session.subjectName}
+                        {session.isExam ? ' · 模考' : ''}
+                      </Text>
+                      <Text
+                        style={{
+                          color: theme.colors.textTertiary,
+                          fontSize: 12,
+                          marginTop: 2,
+                        }}
+                      >
+                        {formatClockFromEpoch(session.startTime)} 起 · {session.mode}
+                      </Text>
+                    </View>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>
+                      {formatMinutes(session.durationSeconds)}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>
-                  {formatMinutes(session.durationSeconds)}
-                </Text>
-              </View>
-            ))}
+              ))}
 
-            {timeline?.completedTasks.map(task => (
-              <View
-                key={task.id}
-                style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}
-              >
-                <Text style={{ color: theme.colors.textPrimary, fontSize: 14, flex: 1 }}>
-                  ✓ {task.title}
-                </Text>
-                <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>
-                  {task.subjectName}
-                </Text>
-              </View>
-            ))}
+              {timeline?.completedTasks.map((task, index) => (
+                <View key={task.id}>
+                  {(timeline.sessions.length + index) > 0 ? <YanjiHairline inset={16} /> : null}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                    }}
+                  >
+                    <YanjiIcon
+                      name="check"
+                      size={14}
+                      color={theme.colors.success}
+                      strokeWidth={2.5}
+                    />
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontSize: 14,
+                        flex: 1,
+                        marginLeft: YanjiSpacing.sm,
+                      }}
+                    >
+                      {task.title}
+                    </Text>
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>
+                      {task.subjectName}
+                    </Text>
+                  </View>
+                </View>
+              ))}
 
-            {timeline?.notes.map(note => (
-              <View
-                key={note.id}
-                style={{
-                  backgroundColor: theme.colors.bgSurface,
-                  borderRadius: YanjiRadius.md,
-                  padding: YanjiSpacing.md,
-                  marginTop: YanjiSpacing.sm,
-                }}
-              >
-                <Text style={{ color: theme.colors.textPrimary, fontSize: 14, lineHeight: 21 }}>
-                  {note.content}
-                </Text>
-                <Text style={{ color: theme.colors.textTertiary, fontSize: 11, marginTop: 6 }}>
-                  {formatClockFromEpoch(note.timestamp)}
-                </Text>
-              </View>
-            ))}
+              {timeline?.notes.map((note, index) => (
+                <View key={note.id}>
+                  {index > 0 ? <YanjiHairline inset={16} /> : null}
+                  <View style={{ padding: 16 }}>
+                    <Text
+                      style={{
+                        color: theme.colors.textPrimary,
+                        fontSize: 14,
+                        lineHeight: 21,
+                      }}
+                    >
+                      {note.content}
+                    </Text>
+                    <Text
+                      style={{
+                        color: theme.colors.textTertiary,
+                        fontSize: 11,
+                        marginTop: 6,
+                      }}
+                    >
+                      {formatClockFromEpoch(note.timestamp)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </YanjiCard>
           </View>
         )}
 
-        {/* Layer 3 — secondary statistics */}
+        {/* Secondary statistics */}
         <YanjiSectionHeader title="最近 7 天" />
         {trendEntries.length === 0 ? (
-          <YanjiEmptyState title="暂无统计数据" />
+          <YanjiCard variant="sunken">
+            <YanjiEmptyState icon="chartMinimal" title="暂无统计数据" />
+          </YanjiCard>
         ) : (
           <YanjiCard>
             <View
@@ -233,61 +312,72 @@ export function ReviewScreen(): React.JSX.Element {
                 {stats ? formatMinutes(stats.dailyAverageMinutes * 60) : '—'}
               </Text>
             </View>
-            {trendEntries.map(entry => {
-              const max = Math.max(...trendEntries.map(e => e.minutes), 1);
-              return (
-                <View
-                  key={entry.date}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
-                >
-                  <Text style={{ color: theme.colors.textTertiary, fontSize: 11, width: 62 }}>
-                    {entry.date.slice(5)}
-                  </Text>
-                  <View
+
+            {/* The chart is measured, not given a magic width: it must line up
+                with the day labels below it on any screen width. */}
+            <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)}>
+              <YanjiMiniBarChart
+                data={trendEntries.map(entry => entry.minutes)}
+                width={chartWidth}
+                height={64}
+                highlightIndex={isToday ? trendEntries.length - 1 : undefined}
+                emptyLabel="暂无统计数据"
+              />
+
+              {/* Day labels sit under the chart, aligned to their column. */}
+              <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.sm }}>
+                {trendEntries.map(entry => (
+                  <Text
+                    key={entry.date}
                     style={{
                       flex: 1,
-                      height: 8,
-                      borderRadius: YanjiRadius.full,
-                      backgroundColor: theme.colors.bgElevated,
-                      marginRight: YanjiSpacing.sm,
+                      textAlign: 'center',
+                      color: theme.colors.textTertiary,
+                      fontSize: 10,
                     }}
                   >
-                    <View
-                      style={{
-                        width: `${Math.round((entry.minutes / max) * 100)}%`,
-                        height: 8,
-                        borderRadius: YanjiRadius.full,
-                        backgroundColor: theme.colors.accentPrimary,
-                      }}
-                    />
-                  </View>
-                  <Text style={{ color: theme.colors.textSecondary, fontSize: 11, width: 52, textAlign: 'right' }}>
-                    {entry.minutes} 分
+                    {entry.date.slice(5)}
                   </Text>
-                </View>
-              );
-            })}
+                ))}
+              </View>
+            </View>
+
+            <YanjiHairline style={{ marginTop: YanjiSpacing.md }} />
+
+            <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.md }}>
+              <ReviewStat label="累计" value={formatMinutes(stats ? stats.totalFocusHours * 3600 : 0)} />
+              <ReviewStat label="专注天数" value={`${stats?.activeDays ?? 0} 天`} />
+            </View>
           </YanjiCard>
         )}
 
         {subjectEntries.length > 0 ? (
           <>
             <YanjiSectionHeader title="科目分布" />
-            <YanjiCard>
-              {subjectEntries.map(entry => (
-                <View
-                  key={entry.name}
-                  style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}
-                >
-                  <Text style={{ color: theme.colors.textPrimary, fontSize: 14 }}>{entry.name}</Text>
-                  <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>
-                    {formatMinutes(entry.minutes * 60)}
-                  </Text>
+            <YanjiCard style={{ padding: 0 }}>
+              {subjectEntries.map((entry, index) => (
+                <View key={entry.name}>
+                  {index > 0 ? <YanjiHairline inset={16} /> : null}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                    }}
+                  >
+                    <Text style={{ color: theme.colors.textPrimary, fontSize: 14 }}>{entry.name}</Text>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>
+                      {formatMinutes(entry.minutes * 60)}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </YanjiCard>
           </>
         ) : null}
+
         {dayTasks.length > 0 ? (
           <>
             <YanjiSectionHeader title="任务完成" />
@@ -309,6 +399,26 @@ export function ReviewScreen(): React.JSX.Element {
           </>
         ) : null}
       </ScrollView>
+    </View>
+  );
+}
+
+/** Two-up tally strip, matching the hero sheet on the Today screen. */
+function ReviewStat({ label, value }: { label: string; value: string }): React.JSX.Element {
+  const theme = useYanjiTheme();
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={[theme.typography.label, { color: theme.colors.textTertiary }]}>{label}</Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontSize: 17,
+          fontWeight: '600',
+          marginTop: 2,
+        }}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

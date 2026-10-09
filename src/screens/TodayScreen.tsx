@@ -23,16 +23,19 @@ import {
 import type { ActiveSessionState, ExamCountdown, StudyTask, TodayStats } from '../bridge';
 import {
   YanjiBadge,
+  YanjiBreathButton,
   YanjiCard,
   YanjiEmptyState,
-  YanjiPrimaryButton,
+  YanjiHairline,
+  YanjiIcon,
+  YanjiIconButton,
   YanjiSectionHeader,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { TaskEditorModal } from '../components/TaskEditorModal';
 import { useNavigation } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
 function todayIso(): string {
   const now = new Date();
@@ -123,25 +126,17 @@ export function TodayScreen(): React.JSX.Element {
   /** One restrained primary action, resolved from real state. */
   const primaryAction = useMemo(() => {
     if (activeSession) {
-      return {
-        label: '继续专注',
-        icon: '⏱️',
-        onPress: () => selectTab('focus'),
-      };
+      return { label: '继续专注', icon: 'focus' as const, onPress: () => selectTab('focus') };
     }
     const pending = tasks.find(t => !t.completed);
     if (pending) {
       return {
         label: `继续学习 · ${pending.title}`,
-        icon: '▶',
+        icon: 'play' as const,
         onPress: () => startFromTask(pending),
       };
     }
-    return {
-      label: '开始专注',
-      icon: '▶',
-      onPress: () => selectTab('focus'),
-    };
+    return { label: '开始专注', icon: 'play' as const, onPress: () => selectTab('focus') };
   }, [activeSession, tasks, selectTab, startFromTask]);
 
   const toggleTask = useCallback(
@@ -177,65 +172,56 @@ export function TodayScreen(): React.JSX.Element {
     return `${month}月${day}日 · 星期${names[parsed.getDay()]}`;
   }, [date]);
 
+  const completed = stats?.completedTasksCount ?? 0;
+  const totalTasks = stats?.totalTasksCount ?? 0;
+  const notesCount = stats?.notesCount ?? 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: YanjiSpacing.xl,
+          paddingHorizontal: YanjiSpacing.page,
           paddingTop: YanjiSpacing.md,
           paddingBottom: 120,
         }}
       >
-        {/* Header: Greeting, date & subtle settings action button */}
+        {/* Header: greeting, date & settings action */}
         <View
           style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 4,
+            marginBottom: YanjiSpacing.xs,
           }}
         >
           <View>
             <Text
-              style={{
-                color: theme.colors.textPrimary,
-                fontSize: 30,
-                fontWeight: '800',
-                letterSpacing: -0.5,
-              }}
+              style={[
+                theme.typography.pageTitle,
+                { color: theme.colors.textPrimary, letterSpacing: -0.4 },
+              ]}
             >
               今天
             </Text>
             <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontSize: 13,
-                fontWeight: '500',
-                marginTop: 3,
-              }}
+              style={[
+                theme.typography.caption,
+                { color: theme.colors.textTertiary, marginTop: 3 },
+              ]}
             >
               {formattedDate}
             </Text>
           </View>
-          <Pressable
-            onPress={openSettings}
-            accessibilityRole="button"
+          <YanjiIconButton
+            icon="settings"
             accessibilityLabel="设置"
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: YanjiRadius.full,
-              backgroundColor: theme.colors.bgSurface,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 18, color: theme.colors.textSecondary }}>⚙️</Text>
-          </Pressable>
+            onPress={openSettings}
+            tone="filled"
+            size={YanjiTouch.comfortable}
+          />
         </View>
 
-        {/* Layer 1 — Today Hero Status Card with Exam Countdown Chip */}
+        {/* Hero status sheet: today's focus total, exam countdown, real tallies */}
         <YanjiCard variant="hero" style={{ marginTop: YanjiSpacing.lg }}>
           <View
             style={{
@@ -244,70 +230,64 @@ export function TodayScreen(): React.JSX.Element {
               alignItems: 'center',
             }}
           >
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: 13,
-                fontWeight: '600',
-              }}
-            >
+            <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
               今日专注
             </Text>
             {countdown && countdown.daysRemaining > 0 ? (
               <YanjiBadge
-                icon="🎯"
+                icon="target"
                 label={`距考研 ${countdown.daysRemaining} 天`}
               />
             ) : null}
           </View>
 
-          <View style={{ marginTop: 10 }}>
-            <Text
-              style={{
+          <Text
+            style={[
+              theme.typography.display,
+              {
                 color: theme.colors.textPrimary,
-                fontSize: 34,
-                fontWeight: '800',
-                letterSpacing: -0.5,
+                marginTop: YanjiSpacing.sm,
                 fontVariant: ['tabular-nums'],
-              }}
-            >
-              {stats ? formatDuration(stats.totalFocusSeconds) : '—'}
-            </Text>
-          </View>
+              },
+            ]}
+          >
+            {stats ? formatDuration(stats.totalFocusSeconds) : '—'}
+          </Text>
 
-          {stats && stats.totalFocusSeconds === 0 ? (
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontSize: 12,
-                marginTop: 8,
-              }}
-            >
-              不足 1 分钟的专注不会被记录
-            </Text>
-          ) : (
-            <Text
-              style={{
-                color: theme.colors.textTertiary,
-                fontSize: 12,
-                marginTop: 8,
-              }}
-            >
-              静心专注，每一分钟都有意义
-            </Text>
-          )}
+          <Text
+            style={[
+              theme.typography.caption,
+              { color: theme.colors.textTertiary, marginTop: 6 },
+            ]}
+          >
+            {stats && stats.totalFocusSeconds === 0
+              ? '不足 1 分钟的专注不会被记录'
+              : '静心专注，每一分钟都有意义'}
+          </Text>
+
+          <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
+
+          <View
+            style={{
+              flexDirection: 'row',
+              marginTop: YanjiSpacing.md,
+            }}
+          >
+            <Stat label="任务" value={`${completed}/${totalTasks}`} />
+            <Stat label="心得" value={`${notesCount} 篇`} />
+          </View>
         </YanjiCard>
 
-        {/* Layer 2 — Primary Action CTA Button */}
+        {/* The one primary action */}
         <View style={{ marginTop: YanjiSpacing.lg }}>
-          <YanjiPrimaryButton
+          <YanjiBreathButton
             icon={primaryAction.icon}
             label={primaryAction.label}
             onPress={primaryAction.onPress}
           />
         </View>
 
-        {/* Layer 3 — Today's Tasks */}
+        {/* Today's tasks — one sheet, hairline-separated rows, not a card wall */}
         <YanjiSectionHeader
           title="今日任务"
           rightAction={
@@ -320,11 +300,15 @@ export function TodayScreen(): React.JSX.Element {
                 alignItems: 'center',
                 backgroundColor: theme.colors.bgSurface,
                 paddingVertical: 5,
-                paddingHorizontal: 12,
+                paddingLeft: 10,
+                paddingRight: 12,
                 borderRadius: YanjiRadius.full,
                 opacity: pressed ? 0.7 : 1,
               })}
             >
+              <View style={{ marginRight: 4 }}>
+                <YanjiIcon name="add" size={13} color={theme.colors.accentPrimary} />
+              </View>
               <Text
                 style={{
                   color: theme.colors.accentPrimary,
@@ -332,165 +316,175 @@ export function TodayScreen(): React.JSX.Element {
                   fontWeight: '600',
                 }}
               >
-                ＋ 添加
+                添加
               </Text>
             </Pressable>
           }
         />
 
         {tasks.length === 0 ? (
-          <YanjiCard variant="elevated" style={{ marginTop: 2, paddingVertical: 10 }}>
+          <YanjiCard variant="sunken">
             <YanjiEmptyState
-              icon="🌱"
+              icon="sprout"
               title="今天还没有任务"
               hint="可以直接开始专注，不必先做计划"
             />
           </YanjiCard>
         ) : (
-          <View style={{ marginTop: 2 }}>
-            {tasks.map(task => {
+          <YanjiCard variant="default" style={{ padding: 0, overflow: 'hidden' }}>
+            {tasks.map((task, index) => {
               const confirmingDelete = confirmDeleteId === task.id;
               return (
-                <YanjiCard
-                  key={task.id}
-                  variant="elevated"
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: 10,
-                    paddingVertical: 14,
-                    paddingHorizontal: 16,
-                  }}
-                >
-                  <Pressable
-                    onPress={() => void toggleTask(task)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: task.completed }}
+                <View key={task.id}>
+                  {index > 0 ? <YanjiHairline inset={16} /> : null}
+                  <View
                     style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: YanjiRadius.xs,
-                      borderWidth: 1.5,
-                      borderColor: task.completed
-                        ? theme.colors.accentPrimary
-                        : theme.colors.fieldBorder,
-                      backgroundColor: task.completed
-                        ? theme.colors.accentPrimary
-                        : 'transparent',
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: YanjiSpacing.md,
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
                     }}
                   >
-                    {task.completed ? (
-                      <Text
-                        style={{
-                          color: '#FFFFFF',
-                          fontSize: 13,
-                          fontWeight: '800',
-                          lineHeight: 14,
-                        }}
-                      >
-                        ✓
-                      </Text>
-                    ) : null}
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => startFromTask(task)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`继续学习 · ${task.title}`}
-                    style={{ flex: 1 }}
-                  >
-                    <Text
+                    <Pressable
+                      onPress={() => void toggleTask(task)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: task.completed }}
+                      hitSlop={10}
                       style={{
-                        color: task.completed
-                          ? theme.colors.textTertiary
-                          : theme.colors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: task.completed ? '400' : '500',
-                        textDecorationLine: task.completed ? 'line-through' : 'none',
+                        width: 22,
+                        height: 22,
+                        borderRadius: YanjiRadius.xs,
+                        borderWidth: 1.5,
+                        borderColor: task.completed
+                          ? theme.colors.accentPrimary
+                          : theme.colors.fieldBorder,
+                        backgroundColor: task.completed
+                          ? theme.colors.accentPrimary
+                          : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: YanjiSpacing.md,
                       }}
                     >
-                      {task.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                      <View
+                      {task.completed ? (
+                        <YanjiIcon
+                          name="check"
+                          size={13}
+                          color={theme.colors.onAccent}
+                          strokeWidth={2.5}
+                        />
+                      ) : null}
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => startFromTask(task)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`继续学习 · ${task.title}`}
+                      style={{ flex: 1 }}
+                    >
+                      <Text
                         style={{
-                          backgroundColor: theme.colors.accentSoft,
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: YanjiRadius.xs,
-                          marginRight: 6,
+                          color: task.completed
+                            ? theme.colors.textTertiary
+                            : theme.colors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: task.completed ? '400' : '500',
+                          textDecorationLine: task.completed ? 'line-through' : 'none',
                         }}
                       >
-                        <Text
+                        {task.title}
+                      </Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginTop: 5,
+                        }}
+                      >
+                        <View
                           style={{
-                            color: theme.colors.accentPrimary,
-                            fontSize: 11,
-                            fontWeight: '600',
+                            backgroundColor: theme.colors.accentSoft,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: YanjiRadius.xs,
+                            marginRight: 6,
                           }}
                         >
-                          {task.subjectName}
+                          <Text
+                            style={{
+                              color: theme.colors.accentPrimary,
+                              fontSize: 11,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {task.subjectName}
+                          </Text>
+                        </View>
+                        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>
+                          计划 {task.plannedMinutes} 分钟
+                          {task.actualMinutes > 0
+                            ? ` · 已专注 ${task.actualMinutes} 分钟`
+                            : ''}
                         </Text>
                       </View>
-                      <Text
-                        style={{ color: theme.colors.textTertiary, fontSize: 12 }}
-                      >
-                        计划 {task.plannedMinutes} 分钟
-                        {task.actualMinutes > 0 ? ` · 已专注 ${task.actualMinutes} 分钟` : ''}
-                      </Text>
-                    </View>
-                  </Pressable>
-
-                  {confirmingDelete ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Pressable
-                        onPress={() => void deleteTask(task.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`确认删除 · ${task.title}`}
-                        style={{ padding: 6 }}
-                      >
-                        <Text style={{ color: theme.colors.danger, fontSize: 13, fontWeight: '600' }}>
-                          删除
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setConfirmDeleteId(null)}
-                        accessibilityRole="button"
-                        accessibilityLabel="取消删除"
-                        style={{ padding: 6 }}
-                      >
-                        <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                          取消
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      onPress={() => setConfirmDeleteId(task.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`删除任务 · ${task.title}`}
-                      style={{ padding: 6, marginLeft: YanjiSpacing.sm }}
-                    >
-                      <Text style={{ color: theme.colors.textTertiary, fontSize: 16 }}>✕</Text>
                     </Pressable>
-                  )}
-                </YanjiCard>
+
+                    {confirmingDelete ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Pressable
+                          onPress={() => void deleteTask(task.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`确认删除 · ${task.title}`}
+                          hitSlop={8}
+                          style={{ paddingVertical: 6, paddingLeft: 8 }}
+                        >
+                          <Text
+                            style={{
+                              color: theme.colors.danger,
+                              fontSize: 13,
+                              fontWeight: '600',
+                            }}
+                          >
+                            删除
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setConfirmDeleteId(null)}
+                          accessibilityRole="button"
+                          accessibilityLabel="取消删除"
+                          hitSlop={8}
+                          style={{ paddingVertical: 6, paddingLeft: 8 }}
+                        >
+                          <Text
+                            style={{ color: theme.colors.textSecondary, fontSize: 13 }}
+                          >
+                            取消
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <YanjiIconButton
+                        icon="delete"
+                        accessibilityLabel={`删除任务 · ${task.title}`}
+                        onPress={() => setConfirmDeleteId(task.id)}
+                        iconSize={16}
+                      />
+                    )}
+                  </View>
+                </View>
               );
             })}
-          </View>
+          </YanjiCard>
         )}
 
-        {/* Layer 4 — Record Moment Entry Quick Card */}
+        {/* Record Moment entry */}
         <YanjiCard
           style={{
             marginTop: YanjiSpacing.lg,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
             paddingVertical: 14,
-            paddingHorizontal: 18,
+            paddingHorizontal: 16,
           }}
         >
           <Pressable
@@ -499,8 +493,20 @@ export function TodayScreen(): React.JSX.Element {
             accessibilityLabel="记录此刻"
             style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
           >
-            <Text style={{ fontSize: 18, marginRight: 12 }}>✍️</Text>
-            <View>
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: YanjiRadius.full,
+                backgroundColor: theme.colors.accentSoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: YanjiSpacing.md,
+              }}
+            >
+              <YanjiIcon name="compose" size={17} color={theme.colors.accentPrimary} />
+            </View>
+            <View style={{ flex: 1 }}>
               <Text
                 style={{
                   color: theme.colors.textPrimary,
@@ -524,6 +530,8 @@ export function TodayScreen(): React.JSX.Element {
 
           <Pressable
             onPress={() => setRecordOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="写心得"
             style={({ pressed }) => ({
               backgroundColor: theme.colors.accentSoft,
               paddingVertical: 6,
@@ -558,6 +566,29 @@ export function TodayScreen(): React.JSX.Element {
         onClose={closeTaskEditor}
         onSaved={() => void refresh()}
       />
+    </View>
+  );
+}
+
+/** Two-up tally strip inside the hero sheet. */
+function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
+  const theme = useYanjiTheme();
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={[theme.typography.label, { color: theme.colors.textTertiary }]}>
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontSize: 17,
+          fontWeight: '600',
+          marginTop: 2,
+          fontVariant: ['tabular-nums'],
+        }}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
