@@ -82,7 +82,7 @@
 3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
 4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
 5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 设计红线**：`ui/` 层 0 容忍裸 `Color(0x...)` 字面量与静态亮色 Token；**同样 0 容忍裸 `RoundedCornerShape(<N>.dp)` 圆角字面量**——产品级圆角一律引用 `theme/Radius.kt` 的 `YanjiRadius` 语义 token，确属局部几何（图表轨道、进度条端头、无同值 token 的紧凑控件）才可在行尾写 `// token-exempt: <原因>`；暗色背景用 Midnight Blue 系列，**禁止纯黑 `#000000`**；**卡片零边框**：一切卡片容器（`YanjiCard` / `YanjiGroupedCard` / 同级 `Surface` 槽位）一律不设 `BorderStroke`，**深浅色均无描边**，层级只靠表面明度递进与字号字重表达（输入框 / 按钮等需要可辨识边界的控件不受此条约束）；`Modifier.hazeEffect` 必须显式设 `backgroundColor` 垫底（否则真机启动崩溃）。
+6. **UI 工程底线与设计自由**：品牌气质和页面信息架构参考 `DESIGN.md`，但不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。现有 Compose `Modifier.hazeEffect` 若仍被使用，必须显式设置 `backgroundColor` 以规避已知崩溃；此条是技术安全约束，不是材质设计禁令。
 7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
@@ -112,7 +112,7 @@
 | Room schema 版本与库版本 | `app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt`、`gradle/libs.versions.toml` | 同上由 CI 守卫 |
 | 依赖库版本（Kotlin / Compose BOM / Room / KSP 等） | `gradle/libs.versions.toml` | 统一走 Version Catalog |
 | 包名 / namespace / 主入口 Activity | `app/build.gradle.kts`、`app/src/main/AndroidManifest.xml` | — |
-| 设计 Token 颜色数值 | `app/src/main/java/com/example/yanji/theme/**` | 只引用语义 Token 名，不复制 Hex |
+| 当前 React Native 设计 Token | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx` | 本轮视觉重构允许设计评审后修改，并同步更新相关测试；Kotlin 原生 UI 仍参考其原生主题 |
 | 设备网络参数（序列号 / IP / 端口） | mDNS 动态广播发现，或 `$ANDROID_SERIAL` | 动态过滤 `_adb-tls-connect` |
 | 废弃功能（`QuickStartPreset`）行为 | `docs/adr/0001-retain-quick-start-compatibility-tombstone.md` | 兼容墓碑，禁止运行时读写 |
 
@@ -133,7 +133,7 @@ Level 0  机器执行守卫与代码现状（最高权威）
 Level 1  Agent 核心指南 —— AGENTS.md（本文）
 Level 2  架构决策记录 —— docs/adr/**（分歧时无条件服从 ADR）、docs/audits/**
 Level 3  项目门面与验证事实 —— README.md（受 check-project-facts.sh 保护的字段）
-Level 4  设计系统活体代码 —— app/src/main/java/.../theme/*.kt 优先于 DESIGN.md / FrontEnd.md / docs/design/
+Level 4  当前运行 UI 的设计 Token 与组件代码 —— `src/theme/**`、`src/components/**`、`src/screens/**`；`DESIGN.md` 提供可迭代的创作方向，历史 Compose 主题仅作迁移参考
 Level 5  长期沉淀事实 —— .workbuddy/memory/MEMORY.md（经验证的环境与平台坑）
 Level 6  历史阶段性留档（仅供回溯，禁止作为改动依据）—— 开发手册/**、历史 Prompt 模板、旧重构报告
 ```
@@ -253,7 +253,7 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 | `README.md` | 产品 / 架构 / 构建门禁门面；`project-facts` 由 CI 校验 | 事实来源 |
 | `docs/adr/**` | 架构决策记录（ADR） | **决策分歧时以 ADR 为准** |
 | `docs/audits/**` | 安全 / CI / 后端审计报告 | 历史证据 |
-| `docs/design/**`、`DESIGN.md`、`FrontEnd.md` | 设计系统与前端规范 | UI 参考（注意：暗色口径以活体 theme 代码为准） |
+| `DESIGN.md`、`docs/design/**`、`FrontEnd.md` | 设计与前端资料 | **以新版 `DESIGN.md` 为创作方向，其他旧版文档仅供回溯，不可将其固定参数当作新 UI 红线** |
 | `docs/migration/**` | 仓库加固 / 迁移计划 | 规划参考 |
 | `.workbuddy/memory/MEMORY.md` | 长期沉淀的环境与平台坑 | 经验事实（Level 5） |
 | `开发手册/**` | 阶段性重构报告、技术栈、架构状态 | **历史留档（Level 6，禁止作为改动依据）**；`技术栈.md` / `架构与能力状态.md` 可能仍在 v11 阶段，以代码与 `gradle/libs.versions.toml` 为准 |
@@ -265,4 +265,4 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 1. **唯一入口**：本文是仓库主要的 Agent 操作指南与工程规范；其他开发手册与本文冲突时以本文（除代码与 ADR 外）为准。
 2. **修订原则**：只保留清晰可落地的规范与原则，不堆砌冗余报告；易漂移的事实一律改为引用式（§四）。
-3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、严禁自行截屏验证原则、严禁改动设备系统深浅色模式、卡片零边框（深浅色均无描边）、提交 / 忽略与 Git 推送纪律。
+3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、严禁自行截屏验证原则、严禁改动设备系统深浅色模式、必要的数据与计时安全、提交 / 忽略与 Git 推送纪律。**不要将旧卡片风格、固定配色、零边框或历史圆角规格升级为不可变规范**。
