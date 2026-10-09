@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 21
+    private val CURRENT_VERSION = 22
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -189,7 +189,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_17_18,
         YanjiDatabase.MIGRATION_18_19,
         YanjiDatabase.MIGRATION_19_20,
-        YanjiDatabase.MIGRATION_20_21
+        YanjiDatabase.MIGRATION_20_21,
+        YanjiDatabase.MIGRATION_21_22
     )
 
     /**
@@ -1112,6 +1113,54 @@ class YanjiMigrationTest {
             if (sessionId == null) statement.bindNull(6) else statement.bindText(6, sessionId)
             statement.step()
         }
+    }
+
+    // ---------------------------------------------------------------- 21 -> 22 学科换色
+
+    /**
+     * 21→22 只重写「仍是旧默认色」的默认学科行。
+     *
+     * 两条不能让步的边界：用户自己改过的颜色、以及用户自建学科的颜色，都是用户产生的
+     * 数据，迁移一律不碰——所以守卫写在 SQL 里（`AND colorHex = 旧默认色`），而不是
+     * 迁移后在 Kotlin 里比对。
+     */
+    @Test
+    fun migrate21To22_recolorsDefaultSubjectsButNeverUserChoices() {
+        val db21 = helper.createDatabase(21)
+        db21.prepare(
+            "INSERT INTO subjects (id, name, colorHex, sortOrder, enabled, parentId) VALUES " +
+                "('math_linear','线性代数','#4C7BE8',12,1,'math')," +
+                "('major_os','操作系统','#B8ADFC',24,1,'major')," +
+                "('politics','政治','#E67E22',4,1,NULL)"
+        ).use { it.step() }
+        // 用户把英语改成了自己的颜色。
+        db21.prepare(
+            "INSERT INTO subjects (id, name, colorHex, sortOrder, enabled, parentId) VALUES " +
+                "('english','英语一','#111111',3,1,NULL)"
+        ).use { it.step() }
+        // 用户自建的学科。
+        db21.prepare(
+            "INSERT INTO subjects (id, name, colorHex, sortOrder, enabled, parentId) VALUES " +
+                "('custom-x','自学科','#222222',99,1,NULL)"
+        ).use { it.step() }
+        db21.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(21))
+
+        assertEquals("#0891B2", db.textValue("SELECT colorHex FROM subjects WHERE id='math_linear'"))
+        assertEquals("#C026D3", db.textValue("SELECT colorHex FROM subjects WHERE id='major_os'"))
+        assertEquals("#DC2626", db.textValue("SELECT colorHex FROM subjects WHERE id='politics'"))
+        assertEquals(
+            "用户自己改过的颜色必须原样保留",
+            "#111111",
+            db.textValue("SELECT colorHex FROM subjects WHERE id='english'")
+        )
+        assertEquals(
+            "自定义学科一行都不碰",
+            "#222222",
+            db.textValue("SELECT colorHex FROM subjects WHERE id='custom-x'")
+        )
+        db.close()
     }
 
     private fun SQLiteConnection.intValue(sql: String): Int =

@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -631,6 +631,46 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v21 → v22：默认学科换用可区分的调色板。
+         *
+         * 为什么必须走迁移而不是只改 `SubjectCatalog.defaults`：学科色持久化在
+         * `subjects` 表里，目录只是它的内存镜像——只改默认值会让存量安装永远停在旧色上。
+         * 而旧色里同一家族的子学科只差几个亮度阶（#8B7CF6 / #9A8CFA / #AA9DFB），
+         * 在按科目堆叠的柱状图细段里会糊成一片，回顾页读不出「哪段是哪门课」。
+         *
+         * **只重写仍是旧默认色的行**（`WHERE id = ? AND colorHex = ?`）：用户自己改过的
+         * 颜色是他产生的数据，迁移无权覆盖；自定义学科同理，一行都不碰。
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(connection: SQLiteConnection) {
+                val recolor = listOf(
+                    Triple("math_advanced", "#2453BF", "#7C3AED"),
+                    Triple("math_linear", "#4C7BE8", "#0891B2"),
+                    Triple("math_probability", "#678DEB", "#DB2777"),
+                    Triple("major", "#8B7CF6", "#EA580C"),
+                    Triple("major_organization", "#725FD8", "#4D7C0F"),
+                    Triple("major_data_structure", "#9A8CFA", "#0D9488"),
+                    Triple("major_network", "#AA9DFB", "#A16207"),
+                    Triple("major_os", "#B8ADFC", "#C026D3"),
+                    Triple("english", "#2F9E6D", "#16A34A"),
+                    Triple("politics", "#E67E22", "#DC2626")
+                )
+                val statement = connection.prepare(
+                    "UPDATE subjects SET colorHex = ? WHERE id = ? AND colorHex = ?"
+                )
+                statement.use { stmt ->
+                    for ((id, oldColor, newColor) in recolor) {
+                        stmt.bindText(1, newColor)
+                        stmt.bindText(2, id)
+                        stmt.bindText(3, oldColor)
+                        stmt.step()
+                        stmt.reset()
+                    }
+                }
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -657,7 +697,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_17_18,
             MIGRATION_18_19,
             MIGRATION_19_20,
-            MIGRATION_20_21
+            MIGRATION_20_21,
+            MIGRATION_21_22
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

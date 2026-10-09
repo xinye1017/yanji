@@ -146,25 +146,31 @@ object SubjectCatalog {
     /** 统计/反查未命中时的兜底中性灰色彩。 */
     const val DEFAULT_FALLBACK_COLOR = "#667085"
 
-    /** 顶级学科创建时的候选调色板（按次序分配，避免相邻学科重色）。 */
+    /**
+     * 顶级学科创建时的候选调色板（按次序分配，避免相邻学科重色）。
+     *
+     * 选色规则（v22 迁移时统一重算过）：任意两色的 CIELAB 色差 ≥ 23，且对浅色卡片
+     * （#FFFFFF）与深色卡片（#151B28）的非文本对比度都 ≥ 3:1。同色相族的浅色渐变
+     * 在堆叠柱的细段里会糊成一片，所以这里不再按「家族色」派生子学科颜色。
+     */
     val CATEGORY_PALETTE: List<String> = listOf(
-        "#356AE6", "#8B7CF6", "#2F9E6D", "#E67E22",
-        "#B8426B", "#3B78B8", "#A95822", "#2F7F55"
+        "#356AE6", "#EA580C", "#16A34A", "#DB2777",
+        "#0D9488", "#7C3AED", "#A16207", "#C026D3"
     )
 
     /** 新装 / 迁移时写入的默认学科，同时也是「恢复默认」的数据源。 */
     val defaults: List<Subject> = listOf(
         Subject("math", "数学一", "#356AE6", 1),
-        Subject("math_advanced", "高等数学", "#2453BF", 11, parentId = "math"),
-        Subject("math_linear", "线性代数", "#4C7BE8", 12, parentId = "math"),
-        Subject("math_probability", "概率论", "#678DEB", 13, parentId = "math"),
-        Subject("major", "408专业课", "#8B7CF6", 2),
-        Subject("major_organization", "计算机组成原理", "#725FD8", 21, parentId = "major"),
-        Subject("major_data_structure", "数据结构", "#9A8CFA", 22, parentId = "major"),
-        Subject("major_network", "计算机网络", "#AA9DFB", 23, parentId = "major"),
-        Subject("major_os", "操作系统", "#B8ADFC", 24, parentId = "major"),
-        Subject("english", "英语一", "#2F9E6D", 3),
-        Subject("politics", "政治", "#E67E22", 4),
+        Subject("math_advanced", "高等数学", "#7C3AED", 11, parentId = "math"),
+        Subject("math_linear", "线性代数", "#0891B2", 12, parentId = "math"),
+        Subject("math_probability", "概率论", "#DB2777", 13, parentId = "math"),
+        Subject("major", "408专业课", "#EA580C", 2),
+        Subject("major_organization", "计算机组成原理", "#4D7C0F", 21, parentId = "major"),
+        Subject("major_data_structure", "数据结构", "#0D9488", 22, parentId = "major"),
+        Subject("major_network", "计算机网络", "#A16207", 23, parentId = "major"),
+        Subject("major_os", "操作系统", "#C026D3", 24, parentId = "major"),
+        Subject("english", "英语一", "#16A34A", 3),
+        Subject("politics", "政治", "#DC2626", 4),
         Subject("other", "其他", "#667085", 5)
     )
 
