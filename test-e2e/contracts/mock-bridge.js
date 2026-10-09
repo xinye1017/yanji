@@ -49,8 +49,8 @@ export class MockYanjiBridge {
       isDark: true, // defaults to dark (Midnight Blue) for quiet focus
     };
 
-    // Simulated Monotonic Clock
-    this.virtualClockMs = Date.now();
+    // Simulated Monotonic Clock (deterministic test anchor date)
+    this.virtualClockMs = initialData.virtualClockMs || new Date('2026-10-08T12:00:00Z').getTime();
   }
 
   // --- Monotonic Physical Clock Helper ---

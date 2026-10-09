@@ -118,7 +118,7 @@ export function registerM2Tests() {
       bridge.advanceTime(90 * 60); // 90 minutes of unbounded focus
       await bridge.completeTimer();
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date(bridge.virtualClockMs).toISOString().split('T')[0];
       const stats = await bridge.getTodayStats(today);
       assertEqual(
         stats.totalFocusSeconds,
