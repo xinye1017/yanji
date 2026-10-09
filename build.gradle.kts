@@ -44,6 +44,40 @@ project(":app").extra.set("REACT_NATIVE_NODE_MODULES_DIR", reactNativeDir)
 // 也避开 AGP 9.0.1「仅测试到 compileSdk 36.1」的告警。各库通过 rootProject.ext 读该值。
 extra.set("compileSdkVersion", 36)
 
+/*
+ * NDK 版本——全工程唯一来源。
+ *
+ * 这里必须是单一来源：node_modules 下的 RN 原生库（reanimated / worklets / svg /
+ * safe-area-context）是独立的 Gradle library 工程，读不到 :app 的 android.ndkVersion，
+ * 各自落到 AGP 默认值「已安装的最新 NDK」。本机同时装着 NDK 27.1 与 28.2，这些库便用
+ * 28.2 编译，而 react-android 0.87.1 的 AAR 自带旧 NDK 产物的 libc++_shared.so
+ * （实测导出 2336 个符号，与 NDK 27.1 的完全等价，比 28.2 少 4 个）。
+ *
+ * app/build.gradle.kts 的 packaging.jniLibs.pickFirsts 里有 libc++_shared.so 一项，合并时
+ * 静默保留 AAR 那份旧的、丢掉 28.2 那份新的。运行期 dlopen libworklets.so 于是找不到
+ * NDK 28.2 才导出的 __cxa_init_primary_exception，抛 UnsatisfiedLinkError，被 SoLoader
+ * 的恢复流程包装成 SoLoaderDSONotFoundError，表象是「一点击就闪退」。
+ *
+ * 统一到 27.1 后，各原生库只引用 NDK 27.1 libc++ 的符号，而 AAR 那份全都提供。
+ * :app 也从这里读同一个值，避免两处字面量漂移后再次静默错配。
+ */
+val yanjiNdkVersion = "27.1.12297006"
+extra.set("yanjiNdkVersion", yanjiNdkVersion)
+
+// :app 用 com.android.application，其余 RN 原生库用 com.android.library，两类都要压。
+// 回调在各库的 plugins {} 求值时就触发，早于它们自己的 android {} 块，因此不会被覆盖
+// （reanimated / worklets / svg / safe-area-context 本身都没有声明 ndkVersion）。
+// 走 Groovy 动态派发而非强类型 extensions.configure<LibraryExtension>：AGP 9 会给扩展对象
+// 套一层生成的装饰类，它不实现 com.android.build.gradle.LibraryExtension，强类型转换会直接
+// ClassCastException。属性名与 :app 的 android.ndkVersion 是同一个。
+subprojects {
+  plugins.withId("com.android.library") {
+    extensions.getByName("android").withGroovyBuilder {
+      setProperty("ndkVersion", yanjiNdkVersion)
+    }
+  }
+}
+
 // RNGP 在给 :app 应用 com.facebook.react 时，会通过 configureDependencies() 给所有工程的
 // 所有 configuration 装上一组依赖替换与版本强制（见 node_modules/@react-native/gradle-plugin/
 // react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/DependencyUtils.kt）。

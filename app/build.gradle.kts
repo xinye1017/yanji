@@ -25,7 +25,10 @@ require(!hasAnyReleaseSigningValue || hasCompleteReleaseSigningConfig) {
 android {
     namespace = "com.example.yanji"
     compileSdk = 36
-    ndkVersion = "27.1.12297006"
+    // 与根 build.gradle.kts 的 yanjiNdkVersion 同源：node_modules 下的 RN 原生库读不到
+    // 这里的值，必须由根工程统一下发，否则它们会各自落到「已安装的最新 NDK」而与
+    // react-android AAR 自带的 libc++_shared.so 符号集错配，运行期 dlopen 崩溃。
+    ndkVersion = rootProject.extra["yanjiNdkVersion"] as String
     defaultConfig {
         applicationId = "com.example.yanji"
         minSdk = 24
