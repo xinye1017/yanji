@@ -327,15 +327,15 @@ export class MockYanjiBridge {
    * 科目归一刻意**不**实现：mock 按记录自身的 `subjectId` / `subjectName` 分桶，
    * 它要锁的是「排序 / 截断 / 窗口」三条口径，不是 Kotlin `SubjectCatalog` 的分类学。
    */
-  async getReviewOverview(scope = 'ROLLING_7', periodsBack = 0) {
+  async getReviewOverview(scope = 'ROLLING_7', periodsBack = 0, anchorDate = null) {
     if (!REVIEW_SCOPES.includes(scope)) {
       throw new Error(`Invalid review scope: ${scope}`);
     }
     const back = Number.isFinite(periodsBack) ? Math.max(0, Math.floor(periodsBack)) : 0;
-    // 滚动窗口不看 periodsBack：终点永远是今天，不存在「往前第几个窗口」。
+    // 滚动窗口不看 periodsBack：终点为 anchorDate（或今天），不存在「往前第几个窗口」。
     const resolvedBack = scope === 'ROLLING_7' || scope === 'ROLLING_30' ? 0 : back;
 
-    const dates = this._reviewWindowDates(scope, resolvedBack);
+    const dates = this._reviewWindowDates(scope, resolvedBack, anchorDate);
     const todayIso = this._isoDateAt(this.virtualClockMs, 0);
 
     const daySecondsByDate = new Map(dates.map(d => [d, 0]));
@@ -448,18 +448,24 @@ export class MockYanjiBridge {
   }
 
   /** 窗口内的本地日历日期键，升序、唯一。 */
-  _reviewWindowDates(scope, periodsBack) {
+  _reviewWindowDates(scope, periodsBack, anchorDate = null) {
+    const anchor = anchorDate
+      ? this._localDateFromIso(anchorDate)
+      : new Date(this.virtualClockMs);
+
     if (scope === 'ROLLING_7' || scope === 'ROLLING_30') {
       const span = scope === 'ROLLING_7' ? 7 : 30;
       const dates = [];
-      for (let i = span - 1; i >= 0; i--) dates.push(this._isoDateAt(this.virtualClockMs, -i));
+      for (let i = span - 1; i >= 0; i--) {
+        dates.push(this._isoOfLocalDate(this._shiftLocalDate(anchor, -i)));
+      }
       return dates;
     }
 
     if (scope === 'CALENDAR_WEEK') {
-      const anchor = this._shiftLocalDate(new Date(this.virtualClockMs), -7 * periodsBack);
-      const weekday = anchor.getDay(); // 0 = 周日
-      const monday = this._shiftLocalDate(anchor, weekday === 0 ? -6 : 1 - weekday);
+      const weekAnchor = this._shiftLocalDate(anchor, -7 * periodsBack);
+      const weekday = weekAnchor.getDay(); // 0 = 周日
+      const monday = this._shiftLocalDate(weekAnchor, weekday === 0 ? -6 : 1 - weekday);
       const dates = [];
       // 周一起 7 天：跨月/跨年都靠本地日历推进，不会漏日也不会多日。
       for (let i = 0; i < 7; i++) dates.push(this._isoOfLocalDate(this._shiftLocalDate(monday, i)));
@@ -468,8 +474,7 @@ export class MockYanjiBridge {
 
     // CALENDAR_MONTH：先落到当月 1 号，再用「下月 0 号」求真实天数
     // （new Date(y, m, 0) 的月份是 0-based，m = 当月 1-based - 1）。
-    const today = new Date(this.virtualClockMs);
-    const firstOfMonth = new Date(today.getFullYear(), today.getMonth() - periodsBack, 1);
+    const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth() - periodsBack, 1);
     const lengthOfMonth = new Date(
       firstOfMonth.getFullYear(),
       firstOfMonth.getMonth() + 1,

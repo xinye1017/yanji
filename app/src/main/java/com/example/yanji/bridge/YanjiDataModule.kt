@@ -273,7 +273,7 @@ class YanjiDataModule(
      * 所有秒 → 分钟的换算只在 [BridgeMappers] 里发生一次：这里交出去的全部是原始秒数。
      */
     @ReactMethod
-    fun getReviewOverview(scope: String, periodsBack: Double, promise: Promise) {
+    fun getReviewOverview(scope: String, periodsBack: Double, anchorDate: String?, promise: Promise) {
         if (scope !in BridgeMappers.REVIEW_SCOPES) {
             promise.reject("E_INVALID_SCOPE", "Unknown review scope: $scope")
             return
@@ -283,7 +283,7 @@ class YanjiDataModule(
             else -> periodsBack.toLong().coerceAtLeast(0L)
         }
         // 窗口在协程外算好：只需要本地日历推进，没有 IO，也就没有挂起语义。
-        val window = reviewWindow(scope, effectivePeriodsBack)
+        val window = reviewWindow(scope, effectivePeriodsBack, anchorDate)
 
         // `scope` 这个形参遮住了协程域，必须写全名，否则下面 launch 的对象是 String。
         this.scope.launch {
@@ -341,30 +341,60 @@ class YanjiDataModule(
 
     /**
      * scope → 窗口。日期键与 DAO 查询区间来自同一套日历推进，二者不会错位。
-     *
-     * 调用方（[getReviewOverview]）已按白名单 reject，第四个分支不可达；
-     * 这里显式抛错而不是给个默认窗口，免得将来有人绕过校验后拿到「最近 7 天」。
+     * 当传入 anchorDate 时，滚动窗口以此日期为终点向前推。
      */
-    private fun reviewWindow(scope: String, periodsBack: Long): ReviewWindow {
-        val today = YanjiTime.today()
+    private fun reviewWindow(scope: String, periodsBack: Long, anchorDate: String? = null): ReviewWindow {
+        val anchorLocalDate = anchorDate?.let { dateStr ->
+            try {
+                java.time.LocalDate.parse(dateStr, YanjiTime.isoDateFormatter)
+            } catch (_: Exception) {
+                null
+            }
+        } ?: YanjiTime.today()
+        val zoneId = java.time.ZoneId.systemDefault()
+
         return when (scope) {
-            BridgeMappers.SCOPE_ROLLING_7 -> ReviewWindow(
-                YanjiTime.lastDaysRange(7L),
-                BridgeMappers.rollingWindowDates(today.minusDays(6L), 7)
-            )
-            BridgeMappers.SCOPE_ROLLING_30 -> ReviewWindow(
-                YanjiTime.lastDaysRange(30L),
-                BridgeMappers.rollingWindowDates(today.minusDays(29L), 30)
-            )
+            BridgeMappers.SCOPE_ROLLING_7 -> {
+                val start = anchorLocalDate.minusDays(6L)
+                val range = com.example.yanji.data.EpochRange(
+                    start.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    anchorLocalDate.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                )
+                ReviewWindow(
+                    range,
+                    BridgeMappers.rollingWindowDates(start, 7)
+                )
+            }
+            BridgeMappers.SCOPE_ROLLING_30 -> {
+                val start = anchorLocalDate.minusDays(29L)
+                val range = com.example.yanji.data.EpochRange(
+                    start.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    anchorLocalDate.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                )
+                ReviewWindow(
+                    range,
+                    BridgeMappers.rollingWindowDates(start, 30)
+                )
+            }
             BridgeMappers.SCOPE_CALENDAR_WEEK -> {
-                val monday = today.minusWeeks(periodsBack)
+                val monday = anchorLocalDate.minusWeeks(periodsBack)
                     .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
-                ReviewWindow(YanjiTime.weekRange(periodsBack), BridgeMappers.rollingWindowDates(monday, 7))
+                val sunday = monday.plusDays(6L)
+                val range = com.example.yanji.data.EpochRange(
+                    monday.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    sunday.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                )
+                ReviewWindow(range, BridgeMappers.rollingWindowDates(monday, 7))
             }
             BridgeMappers.SCOPE_CALENDAR_MONTH -> {
-                val first = today.minusMonths(periodsBack).withDayOfMonth(1)
+                val first = anchorLocalDate.minusMonths(periodsBack).withDayOfMonth(1)
+                val last = first.withDayOfMonth(first.lengthOfMonth())
+                val range = com.example.yanji.data.EpochRange(
+                    first.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    last.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                )
                 ReviewWindow(
-                    YanjiTime.monthRange(periodsBack),
+                    range,
                     BridgeMappers.rollingWindowDates(first, first.lengthOfMonth())
                 )
             }

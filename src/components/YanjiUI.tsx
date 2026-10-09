@@ -622,38 +622,40 @@ export function YanjiEmptyState({
   title,
   hint,
   icon = 'sprout',
+  compact = false,
 }: {
   title: string;
   hint?: string;
   icon?: YanjiIconName;
+  compact?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   return (
     <View
       style={{
-        paddingVertical: YanjiSpacing.xxl + YanjiSpacing.xs,
-        paddingHorizontal: YanjiSpacing.xl,
+        paddingVertical: compact ? YanjiSpacing.md : YanjiSpacing.xxl + YanjiSpacing.xs,
+        paddingHorizontal: YanjiSpacing.lg,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       <View
         style={{
-          width: 48,
-          height: 48,
+          width: compact ? 36 : 48,
+          height: compact ? 36 : 48,
           borderRadius: YanjiRadius.full,
           backgroundColor: theme.colors.bgElevated,
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: YanjiSpacing.md,
+          marginBottom: compact ? YanjiSpacing.xs : YanjiSpacing.md,
         }}
       >
-        <YanjiIcon name={icon} size={22} color={theme.colors.textSecondary} />
+        <YanjiIcon name={icon} size={compact ? 18 : 22} color={theme.colors.textSecondary} />
       </View>
       <Text
         style={{
           color: theme.colors.textPrimary,
-          ...theme.typography.bodyStrong,
+          ...(compact ? theme.typography.label : theme.typography.bodyStrong),
           textAlign: 'center',
         }}
       >
@@ -664,7 +666,7 @@ export function YanjiEmptyState({
           style={{
             color: theme.colors.textTertiary,
             ...theme.typography.caption,
-            marginTop: YanjiSpacing.xs,
+            marginTop: compact ? 2 : YanjiSpacing.xs,
             textAlign: 'center',
           }}
         >

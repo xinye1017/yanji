@@ -351,12 +351,104 @@ export function registerReviewViewLogicTests() {
         dayLabel: String(i + 1),
         isToday: false,
       }));
-      // A 30-day column is ~35px against a 31-day column's ~30px: close enough
-      // that labelling every one of them overlaps the same way.
       assert(
         logic.axisLabels(days).length < 30,
         '30 columns are just as crowded as 31 and must be thinned the same way'
       );
     });
+
+    it('never labels adjacent columns next to today, avoiding overlapping text', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      // Index 9 (10th day) is today, while index 10 would normally hit stride 5 (10 % 5 === 0)
+      const days = Array.from({ length: 31 }, (_, i) => ({
+        date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+        dayLabel: `${i + 1}日`,
+        isToday: i === 9,
+      }));
+      const labelled = logic.axisLabels(days);
+      const labelledDates = new Set(labelled.map(d => d.date));
+      assert(labelledDates.has(days[9].date), 'Today must always be labelled');
+      assert(!labelledDates.has(days[10].date), 'Column adjacent to today must not be labelled');
+      assert(!labelledDates.has(days[8].date), 'Column adjacent to today must not be labelled');
+    });
+  });
+
+  describe('Tier 1: Review view logic — date and average duration formatting', () => {
+    it('formats ISO dates as MM月/DD日 without YY', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      assertEqual(logic.formatMonthDaySlash('2026-10-10'), '10月/10日');
+      assertEqual(logic.formatMonthDaySlash('2026-05-08'), '05月/08日');
+    });
+
+    it('formats daily average duration with per-day suffix', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      assertEqual(logic.formatDailyAverageDuration(0), '0 分钟/天');
+      assertEqual(logic.formatDailyAverageDuration(720), '12 分钟/天');
+      assertEqual(logic.formatDailyAverageDuration(3600), '1 小时/天');
+      assertEqual(logic.formatDailyAverageDuration(5400), '1 小时 30 分/天');
+    });
+
+    it('computes pie slices with valid arc coordinates', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+      const slices = [
+        { subjectId: 'math', subjectName: '数学', subjectColor: '#2453BF', minutes: 60, share: 0.6 },
+        { subjectId: 'eng', subjectName: '英语', subjectColor: '#10B981', minutes: 40, share: 0.4 },
+      ];
+      const result = logic.computePieSlices(slices, 50, 30);
+      assertEqual(result.length, 2, 'Must produce 2 slices');
+      assert(result[0].path.startsWith('M '), 'Slice 1 path must be a valid SVG path');
+      assert(result[1].path.startsWith('M '), 'Slice 2 path must be a valid SVG path');
+
+      // Single slice
+      const single = logic.computePieSlices([
+        { subjectId: 'math', subjectName: '数学', subjectColor: '#2453BF', minutes: 60, share: 1.0 },
+      ], 50, 30);
+      assertEqual(single.length, 1);
+      assertEqual(single[0].path, '', 'Single 100% slice uses circle, empty path');
+    });
+
+    it('computes collision-free layout for chart axis labels', async () => {
+      const logic = await import(pathToFileURL(LOGIC_PATH).href);
+
+      // 7-day window
+      const weekDays = Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-10-0${i + 1}`,
+        dayLabel: `10-0${i + 1}`,
+        isToday: i === 6,
+      }));
+      const weekLayout = logic.computeAxisLabelsLayout(weekDays, 340, { labelWidth: 38, gap: 4, minSpacing: 2 });
+      assertEqual(weekLayout.length, 7, 'All 7 days should be laid out on 340px width');
+
+      // Verify no overlaps in weekLayout
+      for (let i = 0; i < weekLayout.length - 1; i++) {
+        assert(
+          weekLayout[i].left + weekLayout[i].width <= weekLayout[i + 1].left + 0.1,
+          `Label ${i} and ${i + 1} must not overlap`
+        );
+      }
+
+      // 30-day window
+      const monthDays = Array.from({ length: 30 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        dayLabel: `09-${String(i + 1).padStart(2, '0')}`,
+        isToday: i === 29,
+      }));
+      const monthLayout = logic.computeAxisLabelsLayout(monthDays, 340, { labelWidth: 38, gap: 4, minSpacing: 2 });
+      assert(monthLayout.length >= 5 && monthLayout.length <= 8, 'Should produce 5-8 thinned labels');
+      assert(monthLayout.some(item => item.isToday), 'Today must be present in layout');
+
+      // Verify no overlaps in monthLayout
+      for (let i = 0; i < monthLayout.length - 1; i++) {
+        assert(
+          monthLayout[i].left + monthLayout[i].width <= monthLayout[i + 1].left + 0.1,
+          `Month label ${i} and ${i + 1} must not overlap`
+        );
+      }
+
+      // Zero width or empty array returns empty
+      assertEqual(logic.computeAxisLabelsLayout([], 340).length, 0);
+      assertEqual(logic.computeAxisLabelsLayout(monthDays, 0).length, 0);
+    });
   });
 }
+

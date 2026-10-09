@@ -159,31 +159,241 @@ export function findTodayColumn<T extends { date: string; isToday: boolean }>(
   return days.find(day => day.isToday) ?? null;
 }
 
+export function formatMonthDaySlash(iso: string): string {
+  const parts = iso.split('-');
+  if (parts.length < 3) return iso;
+  return `${parts[1]}月/${parts[2]}日`;
+}
+
+export function formatDailyAverageDuration(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '0 分钟/天';
+  const minutes = Math.round(totalSeconds / 60);
+  if (minutes <= 0) return totalSeconds > 0 ? '<1 分钟/天' : '0 分钟/天';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours > 0 && rest > 0) return `${hours} 小时 ${rest} 分/天`;
+  if (hours > 0) return `${hours} 小时/天`;
+  return `${rest} 分钟/天`;
+}
+
 /**
  * Which axis labels to draw for a window.
  *
- * A 31-day month splits the chart into ~30px columns on a phone, which cannot
- * hold a「28日」label — rendering all of them produced an unreadable wall of
- * overlapping text. Crowded windows therefore keep every Nth label, but never
- * drop today: an unlabelled column is ambiguous, and the chart's whole job is
- * saying which day held the work.
+ * Prevents adjacent labels from overlapping (such as「10日11日」).
+ * In crowded windows (length > 14), labels are thinned with a stride of 5,
+ * keeping today while suppressing any stride candidate within 1 slot of today.
  */
 export function axisLabels<T extends { date: string; dayLabel: string; isToday: boolean }>(
   days: readonly T[]
 ): T[] {
+  if (days.length <= 14) {
+    return [...days];
+  }
   const stride = axisLabelStride(days.length);
-  return days.filter((day, index) => index % stride === 0 || day.isToday);
+  const todayIndex = days.findIndex(day => day.isToday);
+
+  return days.filter((day, index) => {
+    if (day.isToday) return true;
+    // Suppress regular labels directly adjacent to today to avoid collision
+    if (todayIndex !== -1 && Math.abs(index - todayIndex) < 2) {
+      return false;
+    }
+    return index % stride === 0;
+  });
 }
 
-/**
- * Every Nth label.
- *
- * The threshold is about pixels, not days: on the device's 1256px-wide card a
- * column is ~35px at 30 days and ~30px at 31 — nearly identical, so both need
- * thinning. Weekly windows have ~95px columns and keep every label.
- */
 function axisLabelStride(dayCount: number): number {
   if (dayCount <= 14) return 1;
   if (dayCount <= 20) return 2;
   return 5;
+}
+
+export interface PlacedAxisLabel {
+  date: string;
+  dayLabel: string;
+  isToday: boolean;
+  left: number;
+  width: number;
+}
+
+/**
+ * Computes non-overlapping absolute layout positions for chart axis labels.
+ *
+ * Prevents truncation (such as「09-1」instead of「09-15」) by assigning
+ * a fixed width to each label and ensuring no two labels collide.
+ * Today is always given priority, followed by the start of the window.
+ */
+export function computeAxisLabelsLayout<
+  T extends { date: string; dayLabel: string; isToday: boolean }
+>(
+  days: readonly T[],
+  chartWidth: number,
+  options?: {
+    labelWidth?: number;
+    gap?: number;
+    minSpacing?: number;
+  }
+): PlacedAxisLabel[] {
+  if (days.length === 0 || chartWidth <= 0) return [];
+
+  const labelWidth = options?.labelWidth ?? 38;
+  const gap = options?.gap ?? 4;
+  const minSpacing = options?.minSpacing ?? 4;
+
+  const barWidth = Math.max(2, (chartWidth - gap * (days.length - 1)) / days.length);
+
+  const getClampedLeft = (index: number) => {
+    const barCenterX = index * (barWidth + gap) + barWidth / 2;
+    return Math.max(0, Math.min(chartWidth - labelWidth, barCenterX - labelWidth / 2));
+  };
+
+  const candidateIndices: number[] = [];
+  const todayIndex = days.findIndex(d => d.isToday);
+
+  if (days.length <= 7) {
+    for (let i = 0; i < days.length; i++) {
+      candidateIndices.push(i);
+    }
+  } else {
+    const stride = axisLabelStride(days.length);
+    for (let i = 0; i < days.length; i++) {
+      if (i % stride === 0 || i === days.length - 1) {
+        candidateIndices.push(i);
+      }
+    }
+  }
+
+  const placed: Array<{ index: number; left: number; right: number; item: T }> = [];
+
+  const canPlace = (left: number, right: number) => {
+    return !placed.some(
+      p => left < p.right + minSpacing && right > p.left - minSpacing
+    );
+  };
+
+  // 1. High priority: today
+  if (todayIndex !== -1) {
+    const left = getClampedLeft(todayIndex);
+    placed.push({
+      index: todayIndex,
+      left,
+      right: left + labelWidth,
+      item: days[todayIndex],
+    });
+  }
+
+  // 2. Start of window (index 0)
+  if (candidateIndices.includes(0) && (todayIndex !== 0 || placed.length === 0)) {
+    const left = getClampedLeft(0);
+    const right = left + labelWidth;
+    if (canPlace(left, right)) {
+      placed.push({
+        index: 0,
+        left,
+        right,
+        item: days[0],
+      });
+    }
+  }
+
+  // 3. Remaining candidates
+  for (const idx of candidateIndices) {
+    if (idx === todayIndex || idx === 0) continue;
+    const left = getClampedLeft(idx);
+    const right = left + labelWidth;
+    if (canPlace(left, right)) {
+      placed.push({
+        index: idx,
+        left,
+        right,
+        item: days[idx],
+      });
+    }
+  }
+
+  placed.sort((a, b) => a.index - b.index);
+
+  return placed.map(p => ({
+    date: p.item.date,
+    dayLabel: p.item.dayLabel,
+    isToday: p.item.isToday,
+    left: Math.round(p.left * 10) / 10,
+    width: labelWidth,
+  }));
+}
+
+
+export interface PieSliceData {
+  key: string;
+  label: string;
+  color: string;
+  value: number;
+  share: number;
+  path: string;
+}
+
+export function computePieSlices(
+  slices: ReadonlyArray<{
+    subjectId: string;
+    subjectName: string;
+    subjectColor: string;
+    minutes: number;
+    share: number;
+  }>,
+  radius: number,
+  innerRadius: number = 0,
+  cx: number = radius,
+  cy: number = radius
+): PieSliceData[] {
+  const filtered = slices.filter(s => s.share > 0);
+  if (filtered.length === 0) return [];
+
+  if (filtered.length === 1) {
+    const s = filtered[0];
+    return [
+      {
+        key: s.subjectId,
+        label: s.subjectName,
+        color: s.subjectColor,
+        value: s.minutes,
+        share: s.share,
+        path: '',
+      },
+    ];
+  }
+
+  let currentAngle = -Math.PI / 2;
+  return filtered.map(s => {
+    const angle = s.share * 2 * Math.PI;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + angle;
+    currentAngle = endAngle;
+
+    const x1 = cx + radius * Math.cos(startAngle);
+    const y1 = cy + radius * Math.sin(startAngle);
+    const x2 = cx + radius * Math.cos(endAngle);
+    const y2 = cy + radius * Math.sin(endAngle);
+
+    const largeArcFlag = angle > Math.PI ? 1 : 0;
+
+    let path = '';
+    if (innerRadius > 0) {
+      const ix1 = cx + innerRadius * Math.cos(endAngle);
+      const iy1 = cy + innerRadius * Math.sin(endAngle);
+      const ix2 = cx + innerRadius * Math.cos(startAngle);
+      const iy2 = cy + innerRadius * Math.sin(startAngle);
+      path = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${ix2} ${iy2} Z`;
+    } else {
+      path = `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+    }
+
+    return {
+      key: s.subjectId,
+      label: s.subjectName,
+      color: s.subjectColor,
+      value: s.minutes,
+      share: s.share,
+      path,
+    };
+  });
 }

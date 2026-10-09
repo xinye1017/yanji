@@ -253,7 +253,11 @@ interface YanjiDataModuleNative {
    * `scope` 不在白名单内时原生侧 reject（`E_INVALID_SCOPE`），不做猜测回落。
    * `periodsBack` 只对 `CALENDAR_*` 有意义，滚动窗口强制为 0。
    */
-  getReviewOverview(scope: ReviewScope, periodsBack: number): Promise<ReviewOverview>;
+  getReviewOverview(
+    scope: ReviewScope,
+    periodsBack: number,
+    anchorDate?: string | null
+  ): Promise<ReviewOverview>;
   /**
    * 编辑一条已完成专注的随笔。模考暂不支持（原生 reject `E_UNSUPPORTED`）。
    * 空内容 reject `E_EMPTY_NOTE`；找不到会话 reject `E_SESSION_NOT_FOUND`。
