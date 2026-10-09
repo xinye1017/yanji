@@ -10,11 +10,17 @@
  */
 
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useNavigation, TABS } from './NavigationShell';
 import type { TabKey } from './NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius } from '../theme/tokens';
+
+const TAB_ICONS: Record<string, string> = {
+  today: '☀️',
+  focus: '⏱️',
+  review: '📊',
+};
 
 export function BottomTabBar(): React.JSX.Element | null {
   const theme = useYanjiTheme();
@@ -26,14 +32,16 @@ export function BottomTabBar(): React.JSX.Element | null {
         flexDirection: 'row',
         backgroundColor: theme.colors.bgSurface,
         borderRadius: YanjiRadius.full,
-        marginHorizontal: 24,
-        marginBottom: 12,
-        paddingVertical: 8,
-        // Zero border — hierarchy comes from the surface step alone.
+        marginHorizontal: 28,
+        marginBottom: Platform.OS === 'android' ? 16 : 28,
+        padding: 5,
+        elevation: 4,
+        // Zero border — strictly zero border per design system.
       }}
     >
       {TABS.map(tab => {
         const isActive = tab.key === activeTab;
+        const icon = TAB_ICONS[tab.key];
         return (
           <Pressable
             key={tab.key}
@@ -43,17 +51,32 @@ export function BottomTabBar(): React.JSX.Element | null {
             accessibilityLabel={tab.label}
             style={{
               flex: 1,
+              flexDirection: 'row',
               alignItems: 'center',
-              paddingVertical: 6,
+              justifyContent: 'center',
+              paddingVertical: 10,
+              paddingHorizontal: 12,
               borderRadius: YanjiRadius.full,
               backgroundColor: isActive ? theme.colors.accentSoft : 'transparent',
             }}
           >
+            {icon ? (
+              <Text
+                style={{
+                  fontSize: 14,
+                  marginRight: 6,
+                  opacity: isActive ? 1 : 0.7,
+                }}
+              >
+                {icon}
+              </Text>
+            ) : null}
             <Text
               style={{
-                fontSize: 13,
-                fontWeight: isActive ? '600' : '400',
+                fontSize: 14,
+                fontWeight: isActive ? '700' : '500',
                 color: isActive ? theme.colors.accentPrimary : theme.colors.textSecondary,
+                letterSpacing: 0.2,
               }}
             >
               {tab.label}

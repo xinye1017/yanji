@@ -22,6 +22,7 @@ import {
 } from '../bridge';
 import type { ActiveSessionState, ExamCountdown, StudyTask, TodayStats } from '../bridge';
 import {
+  YanjiBadge,
   YanjiCard,
   YanjiEmptyState,
   YanjiPrimaryButton,
@@ -40,15 +41,6 @@ function todayIso(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-/**
- * Today's focus total, phrased so it never claims more than Room recorded.
- *
- * Sessions shorter than one minute are dropped by the native layer
- * (`TimerStore.MIN_RECORDED_FOCUS_SECONDS`), and `TodayStats` carries no
- * session count, so a zero total cannot distinguish "completed a 40-second
- * session" from "never started". The wording therefore states the recorded
- * fact only and never claims the user did not start.
- */
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -131,14 +123,25 @@ export function TodayScreen(): React.JSX.Element {
   /** One restrained primary action, resolved from real state. */
   const primaryAction = useMemo(() => {
     if (activeSession) {
-      // A session is already running — the only truthful action is to show it.
-      return { label: '继续专注', onPress: () => selectTab('focus') };
+      return {
+        label: '继续专注',
+        icon: '⏱️',
+        onPress: () => selectTab('focus'),
+      };
     }
     const pending = tasks.find(t => !t.completed);
     if (pending) {
-      return { label: `继续学习 · ${pending.title}`, onPress: () => startFromTask(pending) };
+      return {
+        label: `继续学习 · ${pending.title}`,
+        icon: '▶',
+        onPress: () => startFromTask(pending),
+      };
     }
-    return { label: '开始专注', onPress: () => selectTab('focus') };
+    return {
+      label: '开始专注',
+      icon: '▶',
+      onPress: () => selectTab('focus'),
+    };
   }, [activeSession, tasks, selectTab, startFromTask]);
 
   const toggleTask = useCallback(
@@ -166,95 +169,206 @@ export function TodayScreen(): React.JSX.Element {
     [refresh]
   );
 
-  const weekday = useMemo(() => {
+  const formattedDate = useMemo(() => {
     const parsed = new Date(`${date}T00:00:00`);
     const names = ['日', '一', '二', '三', '四', '五', '六'];
-    return `周${names[parsed.getDay()]}`;
+    const month = parsed.getMonth() + 1;
+    const day = parsed.getDate();
+    return `${month}月${day}日 · 星期${names[parsed.getDay()]}`;
   }, [date]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-      <ScrollView contentContainerStyle={{ padding: YanjiSpacing.xl, paddingBottom: 120 }}>
-        {/* Header: date + settings entry (settings is never a tab). */}
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: YanjiSpacing.xl,
+          paddingTop: YanjiSpacing.md,
+          paddingBottom: 120,
+        }}
+      >
+        {/* Header: Greeting, date & subtle settings action button */}
         <View
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 4,
+          }}
         >
           <View>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: 26, fontWeight: '700' }}>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontSize: 30,
+                fontWeight: '800',
+                letterSpacing: -0.5,
+              }}
+            >
               今天
             </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: 2 }}>
-              {date} · {weekday}
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontSize: 13,
+                fontWeight: '500',
+                marginTop: 3,
+              }}
+            >
+              {formattedDate}
             </Text>
           </View>
           <Pressable
             onPress={openSettings}
             accessibilityRole="button"
             accessibilityLabel="设置"
-            style={{ padding: 8 }}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: YanjiRadius.full,
+              backgroundColor: theme.colors.bgSurface,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
           >
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 20 }}>⚙</Text>
+            <Text style={{ fontSize: 18, color: theme.colors.textSecondary }}>⚙️</Text>
           </Pressable>
         </View>
 
-        {/* Layer 1 — today status */}
-        <YanjiCard style={{ marginTop: YanjiSpacing.xl }}>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>今日专注</Text>
-          <Text
+        {/* Layer 1 — Today Hero Status Card with Exam Countdown Chip */}
+        <YanjiCard variant="hero" style={{ marginTop: YanjiSpacing.lg }}>
+          <View
             style={{
-              color: theme.colors.textPrimary,
-              fontSize: 30,
-              fontWeight: '700',
-              marginTop: 4,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
             }}
           >
-            {stats ? formatDuration(stats.totalFocusSeconds) : '—'}
-          </Text>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 13,
+                fontWeight: '600',
+              }}
+            >
+              今日专注
+            </Text>
+            {countdown && countdown.daysRemaining > 0 ? (
+              <YanjiBadge
+                icon="🎯"
+                label={`距考研 ${countdown.daysRemaining} 天`}
+              />
+            ) : null}
+          </View>
+
+          <View style={{ marginTop: 10 }}>
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontSize: 34,
+                fontWeight: '800',
+                letterSpacing: -0.5,
+                fontVariant: ['tabular-nums'],
+              }}
+            >
+              {stats ? formatDuration(stats.totalFocusSeconds) : '—'}
+            </Text>
+          </View>
+
           {stats && stats.totalFocusSeconds === 0 ? (
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: 8 }}>
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontSize: 12,
+                marginTop: 8,
+              }}
+            >
               不足 1 分钟的专注不会被记录
             </Text>
-          ) : null}
-          {countdown && countdown.daysRemaining > 0 ? (
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: 8 }}>
-              距考研还有 {countdown.daysRemaining} 天
+          ) : (
+            <Text
+              style={{
+                color: theme.colors.textTertiary,
+                fontSize: 12,
+                marginTop: 8,
+              }}
+            >
+              静心专注，每一分钟都有意义
             </Text>
-          ) : null}
+          )}
         </YanjiCard>
 
-        {/* Layer 2 — primary action */}
-        <View style={{ marginTop: YanjiSpacing.xl }}>
-          <YanjiPrimaryButton label={primaryAction.label} onPress={primaryAction.onPress} />
+        {/* Layer 2 — Primary Action CTA Button */}
+        <View style={{ marginTop: YanjiSpacing.lg }}>
+          <YanjiPrimaryButton
+            icon={primaryAction.icon}
+            label={primaryAction.label}
+            onPress={primaryAction.onPress}
+          />
         </View>
 
-        {/* Layer 3 — today's tasks */}
-        <YanjiSectionHeader title="今日任务" />
-        <Pressable
-          onPress={openTaskEditor}
-          accessibilityRole="button"
-          accessibilityLabel="添加任务"
-          style={{ marginBottom: YanjiSpacing.sm }}
-        >
-          <Text style={{ color: theme.colors.accentPrimary, fontSize: 14 }}>＋ 添加任务</Text>
-        </Pressable>
+        {/* Layer 3 — Today's Tasks */}
+        <YanjiSectionHeader
+          title="今日任务"
+          rightAction={
+            <Pressable
+              onPress={openTaskEditor}
+              accessibilityRole="button"
+              accessibilityLabel="添加任务"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.colors.bgSurface,
+                paddingVertical: 5,
+                paddingHorizontal: 12,
+                borderRadius: YanjiRadius.full,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: theme.colors.accentPrimary,
+                  fontSize: 13,
+                  fontWeight: '600',
+                }}
+              >
+                ＋ 添加
+              </Text>
+            </Pressable>
+          }
+        />
+
         {tasks.length === 0 ? (
-          <YanjiEmptyState title="今天还没有任务" hint="可以直接开始专注，不必先做计划" />
+          <YanjiCard variant="elevated" style={{ marginTop: 2, paddingVertical: 10 }}>
+            <YanjiEmptyState
+              icon="🌱"
+              title="今天还没有任务"
+              hint="可以直接开始专注，不必先做计划"
+            />
+          </YanjiCard>
         ) : (
-          <View>
+          <View style={{ marginTop: 2 }}>
             {tasks.map(task => {
               const confirmingDelete = confirmDeleteId === task.id;
               return (
-                <View
+                <YanjiCard
                   key={task.id}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  variant="elevated"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                  }}
                 >
                   <Pressable
                     onPress={() => void toggleTask(task)}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: task.completed }}
                     style={{
-                      width: 20,
-                      height: 20,
+                      width: 22,
+                      height: 22,
                       borderRadius: YanjiRadius.xs,
                       borderWidth: 1.5,
                       borderColor: task.completed
@@ -263,9 +377,25 @@ export function TodayScreen(): React.JSX.Element {
                       backgroundColor: task.completed
                         ? theme.colors.accentPrimary
                         : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                       marginRight: YanjiSpacing.md,
                     }}
-                  />
+                  >
+                    {task.completed ? (
+                      <Text
+                        style={{
+                          color: '#FFFFFF',
+                          fontSize: 13,
+                          fontWeight: '800',
+                          lineHeight: 14,
+                        }}
+                      >
+                        ✓
+                      </Text>
+                    ) : null}
+                  </Pressable>
+
                   <Pressable
                     onPress={() => startFromTask(task)}
                     accessibilityRole="button"
@@ -278,18 +408,41 @@ export function TodayScreen(): React.JSX.Element {
                           ? theme.colors.textTertiary
                           : theme.colors.textPrimary,
                         fontSize: 15,
+                        fontWeight: task.completed ? '400' : '500',
                         textDecorationLine: task.completed ? 'line-through' : 'none',
                       }}
                     >
                       {task.title}
                     </Text>
-                    <Text
-                      style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: 2 }}
-                    >
-                      {task.subjectName} · 计划 {task.plannedMinutes} 分钟
-                      {task.actualMinutes > 0 ? ` · 已专注 ${task.actualMinutes} 分钟` : ''}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      <View
+                        style={{
+                          backgroundColor: theme.colors.accentSoft,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: YanjiRadius.xs,
+                          marginRight: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: theme.colors.accentPrimary,
+                            fontSize: 11,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {task.subjectName}
+                        </Text>
+                      </View>
+                      <Text
+                        style={{ color: theme.colors.textTertiary, fontSize: 12 }}
+                      >
+                        计划 {task.plannedMinutes} 分钟
+                        {task.actualMinutes > 0 ? ` · 已专注 ${task.actualMinutes} 分钟` : ''}
+                      </Text>
+                    </View>
                   </Pressable>
+
                   {confirmingDelete ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Pressable
@@ -298,7 +451,9 @@ export function TodayScreen(): React.JSX.Element {
                         accessibilityLabel={`确认删除 · ${task.title}`}
                         style={{ padding: 6 }}
                       >
-                        <Text style={{ color: theme.colors.danger, fontSize: 13 }}>删除</Text>
+                        <Text style={{ color: theme.colors.danger, fontSize: 13, fontWeight: '600' }}>
+                          删除
+                        </Text>
                       </Pressable>
                       <Pressable
                         onPress={() => setConfirmDeleteId(null)}
@@ -321,20 +476,73 @@ export function TodayScreen(): React.JSX.Element {
                       <Text style={{ color: theme.colors.textTertiary, fontSize: 16 }}>✕</Text>
                     </Pressable>
                   )}
-                </View>
+                </YanjiCard>
               );
             })}
           </View>
         )}
 
-        {/* Layer 4 — record moment entry */}
-        <Pressable
-          onPress={() => setRecordOpen(true)}
-          accessibilityRole="button"
-          style={{ marginTop: YanjiSpacing.xl, paddingVertical: YanjiSpacing.md }}
+        {/* Layer 4 — Record Moment Entry Quick Card */}
+        <YanjiCard
+          style={{
+            marginTop: YanjiSpacing.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+          }}
         >
-          <Text style={{ color: theme.colors.accentPrimary, fontSize: 14 }}>＋ 记录此刻</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => setRecordOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="记录此刻"
+            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+          >
+            <Text style={{ fontSize: 18, marginRight: 12 }}>✍️</Text>
+            <View>
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: '600',
+                }}
+              >
+                记录此刻
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+              >
+                随手记下当下的灵感与心得
+              </Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setRecordOpen(true)}
+            style={({ pressed }) => ({
+              backgroundColor: theme.colors.accentSoft,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: YanjiRadius.full,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: theme.colors.accentPrimary,
+                fontSize: 12,
+                fontWeight: '600',
+              }}
+            >
+              写心得
+            </Text>
+          </Pressable>
+        </YanjiCard>
       </ScrollView>
 
       <RecordMomentModal

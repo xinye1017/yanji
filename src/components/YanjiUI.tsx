@@ -19,19 +19,30 @@ import { YanjiRadius } from '../theme/tokens';
 export function YanjiCard({
   children,
   style,
+  variant = 'default',
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
+  variant?: 'default' | 'hero' | 'elevated';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const radius =
+    variant === 'hero'
+      ? YanjiRadius.xxl
+      : variant === 'elevated'
+      ? YanjiRadius.lg
+      : YanjiRadius.xl;
+  const bgColor =
+    variant === 'elevated' ? theme.colors.bgElevated : theme.colors.bgSurface;
+
   return (
     <View
       style={[
         {
-          backgroundColor: theme.colors.bgSurface,
-          borderRadius: YanjiRadius.lg,
-          // Zero border — deliberately no borderWidth / borderColor.
-          padding: 16,
+          backgroundColor: bgColor,
+          borderRadius: radius,
+          // Zero border — strictly zero border per design system.
+          padding: variant === 'hero' ? 22 : 18,
         },
         style,
       ]}
@@ -42,19 +53,83 @@ export function YanjiCard({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiPrimaryButton — restrained single accent action
+// YanjiBadge — restrained micro capsule
+// ---------------------------------------------------------------------------
+
+export function YanjiBadge({
+  label,
+  icon,
+  style,
+}: {
+  label: string;
+  icon?: string;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  return (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: theme.colors.accentSoft,
+          paddingVertical: 4,
+          paddingHorizontal: 10,
+          borderRadius: YanjiRadius.full,
+          alignSelf: 'flex-start',
+        },
+        style,
+      ]}
+    >
+      {icon ? (
+        <Text style={{ fontSize: 12, marginRight: 4 }}>{icon}</Text>
+      ) : null}
+      <Text
+        style={{
+          color: theme.colors.accentPrimary,
+          fontSize: 12,
+          fontWeight: '600',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiPrimaryButton — restrained single accent action with tactile feel
 // ---------------------------------------------------------------------------
 
 export function YanjiPrimaryButton({
   label,
+  icon,
   onPress,
   disabled = false,
+  variant = 'primary',
 }: {
   label: string;
+  icon?: string;
   onPress: () => void;
   disabled?: boolean;
+  variant?: 'primary' | 'secondary' | 'danger';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+
+  const getBgColor = () => {
+    if (disabled) return theme.colors.bgElevated;
+    if (variant === 'secondary') return theme.colors.bgElevated;
+    if (variant === 'danger') return theme.colors.danger;
+    return theme.colors.accentPrimary;
+  };
+
+  const getTextColor = () => {
+    if (disabled) return theme.colors.textDisabled;
+    if (variant === 'secondary') return theme.colors.textPrimary;
+    if (variant === 'danger') return '#FFFFFF';
+    return theme.colors.onAccent;
+  };
+
   return (
     <Pressable
       onPress={onPress}
@@ -62,21 +137,34 @@ export function YanjiPrimaryButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => ({
-        backgroundColor: disabled
-          ? theme.colors.bgElevated
-          : theme.colors.accentPrimary,
-        borderRadius: YanjiRadius.md,
-        paddingVertical: 14,
+        backgroundColor: getBgColor(),
+        borderRadius: YanjiRadius.xl,
+        paddingVertical: 15,
         paddingHorizontal: 24,
+        flexDirection: 'row',
         alignItems: 'center',
-        opacity: pressed ? 0.85 : 1,
+        justifyContent: 'center',
+        opacity: pressed ? 0.88 : 1,
+        transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
     >
+      {icon ? (
+        <Text
+          style={{
+            fontSize: 15,
+            color: getTextColor(),
+            marginRight: 8,
+          }}
+        >
+          {icon}
+        </Text>
+      ) : null}
       <Text
         style={{
-          color: disabled ? theme.colors.textDisabled : theme.colors.onAccent,
+          color: getTextColor(),
           fontSize: 16,
           fontWeight: '600',
+          letterSpacing: 0.3,
         }}
       >
         {label}
@@ -86,24 +174,61 @@ export function YanjiPrimaryButton({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiEmptyState — quiet, factual empty state (no fake data, no nudging)
+// YanjiEmptyState — quiet, factual empty state with delicate illustration
 // ---------------------------------------------------------------------------
 
 export function YanjiEmptyState({
   title,
   hint,
+  icon = '🌱',
 }: {
   title: string;
   hint?: string;
+  icon?: string;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   return (
-    <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-      <Text style={{ color: theme.colors.textSecondary, fontSize: 15, fontWeight: '600' }}>
+    <View
+      style={{
+        paddingVertical: 36,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: YanjiRadius.full,
+          backgroundColor: theme.colors.bgElevated,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 12,
+        }}
+      >
+        <Text style={{ fontSize: 22 }}>{icon}</Text>
+      </View>
+      <Text
+        style={{
+          color: theme.colors.textPrimary,
+          fontSize: 15,
+          fontWeight: '600',
+          textAlign: 'center',
+        }}
+      >
         {title}
       </Text>
       {hint ? (
-        <Text style={{ color: theme.colors.textTertiary, fontSize: 13, marginTop: 6 }}>
+        <Text
+          style={{
+            color: theme.colors.textTertiary,
+            fontSize: 13,
+            marginTop: 6,
+            textAlign: 'center',
+            lineHeight: 18,
+          }}
+        >
           {hint}
         </Text>
       ) : null}
@@ -112,22 +237,38 @@ export function YanjiEmptyState({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiSectionHeader — typographic grouping without card chrome
+// YanjiSectionHeader — typographic grouping with optional right accessory
 // ---------------------------------------------------------------------------
 
-export function YanjiSectionHeader({ title }: { title: string }): React.JSX.Element {
+export function YanjiSectionHeader({
+  title,
+  rightAction,
+}: {
+  title: string;
+  rightAction?: React.ReactNode;
+}): React.JSX.Element {
   const theme = useYanjiTheme();
   return (
-    <Text
+    <View
       style={{
-        color: theme.colors.textSecondary,
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 8,
-        marginTop: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+        marginTop: 24,
       }}
     >
-      {title}
-    </Text>
+      <Text
+        style={{
+          color: theme.colors.textSecondary,
+          fontSize: 14,
+          fontWeight: '600',
+          letterSpacing: 0.2,
+        }}
+      >
+        {title}
+      </Text>
+      {rightAction}
+    </View>
   );
 }

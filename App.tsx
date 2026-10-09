@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { BackHandler, StatusBar, View } from 'react-native';
+import { BackHandler, Platform, StatusBar, View } from 'react-native';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
 import { NavigationProvider, useNavigation } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
@@ -60,8 +60,10 @@ function AppShell(): React.JSX.Element {
     return () => subscription.remove();
   }, [taskEditorOpen, settingsOpen, closeSettings, closeTaskEditor]);
 
+  const topInset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 38) : 44;
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary, paddingTop: topInset }}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={{ flex: 1 }}>
@@ -87,6 +89,7 @@ function AppShell(): React.JSX.Element {
             top: 0,
             bottom: 0,
             backgroundColor: theme.colors.bgPrimary,
+            paddingTop: topInset,
           }}
         >
           <SettingsScreen />
