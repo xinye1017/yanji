@@ -224,6 +224,22 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.countWorkedDays(days), 1, 'A calendar-month cell after today must not count');
     });
 
+    it('counts elapsed days with the same caliber as the worked-day numerator', () => {
+      // 自然月的窗口一直排到月末，但今天只过去了其中几天。分母用 days.length 会让
+      // 「有记录」显示 8 / 31 —— 分子已经过滤掉未来格，分母没有，两者不是一个口径。
+      const days = [
+        { durationSeconds: 1800, isFuture: false },
+        { durationSeconds: 0, isFuture: false },
+        { durationSeconds: 3600, isFuture: true },
+      ];
+      assertEqual(logic.countElapsedDays(days), 2, 'Future cells never join the denominator');
+      assert(
+        logic.countWorkedDays(days) <= logic.countElapsedDays(days),
+        'Worked days are a subset of elapsed days, so the ratio can never exceed 1'
+      );
+      assertEqual(logic.countElapsedDays([]), 0, 'An empty window has no elapsed days');
+    });
+
     it('locates today in the window only when today is actually inside it', () => {
       const inWindow = [
         { date: '2026-10-07', isToday: false },

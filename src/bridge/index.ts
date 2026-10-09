@@ -66,8 +66,8 @@ export interface TodayStats {
 /**
  * 回顾页的趋势窗口。
  *
- * - `ROLLING_7` / `ROLLING_30`：以**今天**为终点的滚动窗口（不是自然周），
- *   这样柱状图的横轴不会随星期几漂移。
+ * - `ROLLING_7` / `ROLLING_30`：以 `anchorDate`（缺省为今天）为终点的滚动窗口
+ *   （不是自然周），这样柱状图的横轴不会随星期几漂移。
  * - `CALENDAR_WEEK`：自然周（周一起、周日止），`periodsBack` = 0 表示本周。
  * - `CALENDAR_MONTH`：自然月，`periodsBack` = 0 表示本月。
  */
@@ -110,14 +110,20 @@ export interface ReviewSubjectSlice {
 export interface ReviewOverview {
   scope: ReviewScope;
   periodsBack: number;
-  /** 窗口的可读标题，如「最近 7 天」「2026年10月」。 */
+  /**
+   * 窗口的可读标题，如「最近 7 天」「2026年10月」。
+   * 滚动窗口只在终点确实是今天时才写「最近 N 天」，否则如实报首尾日期。
+   */
   label: string;
-  /** 等于 `days.length`。 */
+  /** 等于 `days.length`，含自然周 / 自然月里还没发生的日子。 */
   windowDays: number;
   /** 升序（早 → 晚），绝不出现被裁掉的过去日期。 */
   days: ReviewPeriodDay[];
   totalSeconds: number;
-  /** 分母是窗口长度，不是有效天数。 */
+  /**
+   * 分母是**已过去的天数**（`days` 中 `!isFuture` 的个数），不是 `windowDays`。
+   * 自然月的窗口一直排到月末，用窗口长度当分母会把日均稀释成无法解释的数。
+   */
   dailyAverageSeconds: number;
   examCount: number;
   /** 按 `minutes` 降序，相同再按 `subjectId` 字典序，保证渲染顺序稳定。 */
@@ -252,6 +258,8 @@ interface YanjiDataModuleNative {
    *
    * `scope` 不在白名单内时原生侧 reject（`E_INVALID_SCOPE`），不做猜测回落。
    * `periodsBack` 只对 `CALENDAR_*` 有意义，滚动窗口强制为 0。
+   * `anchorDate`（缺省为今天）决定窗口落在哪：滚动窗口以它为终点向前推，
+   * `CALENDAR_*` 用它选出是哪一周 / 哪一月。
    */
   getReviewOverview(
     scope: ReviewScope,

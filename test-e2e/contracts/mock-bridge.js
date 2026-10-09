@@ -396,15 +396,18 @@ export class MockYanjiBridge {
         return a.subjectId < b.subjectId ? -1 : 1;
       });
 
+    // 日均的分母：只数已经过去的日子。自然周 / 自然月的窗口含未来格子，
+    // 用 dates.length 会把日均稀释（与 Kotlin `BridgeMappers.elapsedDays` 同口径）。
+    const elapsedDays = Math.max(1, days.filter(d => !d.isFuture).length);
+
     return {
       scope,
       periodsBack: resolvedBack,
-      label: this._reviewScopeLabel(scope, dates),
+      label: this._reviewScopeLabel(scope, dates, todayIso),
       windowDays: dates.length,
       days,
       totalSeconds,
-      // 分母是窗口长度，不是有效天数。
-      dailyAverageSeconds: dates.length > 0 ? Math.floor(totalSeconds / dates.length) : 0,
+      dailyAverageSeconds: Math.floor(totalSeconds / elapsedDays),
       examCount,
       subjectDistribution,
     };
@@ -498,13 +501,20 @@ export class MockYanjiBridge {
     return dateIso;
   }
 
-  /** 窗口标题。自然周如实显示首尾日期（跨月也照实），不折算成「第 N 周」。 */
-  _reviewScopeLabel(scope, dates) {
-    if (scope === 'ROLLING_7') return '最近 7 天';
-    if (scope === 'ROLLING_30') return '最近 30 天';
+  /**
+   * 窗口标题。自然周如实显示首尾日期（跨月也照实），不折算成「第 N 周」。
+   * 滚动窗口只在终点确实是今天时才写「最近 N 天」：锚点落在过去时照抄这个标题，
+   * 等于用假区间描述真区间（与 Kotlin `BridgeMappers.reviewScopeLabel` 同口径）。
+   */
+  _reviewScopeLabel(scope, dates, todayIso) {
     const first = dates[0];
     const last = dates[dates.length - 1];
     if (!first || !last) return '';
+    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') {
+      return last === todayIso
+        ? `最近 ${dates.length} 天`
+        : `${this._monthDayLabel(first)} - ${this._monthDayLabel(last)}`;
+    }
     if (scope === 'CALENDAR_WEEK') {
       return `${this._monthDayLabel(first)} - ${this._monthDayLabel(last)}`;
     }

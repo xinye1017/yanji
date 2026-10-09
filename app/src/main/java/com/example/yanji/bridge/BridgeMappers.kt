@@ -351,8 +351,12 @@ object BridgeMappers {
     /**
      * 窗口标题。
      *
-     * 自然周**如实显示首尾两个日期**（跨月也照实：「10月30日 - 11月5日」），
-     * 绝不折算成「第 N 周」——那会让跨月周的视觉区间与实际数据区间对不上。
+     * 两条如实原则：
+     * - 自然周**如实显示首尾两个日期**（跨月也照实：「10月30日 - 11月5日」），
+     *   绝不折算成「第 N 周」——那会让跨月周的视觉区间与实际数据区间对不上；
+     * - 滚动窗口只有**终点确实是今天**时才配叫「最近 N 天」。窗口以调用方传入的锚点
+     *   为终点，用户翻了日期后锚点就落在过去；此时照抄「最近 7 天」等于用一个假区间
+     *   标题去描述一段真区间，所以改为如实报首尾日期。
      *
      * 未知 scope 返回空串：[YanjiDataModule] 在调用前已按白名单 reject，
      * 空串只是「不该走到这里」的显式标记，不是兜底文案。
@@ -360,10 +364,18 @@ object BridgeMappers {
     fun reviewScopeLabel(
         scope: String,
         @Suppress("UNUSED_PARAMETER") periodsBack: Int,
-        dates: List<java.time.LocalDate>
+        dates: List<java.time.LocalDate>,
+        todayIso: String
     ): String = when (scope) {
-        SCOPE_ROLLING_7 -> "最近 7 天"
-        SCOPE_ROLLING_30 -> "最近 30 天"
+        SCOPE_ROLLING_7, SCOPE_ROLLING_30 -> {
+            val start = dates.firstOrNull()
+            val end = dates.lastOrNull()
+            when {
+                start == null || end == null -> ""
+                end == parseIsoOrNull(todayIso) -> "最近 ${dates.size} 天"
+                else -> "${monthDayLabel(start)} - ${monthDayLabel(end)}"
+            }
+        }
         // 如实显示首尾两个日期，跨月也照实；不折算成「第 N 周」。
         SCOPE_CALENDAR_WEEK -> {
             val start = dates.firstOrNull()
@@ -385,7 +397,9 @@ object BridgeMappers {
      *
      * 三条不可让步的口径：
      * 1. **分钟截断只发生一次**：先按秒累加，再 `seconds / 60`；
-     * 2. `dailyAverageSeconds` 的分母是**窗口长度**（[days] 的键数），不是有效天数；
+     * 2. `dailyAverageSeconds` 的分母是**已过去的天数**（`!isFuture`），不是窗口长度。
+     *    自然周 / 自然月的窗口一直排到周末、月末，含大量还没发生的日子；拿窗口长度
+     *    当分母会把日均稀释成一个用户无法解释的数字（10 月 10 日的「本月」会除以 31）；
      * 3. [subjectDistribution] 排序**确定性**：分钟降序，同分按 `subjectId` 字典序升序，
      *    绝不依赖 map 插入顺序（同一份数据两次调用必须给出同一份数组）。
      *
@@ -406,7 +420,6 @@ object BridgeMappers {
     ): ReviewOverviewFields {
         val dates = windowDates.distinct().sorted()
         val localDates = dates.mapNotNull(::parseIsoOrNull)
-        val safeWindowDays = dates.size.coerceAtLeast(1)
 
         val days = dates.map { date ->
             ReviewDayFields(
@@ -419,6 +432,9 @@ object BridgeMappers {
             )
         }
         val totalSeconds = days.sumOf { it.durationSeconds }
+        // 日均的分母：只数已经过去的日子。滚动窗口的终点就是锚点，两者相等；
+        // 自然周 / 自然月的未来格子恒为 0，计进去只会把日均稀释成无法解释的数。
+        val elapsedDays = days.count { !it.isFuture }.coerceAtLeast(1)
 
         // 归一在这里再做一次：调用方漏做 subjectBucket 时，同一大类的自定义 id
         // 仍会落进同一个桶（否则会多出一条空的「综合/未细分」切片）。
@@ -474,12 +490,12 @@ object BridgeMappers {
         return ReviewOverviewFields(
             scope = scope,
             periodsBack = periodsBack,
-            label = reviewScopeLabel(scope, periodsBack, localDates),
+            label = reviewScopeLabel(scope, periodsBack, localDates, todayIso),
             windowDays = dates.size,
             days = days,
             totalSeconds = totalSeconds,
-            // 分母是窗口长度，不是有效天数。
-            dailyAverageSeconds = totalSeconds / safeWindowDays,
+            // 分母是已过去的天数，不是窗口长度（见上方口径 2）。
+            dailyAverageSeconds = totalSeconds / elapsedDays,
             examCount = examCount.coerceAtLeast(0),
             subjectDistribution = distribution
         )

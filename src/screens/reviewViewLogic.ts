@@ -152,6 +152,18 @@ export function countWorkedDays(
   return days.filter(day => !day.isFuture && day.durationSeconds > 0).length;
 }
 
+/**
+ * Days that have already happened — the denominator for every ratio on this page.
+ *
+ * A calendar week/month window runs out to Sunday / the last of the month, so it
+ * carries future cells that can never hold a record. Dividing by `days.length`
+ * instead reported「8 / 31 天」on 10 月 10 日, and diluted the native
+ * `dailyAverageSeconds` by the same factor.
+ */
+export function countElapsedDays(days: ReadonlyArray<{ isFuture: boolean }>): number {
+  return days.filter(day => !day.isFuture).length;
+}
+
 /** The chart column for today, when today falls inside the window at all. */
 export function findTodayColumn<T extends { date: string; isToday: boolean }>(
   days: readonly T[]

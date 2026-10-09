@@ -42,6 +42,7 @@ import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 import {
   buildTimelineEntries,
   computeAxisLabelsLayout,
+  countElapsedDays,
   countWorkedDays,
   dayHasRecords,
   findTodayColumn,
@@ -154,6 +155,8 @@ export function ReviewScreen(): React.JSX.Element {
 
   const days = overview?.days ?? [];
   const workedDays = countWorkedDays(days);
+  /** Days that have already happened — the denominator matching `workedDays`. */
+  const elapsedDays = countElapsedDays(days);
   /** The chart column for today, when today falls inside the window at all. */
   const todayColumn = findTodayColumn(days);
   /** Exact collision-free positioned axis labels */
@@ -466,7 +469,7 @@ export function ReviewScreen(): React.JSX.Element {
 
             <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.md }}>
               <ReviewStat label="累计" value={overview ? formatDuration(overview.totalSeconds) : '—'} />
-              <ReviewStat label="有记录" value={`${workedDays} / ${days.length} 天`} />
+              <ReviewStat label="有记录" value={`${workedDays} / ${elapsedDays} 天`} />
               <ReviewStat label="模考" value={`${overview?.examCount ?? 0} 场`} />
             </View>
           </YanjiCard>
@@ -646,7 +649,7 @@ function trendAccessibilityLabel(overview: ReviewOverview | null): string {
   if (worked.length === 0) return `${overview.label}内没有专注记录`;
   const best = worked.reduce((a, b) => (b.durationSeconds > a.durationSeconds ? b : a));
   return (
-    `${overview.label}共 ${overview.windowDays} 天，${worked.length} 天有记录，` +
+    `${overview.label}已过 ${countElapsedDays(overview.days)} 天，${worked.length} 天有记录，` +
     `累计 ${formatDuration(overview.totalSeconds)}。` +
     `最长的一天是 ${best.date.slice(5)}，${formatDuration(best.durationSeconds)}`
   );

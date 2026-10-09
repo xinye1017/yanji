@@ -216,7 +216,8 @@ class BridgeMappersTest {
 
         assertEquals("秒数不被截断", 7L * almostHalfHour, overview.totalSeconds)
         assertEquals(7, overview.windowDays)
-        // 分母是窗口长度 7，不是有效天数
+        // 窗口终点就是今天，7 天全部已过，所以「已过去天数」与窗口长度在这里相等。
+        // 两者分道扬镳的场景见 reviewOverviewFields_marksDaysAfterTodayAsFutureWithZeroSeconds。
         assertEquals(7L * almostHalfHour / 7L, overview.dailyAverageSeconds)
         val subject = overview.subjectDistribution.single()
         // 唯一的截断点：7×1799 = 12593 秒 → 12593/60 = 209 分钟
@@ -336,14 +337,39 @@ class BridgeMappersTest {
         val week = (5..11).map { java.time.LocalDate.of(2026, 10, it) }
         // 自然月 2026-10
         val month = (1..5).map { java.time.LocalDate.of(2026, 10, it) }
+        // 滚动窗口各自的真实长度，终点都落在今天 2026-10-11。
+        val today = java.time.LocalDate.of(2026, 10, 11)
+        val rolling7 = List(7) { today.minusDays((6 - it).toLong()) }
+        val rolling30 = List(30) { today.minusDays((29 - it).toLong()) }
 
-        assertEquals("最近 7 天", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, week))
-        assertEquals("最近 30 天", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_30, 0, week))
+        assertEquals(
+            "最近 7 天",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, rolling7, "2026-10-11")
+        )
+        assertEquals(
+            "最近 30 天",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_30, 0, rolling30, "2026-10-11")
+        )
         assertEquals(
             "10月5日 - 10月11日",
-            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 0, week)
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 0, week, "2026-10-11")
         )
-        assertEquals("2026年10月", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_MONTH, 0, month))
+        assertEquals(
+            "2026年10月",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_MONTH, 0, month, "2026-10-11")
+        )
+    }
+
+    @Test
+    fun reviewScopeLabel_reportsRealDatesWhenARollingWindowIsAnchoredInThePast() {
+        // 用户把日期翻到 9 月 15 日，滚动窗口就是 9 月 9 日–15 日。
+        // 照抄「最近 7 天」等于用一个假区间标题描述一段真区间。
+        val anchored = List(7) { java.time.LocalDate.of(2026, 9, 15).minusDays((6 - it).toLong()) }
+
+        assertEquals(
+            "9月9日 - 9月15日",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, anchored, "2026-10-10")
+        )
     }
 
     @Test
@@ -353,7 +379,7 @@ class BridgeMappersTest {
 
         assertEquals(
             "10月30日 - 11月5日",
-            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 1, crossMonth)
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 1, crossMonth, "2026-11-05")
         )
     }
 
@@ -381,6 +407,11 @@ class BridgeMappersTest {
         assertTrue(future.all { it.durationSeconds == 0L })
         assertFalse(overview.days[1].isFuture)
         assertTrue(overview.days[2].isToday)
+
+        // 日均的分母是**已过去的 3 天**（10-01..10-03），不是窗口的 5 天。
+        // 旧口径给 1800/5 = 360，把「每天 10 分钟」稀释成用户无法解释的数字。
+        assertEquals(5, overview.windowDays)
+        assertEquals(1800L / 3L, overview.dailyAverageSeconds)
     }
 
     @Test

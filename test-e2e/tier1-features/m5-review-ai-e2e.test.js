@@ -97,7 +97,7 @@ export function registerM5Tests() {
       assertEqual(overview.label, '最近 7 天');
       assertEqual(overview.windowDays, 7);
       assertEqual(overview.totalSeconds, 90 * 60, 'totalSeconds keeps raw seconds: 60m + 30m');
-      assertEqual(overview.dailyAverageSeconds, Math.floor((90 * 60) / 7), 'Average divides by the window length');
+      assertEqual(overview.dailyAverageSeconds, Math.floor((90 * 60) / 7), 'A rolling window ends today, so all 7 days are elapsed');
       assertEqual(overview.examCount, 0, 'Focus sessions are not mock exams');
 
       const math = overview.subjectDistribution.find(s => s.subjectId === 'sub-math');
@@ -150,6 +150,21 @@ export function registerM5Tests() {
       const dates = r30.days.map(d => d.date);
       assertEqual(new Set(dates).size, 30, 'Rolling window must never repeat a date key');
       assertDeepEqual(dates, [...dates].sort(), 'Rolling window must stay ascending');
+    });
+
+    it('labels a rolling window with real dates once the anchor sits in the past', async () => {
+      // 回顾页把选中日期当锚点传下来，所以滚动窗口并不总是「以今天为终点」。
+      const b = new MockYanjiBridge({ virtualClockMs: new Date(2026, 9, 10, 12, 0, 0).getTime() });
+
+      const anchored = await b.getReviewOverview('ROLLING_7', 0, '2026-09-15');
+      assertEqual(anchored.days[0].date, '2026-09-09', 'The window runs 6 days back from the anchor');
+      assertEqual(anchored.days[6].date, '2026-09-15', 'The window ends on the anchor, not on today');
+      // 照抄「最近 7 天」等于用一个假区间标题去描述一段真区间。
+      assertEqual(anchored.label, '9月9日 - 9月15日');
+
+      const current = await b.getReviewOverview('ROLLING_7', 0);
+      assertEqual(current.days[6].date, '2026-10-10');
+      assertEqual(current.label, '最近 7 天', 'A window that really ends today still earns the relative label');
     });
   });
 
@@ -235,6 +250,25 @@ export function registerM5Tests() {
       assert(
         lastMonth.days[lastMonth.days.length - 1].date < overview.days[0].date,
         'The previous month must end before the current month starts'
+      );
+    });
+
+    it('divides the daily average by elapsed days, never by the whole month', async () => {
+      // 2026-10-10：本月窗口是 10-01..10-31 共 31 天，但只过去了 10 天。
+      const b = new MockYanjiBridge({ virtualClockMs: new Date(2026, 9, 10, 12, 0, 0).getTime() });
+      b.sessionRecords.push(recordAt('sub-math', '数学', '2026-10-02', 3600));
+      b.sessionRecords.push(recordAt('sub-math', '数学', '2026-10-09', 3600));
+
+      const overview = await b.getReviewOverview('CALENDAR_MONTH', 0);
+
+      assertEqual(overview.windowDays, 31, 'The month window still spans all 31 days');
+      assertEqual(overview.days.filter(d => d.isFuture).length, 21, 'Oct 11..31 has not happened yet');
+      assertEqual(overview.totalSeconds, 7200);
+      // 旧口径给 7200/31 = 232，把「每天 12 分钟」稀释成用户无法解释的数字。
+      assertEqual(overview.dailyAverageSeconds, 720, 'The average divides by the 10 elapsed days');
+      assert(
+        overview.dailyAverageSeconds !== Math.floor(7200 / 31),
+        'The average must not divide by the window length'
       );
     });
 
