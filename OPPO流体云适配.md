@@ -46,8 +46,8 @@
 ## 二、标准 Live Update 适配规范与代码落地
 
 在「研迹」中，流体云的核心实现集中于两层：
-1. **语义描述层**：[`FocusNotificationSpec.kt`](file:///d:/AI项目/yanji/app/src/main/java/com/example/yanji/liveactivity/FocusNotificationSpec.kt)（纯 Kotlin 状态抽象，不依赖 Android API，便于 JVM 单测覆盖）；
-2. **控制器层**：[`StandardNotificationController.kt`](file:///d:/AI项目/yanji/app/src/main/java/com/example/yanji/liveactivity/StandardNotificationController.kt) 与 [`AndroidLiveUpdateController.kt`](file:///d:/AI项目/yanji/app/src/main/java/com/example/yanji/liveactivity/AndroidLiveUpdateController.kt)。
+1. **语义描述层**：[`FocusNotificationSpec.kt`](file:///d:/yanji/app/src/main/java/com/example/yanji/liveactivity/FocusNotificationSpec.kt)（纯 Kotlin 状态抽象，不依赖 Android API，便于 JVM 单测覆盖）；
+2. **控制器层**：[`StandardNotificationController.kt`](file:///d:/yanji/app/src/main/java/com/example/yanji/liveactivity/StandardNotificationController.kt) 与 [`AndroidLiveUpdateController.kt`](file:///d:/yanji/app/src/main/java/com/example/yanji/liveactivity/AndroidLiveUpdateController.kt)。
 
 ### 1. 关键 API 配置
 

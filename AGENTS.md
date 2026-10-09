@@ -3,7 +3,7 @@
 > 本文档是接手的 **AI Coding Agent**（Claude、Codex、Gemini、Cursor、Cline、Copilot、Antigravity 等）的操作规范与指南。
 > 记录项目的核心架构与工程原则、构建方式、设备连接机制、避坑指南与真机推送工作流。
 >
-> **开工顺序**：先读「§一 核心架构与工程原则」与「§三 Active Constraints」确立红线；开发前查阅「§二 核心机制与避坑铁律」；日常构建部署看「§五 标准构建与真机部署流程」；真机无线连接、配对与排错查阅 [ADB.md](file:///d:/AI项目/yanji/ADB.md)。
+> **开工顺序**：先读「§一 核心架构与工程原则」与「§三 Active Constraints」确立红线；开发前查阅「§二 核心机制与避坑铁律」；日常构建部署看「§五 标准构建与真机部署流程」；真机无线连接、配对与排错查阅 [ADB.md](file:///d:/yanji/ADB.md)。
 
 ---
 
@@ -28,21 +28,21 @@
 ### 1. 【最关键】ADB 发现与安装必须落在同一次工具调用内
 
 - **底层原因**：在部分 Agent 执行环境中，每个工具命令调用运行在独立的临时作业对象里；单条命令结束后，后台子进程（包括 `adb.exe` 服务端守护进程）会被系统自动回收终止，拆分调用会导致连接建立中断或误报 `device not found`。
-- **铁律**：**设备发现（`start-server` + 等待）与安装 / 启动必须写在同一个工具调用中。** 详细机理与多环境脚本参见 [ADB.md §一.1](file:///d:/AI项目/yanji/ADB.md)。
+- **铁律**：**设备发现（`start-server` + 等待）与安装 / 启动必须写在同一个工具调用中。** 详细机理与多环境脚本参见 [ADB.md §一.1](file:///d:/yanji/ADB.md)。
 
 ### 2. 【最省心】优先 mDNS 自动发现，断连配对走标准流程
 
 - **机制**：优先通过 Android 11+ TLS mDNS 动态广播发现设备序列号，不写死任何动态端口或 IP。
-- **断连处理**：若网络变动或凭据过期，按 [ADB.md §二.2](file:///d:/AI项目/yanji/ADB.md) 的标准 6 步法进行配对（`adb pair`）与主端口连接（`adb connect`）。
+- **断连处理**：若网络变动或凭据过期，按 [ADB.md §二.2](file:///d:/yanji/ADB.md) 的标准 6 步法进行配对（`adb pair`）与主端口连接（`adb connect`）。
 
 ### 3. 【最效率】严禁自行操作真机与截屏验证，依赖用户及时反馈
 
 - **真机交付终点**：编译 APK → 单次推送安装（`install -r -d`）→ 调起主界面（`am start`）即宣告交付完成。
-- **严禁越俎代庖**：**严禁 AI 自行截屏验证（禁 `screencap`），严禁 AI 自行模拟点击滑动操作真机（禁 `input tap`、`input swipe`、`uiautomator dump`）**。测试操作、视觉核验与交互体验完全由用户在真机亲自进行并及时在对话中反馈（详见 [ADB.md §一.2](file:///d:/AI项目/yanji/ADB.md)）。
+- **严禁越俎代庖**：**严禁 AI 自行截屏验证（禁 `screencap`），严禁 AI 自行模拟点击滑动操作真机（禁 `input tap`、`input swipe`、`uiautomator dump`）**。测试操作、视觉核验与交互体验完全由用户在真机亲自进行并及时在对话中反馈（详见 [ADB.md §一.2](file:///d:/yanji/ADB.md)）。
 
 ### 4. 【高频排错】网络代理与息屏休眠排查
 
-- **代理拦截（最常见）**：本机 GitHub 访问依赖**代理端口 `7898`**；一旦开启全局/TUN 模式会拦截局域网 UDP 5353 组播导致 mDNS 发现失败。排查步骤详见 [ADB.md §三.1](file:///d:/AI项目/yanji/ADB.md)。
+- **代理拦截（最常见）**：本机 GitHub 访问依赖**代理端口 `7898`**；一旦开启全局/TUN 模式会拦截局域网 UDP 5353 组播导致 mDNS 发现失败。排查步骤详见 [ADB.md §三.1](file:///d:/yanji/ADB.md)。
 - **页面休眠**：手机息屏或退到桌面后系统会将无线调试休眠并重置端口，调试时需保持在「无线调试」设置页面内。
 
 ### 5. 【编译提速】Gradle 极速构建与避坑原则（30 秒 vs 2 分钟）
@@ -146,7 +146,7 @@ Level 6  历史阶段性留档（仅供回溯，禁止作为改动依据）—�
 
 - **代码仓库**：`github.com/xinye1017/yanji`，分支 `main`，远端 `origin`
 - **操作系统**：Windows（Git Bash / PowerShell）
-- **项目路径**：`D:\AI项目\yanji`
+- **项目路径**：`D:\yanji`
 - **应用包名**：`com.example.yanji`；主入口 `com.example.yanji.MainActivity`
 - **Android SDK 路径**：`C:\Users\dex\Android\Sdk`（配置于 `local.properties`）
 - **ADB 工具路径**：`C:\Users\dex\Android\Sdk\platform-tools\adb.exe`（已配置进系统环境变量 `PATH`）
@@ -208,13 +208,13 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 ## 六、真机无线调试与 ADB 工作流（权威规范见 ADB.md）
 
-> ⚠️ **关于 ADB 无线调试全流程、断连配对 6 步法、网络代理（端口 7898）排错、常用调试指令表与真机交互红线，已全部迁移并整合至独立权威文档 [ADB.md](file:///d:/AI项目/yanji/ADB.md)。**
+> ⚠️ **关于 ADB 无线调试全流程、断连配对 6 步法、网络代理（端口 7898）排错、常用调试指令表与真机交互红线，已全部迁移并整合至独立权威文档 [ADB.md](file:///d:/yanji/ADB.md)。**
 
 ### 核心纪律与准则摘要：
 1. **同调用执行铁律**：`adb start-server`、设备发现、安装与启动必须写在**同一次工具调用内**执行，严禁拆分；
 2. **交付终点**：编译 APK → 单次覆盖安装（`install -r -d`） → 调起主界面（`am start`）即宣告交付完成；
 3. **严禁越俎代庖**：**严禁 AI 自行截屏验证（禁 `screencap`），严禁 AI 自行模拟点击滑动操作真机（禁 `input tap/swipe`、`uiautomator dump`）**。测试操作、交互体验与视觉效果完全由用户在真机亲自进行并及时在对话中反馈；
-4. **配对与排错**：遇到搜不到设备、提示 `10061 积极拒绝` 或凭证失效时，严格遵循 [ADB.md §二.2](file:///d:/AI项目/yanji/ADB.md) 的标准 6 步法处理。
+4. **配对与排错**：遇到搜不到设备、提示 `10061 积极拒绝` 或凭证失效时，严格遵循 [ADB.md §二.2](file:///d:/yanji/ADB.md) 的标准 6 步法处理。
 5. **严禁改动设备系统配色**：推送与调试全程，严禁通过 ADB（`cmd uimode night` / `settings put ui_night_mode`）或代码改动真机系统的浅色 / 深色模式；深浅色验证由用户自行切换后反馈（见 §二.6）。
 
 ---

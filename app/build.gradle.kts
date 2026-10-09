@@ -162,6 +162,13 @@ dependencies {
   implementation(libs.hermes.android)
   implementation(libs.fbjni)
 
+  // RN 原生库（autolinking 由 settings.gradle.kts 的 ReactSettingsExtension 提供，
+  // 这里显式声明子工程依赖；不应用 RN app 插件以保持既有 bundle 构建流程）
+  implementation(project(":react-native-reanimated"))
+  implementation(project(":react-native-worklets"))
+  implementation(project(":react-native-svg"))
+  implementation(project(":react-native-safe-area-context"))
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)

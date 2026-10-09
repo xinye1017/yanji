@@ -30,8 +30,8 @@ cd "$ROOT"
 
 METADATA="gradle/verification-metadata.xml"
 # Must stay RELATIVE and be passed after `cd "$ROOT"`. An absolute POSIX path such as
-# /d/AI项目/yanji/... is mangled by gradlew.bat on Windows into a doubled path
-# (D:\AI项目\yanji\d\AI项目\...) and Gradle rejects it as non-existent.
+# /d/yanji/... is mangled by gradlew.bat on Windows into a doubled path
+# (D:\yanji\d\...) and Gradle rejects it as non-existent.
 INIT_SCRIPT="scripts/lib/resolve-all-configurations.init.gradle"
 
 if [ ! -f "$METADATA" ]; then

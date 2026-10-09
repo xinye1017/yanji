@@ -14,6 +14,10 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.runtime.hermes.HermesInstance
 import com.facebook.react.shell.MainReactPackage
 import com.facebook.soloader.SoLoader
+import com.horcrux.svg.SvgPackage
+import com.swmansion.reanimated.ReanimatedPackage
+import com.swmansion.worklets.WorkletsPackage
+import com.th3rdwave.safeareacontext.SafeAreaContextPackage
 
 /**
  * 研迹 Application —— React Native 新架构（Bridgeless）宿主。
@@ -26,7 +30,12 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
         object : DefaultReactNativeHost(this@YanjiApplication) {
             override fun getPackages(): List<ReactPackage> = listOf(
                 MainReactPackage(),
-                YanjiPackage()
+                YanjiPackage(),
+                // 前端 UI 组件库（reanimated 依赖 worklets，两者必须同时注册）
+                ReanimatedPackage(),
+                WorkletsPackage(),
+                SvgPackage(),
+                SafeAreaContextPackage()
             )
 
             override fun getJSMainModuleName(): String = "index"
