@@ -155,6 +155,21 @@ export const YanjiTypography = {
   bodyStrong: { fontSize: 15, fontWeight: '600' as const, lineHeight: 22 },
   caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
   /**
+   * List-row title. One step under `body` so a dense list (timeline rows,
+   * subject rows) still reads as a list rather than as paragraph text.
+   */
+  rowTitle: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
+  rowTitleStrong: { fontSize: 14, fontWeight: '600' as const, lineHeight: 20 },
+  /**
+   * Secondary readout (totals, the selected date label). Heavier than
+   * `caption` but well below `display`, so it never competes with a hero.
+   */
+  valueStrong: { fontSize: 17, fontWeight: '600' as const, lineHeight: 22 },
+  /** Quiet metadata on a row: timestamps, mode names, "· 模考" tags. */
+  meta: { fontSize: 12, fontWeight: '400' as const, lineHeight: 16 },
+  /** Chart axis labels. The smallest legible step; never below 11px. */
+  axisLabel: { fontSize: 11, fontWeight: '400' as const, lineHeight: 14 },
+  /**
    * Micro label for over-line grouping ("今天", "专注记录"). Uppercase tracking
    * is applied at the call site so CJK labels are not letter-spaced apart.
    */

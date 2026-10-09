@@ -80,11 +80,23 @@ export function registerTier4Tests() {
       assertEqual(timeline.completedTasks[0].title, '英语二阅读真题2020 Text 1');
       assertEqual(timeline.notes.length, 1, 'Timeline must show 1 note');
 
-      // 7-Day Trend & Subject Breakdown check
-      const reviewStats = await bridge.getReviewStats(7);
-      assertEqual(reviewStats.totalFocusHours, 1.8, '105 minutes / 60 = 1.75 -> 1.8h');
-      assertEqual(reviewStats.subjectDistribution['数学'], 60, 'Math study time 60m');
-      assertEqual(reviewStats.subjectDistribution['英语'], 45, 'English study time 45m');
+      // Trend & Subject Breakdown check
+      const reviewOverview = await bridge.getReviewOverview('ROLLING_7', 0);
+      assertEqual(reviewOverview.totalSeconds, 105 * 60, '105 minutes kept as raw seconds');
+      assertEqual(reviewOverview.windowDays, 7);
+      assertEqual(reviewOverview.days.length, 7, 'The rolling trend still renders a full 7-day axis');
+
+      const mathSlice = reviewOverview.subjectDistribution.find(s => s.subjectName === '数学');
+      const engSlice = reviewOverview.subjectDistribution.find(s => s.subjectName === '英语');
+      assertEqual(reviewOverview.subjectDistribution.length, 2, 'Only the two studied subjects appear');
+      assertEqual(mathSlice.minutes, 60, 'Math study time 60m');
+      assertEqual(engSlice.minutes, 45, 'English study time 45m');
+      assertEqual(mathSlice.subjectId, 'sub-math');
+      assertEqual(engSlice.subjectId, 'sub-eng');
+      assert(
+        mathSlice.minutes > engSlice.minutes,
+        'Slices must be ordered by minutes descending'
+      );
 
       // -------------------------------------------------------------
       // 5. Night Settings: Check preferences & return

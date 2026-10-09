@@ -31,6 +31,7 @@ import {
   RotateCcw,
   Settings,
   Sprout,
+  Star,
   Sun,
   Target,
   Timer,
@@ -60,6 +61,8 @@ export type YanjiIconName =
   | 'calendar'
   | 'tasks'
   | 'chartMinimal'
+  | 'star'
+  | 'starOutline'
   | 'reset';
 
 const ICONS: Record<YanjiIconName, LucideIcon> = {
@@ -82,6 +85,8 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   calendar: CalendarDays,
   tasks: ListChecks,
   chartMinimal: ChartNoAxesCombined,
+  star: Star,
+  starOutline: Star,
   reset: RotateCcw,
 };
 

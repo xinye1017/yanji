@@ -1,8 +1,10 @@
-/**
- * Threshold for counting a day as "active" in the rolling review window.
- * Mirrors StudyStatisticsRepository.activeDayThresholdSeconds (30 min).
- */
-const ACTIVE_DAY_THRESHOLD_MINUTES = 30;
+/** 回顾页的时间粒度白名单：只有这四个值（与 TS `ReviewScope` 逐字一致）。 */
+const REVIEW_SCOPES = ['ROLLING_7', 'ROLLING_30', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
+
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/** 科目查表未命中时的中性灰（与 Kotlin `SubjectCatalog.DEFAULT_FALLBACK_COLOR` 同值）。 */
+const NEUTRAL_SUBJECT_COLOR = '#667085';
 
 /**
  * Yanji E2E Test Suite - Reference Bridge Oracle & In-Memory Driver
@@ -131,7 +133,11 @@ export class MockYanjiBridge {
       durationMinutes,
       elapsedSeconds: session.elapsedSeconds,
       taskId: session.taskId,
-      date: new Date(session.startTime).toISOString().split('T')[0],
+      // 本地日历键：startTime 由虚拟时钟给出，绝不走 toISOString()（那是 UTC）。
+      date: this._isoDateAt(session.startTime, 0),
+      // 模考记录独立于专注记录；随笔初始为空串（缺字段会在读取时退化成 undefined）。
+      isExam: false,
+      note: session.note || '',
     });
 
     // Update bound task actual study time if linked
@@ -308,64 +314,230 @@ export class MockYanjiBridge {
   }
 
   /**
-   * Rolling N-day window (mirrors YanjiTime.lastDaysRange(days)).
+   * 回顾页趋势概览：`scope` + `periodsBack` 双参数（见 TS `ReviewOverview`）。
    *
-   * Semantics that the native side must honour and this reference oracle enforces:
-   *  - days is honoured: exactly N keys, from (today - (N-1)) through today.
-   *  - Keys are local-calendar yyyy-MM-dd, derived by shifting the local date,
-   *    never by subtracting 24h multiples (that drifts across DST).
-   *  - No future-dated keys: tomorrow can never appear, even with a zero value.
-   *  - No calendar-week clipping: the window is not aligned to Monday.
-   *  - Sessions outside the window contribute to nothing.
-   *  - Zero days with data is reported as 0, never faked (activeDays / average).
+   * 三条不可让步的口径（mock 是契约 oracle，不是 Kotlin 分类学的复刻）：
+   *  1. **分钟只截断一次**：全程按 `elapsedSeconds` 累加，最后才 `seconds / 60`。
+   *     逐行先截断再相加会让「每天 29 分 59 秒」的窗口凭空少掉几分钟。
+   *  2. **日期键走本地日历**：全部经 `_isoDateAt` / `_shiftLocalDate` 推进，
+   *     绝不用 `toISOString()`（那是 UTC，会在东八区的凌晨把「今天」标成昨天）。
+   *  3. **`subjectDistribution` 排序确定**：分钟降序，同分按 `subjectId` 字典序升序，
+   *     绝不依赖 map 插入顺序（同一份数据两次调用必须给出同一份数组）。
+   *
+   * 科目归一刻意**不**实现：mock 按记录自身的 `subjectId` / `subjectName` 分桶，
+   * 它要锁的是「排序 / 截断 / 窗口」三条口径，不是 Kotlin `SubjectCatalog` 的分类学。
    */
-  async getReviewStats(days = 7) {
-    const windowDays = Math.max(1, Math.floor(days));
-    const dailyFocusMinutes = {};
-    const subjectDistribution = {};
-    let totalMinutes = 0;
-    let activeDays = 0;
-
-    const windowDates = [];
-    for (let i = windowDays - 1; i >= 0; i--) {
-      const d = this._isoDateAt(this.virtualClockMs, -i);
-      windowDates.push(d);
-      dailyFocusMinutes[d] = 0;
+  async getReviewOverview(scope = 'ROLLING_7', periodsBack = 0) {
+    if (!REVIEW_SCOPES.includes(scope)) {
+      throw new Error(`Invalid review scope: ${scope}`);
     }
+    const back = Number.isFinite(periodsBack) ? Math.max(0, Math.floor(periodsBack)) : 0;
+    // 滚动窗口不看 periodsBack：终点永远是今天，不存在「往前第几个窗口」。
+    const resolvedBack = scope === 'ROLLING_7' || scope === 'ROLLING_30' ? 0 : back;
 
-    for (const session of this.sessionRecords) {
-      if (Object.prototype.hasOwnProperty.call(dailyFocusMinutes, session.date)) {
-        dailyFocusMinutes[session.date] += session.durationMinutes;
-        subjectDistribution[session.subjectName] =
-          (subjectDistribution[session.subjectName] || 0) + session.durationMinutes;
-        totalMinutes += session.durationMinutes;
+    const dates = this._reviewWindowDates(scope, resolvedBack);
+    const todayIso = this._isoDateAt(this.virtualClockMs, 0);
+
+    const daySecondsByDate = new Map(dates.map(d => [d, 0]));
+    const buckets = new Map();
+    let examCount = 0;
+
+    for (const record of this.sessionRecords) {
+      if (!daySecondsByDate.has(record.date)) continue;
+      const seconds = Number.isFinite(record.elapsedSeconds)
+        ? Math.max(0, record.elapsedSeconds)
+        : 0;
+      daySecondsByDate.set(record.date, daySecondsByDate.get(record.date) + seconds);
+
+      let bucket = buckets.get(record.subjectId);
+      if (!bucket) {
+        bucket = {
+          subjectId: record.subjectId,
+          subjectName: record.subjectName,
+          totalSeconds: 0,
+          dailySeconds: new Map(),
+        };
+        buckets.set(record.subjectId, bucket);
       }
+      bucket.totalSeconds += seconds;
+      bucket.dailySeconds.set(record.date, (bucket.dailySeconds.get(record.date) || 0) + seconds);
+
+      if (record.isExam === true) examCount++;
     }
 
-    // An "active day" is a day with at least 30 minutes of recorded study,
-    // matching StudyStatisticsRepository.activeDayThresholdSeconds.
-    for (const d of windowDates) {
-      if (dailyFocusMinutes[d] >= ACTIVE_DAY_THRESHOLD_MINUTES) activeDays++;
-    }
+    const days = dates.map(date => ({
+      date,
+      dayLabel: this._reviewDayLabel(scope, date),
+      durationSeconds: daySecondsByDate.get(date) || 0,
+      isToday: date === todayIso,
+      // ISO 定长日期串，字典序即时间序。
+      isFuture: date > todayIso,
+    }));
+    const totalSeconds = days.reduce((acc, day) => acc + day.durationSeconds, 0);
+
+    const subjectDistribution = [...buckets.values()]
+      .map(bucket => ({
+        subjectId: bucket.subjectId,
+        subjectName: bucket.subjectName,
+        subjectColor: this._subjectColor(bucket.subjectId),
+        // 唯一的截断点：秒先加完，再除 60。
+        minutes: Math.floor(bucket.totalSeconds / 60),
+        // share 走秒：用整数分钟会在总时长不足一分钟时除零，也会把占比放大。
+        share: totalSeconds > 0 ? bucket.totalSeconds / totalSeconds : 0,
+        // 键集合与 days[].date 完全一致：没有数据的那天也必须是 0，不能缺键。
+        dailyMinutes: dates.reduce((acc, date) => {
+          acc[date] = Math.floor((bucket.dailySeconds.get(date) || 0) / 60);
+          return acc;
+        }, {}),
+      }))
+      .sort((a, b) => {
+        if (b.minutes !== a.minutes) return b.minutes - a.minutes;
+        if (a.subjectId === b.subjectId) return 0;
+        return a.subjectId < b.subjectId ? -1 : 1;
+      });
 
     return {
-      days: windowDays,
-      dailyFocusMinutes,
+      scope,
+      periodsBack: resolvedBack,
+      label: this._reviewScopeLabel(scope, dates),
+      windowDays: dates.length,
+      days,
+      totalSeconds,
+      // 分母是窗口长度，不是有效天数。
+      dailyAverageSeconds: dates.length > 0 ? Math.floor(totalSeconds / dates.length) : 0,
+      examCount,
       subjectDistribution,
-      totalFocusHours: parseFloat((totalMinutes / 60).toFixed(1)),
-      dailyAverageMinutes: Math.round(totalMinutes / windowDates.length),
-      activeDays,
     };
+  }
+
+  /** 编辑一条已完成记录的随笔。空内容 / 找不到会话都必须是硬失败，不做静默回落。 */
+  async updateSessionNote(sessionId, isExam, note) {
+    const cleanNote = typeof note === 'string' ? note.trim() : '';
+    if (cleanNote.length === 0) {
+      throw new Error('Session note cannot be empty');
+    }
+    const record = this._findSessionRecord(sessionId, isExam);
+    if (!record) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    record.note = cleanNote;
+    this._emitDataChanged('sessions');
+    return true;
+  }
+
+  /** 删除一条记录。找不到返回 false（与 deleteTask / deleteNote 同风格）。 */
+  async deleteSessionRecord(sessionId, isExam) {
+    const index = this.sessionRecords.findIndex(r => this._isSessionRecord(r, sessionId, isExam));
+    if (index === -1) return false;
+    this.sessionRecords.splice(index, 1);
+    this._emitDataChanged('sessions');
+    return true;
+  }
+
+  _findSessionRecord(sessionId, isExam) {
+    return this.sessionRecords.find(r => this._isSessionRecord(r, sessionId, isExam)) || null;
+  }
+
+  _isSessionRecord(record, sessionId, isExam) {
+    return record.id === sessionId && Boolean(record.isExam) === Boolean(isExam);
+  }
+
+  _subjectColor(subjectId) {
+    const subject = this.subjects.find(s => s.id === subjectId);
+    return subject ? subject.color : NEUTRAL_SUBJECT_COLOR;
+  }
+
+  /** 窗口内的本地日历日期键，升序、唯一。 */
+  _reviewWindowDates(scope, periodsBack) {
+    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') {
+      const span = scope === 'ROLLING_7' ? 7 : 30;
+      const dates = [];
+      for (let i = span - 1; i >= 0; i--) dates.push(this._isoDateAt(this.virtualClockMs, -i));
+      return dates;
+    }
+
+    if (scope === 'CALENDAR_WEEK') {
+      const anchor = this._shiftLocalDate(new Date(this.virtualClockMs), -7 * periodsBack);
+      const weekday = anchor.getDay(); // 0 = 周日
+      const monday = this._shiftLocalDate(anchor, weekday === 0 ? -6 : 1 - weekday);
+      const dates = [];
+      // 周一起 7 天：跨月/跨年都靠本地日历推进，不会漏日也不会多日。
+      for (let i = 0; i < 7; i++) dates.push(this._isoOfLocalDate(this._shiftLocalDate(monday, i)));
+      return dates;
+    }
+
+    // CALENDAR_MONTH：先落到当月 1 号，再用「下月 0 号」求真实天数
+    // （new Date(y, m, 0) 的月份是 0-based，m = 当月 1-based - 1）。
+    const today = new Date(this.virtualClockMs);
+    const firstOfMonth = new Date(today.getFullYear(), today.getMonth() - periodsBack, 1);
+    const lengthOfMonth = new Date(
+      firstOfMonth.getFullYear(),
+      firstOfMonth.getMonth() + 1,
+      0
+    ).getDate();
+    const dates = [];
+    for (let i = 0; i < lengthOfMonth; i++) {
+      dates.push(this._isoOfLocalDate(this._shiftLocalDate(firstOfMonth, i)));
+    }
+    return dates;
+  }
+
+  /** 横轴标签：滚动窗口 → `MM-DD`，自然周 → `周一…周日`，自然月 → `D日`。 */
+  _reviewDayLabel(scope, dateIso) {
+    if (scope === 'ROLLING_7' || scope === 'ROLLING_30') return dateIso.slice(5);
+    if (scope === 'CALENDAR_WEEK') {
+      const d = this._localDateFromIso(dateIso);
+      return WEEKDAY_LABELS[(d.getDay() + 6) % 7];
+    }
+    if (scope === 'CALENDAR_MONTH') return `${Number(dateIso.slice(8, 10))}日`;
+    return dateIso;
+  }
+
+  /** 窗口标题。自然周如实显示首尾日期（跨月也照实），不折算成「第 N 周」。 */
+  _reviewScopeLabel(scope, dates) {
+    if (scope === 'ROLLING_7') return '最近 7 天';
+    if (scope === 'ROLLING_30') return '最近 30 天';
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    if (!first || !last) return '';
+    if (scope === 'CALENDAR_WEEK') {
+      return `${this._monthDayLabel(first)} - ${this._monthDayLabel(last)}`;
+    }
+    if (scope === 'CALENDAR_MONTH') {
+      return `${Number(first.slice(0, 4))}年${Number(first.slice(5, 7))}月`;
+    }
+    return '';
+  }
+
+  _monthDayLabel(dateIso) {
+    return `${Number(dateIso.slice(5, 7))}月${Number(dateIso.slice(8, 10))}日`;
+  }
+
+  _localDateFromIso(dateIso) {
+    return new Date(
+      Number(dateIso.slice(0, 4)),
+      Number(dateIso.slice(5, 7)) - 1,
+      Number(dateIso.slice(8, 10))
+    );
+  }
+
+  /** 本地日历日推进：绝不用 24 小时倍数（跨夏令时会漂一天）。 */
+  _shiftLocalDate(date, deltaDays) {
+    const shifted = new Date(date.getTime());
+    shifted.setDate(shifted.getDate() + deltaDays);
+    return shifted;
+  }
+
+  _isoOfLocalDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   /** Local-calendar yyyy-MM-dd shifted by deltaDays (never UTC-shifted). */
   _isoDateAt(epochMs, deltaDays) {
-    const d = new Date(epochMs);
-    d.setDate(d.getDate() + deltaDays);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return this._isoOfLocalDate(this._shiftLocalDate(new Date(epochMs), deltaDays));
   }
 
   async getDailyTimeline(date) {

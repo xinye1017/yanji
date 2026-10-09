@@ -16,6 +16,7 @@ import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -251,78 +252,185 @@ class YanjiDataModule(
     // ------------------------------------------------------------ 统计
 
     /**
-     * 最近 N 天趋势与科目分布。
+     * 回顾页概览：一次拿到窗口内的逐日时长 + 展示桶分布。
      *
-     * 窗口是**滚动 N 天**（含今天，不含明天），绝不按自然周（周一为起点）裁剪：
-     * 否则周一之后调用会得到未来日期的零柱、并把周一的真实数据整块丢掉。
-     * `days` 被如实尊重；`dailyAverageMinutes` 的分母是**窗口长度**，
-     * `activeDays` 用 30 分钟阈值 —— 与 `test-e2e/contracts/mock-bridge.js` 的
-     * `getReviewStats` 逐字对齐。
+     * `scope` 只有四个合法取值，**不在白名单里直接 reject** —— 猜一个默认窗口会让
+     * 「上周」按钮静默变成「最近 7 天」，用户看到的区间与请求的不一致。
+     *
+     * 窗口语义：
+     *  - `ROLLING_7` / `ROLLING_30`：今天往前 N 天（含今天），恒不含未来日期，
+     *    `periodsBack` 被强制为 0（滚动窗口没有「往前翻期」这回事）；
+     *  - `CALENDAR_WEEK`：自然周，`periodsBack` = 往回翻几个整周（0 = 本周）；
+     *  - `CALENDAR_MONTH`：自然月，`periodsBack` = 往回翻几个月（0 = 本月）。
+     *
+     * 自然周边界必须落到周一（`previousOrSame(MONDAY)`，与
+     * `StudyStatisticsRepository.buildWeeklyStudySummary` 同一写法），
+     * 拿 7 天滚动凑会让「上周」和本周的数据整块重叠。
+     *
+     * 科目分布按展示桶归一：**`row.subjectId` 与 `row.subjectName` 必须成对传入**
+     * `BridgeMappers.subjectBucket`，只看名字无法把自定义 id 归进它的大类。
+     *
+     * 所有秒 → 分钟的换算只在 [BridgeMappers] 里发生一次：这里交出去的全部是原始秒数。
      */
     @ReactMethod
-    fun getReviewStats(days: Double, promise: Promise) {
-        scope.launch {
-            val windowDays = days.toLong().coerceAtLeast(1L).toInt()
-            val today = YanjiTime.today()
-            val windowDates = BridgeMappers.rollingWindowDates(today.minusDays((windowDays - 1).toLong()), windowDays)
-            val range = YanjiTime.lastDaysRange(windowDays.toLong())
-            val activeDayThresholdSeconds =
-                repository.settings.value.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L
+    fun getReviewOverview(scope: String, periodsBack: Double, promise: Promise) {
+        if (scope !in BridgeMappers.REVIEW_SCOPES) {
+            promise.reject("E_INVALID_SCOPE", "Unknown review scope: $scope")
+            return
+        }
+        val effectivePeriodsBack = when (scope) {
+            BridgeMappers.SCOPE_ROLLING_7, BridgeMappers.SCOPE_ROLLING_30 -> 0L
+            else -> periodsBack.toLong().coerceAtLeast(0L)
+        }
+        // 窗口在协程外算好：只需要本地日历推进，没有 IO，也就没有挂起语义。
+        val window = reviewWindow(scope, effectivePeriodsBack)
 
+        // `scope` 这个形参遮住了协程域，必须写全名，否则下面 launch 的对象是 String。
+        this.scope.launch {
+            val range = window.range
             val focusSessions = repository.observeFocusSessionsInRange(range.startInclusive, range.endExclusive).first()
             val examSessions = repository.observeExamSessionsInRange(range.startInclusive, range.endExclusive).first()
             val focusTotals = repository.observeFocusSubjectTotals(range.startInclusive, range.endExclusive).first()
             val examTotals = repository.observeExamSubjectTotals(range.startInclusive, range.endExclusive).first()
 
-            val windowKeys = windowDates.toSet()
-
-            // 每个窗口日期的当日秒数（含今天；未来日期永远不会出现）
+            val windowKeys = window.dates.toSet()
             val daySecondsByDate = LinkedHashMap<String, Long>()
-            windowDates.forEach { daySecondsByDate[it] = 0L }
+            window.dates.forEach { daySecondsByDate[it] = 0L }
+            val subjectSecondsByDate = LinkedHashMap<String, MutableList<BridgeMappers.SubjectSecondsSlice>>()
 
-            // FocusSession 与 ExamSession 都只有 startTime + 各自的实际时长，
-            // 先归一成 (日期, 秒数) 再按窗口键聚合，避免在混合列表上做强转。
-            val windowSeconds: List<Pair<Long, Long>> =
-                focusSessions.map { it.startTime to it.durationSeconds } +
-                    examSessions.map { it.startTime to it.actualDurationSeconds }
-            windowSeconds.forEach { (startTime, seconds) ->
+            // 专注取 durationSeconds、模考取 actualDurationSeconds，统一成 (日期, 桶, 秒数)。
+            fun accumulate(startTime: Long, subjectId: String, subjectName: String, seconds: Long) {
                 val date = YanjiTime.localDate(startTime).format(YanjiTime.isoDateFormatter)
-                if (date in windowKeys) {
-                    daySecondsByDate[date] = (daySecondsByDate[date] ?: 0L) + seconds
-                }
+                if (date !in windowKeys) return
+                daySecondsByDate[date] = (daySecondsByDate[date] ?: 0L) + seconds
+                val (bucketId, displayName) = BridgeMappers.subjectBucket(subjectId, subjectName)
+                subjectSecondsByDate.getOrPut(date) { mutableListOf() }
+                    .add(BridgeMappers.SubjectSecondsSlice(bucketId, displayName, seconds))
             }
 
-            // 科目分布：按展示名聚合分钟数（只统计窗口内的会话）
-            val subjectMinutes = LinkedHashMap<String, Int>()
-            (focusTotals + examTotals).forEach { row ->
-                subjectMinutes[row.subjectName] =
-                    (subjectMinutes[row.subjectName] ?: 0) + (row.durationSeconds / 60L).toInt()
+            focusSessions.forEach { accumulate(it.startTime, it.subjectId, it.subjectName, it.durationSeconds) }
+            examSessions.forEach {
+                accumulate(it.startTime, it.subjectId, it.subjectName, it.actualDurationSeconds)
             }
 
-            val stats = BridgeMappers.reviewStatsFields(
-                windowDays = windowDays,
+            // 窗口内各展示桶的合计秒数（DAO 的 GROUP BY 行，已按 status='COMPLETED' 过滤）
+            val subjectTotals = (focusTotals + examTotals).map { row ->
+                val (bucketId, displayName) = BridgeMappers.subjectBucket(row.subjectId, row.subjectName)
+                BridgeMappers.SubjectSecondsSlice(bucketId, displayName, row.durationSeconds)
+            }
+
+            val overview = BridgeMappers.reviewOverviewFields(
+                scope = scope,
+                periodsBack = effectivePeriodsBack.toInt(),
+                windowDates = window.dates,
+                todayIso = YanjiTime.todayIso(),
                 daySecondsByDate = daySecondsByDate,
-                subjectMinutesBySubject = subjectMinutes,
-                activeDayThresholdSeconds = activeDayThresholdSeconds
+                subjectSecondsByDate = subjectSecondsByDate,
+                subjectTotals = subjectTotals,
+                examCount = examSessions.count { it.status.name == "COMPLETED" }
             )
+            promise.resolve(reviewOverviewMap(overview))
+        }
+    }
 
-            val dailyFocusMinutes = Arguments.createMap()
-            stats.dailyFocusMinutes.forEach { (date, minutes) ->
-                dailyFocusMinutes.putInt(date, minutes)
+    /** 回顾窗口 = 一个 [com.example.yanji.data.EpochRange] + 窗口内的本地日期键。 */
+    private data class ReviewWindow(
+        val range: com.example.yanji.data.EpochRange,
+        val dates: List<String>
+    )
+
+    /**
+     * scope → 窗口。日期键与 DAO 查询区间来自同一套日历推进，二者不会错位。
+     *
+     * 调用方（[getReviewOverview]）已按白名单 reject，第四个分支不可达；
+     * 这里显式抛错而不是给个默认窗口，免得将来有人绕过校验后拿到「最近 7 天」。
+     */
+    private fun reviewWindow(scope: String, periodsBack: Long): ReviewWindow {
+        val today = YanjiTime.today()
+        return when (scope) {
+            BridgeMappers.SCOPE_ROLLING_7 -> ReviewWindow(
+                YanjiTime.lastDaysRange(7L),
+                BridgeMappers.rollingWindowDates(today.minusDays(6L), 7)
+            )
+            BridgeMappers.SCOPE_ROLLING_30 -> ReviewWindow(
+                YanjiTime.lastDaysRange(30L),
+                BridgeMappers.rollingWindowDates(today.minusDays(29L), 30)
+            )
+            BridgeMappers.SCOPE_CALENDAR_WEEK -> {
+                val monday = today.minusWeeks(periodsBack)
+                    .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+                ReviewWindow(YanjiTime.weekRange(periodsBack), BridgeMappers.rollingWindowDates(monday, 7))
             }
-            val subjectDistribution = Arguments.createMap()
-            stats.subjectDistribution.forEach { (name, minutes) ->
-                subjectDistribution.putInt(name, minutes)
+            BridgeMappers.SCOPE_CALENDAR_MONTH -> {
+                val first = today.minusMonths(periodsBack).withDayOfMonth(1)
+                ReviewWindow(
+                    YanjiTime.monthRange(periodsBack),
+                    BridgeMappers.rollingWindowDates(first, first.lengthOfMonth())
+                )
             }
-            val payload = Arguments.createMap().apply {
-                putInt("days", stats.days)
-                putMap("dailyFocusMinutes", dailyFocusMinutes)
-                putMap("subjectDistribution", subjectDistribution)
-                putDouble("totalFocusHours", stats.totalFocusHours)
-                putInt("dailyAverageMinutes", stats.dailyAverageMinutes)
-                putInt("activeDays", stats.activeDays)
+            else -> throw IllegalArgumentException("Unsupported review scope: $scope")
+        }
+    }
+
+    /**
+     * 编辑某次专注的随笔。
+     *
+     * 模考**没有**可编辑随笔（`StudyStatisticsRepository.updateSessionNote` 对 exam 是
+     * no-op），因此显式 reject 而不是静默 `resolve(true)` —— 静默成功会让用户以为存上了。
+     *
+     * 纯空白随笔一律拒绝（与 [saveQuickNote] 同一先例）：把空白写进库等于制造一条
+     * 「有内容但是空的」记录，读回来没有任何信息量。
+     */
+    @ReactMethod
+    fun updateSessionNote(sessionId: String, isExam: Boolean, note: String, promise: Promise) {
+        val cleanNote = note.trim()
+        if (cleanNote.isEmpty()) {
+            promise.reject("E_EMPTY_NOTE", "Session note cannot be empty")
+            return
+        }
+        scope.launch {
+            // 模考不支持可编辑随笔：先于查库拒绝，免得为一条注定失败的调用去读一次库，
+            // 也免得「模考 + 空白」报出 E_EMPTY_NOTE 这种与真实原因不符的错。
+            if (isExam) {
+                promise.reject("E_UNSUPPORTED", "模考记录暂不支持编辑随笔")
+                return@launch
             }
-            promise.resolve(payload)
+            if (StudyStatisticsRepository(repository).getFocusSessionDetail(sessionId) == null) {
+                promise.reject("E_SESSION_NOT_FOUND", "No focus session with id $sessionId")
+                return@launch
+            }
+            repository.updateFocusSessionNote(sessionId, cleanNote)
+            emitDataChanged("sessions")
+            promise.resolve(true)
+        }
+    }
+
+    /**
+     * 删除一条专注 / 模考记录。
+     *
+     * 先确认记录存在再删：删不存在的 id 也 resolve(true) 会让前端把「删掉了」当成事实，
+     * 而库里那条记录其实还在。
+     */
+    @ReactMethod
+    fun deleteSessionRecord(sessionId: String, isExam: Boolean, promise: Promise) {
+        scope.launch {
+            val statistics = StudyStatisticsRepository(repository)
+            val detail = if (isExam) {
+                statistics.getExamSessionDetail(sessionId)
+            } else {
+                statistics.getFocusSessionDetail(sessionId)
+            }
+            if (detail == null) {
+                promise.reject("E_SESSION_NOT_FOUND", "No session with id $sessionId")
+                return@launch
+            }
+            if (isExam) {
+                repository.deleteExamSession(sessionId)
+            } else {
+                repository.deleteFocusSession(sessionId)
+            }
+            emitDataChanged("sessions")
+            promise.resolve(true)
         }
     }
 
@@ -437,9 +545,20 @@ class YanjiDataModule(
         }
     }
 
+    /**
+     * 专注 **与** 模考都在监听：只订阅 `focusSessions` 时，删掉 / 改掉一条模考后
+     * 回顾页收不到任何事件，界面上那条记录会一直留着。
+     *
+     * `combine` 在两条 Flow 中**任意一条**发射时都会发射，因此写路径
+     * （`updateSessionNote` / `deleteSessionRecord`）里显式的 `emitDataChanged`
+     * 与这里的 Flow 发射会对同一次写重复发事件。前端按 `type` 不去重、
+     * 「可重复刷新」是已接受的现状 —— 这里刻意**不做**节流 / 去抖：
+     * 桥接层少发一次事件，界面就少刷新一次。
+     */
     private fun observeSessions() {
         scope.launch {
-            repository.focusSessions.collectLatest { emitDataChanged("sessions") }
+            combine(repository.focusSessions, repository.examSessions) { _, _ -> Unit }
+                .collectLatest { emitDataChanged("sessions") }
         }
     }
 
@@ -479,6 +598,57 @@ class YanjiDataModule(
             putDouble("createdAt", fields.createdAt)
         }
     }
+
+    /**
+     * 回顾概览载荷（`ReviewOverview`）。这里只做 `WritableMap` 装配，
+     * 所有秒 → 分钟 / 占比 / 排序都在 [BridgeMappers] 里算完了。
+     */
+    private fun reviewOverviewMap(fields: BridgeMappers.ReviewOverviewFields): WritableMap =
+        Arguments.createMap().apply {
+            putString("scope", fields.scope)
+            putInt("periodsBack", fields.periodsBack)
+            putString("label", fields.label)
+            putInt("windowDays", fields.windowDays)
+            putArray(
+                "days",
+                Arguments.createArray().apply {
+                    fields.days.forEach { day ->
+                        pushMap(Arguments.createMap().apply {
+                            putString("date", day.date)
+                            putString("dayLabel", day.dayLabel)
+                            putDouble("durationSeconds", day.durationSeconds.toDouble())
+                            putBoolean("isToday", day.isToday)
+                            putBoolean("isFuture", day.isFuture)
+                        })
+                    }
+                }
+            )
+            putDouble("totalSeconds", fields.totalSeconds.toDouble())
+            putDouble("dailyAverageSeconds", fields.dailyAverageSeconds.toDouble())
+            putInt("examCount", fields.examCount)
+            putArray(
+                "subjectDistribution",
+                Arguments.createArray().apply {
+                    fields.subjectDistribution.forEach { slice ->
+                        pushMap(Arguments.createMap().apply {
+                            putString("subjectId", slice.subjectId)
+                            putString("subjectName", slice.subjectName)
+                            putString("subjectColor", slice.subjectColor)
+                            putInt("minutes", slice.minutes)
+                            putDouble("share", slice.share)
+                            putMap(
+                                "dailyMinutes",
+                                Arguments.createMap().apply {
+                                    slice.dailyMinutes.forEach { (date, minutes) ->
+                                        putInt(date, minutes)
+                                    }
+                                }
+                            )
+                        })
+                    }
+                }
+            )
+        }
 
     private fun noteMap(fields: BridgeMappers.NoteFields): WritableMap =
         Arguments.createMap().apply {

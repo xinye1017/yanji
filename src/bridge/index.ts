@@ -63,13 +63,65 @@ export interface TodayStats {
   notesCount: number;
 }
 
-export interface ReviewStats {
-  days: number;
-  dailyFocusMinutes: Record<string, number>;
-  subjectDistribution: Record<string, number>;
-  totalFocusHours: number;
-  dailyAverageMinutes: number;
-  activeDays: number;
+/**
+ * 回顾页的趋势窗口。
+ *
+ * - `ROLLING_7` / `ROLLING_30`：以**今天**为终点的滚动窗口（不是自然周），
+ *   这样柱状图的横轴不会随星期几漂移。
+ * - `CALENDAR_WEEK`：自然周（周一起、周日止），`periodsBack` = 0 表示本周。
+ * - `CALENDAR_MONTH`：自然月，`periodsBack` = 0 表示本月。
+ */
+export type ReviewScope = 'ROLLING_7' | 'ROLLING_30' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH';
+
+/** 窗口里的一天。日历视图里今天之后的格子 `isFuture` 为 true 且时长恒为 0。 */
+export interface ReviewPeriodDay {
+  /** ISO date `yyyy-MM-dd`，本地日历。 */
+  date: string;
+  /** `ROLLING_*` 为 `MM-DD`；自然周为「周一」…；自然月为 `D日`。 */
+  dayLabel: string;
+  durationSeconds: number;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+/** 一个科目桶在窗口内的占比。桶口径与科目统计一致（子类桶 + 展示名）。 */
+export interface ReviewSubjectSlice {
+  /** `SubjectCatalog.subcategoryBucketId` 归一后的桶 id。 */
+  subjectId: string;
+  subjectName: string;
+  subjectColor: string;
+  /** 整数分钟。窗口内**秒数累加后**才除以 60，零头不逐行丢弃。 */
+  minutes: number;
+  /** 0..1 占窗口总时长的比例；窗口总时长为 0 时为 0。 */
+  share: number;
+  /** 与 `ReviewOverview.days[].date` 同一批键，含 0 值日。 */
+  dailyMinutes: Record<string, number>;
+}
+
+/**
+ * 回顾页的趋势概览，取代旧的 `ReviewStats`。
+ *
+ * 旧契约里三个字段被有意移除：
+ * - `activeDays`：阈值来自用户设置却无处可改也无处可见，渲染它等于在回顾页
+ *   引入一个用户无法解释的连续天数框架。
+ * - `totalFocusHours` / `dailyAverageMinutes`：分钟数先按秒截断再汇总，多天各丢
+ *   一次零头。现在统一用秒承载时长，只在展示层换算。
+ */
+export interface ReviewOverview {
+  scope: ReviewScope;
+  periodsBack: number;
+  /** 窗口的可读标题，如「最近 7 天」「2026年10月」。 */
+  label: string;
+  /** 等于 `days.length`。 */
+  windowDays: number;
+  /** 升序（早 → 晚），绝不出现被裁掉的过去日期。 */
+  days: ReviewPeriodDay[];
+  totalSeconds: number;
+  /** 分母是窗口长度，不是有效天数。 */
+  dailyAverageSeconds: number;
+  examCount: number;
+  /** 按 `minutes` 降序，相同再按 `subjectId` 字典序，保证渲染顺序稳定。 */
+  subjectDistribution: ReviewSubjectSlice[];
 }
 
 export interface DailyTimelineSession {
@@ -195,7 +247,20 @@ interface YanjiDataModuleNative {
   toggleFavoriteNote(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
   getSubjects(): Promise<Subject[]>;
-  getReviewStats(days: number): Promise<ReviewStats>;
+  /**
+   * 回顾页的趋势概览。
+   *
+   * `scope` 不在白名单内时原生侧 reject（`E_INVALID_SCOPE`），不做猜测回落。
+   * `periodsBack` 只对 `CALENDAR_*` 有意义，滚动窗口强制为 0。
+   */
+  getReviewOverview(scope: ReviewScope, periodsBack: number): Promise<ReviewOverview>;
+  /**
+   * 编辑一条已完成专注的随笔。模考暂不支持（原生 reject `E_UNSUPPORTED`）。
+   * 空内容 reject `E_EMPTY_NOTE`；找不到会话 reject `E_SESSION_NOT_FOUND`。
+   */
+  updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>;
+  /** 删除一条专注/模考记录。找不到会话 reject `E_SESSION_NOT_FOUND`。 */
+  deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>;
   getDailyTimeline(date: string): Promise<DailyTimeline>;
   getUserSettings(): Promise<UserSettings>;
   updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>;

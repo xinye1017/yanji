@@ -33,9 +33,11 @@ export function registerTier2Tests() {
       assertEqual(timeline.completedTasks.length, 0);
       assertEqual(timeline.notes.length, 0);
 
-      const reviewStats = await bridge.getReviewStats(7);
-      assertEqual(reviewStats.totalFocusHours, 0);
-      assert(!Number.isNaN(reviewStats.totalFocusHours), 'totalFocusHours must never be NaN');
+      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      assertEqual(overview.totalSeconds, 0);
+      assert(!Number.isNaN(overview.totalSeconds), 'totalSeconds must never be NaN');
+      assertEqual(overview.dailyAverageSeconds, 0, 'A zero window must average 0, not NaN');
+      assertEqual(overview.days.length, 7, 'The zero state must still carry the full window');
     });
   });
 

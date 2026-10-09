@@ -71,7 +71,9 @@ test-e2e/
 │   ├── m2-native-bridge.test.js          # Features 5-8 (Timer, Data, Theme modules, Contracts)
 │   ├── m3-design-navigation.test.js      # Features 9-11 (Tokens, 3-tab Navigation, Settings)
 │   ├── m4-today-focus-moment.test.js     # Features 12-16 (Today CTA, Tasks, Focus, Moments)
-│   └── m5-review-ai-e2e.test.js          # Features 17-21 (Review Timeline, Stats, AI slot, E2E)
+│   ├── m5-review-ai-e2e.test.js          # Features 17-21 (Review Timeline, Stats, AI slot, E2E)
+│   ├── m8-shipped-tokens.test.js         # Shipped src/theme/tokens.ts red lines
+│   └── m9-review-view-logic.test.js      # Shipped src/screens/reviewViewLogic.ts (date clamp, timeline merge)
 ├── tier2-boundaries/
 │   └── boundaries.test.js                # Empty data, limits, date edges, unicode stress
 ├── tier3-interactions/

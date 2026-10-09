@@ -61,7 +61,7 @@ class CollectFirstRemovedTest {
             Regex("""repository\.observeStudyTasks\(date\)\.first\(\)""").containsMatchIn(code)
         )
         assertTrue(
-            "getReviewStats 必须用 flow.first() 读取窗口内的时段",
+            "getReviewOverview 必须用 flow.first() 读取窗口内的时段",
             code.contains("repository.observeFocusSessionsInRange(range.startInclusive, range.endExclusive).first()")
         )
         assertTrue(

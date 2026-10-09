@@ -4,6 +4,9 @@
  * Derived strictly from PROJECT.md § Interface Contracts.
  */
 
+/** 回顾页时间粒度白名单：与 TS `ReviewScope` / Kotlin `BridgeMappers.REVIEW_SCOPES` 逐字一致。 */
+const REVIEW_SCOPES = ['ROLLING_7', 'ROLLING_30', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
+
 export const BridgeSchemas = {
   isValidActiveSessionState(obj) {
     if (!obj || typeof obj !== 'object') return false;
@@ -62,16 +65,38 @@ export const BridgeSchemas = {
     );
   },
 
-  isValidReviewStats(obj) {
+  isValidReviewOverview(obj) {
     if (!obj || typeof obj !== 'object') return false;
-    return (
-      typeof obj.days === 'number' &&
-      typeof obj.dailyFocusMinutes === 'object' &&
-      typeof obj.subjectDistribution === 'object' &&
-      typeof obj.totalFocusHours === 'number' &&
-      typeof obj.dailyAverageMinutes === 'number' &&
-      typeof obj.activeDays === 'number'
-    );
+    if (!REVIEW_SCOPES.includes(obj.scope)) return false;
+    if (typeof obj.periodsBack !== 'number') return false;
+    if (typeof obj.label !== 'string' || obj.label.length === 0) return false;
+    if (typeof obj.windowDays !== 'number') return false;
+    if (!Array.isArray(obj.days)) return false;
+    // windowDays 是 days 的长度，不是另一个独立计算的数字。
+    if (obj.windowDays !== obj.days.length) return false;
+    if (typeof obj.totalSeconds !== 'number') return false;
+    if (typeof obj.dailyAverageSeconds !== 'number') return false;
+    if (typeof obj.examCount !== 'number') return false;
+    if (!Array.isArray(obj.subjectDistribution)) return false;
+
+    for (const day of obj.days) {
+      if (!day || typeof day !== 'object') return false;
+      if (typeof day.date !== 'string' || typeof day.dayLabel !== 'string') return false;
+      if (typeof day.durationSeconds !== 'number') return false;
+      if (typeof day.isToday !== 'boolean' || typeof day.isFuture !== 'boolean') return false;
+    }
+
+    for (const slice of obj.subjectDistribution) {
+      if (!slice || typeof slice !== 'object') return false;
+      if (typeof slice.subjectId !== 'string') return false;
+      if (typeof slice.subjectName !== 'string') return false;
+      if (typeof slice.subjectColor !== 'string') return false;
+      if (typeof slice.minutes !== 'number') return false;
+      if (typeof slice.share !== 'number') return false;
+      if (!slice.dailyMinutes || typeof slice.dailyMinutes !== 'object') return false;
+    }
+
+    return true;
   },
 
   isValidDailyTimeline(obj) {

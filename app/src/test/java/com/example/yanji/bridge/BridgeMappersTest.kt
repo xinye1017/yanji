@@ -173,80 +173,220 @@ class BridgeMappersTest {
         assertEquals(listOf("2026-03-28", "2026-03-29", "2026-03-30"), dates)
     }
 
-    @Test
-    fun reviewStatsFields_dividesTheAverageByTheWindowLengthNotActiveDays() {
-        val daySeconds = linkedMapOf(
-            "2026-10-06" to 3600L, // 60 分钟
-            "2026-10-07" to 0L,
-            "2026-10-08" to 3600L // 60 分钟
-        )
+    // ------------------------------------------------------------------ 复盘概览
 
-        val stats = BridgeMappers.reviewStatsFields(
-            windowDays = 3,
+    /** 一天的 25 分 59 秒：逐日先截断与窗口内先累加的结果差着 6 分钟（203 vs 209）。 */
+    private val almostHalfHour = 1799L
+
+    @Test
+    fun subjectBucket_mergesCustomIdsOfTheSameCategoryIntoOneDirectBucket() {
+        // 目录里没有任何 id 为 custom-math-x 的学科，但名字里有「数学」→
+        // 必须归到 math 的直接桶，而不是自成一个桶。
+        val (bucketId, displayName) = BridgeMappers.subjectBucket("custom-math-x", "数学一（强化）")
+
+        assertEquals("math__unclassified", bucketId)
+        assertEquals("数学一（综合/未细分）", displayName)
+    }
+
+    @Test
+    fun subjectBucket_keepsKnownSubcategoryIdAndName() {
+        assertEquals(
+            "math_linear" to "线性代数",
+            BridgeMappers.subjectBucket("math_linear", "线性代数")
+        )
+    }
+
+    @Test
+    fun reviewOverviewFields_truncatesMinutesOnceAfterSummingSeconds() {
+        val dates = (2..8).map { "2026-10-%02d".format(it) }
+        val daySeconds = dates.associateWith { almostHalfHour }
+        // 每天恰好一条 25 分 59 秒的专注，全部落在同一个展示桶里。
+        val slice = BridgeMappers.SubjectSecondsSlice("math_linear", "线性代数", almostHalfHour)
+
+        val overview = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_ROLLING_7,
+            periodsBack = 0,
+            windowDates = dates,
+            todayIso = "2026-10-08",
             daySecondsByDate = daySeconds,
-            subjectMinutesBySubject = mapOf("高等数学" to 120),
-            activeDayThresholdSeconds = 1800L
+            subjectSecondsByDate = dates.associateWith { listOf(slice) },
+            subjectTotals = listOf(slice.copy(seconds = almostHalfHour * dates.size)),
+            examCount = 0
         )
 
-        // 120 分钟 / 3 天 = 40 —— 分母是窗口长度，不是有效天数 2
-        assertEquals(40, stats.dailyAverageMinutes)
-        assertEquals(3, stats.days)
-        assertEquals(2, stats.activeDays)
-        assertEquals(2.0, stats.totalFocusHours, 0.0001)
-        assertEquals(60, stats.dailyFocusMinutes["2026-10-06"])
-        assertEquals(0, stats.dailyFocusMinutes["2026-10-07"])
-        assertEquals(60, stats.dailyFocusMinutes["2026-10-08"])
-        assertEquals(120, stats.subjectDistribution["高等数学"])
+        assertEquals("秒数不被截断", 7L * almostHalfHour, overview.totalSeconds)
+        assertEquals(7, overview.windowDays)
+        // 分母是窗口长度 7，不是有效天数
+        assertEquals(7L * almostHalfHour / 7L, overview.dailyAverageSeconds)
+        val subject = overview.subjectDistribution.single()
+        // 唯一的截断点：7×1799 = 12593 秒 → 12593/60 = 209 分钟
+        assertEquals(209, subject.minutes)
+        // 单日仍然是如实的 29 分 59 秒 → 29 分钟
+        assertEquals(29, subject.dailyMinutes["2026-10-02"])
+        // 若逐日先截断再相加，这里会是 7×29 = 203；subject.minutes 必须是 209
+        assertTrue("逐日先截断会得到 203", subject.minutes != 29 * 7)
     }
 
     @Test
-    fun reviewStatsFields_activeDaysUsesTheThirtyMinuteThreshold() {
-        val daySeconds = linkedMapOf(
-            "2026-10-06" to 1799L, // 29 分 59 秒 → 不活跃
-            "2026-10-07" to 1800L, // 恰好 30 分钟 → 活跃
-            "2026-10-08" to 3600L
+    fun reviewOverviewFields_shareIsZeroWhenTheWindowHasNoSeconds() {
+        val dates = listOf("2026-10-06", "2026-10-07", "2026-10-08")
+        val zeroSlice = BridgeMappers.SubjectSecondsSlice("english", "英语一", 0L)
+
+        val overview = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_ROLLING_7,
+            periodsBack = 0,
+            windowDates = dates,
+            todayIso = "2026-10-08",
+            daySecondsByDate = emptyMap(),
+            subjectSecondsByDate = emptyMap(),
+            subjectTotals = listOf(zeroSlice),
+            examCount = 0
         )
 
-        val stats = BridgeMappers.reviewStatsFields(
-            windowDays = 3,
-            daySecondsByDate = daySeconds,
-            subjectMinutesBySubject = emptyMap(),
-            activeDayThresholdSeconds = 1800L
-        )
-
-        assertEquals(2, stats.activeDays)
-        // 29 分钟也被如实记录为当天的分钟数（只是不算「有效学习日」）
-        assertEquals(29, stats.dailyFocusMinutes["2026-10-06"])
+        assertEquals(0L, overview.totalSeconds)
+        assertEquals(0L, overview.dailyAverageSeconds)
+        assertTrue(overview.subjectDistribution.all { it.share == 0.0 })
+        assertTrue(overview.subjectDistribution.all { it.share in 0.0..1.0 })
     }
 
     @Test
-    fun reviewStatsFields_emptyWindowReportsZerosWithoutFabricatingAnything() {
-        val stats = BridgeMappers.reviewStatsFields(
-            windowDays = 7,
-            daySecondsByDate = (1..7).associate { "2026-10-0$it" to 0L },
-            subjectMinutesBySubject = emptyMap(),
-            activeDayThresholdSeconds = 1800L
+    fun reviewOverviewFields_shareSumsToOneWhenThereAreSeconds() {
+        val dates = listOf("2026-10-06", "2026-10-07", "2026-10-08")
+        // 逐日分布与窗口合计必须自洽：每天 1800 + 900，合计 × 3 天
+        val perDay = listOf(
+            BridgeMappers.SubjectSecondsSlice("math_linear", "线性代数", 1800L),
+            BridgeMappers.SubjectSecondsSlice("english", "英语一", 900L)
+        )
+        val totals = perDay.map { it.copy(seconds = it.seconds * dates.size) }
+
+        val overview = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_ROLLING_7,
+            periodsBack = 0,
+            windowDates = dates,
+            todayIso = "2026-10-08",
+            daySecondsByDate = dates.associateWith { 1800L + 900L },
+            subjectSecondsByDate = dates.associateWith { perDay },
+            subjectTotals = totals,
+            examCount = 0
         )
 
-        assertEquals(7, stats.days)
-        assertEquals(0, stats.activeDays)
-        assertEquals(0, stats.dailyAverageMinutes)
-        assertEquals(0.0, stats.totalFocusHours, 0.0001)
-        assertTrue(stats.subjectDistribution.isEmpty())
-        assertEquals(7, stats.dailyFocusMinutes.size)
-        assertTrue(stats.dailyFocusMinutes.values.all { it == 0 })
+        assertEquals(3L * 2700L, overview.totalSeconds)
+        val shareSum = overview.subjectDistribution.sumOf { it.share }
+        assertEquals(1.0, shareSum, 0.0001)
+        assertTrue(overview.subjectDistribution.all { it.share >= 0.0 && it.share <= 1.0 })
     }
 
     @Test
-    fun reviewStatsFields_degenerateWindowIsCoercedInsteadOfDividingByZero() {
-        val stats = BridgeMappers.reviewStatsFields(
-            windowDays = 0,
-            daySecondsByDate = mapOf("2026-10-08" to 1800L),
-            subjectMinutesBySubject = emptyMap(),
-            activeDayThresholdSeconds = 1800L
+    fun reviewOverviewFields_subjectOrderIsDeterministicOnTieBreaks() {
+        val dates = listOf("2026-10-06", "2026-10-07", "2026-10-08")
+        val slices = listOf(
+            BridgeMappers.SubjectSecondsSlice("politics", "政治", 600L),
+            BridgeMappers.SubjectSecondsSlice("english", "英语一", 600L),
+            BridgeMappers.SubjectSecondsSlice("math", "数学一", 1200L)
+        )
+        fun build(): List<String> = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_ROLLING_7,
+            periodsBack = 0,
+            windowDates = dates,
+            todayIso = "2026-10-08",
+            daySecondsByDate = dates.associateWith { if (it == "2026-10-06") 2400L else 0L },
+            subjectSecondsByDate = mapOf("2026-10-06" to slices),
+            subjectTotals = slices,
+            examCount = 0
+        ).subjectDistribution.map { "${it.subjectId}:${it.minutes}" }
+
+        // 「数学一」是子类 id，但这里的桶归一走 `subcategoryBucketId`：`math` 本身是
+        // 一个**有子类的大类**，直接记在大类上的会话会落进它的 direct bucket
+        // （`math__unclassified`），而没有子类的 english / politics 保持自身 id。
+        val expected = listOf("math__unclassified:20", "english:10", "politics:10")
+        assertEquals(expected, build())
+        repeat(100) { assertEquals(expected, build()) }
+    }
+
+    @Test
+    fun reviewOverviewFields_dailyMinutesCoverEveryWindowDayIncludingEmptyOnes() {
+        val dates = listOf("2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09")
+        val slice = BridgeMappers.SubjectSecondsSlice("major_data_structure", "数据结构", 3600L)
+
+        val overview = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_ROLLING_7,
+            periodsBack = 0,
+            windowDates = dates,
+            todayIso = "2026-10-08",
+            daySecondsByDate = mapOf("2026-10-07" to 3600L),
+            subjectSecondsByDate = mapOf("2026-10-07" to listOf(slice)),
+            subjectTotals = listOf(slice),
+            examCount = 0
         )
 
-        assertEquals("days <= 0 必须被夹紧为 1", 1, stats.days)
-        assertEquals(30, stats.dailyAverageMinutes)
+        val windowDates = overview.days.map { it.date }
+        assertEquals("窗口内不得出现重复键", windowDates.size, windowDates.toSet().size)
+        assertEquals(windowDates, windowDates.sorted())
+        overview.subjectDistribution.forEach { subject ->
+            assertEquals("键集合必须与 days 完全相等", windowDates.toSet(), subject.dailyMinutes.keys)
+            // 缺键的那天必须是 0，不能没有这条记录
+            assertEquals(0, subject.dailyMinutes["2026-10-05"])
+            assertEquals(60, subject.dailyMinutes["2026-10-07"])
+        }
+    }
+
+    @Test
+    fun reviewScopeLabel_matchesEachScope() {
+        // 自然周：周一 2026-10-05 → 周日 2026-10-11
+        val week = (5..11).map { java.time.LocalDate.of(2026, 10, it) }
+        // 自然月 2026-10
+        val month = (1..5).map { java.time.LocalDate.of(2026, 10, it) }
+
+        assertEquals("最近 7 天", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_7, 0, week))
+        assertEquals("最近 30 天", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_ROLLING_30, 0, week))
+        assertEquals(
+            "10月5日 - 10月11日",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 0, week)
+        )
+        assertEquals("2026年10月", BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_MONTH, 0, month))
+    }
+
+    @Test
+    fun reviewScopeLabel_showsBothDatesForACalendarWeekThatCrossesMonths() {
+        // 自然周跨月时如实显示两段日期，不折算成「第 N 周」
+        val crossMonth = List(7) { java.time.LocalDate.of(2026, 10, 30).plusDays(it.toLong()) }
+
+        assertEquals(
+            "10月30日 - 11月5日",
+            BridgeMappers.reviewScopeLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, 1, crossMonth)
+        )
+    }
+
+    @Test
+    fun reviewOverviewFields_marksDaysAfterTodayAsFutureWithZeroSeconds() {
+        val month = (1..5).map { "2026-10-%02d".format(it) }
+
+        val overview = BridgeMappers.reviewOverviewFields(
+            scope = BridgeMappers.SCOPE_CALENDAR_MONTH,
+            periodsBack = 0,
+            windowDates = month,
+            todayIso = "2026-10-03",
+            daySecondsByDate = mapOf("2026-10-02" to 1800L),
+            subjectSecondsByDate = emptyMap(),
+            subjectTotals = emptyList(),
+            examCount = 0
+        )
+
+        // 滚动口径是 MM-DD，日历月口径是「D日」——两者绝不可串
+        assertEquals("1日", overview.days.first().dayLabel)
+        assertEquals("3日", overview.days[2].dayLabel)
+        assertEquals("10-01", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_ROLLING_7, "2026-10-01"))
+        val future = overview.days.filter { it.isFuture }
+        assertEquals(listOf("2026-10-04", "2026-10-05"), future.map { it.date })
+        assertTrue(future.all { it.durationSeconds == 0L })
+        assertFalse(overview.days[1].isFuture)
+        assertTrue(overview.days[2].isToday)
+    }
+
+    @Test
+    fun reviewDayLabel_usesWeekdayNamesForCalendarWeek() {
+        assertEquals("周一", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, "2026-10-05"))
+        assertEquals("周日", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_CALENDAR_WEEK, "2026-10-11"))
+        assertEquals("10-09", BridgeMappers.reviewDayLabel(BridgeMappers.SCOPE_ROLLING_7, "2026-10-09"))
     }
 }

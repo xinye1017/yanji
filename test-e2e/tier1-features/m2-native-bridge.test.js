@@ -218,8 +218,8 @@ export function registerM2Tests() {
       const stats = await bridge.getTodayStats(today);
       assert(BridgeSchemas.isValidTodayStats(stats), 'TodayStats must strictly conform to contract');
 
-      const reviewStats = await bridge.getReviewStats(7);
-      assert(BridgeSchemas.isValidReviewStats(reviewStats), 'ReviewStats must strictly conform to contract');
+      const overview = await bridge.getReviewOverview('ROLLING_7', 0);
+      assert(BridgeSchemas.isValidReviewOverview(overview), 'ReviewOverview must strictly conform to contract');
 
       const timeline = await bridge.getDailyTimeline(today);
       assert(BridgeSchemas.isValidDailyTimeline(timeline), 'DailyTimeline must strictly conform to contract');

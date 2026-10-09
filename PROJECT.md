@@ -49,7 +49,7 @@
 | 2 | Native Bridge Layer & Contracts | YanjiTimerModule, YanjiDataModule, YanjiThemeModule, YanjiPackage, TypeScript bridge definitions | M1 | ✅ COMPLETE |
 | 3 | Design System & Navigation Shell | Tailwind/NativeWind config, theme tokens, 3-tab bottom bar, Settings screen | M1, M2 | ✅ COMPLETE |
 | 4 | Today, Focus & Record Moment Views | TodayScreen (overview, CTA, tasks), FocusScreen (timer, modes), RecordMomentModal (cross-page, non-pausing) | M2, M3 | ✅ COMPLETE |
-| 5 | Review View & Historical Timeline | ReviewScreen (daily timeline, 7-day trend, subject breakdown, AI expansion slot) | M2, M3 | PLANNED |
+| 5 | Review View & Historical Timeline | ReviewScreen (merged daily timeline, session note editing / deletion, note favourites, trend window switch, subject breakdown with per-day drill-down, AI expansion slot) | M2, M3 | ✅ COMPLETE |
 | Final | E2E Test Suite & Adversarial Hardening | Pass 100% of E2E test suite (Tiers 1-4) + Tier 5 adversarial coverage hardening | M4, M5, TEST_READY | PLANNED |
 
 ## Interface Contracts
@@ -80,7 +80,9 @@
 - `toggleFavoriteNote(noteId: string): Promise<boolean>`
 - `deleteNote(noteId: string): Promise<boolean>`
 - `getSubjects(): Promise<Subject[]>`
-- `getReviewStats(days: number): Promise<ReviewStats>`
+- `getReviewOverview(scope: ReviewScope, periodsBack: number): Promise<ReviewOverview>`
+- `updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>`
+- `deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>`
 - `getDailyTimeline(date: string): Promise<DailyTimeline>`
 - `getUserSettings(): Promise<UserSettings>`
 - `updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>`
@@ -92,13 +94,17 @@
 - `TimerMode = 'COUNTDOWN' | 'STOPWATCH'` — timer mode. Planned seconds come from the mode name (FocusModes.targetSeconds), not from UserSettings.
 - `NoteEntry.sessionId: string | null` — the focus session the note is bound to, or `null` when the note is not bound to a session. It is never an empty string.
 - `UserSettings` fields: `examDate`, `targetSchool`, `targetMajor`, `themePreference`. There is deliberately **no** `focusDurationMinutes` / `breakDurationMinutes` — the domain UserSettings has no such fields, so any value would be fabricated.
-- `ReviewStats` fields: `days`, `dailyFocusMinutes`, `subjectDistribution`, `totalFocusHours`, `dailyAverageMinutes`, `activeDays`.
-  - getReviewStats(days) returns a **rolling N-day window**: exactly days entries, from (today - (days - 1)) through today.
-  - Keys are local-calendar yyyy-MM-dd, produced by shifting the local date — never by subtracting 24h multiples (which drifts across DST).
-  - No future-dated keys: tomorrow can never appear, not even as a zero-valued bar.
-  - No calendar-week clipping: the window is not aligned to Monday, so the x-axis does not drift with the weekday.
-  - activeDays counts days with at least 30 recorded minutes. A window with no data reports activeDays: 0 and dailyAverageMinutes: 0, never a faked value.
-  - dailyAverageMinutes is totalMinutes / days, rounded.
+- `ReviewOverview` fields: `scope`, `periodsBack`, `label`, `windowDays`, `days[]`, `totalSeconds`, `dailyAverageSeconds`, `examCount`, `subjectDistribution[]`.
+  - `ReviewScope = 'ROLLING_7' | 'ROLLING_30' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH'`. Anything else is rejected (`E_INVALID_SCOPE`) rather than guessed; `periodsBack` is forced to 0 for the rolling scopes and means "weeks back" / "months back" for the calendar ones.
+  - `windowDays === days.length`, and `days` is ascending (early → late) local-calendar `yyyy-MM-dd`, produced by shifting the local date — never by subtracting 24h multiples (which drifts across DST).
+  - `ROLLING_*` is a **rolling N-day window** ending today: no future-dated cells, not even as zero-valued bars, and no calendar-week clipping, so the x-axis does not drift with the weekday. `CALENDAR_WEEK` starts on Monday; `CALENDAR_MONTH` covers the real month length.
+  - Each `ReviewPeriodDay` carries `date`, `dayLabel`, `durationSeconds`, `isToday`, `isFuture`. Cells after today are flagged `isFuture` with zero seconds rather than being dropped, so a calendar view keeps its shape.
+  - Durations are carried in **seconds** throughout; the single seconds → minutes conversion happens after summing. Truncating per row first loses the remainder once per day and once per subject.
+  - Each `ReviewSubjectSlice` carries `subjectId`, `subjectName`, `subjectColor`, `minutes`, `share` (0..1) and `dailyMinutes` (one key per window day, including zero days). `subjectId` is the normalised `SubjectCatalog.subcategoryBucketId` bucket and `subjectName` its display name, matching the subject statistics elsewhere — keying by the raw session name splits one category across several rows.
+  - `subjectDistribution` is sorted by `minutes` descending, ties broken by `subjectId`, so repeated reads of the same data render in the same order.
+  - `dailyAverageSeconds` divides by the window length, not by the number of days with records.
+  - The former `activeDays` field is **removed**: its threshold lives in a user setting that neither the settings UI nor the bridge exposes, so rendering it would put an unexplainable streak counter on the page.
+- `updateSessionNote` rejects with `E_EMPTY_NOTE` on blank input, `E_UNSUPPORTED` for exam sessions (they carry no editable note) and `E_SESSION_NOT_FOUND` when the session is gone. `deleteSessionRecord` rejects with `E_SESSION_NOT_FOUND`. Neither reports success for a record it did not change.
 
 ### `YanjiThemeModule` (Native ↔ JS)
 - `getThemePreference(): Promise<{ mode: 'SYSTEM' | 'LIGHT' | 'DARK', isDark: boolean }>`

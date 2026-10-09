@@ -29,7 +29,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiTouch } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
 
@@ -266,6 +266,7 @@ export function YanjiIconButton({
   iconSize = 20,
   tone = 'plain',
   disabled = false,
+  selected,
   style,
 }: {
   icon: YanjiIconName;
@@ -276,6 +277,8 @@ export function YanjiIconButton({
   /** `plain` = bare glyph; `filled` = glyph inside a soft tinted disc. */
   tone?: 'plain' | 'filled';
   disabled?: boolean;
+  /** Toggle buttons must say whether they are on — colour alone is not a state. */
+  selected?: boolean;
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -287,6 +290,7 @@ export function YanjiIconButton({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={selected === undefined ? undefined : { selected }}
       hitSlop={8}
       style={({ pressed }) => [
         {
@@ -627,8 +631,8 @@ export function YanjiEmptyState({
   return (
     <View
       style={{
-        paddingVertical: 36,
-        paddingHorizontal: 20,
+        paddingVertical: YanjiSpacing.xxl + YanjiSpacing.xs,
+        paddingHorizontal: YanjiSpacing.xl,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -641,7 +645,7 @@ export function YanjiEmptyState({
           backgroundColor: theme.colors.bgElevated,
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 12,
+          marginBottom: YanjiSpacing.md,
         }}
       >
         <YanjiIcon name={icon} size={22} color={theme.colors.textSecondary} />
@@ -649,8 +653,7 @@ export function YanjiEmptyState({
       <Text
         style={{
           color: theme.colors.textPrimary,
-          fontSize: 15,
-          fontWeight: '600',
+          ...theme.typography.bodyStrong,
           textAlign: 'center',
         }}
       >
@@ -660,10 +663,9 @@ export function YanjiEmptyState({
         <Text
           style={{
             color: theme.colors.textTertiary,
-            fontSize: 13,
-            marginTop: 6,
+            ...theme.typography.caption,
+            marginTop: YanjiSpacing.xs,
             textAlign: 'center',
-            lineHeight: 18,
           }}
         >
           {hint}
@@ -691,11 +693,14 @@ export function YanjiSectionHeader({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
-        marginTop: 24,
+        marginBottom: YanjiSpacing.md,
+        marginTop: YanjiSpacing.xl,
       }}
     >
+      {/* Marked as a heading so TalkBack users can jump between sections instead
+          of reading the page as one unbroken stream of rows. */}
       <Text
+        accessibilityRole="header"
         style={[
           theme.typography.label,
           { color: theme.colors.textSecondary, textTransform: 'uppercase' },
