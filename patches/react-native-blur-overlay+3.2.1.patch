@@ -1,0 +1,22 @@
+diff --git a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
+index 7b20fde..f30b014 100644
+--- a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
++++ b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
+@@ -187,7 +187,16 @@ final class Glass {
+     shader.setFloatUniform("uDispersion", dispersion);
+     // Light from the upper left, about 30 degrees above horizontal, as iOS has it.
+     shader.setFloatUniform("uLight", 0.866f, 0.5f);
+-    shader.setFloatUniform("uSpecular", specular);
++    // The rim is added after body tinting. An unattenuated white reflection
++    // clips to white on a dark material, especially at the two lit corners.
++    // Derive reflection strength from the same tint used by the glass body;
++    // light/untinted glass keeps its original reflection and refraction is unchanged.
++    final float tintLuma =
++        (0.2126f * Color.red(tint) + 0.7152f * Color.green(tint)
++            + 0.0722f * Color.blue(tint)) / 255f;
++    final float tintLight = Math.max(0f, Math.min(1f, (tintLuma - 0.15f) / 0.5f));
++    final float reflection = 1f - (Color.alpha(tint) / 255f) * (1f - tintLight);
++    shader.setFloatUniform("uSpecular", specular * reflection * reflection);
+     shader.setFloatUniform("uLine", line);
+     shader.setFloatUniform("uGlow", glow);
+     shader.setFloatUniform(
