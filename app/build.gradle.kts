@@ -25,6 +25,7 @@ require(!hasAnyReleaseSigningValue || hasCompleteReleaseSigningConfig) {
 android {
     namespace = "com.example.yanji"
     compileSdk = 36
+    ndkVersion = "27.1.12297006"
     defaultConfig {
         applicationId = "com.example.yanji"
         minSdk = 24
@@ -86,6 +87,7 @@ android {
       aidl = false
       buildConfig = false
       shaders = false
+      prefab = true
     }
 
     lint {
@@ -101,6 +103,14 @@ android {
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+      }
+      jniLibs {
+        pickFirsts += listOf(
+          "**/libc++_shared.so",
+          "**/libfbjni.so",
+          "**/libjsi.so",
+          "**/libreactnative.so"
+        )
       }
     }
 }
@@ -149,6 +159,8 @@ dependencies {
 
   // React Native Add-to-App
   implementation(libs.react.android)
+  implementation(libs.hermes.android)
+  implementation(libs.fbjni)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

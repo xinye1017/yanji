@@ -24,6 +24,7 @@ androidxUiAutomator = "2.3.0"
 androidxProfileInstaller = "1.4.1"
 androidxBaselineProfile = "1.5.0-rc02"
 reactAndroid = "0.87.1"
+hermesVersion = "250829098.0.17"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -48,6 +49,8 @@ androidx-benchmark-macro = { module = "androidx.benchmark:benchmark-macro-junit4
 androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "androidxUiAutomator" }
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "androidxProfileInstaller" }
 react-android = { module = "com.facebook.react:react-android", version.ref = "reactAndroid" }
+hermes-android = { module = "com.facebook.hermes:hermes-android", version.ref = "hermesVersion" }
+fbjni = { module = "com.facebook.fbjni:fbjni", version = "0.7.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
