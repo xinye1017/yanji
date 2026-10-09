@@ -7,20 +7,24 @@ find_package(fbjni REQUIRED CONFIG)
 # 仓库根：从 app/src/main/jni 自身位置相对推导，不写死盘符 / 用户名。
 # app/src/main/jni -> main -> src -> app -> 仓库根，共四级。
 get_filename_component(YANJI_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
-
-# codegen 源码会间接 include folly/portability/Config.h，而 folly-config.h 只在
-# react-native 自身构建时生成，prefab 包里并不提供。RN 各原生库的解法就是统一带
-# -DFOLLY_NO_CONFIG=1 绕过（见 folly-flags.cmake），这里沿用同一份定义，不复制数值。
 get_filename_component(YANJI_RN_DIR "${YANJI_REPO_ROOT}/node_modules/react-native" ABSOLUTE)
+
 if(NOT EXISTS "${YANJI_RN_DIR}/ReactAndroid/cmake-utils/folly-flags.cmake")
     message(FATAL_ERROR
         "react-native was not found at ${YANJI_RN_DIR}. Expected the repository to "
         "keep React Native under node_modules/react-native.")
 endif()
+
+# folly-flags.cmake / react-native-flags.cmake 必须先于 add_library 引入：
+# 它们本身只提供 folly_FLAGS 变量与 target_compile_reactnative_options 函数，
+# 编译选项要在 target 上显式生效。顺序反了（先 add_library 再 add_compile_options）
+# 时 folly_FLAGS 不会进入编译命令行 —— 表现是能编过、能装上，运行期在
+# folly::dynamic 析构上 abort（详见下面 folly_FLAGS 的注释）。
 include("${YANJI_RN_DIR}/ReactAndroid/cmake-utils/folly-flags.cmake")
-add_compile_options(${folly_FLAGS})
+include("${YANJI_RN_DIR}/ReactCommon/cmake-utils/react-native-flags.cmake")
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
+    FollyF14LinkCheck.cpp
     OnLoad.cpp
 )
 
@@ -33,6 +37,29 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -std=c++20
     -fexceptions
     -frtti
+    ${folly_FLAGS}
+    # -DNDEBUG 与 -DREACT_NATIVE_DEBUG 必须成对出现，缺一不可：
+    #
+    # NDEBUG：folly::kIsDebug 就是 !NDEBUG。带上它，F14Table 的调试用插入扰动代码
+    #   （FOLLY_F14_PERTURB_INSERTION_ORDER）不再实例化，也就不会引用
+    #   folly::f14::detail::tlsMinstdRand / tlsPendingSafeInserts —— 这两个符号
+    #   同样不在 libreactnative.so 的导出表里，链接期必然缺。
+    #   它只影响 folly 的 if constexpr 分支，不改类布局。
+    #
+    # REACT_NATIVE_DEBUG：react/debug/flags.h 会按 NDEBUG 反推
+    #   REACT_NATIVE_DEBUG / REACT_NATIVE_PRODUCTION，而这两个宏改变的是**类布局**：
+    #     - Sealable 生产版是空类，调试版带 mutable std::atomic<bool> sealed_（8 字节），
+    #       而 Props 是 virtual 继承它的；
+    #     - RN_DEBUG_STRING_CONVERTIBLE 从 0 变 1，Props / BaseViewProps /
+    #       HostPlatformViewProps 等一整套 Props 层级多出一批虚函数。
+    #   libreactnative.so 是没带 NDEBUG 编的（REACT_NATIVE_DEBUG），本库只带 NDEBUG
+    #   就会让 Props 比它小 8 字节，运行期表现为 libreactnative.so 里的
+    #   HostPlatformViewProps 构造函数按自己的偏移写成员，写到堆外：SIGSEGV。
+    #   所以显式钉死 REACT_NATIVE_DEBUG，把 NDEBUG 的影响限制在 folly 的
+    #   if constexpr 与 assert 上。
+    #   剩下的 F14LinkCheck<Mode>::check() 见 FollyF14LinkCheck.cpp。
+    -DNDEBUG
+    -DREACT_NATIVE_DEBUG
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
@@ -40,6 +67,13 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     ReactAndroid::jsi
     ReactAndroid::reactnative
 )
+
+# react-native-flags.cmake 里的 target_compile_reactnative_options 会额外定义
+# RN_SERIALIZABLE_STATE 与 HERMES_V1_ENABLED。这两个宏直接改变 StateData /
+# ConcreteComponentDescriptor 的 ABI；libreactnative.so 是带着它们编出来的，
+# 本库少一个就会在 Fabric 构造组件描述符时解析 BaseViewProps 崩溃（SIGSEGV）。
+# 所以直接调用 RN 自己的函数，不在这里复制宏列表。
+target_compile_reactnative_options(${CMAKE_PROJECT_NAME} PRIVATE)
 
 # ---------------------------------------------------------------------------
 # RN 原生库的 C++ codegen：TurboModule provider + Fabric 组件描述符。
