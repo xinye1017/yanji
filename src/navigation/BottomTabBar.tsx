@@ -65,6 +65,7 @@ export function BottomTabBar(): React.JSX.Element {
 
   return (
     <View
+      testID="bottom-tab-bar"
       style={{
         paddingHorizontal: theme.spacing.lg,
         paddingBottom: Math.max(insets.bottom, theme.spacing.md),
@@ -108,6 +109,7 @@ export function BottomTabBar(): React.JSX.Element {
           return (
             <Pressable
               key={tab.key}
+              testID={`tab-${tab.key}`}
               onPress={() => selectTab(tab.key as TabKey)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}

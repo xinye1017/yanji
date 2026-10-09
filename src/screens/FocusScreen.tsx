@@ -229,10 +229,13 @@ export function FocusScreen(): React.JSX.Element {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
         <ScrollView
+          testID="scroll-focus"
+          style={{ flex: 1 }}
           contentContainerStyle={{
             paddingHorizontal: YanjiSpacing.page,
             paddingTop: YanjiSpacing.md,
-            paddingBottom: 120,
+            // The tab bar reserves its own height outside this ScrollView.
+            paddingBottom: YanjiSpacing.xxl,
           }}
         >
           <Text

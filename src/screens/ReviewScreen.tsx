@@ -115,10 +115,13 @@ export function ReviewScreen(): React.JSX.Element {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <ScrollView
+        testID="scroll-review"
+        style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: YanjiSpacing.page,
           paddingTop: YanjiSpacing.md,
-          paddingBottom: 120,
+          // The tab bar reserves its own height outside this ScrollView.
+          paddingBottom: YanjiSpacing.xxl,
         }}
       >
         <Text
@@ -151,7 +154,7 @@ export function ReviewScreen(): React.JSX.Element {
             onPress={() => setDate(prev => shiftIsoDate(prev, -1))}
             iconSize={17}
           />
-          <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+          <Text testID="review-date" style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
             {timeline?.formattedDate ?? date}
           </Text>
           <YanjiIconButton

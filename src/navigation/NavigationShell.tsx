@@ -7,7 +7,7 @@
  * rankings are removed from primary navigation entirely.
  *
  * State discipline: the three tab screens stay mounted for the whole session
- * (App.tsx hides the inactive ones with `display: 'none'`), so tab switches
+ * (App.tsx stacks them with absoluteFill and isolates inactive panes), so tab switches
  * preserve in-progress input. Settings and the task editor are overlay layers
  * on top of that mounted content, never route replacements. Android back
  * dismisses the topmost overlay before it is allowed to leave the app.

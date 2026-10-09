@@ -179,10 +179,13 @@ export function TodayScreen(): React.JSX.Element {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <ScrollView
+        testID="scroll-today"
+        style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: YanjiSpacing.page,
           paddingTop: YanjiSpacing.md,
-          paddingBottom: 120,
+          // The tab bar reserves its own height outside this ScrollView.
+          paddingBottom: YanjiSpacing.xxl,
         }}
       >
         {/* Header: greeting, date & settings action */}
