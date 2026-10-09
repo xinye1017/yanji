@@ -14,13 +14,11 @@
   - **PowerShell**：使用分号 `;` 串联整段命令；
   - **Git Bash**：使用 `&&` 或 `;` 串联整段脚本。
 
-### 2. 【最效率】交付终点到 `am start` 为止，严禁自行操作真机与截屏验证
-- **铁律**：真机验证以 **「APK 安装成功且主入口 Activity 正常拉起（`am start` 无启动崩溃）」** 为交付终点。
-- **严禁 AI 越俎代庖**：
-  1. **严禁模拟点击与滑动**：严禁 AI 自行执行 `adb shell input tap/swipe`、`uiautomator dump` 等操作试图模拟点击界面——不仅严重打扰用户手持手机的操作，而且极其低效、白白消耗大量轮次与 Token；
-  2. **严禁自主截屏验证**：严禁 AI 自行运行 `screencap` 抓取屏幕截图或跑深浅色交叉比对；
-  3. **用户主导体验**：真实 UI 视觉、流畅度与业务交互完全由用户在真机上亲自测试并在对话中提供反馈。
-- **截图特例**：仅当**用户在对话中明确指示截屏**（如「帮我截个图」、「截屏看看效果」）时，才配合执行截图导出。
+### 2. 【真机验证】允许截图，交互测试需用户授权
+- **日常推送终点**：**「APK 安装成功且主入口 Activity 正常拉起（`am start` 无启动崩溃）」**。
+- **允许截图**：AI 可以使用 `screencap` 或测试框架截图验证布局与视觉效果；截图只保存到被 Git 忽略的 `build/`。
+- **交互授权**：未经用户授权，不得模拟点击、滑动或运行自动交互测试。用户明确要求真机测试时，可在该任务范围内执行，保护已有数据和专注会话。
+- **系统配色保护**：截图与测试全程不得修改设备系统浅色 / 深色模式。用户仍可亲自体验并反馈。
 
 ### 3. 【无假数据与安全守卫】
 - 严禁为了测试向设备注入任何 Mock 虚假数据；
@@ -163,7 +161,7 @@ adb -s "$dev" shell am start -n com.example.yanji/.MainActivity
 | **强制停止应用** | `adb shell am force-stop com.example.yanji` | 结束应用进程 |
 | **查看实时崩溃堆栈** | `adb logcat *:E` | 仅在启动即崩或严重异常时抓取日志排查 |
 | **查看核心业务日志** | `adb logcat -s YanjiAI:V FocusTimer:V RoomDatabase:V` | 过滤应用业务日志 |
-| **导出屏幕截图（严禁自主执行）** | `adb shell screencap -p /sdcard/s.png; adb pull /sdcard/s.png build/s.png` | **仅限用户在对话中明确要求时执行** |
+| **导出屏幕截图（允许验证）** | `adb shell screencap -p /sdcard/s.png; adb pull /sdcard/s.png build/s.png` | 截图仅保存到被 Git 忽略的 `build/`，不得修改系统配色 |
 
 ---
 
