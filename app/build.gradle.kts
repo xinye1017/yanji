@@ -37,6 +37,13 @@ android {
         versionName = "1.0.0"
         // 插桩测试入口（app/src/androidTest）。之前从未声明过，因此 androidTest 目录一直是空的。
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // 与 ReactAndroid AAR 及各 RN 原生库一致：共用同一份 libc++_shared.so。
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     testOptions {
@@ -93,6 +100,16 @@ android {
       prefab = true
     }
 
+    // libappmodules.so —— 第三方 RN 原生库 TurboModule provider 与 Fabric 组件描述符的
+    // 宿主（源码见 src/main/jni）。必须由 Gradle 从源码构建。
+    // 曾把编译产物当预编译 .so 提交进 src/main/jniLibs/：源码一改二进制不跟着变，
+    // 运行期表现就是「能装上、一点进去就闪退」，且 APK 里装的永远是旧二进制、无从排查。
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/jni/CMakeLists.txt")
+        }
+    }
+
     lint {
         // Lint errors are a real build gate. Existing warnings stay visible in the archived report;
         // they are not silently disabled or converted into an ever-growing baseline.
@@ -131,6 +148,21 @@ kotlin {
 // (git-committed so migration tests can build any historical version in isolation).
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// :app 的 CMake 配置会把各 RN 原生库生成的 C++ codegen（TurboModule provider +
+// Fabric 组件描述符）编进 libappmodules.so，见 src/main/jni/CMakeLists.txt。
+// 那些源码是各库 generateCodegenArtifactsFromSchema 的产物，AGP 不会自动给 :app 的
+// CMake 配置任务建立这条依赖（本工程不给 :app 应用 RNGP，autolinking 整条链缺失）。
+// 不显式补上，干净构建时 CMake 的 file(GLOB) 会拿到空列表，libappmodules.so 里没有
+// 任何第三方 TurboModule provider，运行期 WorkletsModule 解析为 null 而启动闪退。
+tasks.matching { it.name.startsWith("configureCMake") }.configureEach {
+    dependsOn(
+        ":react-native-worklets:generateCodegenArtifactsFromSchema",
+        ":react-native-reanimated:generateCodegenArtifactsFromSchema",
+        ":react-native-svg:generateCodegenArtifactsFromSchema",
+        ":react-native-safe-area-context:generateCodegenArtifactsFromSchema"
+    )
 }
 
 // Room 2.8 是 KMP 构件，`room-runtime` 同时有 android / jvm 两个变体。
