@@ -160,6 +160,8 @@ export interface UserSettings {
   targetSchool: string;
   targetMajor: string;
   themePreference: ThemeMode;
+  /** Default daily focus target, persisted in Room. Optional for older native hosts. */
+  dailyGoalHours?: number;
 }
 
 export interface ExamCountdown {
