@@ -247,6 +247,7 @@ interface YanjiDataModuleNative {
     plannedMinutes: number
   ): Promise<StudyTask>;
   toggleTask(taskId: string, completed: boolean): Promise<boolean>;
+  updateTask(taskId: string, title: string, plannedMinutes: number): Promise<boolean>;
   deleteTask(taskId: string): Promise<boolean>;
   saveQuickNote(content: string, date: string, sessionId: string | null): Promise<NoteEntry>;
   getNotes(page: number, limit: number): Promise<NoteEntry[]>;
