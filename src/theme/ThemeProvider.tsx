@@ -3,7 +3,15 @@
  * (user_settings.themeMode) and exposes semantic colors to the component tree.
  *
  * The system-level light/dark setting is NEVER modified (AGENTS.md §二.6):
- * this provider only reads the app preference and the system uiMode.
+ * this provider only reads the app preference and the system color scheme.
+ *
+ * SYSTEM resolves from `useColorScheme()` alone. The native `pref.isDark` is
+ * deliberately not merged in: it is a snapshot of the configuration cached by
+ * a possibly-frozen process, pushed only when user_settings changes. OR-ing it
+ * in let a stale `true` from a night-time launch override the live system value
+ * forever, pinning the app to dark while the phone stayed light. Activity
+ * recreation on uiMode changes (MainActivity does not declare uiMode in
+ * configChanges) guarantees `useColorScheme()` re-reads a fresh value.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -37,7 +45,6 @@ const ThemeContext = createContext<YanjiTheme | null>(null);
 export function YanjiThemeProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const systemDark = useColorScheme() === 'dark';
   const [mode, setMode] = useState<ThemeMode>('SYSTEM');
-  const [nativeDark, setNativeDark] = useState<boolean>(systemDark);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,25 +52,19 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
       .then(pref => {
         if (cancelled) return;
         setMode(pref.mode);
-        setNativeDark(pref.isDark);
-      })
-      .catch(() => {
-        // Native module unavailable (web/tests): fall back to system scheme.
-        setNativeDark(systemDark);
       });
     const unsubscribe = onThemeChanged(pref => {
       if (cancelled) return;
       setMode(pref.mode);
-      setNativeDark(pref.isDark);
     });
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, [systemDark]);
+  }, []);
 
   const isDark =
-    mode === 'DARK' ? true : mode === 'LIGHT' ? false : nativeDark || systemDark;
+    mode === 'DARK' || (mode === 'SYSTEM' && systemDark);
 
   const theme: YanjiTheme = {
     isDark,
