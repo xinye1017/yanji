@@ -4,13 +4,9 @@
  * Contract (user brief §03): "提供轻量的添加、编辑和删除操作",
  * "添加任务尽量在单个弹层中完成", "学科选择采用层级选择器，不平铺全部子类".
  *
- * Scope honesty: the bridge exposes `createTask` / `deleteTask` / `toggleTask`
- * and nothing else — there is no `updateTask`, and `StudyTaskDao` has no update
- * beyond `setCompleted`. So this layer ADDS a task; deletion and completion
- * toggling live in the Today task row. Renaming or re-planning an existing task
- * is deliberately not offered: the only way to express it with the current
- * bridge (delete + recreate) would change the task id and orphan the focus
- * time already accumulated against it.
+ * Create and edit tasks through the native bridge. Editing uses SQL UPDATE in place,
+ * preserving the task ID and its linked focus history. Subject stays immutable
+ * when editing, so earlier focus session subjects remain truthful.
  *
  * "不限时" is likewise not offered for a task: `StudyTask.plannedMinutes` is a
  * non-null Int and the native `createTask` coerces it to at least 1, so there
@@ -21,7 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative } from '../bridge';
-import type { Subject } from '../bridge';
+import type { StudyTask, Subject } from '../bridge';
 import {
   YanjiBreathButton,
   YanjiChip,
@@ -46,6 +42,7 @@ export interface TaskEditorModalProps {
   date: string;
   onClose: () => void;
   onSaved?: () => void;
+  editingTask?: StudyTask | null;
 }
 
 export function TaskEditorModal({
@@ -53,6 +50,7 @@ export function TaskEditorModal({
   date,
   onClose,
   onSaved,
+  editingTask = null,
 }: TaskEditorModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -62,15 +60,17 @@ export function TaskEditorModal({
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    setTitle('');
+    setTitle(editingTask?.title ?? '');
     setCategoryId(null);
     setSubjectId(null);
-    setMinutes(DEFAULT_MINUTES);
+    setMinutes(editingTask?.plannedMinutes ?? DEFAULT_MINUTES);
     setError(null);
+    setConfirmDelete(false);
     YanjiDataNative.getSubjects()
       .then(list => {
         if (!cancelled) setSubjects(list);
@@ -81,7 +81,7 @@ export function TaskEditorModal({
     return () => {
       cancelled = true;
     };
-  }, [visible]);
+  }, [visible, editingTask]);
 
   const categories = useMemo(
     () => subjects.filter(s => s.isCategory && s.enabled),
@@ -116,20 +116,24 @@ export function TaskEditorModal({
       setError('先填写任务名称');
       return;
     }
-    if (!selectedSubject) {
+    if (!editingTask && !selectedSubject) {
       setError('先选择学科');
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await YanjiDataNative.createTask(
-        date,
-        selectedSubject.id,
-        selectedSubject.name,
-        cleanTitle,
-        minutes
-      );
+      if (editingTask) {
+        await YanjiDataNative.updateTask(editingTask.id, cleanTitle, minutes);
+      } else if (selectedSubject) {
+        await YanjiDataNative.createTask(
+          date,
+          selectedSubject.id,
+          selectedSubject.name,
+          cleanTitle,
+          minutes
+        );
+      }
       onSaved?.();
       onClose();
     } catch {
@@ -137,7 +141,18 @@ export function TaskEditorModal({
     } finally {
       setSaving(false);
     }
-  }, [date, minutes, onClose, onSaved, selectedSubject, title]);
+  }, [date, editingTask, minutes, onClose, onSaved, selectedSubject, title]);
+
+  const handleDelete = useCallback(async () => {
+    if (!editingTask) return;
+    setSaving(true);
+    try {
+      await YanjiDataNative.deleteTask(editingTask.id);
+      onSaved?.();
+      onClose();
+    } catch { setError('删除失败，请重试'); }
+    finally { setSaving(false); }
+  }, [editingTask, onSaved, onClose]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -165,7 +180,7 @@ export function TaskEditorModal({
                 { color: theme.colors.textPrimary, letterSpacing: -0.4 },
               ]}
             >
-              添加任务
+              {editingTask ? '编辑任务' : '添加任务'}
             </Text>
             <YanjiIconButton
               icon="close"
@@ -200,7 +215,9 @@ export function TaskEditorModal({
             <YanjiHairline />
 
             <Field label="学科">
-              {selectedCategory ? (
+              {editingTask ? (
+                <Text style={{ color: theme.colors.textPrimary, fontSize: 15 }}>{editingTask.subjectName}</Text>
+              ) : selectedCategory ? (
                 <>
                   <View
                     style={{
@@ -325,11 +342,29 @@ export function TaskEditorModal({
           <View style={{ marginTop: YanjiSpacing.xl }}>
             <YanjiBreathButton
               icon="check"
-              label={saving ? '保存中' : '保存任务'}
+              label={saving ? '保存中' : editingTask ? '保存修改' : '保存任务'}
               onPress={handleSave}
               disabled={saving}
             />
           </View>
+          {editingTask ? (
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              {!confirmDelete ? (
+                <Pressable onPress={() => setConfirmDelete(true)} accessibilityRole="button" style={{ padding: 12, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.danger }}>删除这个任务</Text>
+                </Pressable>
+              ) : (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                  <Pressable onPress={() => setConfirmDelete(false)} accessibilityRole="button" style={{ padding: 12 }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>取消删除</Text>
+                  </Pressable>
+                  <Pressable onPress={() => void handleDelete()} disabled={saving} accessibilityRole="button" style={{ padding: 12 }}>
+                    <Text style={{ color: theme.colors.danger, fontWeight: '600' }}>确认删除</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
