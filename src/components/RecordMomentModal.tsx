@@ -10,11 +10,10 @@
  *   active focus session id.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
-  Platform,
   Pressable,
   Text,
   View,
@@ -29,6 +28,40 @@ import {
 } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+
+/**
+ * Height of the on-screen keyboard, sampled from `Keyboard.metrics()` the
+ * moment the input takes focus and re-read on every keyboard frame change.
+ *
+ * Why not `KeyboardAvoidingView`: this sheet lives in an RN `Modal`, whose
+ * window is a separate Dialog. `KeyboardAvoidingView` derives its offset from
+ * its own on-screen frame, and Android delivers the keyboard event from the
+ * Activity's root view — inside a Modal the two never agree, so the offset
+ * comes out as 0 and the sheet is left underneath the keyboard.
+ */
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+  const lastRef = useRef(-1);
+
+  useEffect(() => {
+    const sync = () => {
+      const next = Keyboard.metrics()?.height ?? 0;
+      if (next !== lastRef.current) {
+        lastRef.current = next;
+        setHeight(next);
+      }
+    };
+    sync();
+    const show = Keyboard.addListener('keyboardDidShow', sync);
+    const hide = Keyboard.addListener('keyboardDidHide', sync);
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  return height;
+}
 
 export interface RecordMomentModalProps {
   visible: boolean;
@@ -104,14 +137,19 @@ export function RecordMomentModal({
     onClose();
   }, [onClose]);
 
+  const keyboardHeight = useKeyboardHeight();
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <View
         style={{
           flex: 1,
           justifyContent: 'flex-end',
           backgroundColor: theme.colors.scrim,
+          // Lift the whole sheet clear of the keyboard. `paddingBottom` (not a
+          // bottom offset) keeps the scrim filling the screen so the backdrop
+          // still swallows taps above the sheet while it is raised.
+          paddingBottom: keyboardHeight,
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
@@ -207,7 +245,7 @@ export function RecordMomentModal({
             />
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
