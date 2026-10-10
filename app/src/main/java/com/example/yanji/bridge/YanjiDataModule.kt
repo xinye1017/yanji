@@ -708,6 +708,7 @@ class YanjiDataModule(
             putString("examDate", fields.examDate)
             putString("targetSchool", fields.targetSchool)
             putString("targetMajor", fields.targetMajor)
+            putDouble("dailyGoalHours", settings.dailyGoalHours.toDouble())
             putString("themePreference", fields.themePreference)
         }
     }
