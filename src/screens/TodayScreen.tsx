@@ -159,7 +159,7 @@ export function TodayScreen(): React.JSX.Element {
     finally { setRefreshing(false); }
   }, [refresh, refreshSession]);
 
-  const effectiveSeconds = stats?.totalFocusSeconds ?? 0;
+  const effectiveSeconds = stats?.date === date ? stats.totalFocusSeconds : 0;
   const hasFocus = effectiveSeconds > 0;
   const pending = tasks.filter(t => !t.completed).slice(0, 3);
   const latestNotes = useMemo(() => [...notes].sort((a,b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
@@ -480,22 +480,13 @@ export function TodayScreen(): React.JSX.Element {
         onClose={() => { setRecordOpen(false); setEditingNote(null); }}
         onSaved={() => void refresh()}
       />
-      <TaskEditorModal visible={taskEditorOpen} date={date} onClose={closeTaskEditor} onSaved={() => void refresh()} />
-
-      {/* 现有原生接口无法编辑任务字段，详情仍能展示任务实际信息。 */}
-      <Modal visible={!!taskInfo} transparent animationType="fade" onRequestClose={() => setTaskInfo(null)}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.scrim, justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: sheet, padding: 22, borderTopLeftRadius: YanjiRadius.xl, borderTopRightRadius: YanjiRadius.xl }}>
-            <Text style={[theme.typography.sectionTitle, { color: ink }]}>任务详情</Text>
-            <Text style={[theme.typography.bodyStrong, { color: ink, marginTop: 14 }]}>{taskInfo?.title}</Text>
-            <Text style={[theme.typography.caption, { color: muted, marginTop: 8 }]}>{taskInfo?.subjectName} · 计划 {taskInfo?.plannedMinutes} 分钟 · 已专注 {taskInfo?.actualMinutes} 分钟</Text>
-            <Text style={[theme.typography.caption, { color: subtle, marginTop: 10 }]}>当前版本暂不支持修改任务内容，避免删除重建导致专注关联丢失。</Text>
-            <Pressable onPress={() => setTaskInfo(null)} style={{ marginTop: 20, minHeight: 48, justifyContent: 'center', alignItems: 'center', backgroundColor: faint, borderRadius: YanjiRadius.md }}>
-              <Text style={{ color: ink, fontWeight: '600' }}>返回</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <TaskEditorModal
+        visible={taskEditorOpen || !!taskInfo}
+        date={date}
+        editingTask={taskInfo}
+        onClose={() => { setTaskInfo(null); closeTaskEditor(); }}
+        onSaved={() => void refresh()}
+      />
 
       {/* 默认目标使用原生 Room settings 持久化；当日覆盖尚未由原生数据层提供。 */}
       <Modal visible={goalOpen} transparent animationType="slide" onRequestClose={() => setGoalOpen(false)}>
