@@ -3,15 +3,18 @@
  * (user_settings.themeMode) and exposes semantic colors to the component tree.
  *
  * The system-level light/dark setting is NEVER modified (AGENTS.md §二.6):
- * this provider only reads the app preference and the system color scheme.
+ * this provider only reads the app preference and the system-wide color scheme.
  *
- * SYSTEM resolves from `useColorScheme()` alone. The native `pref.isDark` is
- * deliberately not merged in: it is a snapshot of the configuration cached by
- * a possibly-frozen process, pushed only when user_settings changes. OR-ing it
- * in let a stale `true` from a night-time launch override the live system value
- * forever, pinning the app to dark while the phone stayed light. Activity
- * recreation on uiMode changes (MainActivity does not declare uiMode in
- * configChanges) guarantees `useColorScheme()` re-reads a fresh value.
+ * SYSTEM follows the **system-wide** scheme, not the app-effective one. ColorOS
+ * and similar OEM builds expose a per-app "force dark" override
+ * (`ui_night_mode_override_on`), which makes `useColorScheme()` — and
+ * `context.resources` — report dark while the phone itself is light. Choosing
+ * 「跟随系统」 means following the phone, so the native side reads
+ * `Resources.getSystem()` and pushes it through `onThemeChanged`.
+ *
+ * `useColorScheme()` is kept only as the pre-hydration fallback: it is correct
+ * on platforms without an app-level override and avoids a light flash while the
+ * native promise is in flight.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -43,8 +46,9 @@ export interface YanjiTheme {
 const ThemeContext = createContext<YanjiTheme | null>(null);
 
 export function YanjiThemeProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const systemDark = useColorScheme() === 'dark';
+  const rnSystemDark = useColorScheme() === 'dark';
   const [mode, setMode] = useState<ThemeMode>('SYSTEM');
+  const [systemDark, setSystemDark] = useState<boolean>(rnSystemDark);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,19 +56,24 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
       .then(pref => {
         if (cancelled) return;
         setMode(pref.mode);
+        setSystemDark(pref.isDark);
+      })
+      .catch(() => {
+        // Native module unavailable (web/tests): fall back to the RN scheme.
+        setSystemDark(rnSystemDark);
       });
     const unsubscribe = onThemeChanged(pref => {
       if (cancelled) return;
       setMode(pref.mode);
+      setSystemDark(pref.isDark);
     });
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
+  }, [rnSystemDark]);
 
-  const isDark =
-    mode === 'DARK' || (mode === 'SYSTEM' && systemDark);
+  const isDark = mode === 'DARK' || (mode === 'SYSTEM' && systemDark);
 
   const theme: YanjiTheme = {
     isDark,
