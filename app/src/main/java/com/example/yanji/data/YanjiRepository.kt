@@ -414,6 +414,10 @@ class YanjiRepository private constructor() {
         requireDatabase().studyTaskDao().insert(StudyTaskEntity.fromDomainModel(task))
     }
 
+    suspend fun updateStudyTaskDetails(id: String, title: String, plannedMinutes: Int): Boolean =
+        requireDatabase().studyTaskDao()
+            .updateDetails(id, title, plannedMinutes, System.currentTimeMillis()) > 0
+
     suspend fun setStudyTaskCompleted(id: String, completed: Boolean) {
         requireDatabase().studyTaskDao().setCompleted(id, completed, System.currentTimeMillis())
     }

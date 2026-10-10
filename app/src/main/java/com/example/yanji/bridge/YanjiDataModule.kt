@@ -132,6 +132,24 @@ class YanjiDataModule(
     }
 
     @ReactMethod
+    fun updateTask(taskId: String, title: String, plannedMinutes: Double, promise: Promise) {
+        val cleanTitle = title.trim()
+        if (cleanTitle.isEmpty() || !plannedMinutes.isFinite() || plannedMinutes < 1.0) {
+            promise.reject("E_INVALID_TASK", "A title and positive duration are required")
+            return
+        }
+        scope.launch {
+            val updated = repository.updateStudyTaskDetails(taskId, cleanTitle, plannedMinutes.toInt())
+            if (!updated) {
+                promise.reject("E_TASK_NOT_FOUND", "Task no longer exists")
+                return@launch
+            }
+            emitDataChanged("tasks")
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
     fun toggleTask(taskId: String, completed: Boolean, promise: Promise) {
         scope.launch {
             repository.setStudyTaskCompleted(taskId, completed)
@@ -708,6 +726,7 @@ class YanjiDataModule(
             putString("examDate", fields.examDate)
             putString("targetSchool", fields.targetSchool)
             putString("targetMajor", fields.targetMajor)
+            putDouble("dailyGoalHours", settings.dailyGoalHours.toDouble())
             putString("themePreference", fields.themePreference)
         }
     }

@@ -386,6 +386,10 @@ interface StudyTaskDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(task: StudyTaskEntity)
 
+    /** 原位更新保留任务 ID 和历史专注关联，不采用删除再创建。 */
+    @Query("UPDATE study_tasks SET title = :title, plannedMinutes = :plannedMinutes, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateDetails(id: String, title: String, plannedMinutes: Int, updatedAt: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(tasks: List<StudyTaskEntity>)
 
