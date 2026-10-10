@@ -526,6 +526,10 @@ class YanjiRepository private constructor() {
     /** 切换随笔收藏标记（历史页向右滑 / 编辑页收藏按钮）。 */
     fun setNoteFavorite(id: String, favorite: Boolean) = noteStore.setFavorite(id, favorite)
 
+    /** 更新随笔正文（可等待），返回 false 表示 id 不存在。 */
+    suspend fun updateNoteContentAndAwait(id: String, content: String) =
+        noteStore.updateContentAndAwait(id, content)
+
     fun deleteNote(id: String) = noteStore.delete(id)
 
     /**

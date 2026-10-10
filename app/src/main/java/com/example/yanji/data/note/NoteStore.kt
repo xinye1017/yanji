@@ -90,6 +90,17 @@ internal class NoteStore(
         }
     }
 
+    /**
+     * 更新正文的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
+     *
+     * 只写 Room，内存列表由 `bind()` 的 DAO Flow 回灌。**不触发**
+     * [AchievementEvent.NoteCreated]：这是编辑既有随笔，不是新建。
+     */
+    suspend fun updateContentAndAwait(id: String, content: String): Boolean {
+        val dao = dbProvider()?.noteEntryDao() ?: return false
+        return dao.updateContent(id, content, System.currentTimeMillis()) > 0
+    }
+
     fun delete(id: String) {
         scope.launch {
             val db = dbProvider() ?: return@launch

@@ -10,7 +10,7 @@
  *   active focus session id.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -36,6 +36,12 @@ export interface RecordMomentModalProps {
   date: string;
   onClose: () => void;
   onSaved?: () => void;
+  /**
+   * When provided, the sheet edits this note instead of creating a new one:
+   * the field is prefilled and saving calls `updateNote`. The note's date,
+   * session binding and favorite state are left untouched.
+   */
+  editingNote?: { id: string; content: string } | null;
 }
 
 export function RecordMomentModal({
@@ -43,11 +49,21 @@ export function RecordMomentModal({
   date,
   onClose,
   onSaved,
+  editingNote = null,
 }: RecordMomentModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-seed the sheet every time it opens: prefilled for editing, blank for a
+  // new capture. Without this, an edited note's text would leak into the next
+  // "记录此刻", and a stale draft would show when reopening an editor.
+  useEffect(() => {
+    if (!visible) return;
+    setText(editingNote?.content ?? '');
+    setError(null);
+  }, [visible, editingNote]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
@@ -59,15 +75,19 @@ export function RecordMomentModal({
     setSaving(true);
     setError(null);
     try {
-      // Bind to the active session when one exists; the timer keeps running.
-      let sessionId: string | null = null;
-      try {
-        const session = await YanjiTimerNative.getActiveSession();
-        sessionId = session?.sessionId ?? null;
-      } catch {
-        sessionId = null;
+      if (editingNote) {
+        await YanjiDataNative.updateNote(editingNote.id, content);
+      } else {
+        // Bind to the active session when one exists; the timer keeps running.
+        let sessionId: string | null = null;
+        try {
+          const session = await YanjiTimerNative.getActiveSession();
+          sessionId = session?.sessionId ?? null;
+        } catch {
+          sessionId = null;
+        }
+        await YanjiDataNative.saveQuickNote(content, date, sessionId);
       }
-      await YanjiDataNative.saveQuickNote(content, date, sessionId);
       setText('');
       onSaved?.();
       onClose();
@@ -77,7 +97,7 @@ export function RecordMomentModal({
     } finally {
       setSaving(false);
     }
-  }, [saving, text, date, onClose, onSaved]);
+  }, [saving, text, date, onClose, onSaved, editingNote]);
 
   const handleClose = useCallback(() => {
     setError(null);
@@ -130,7 +150,11 @@ export function RecordMomentModal({
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <YanjiIcon name="compose" size={17} color={theme.colors.accentPrimary} />
+              <YanjiIcon
+                name="compose"
+                size={17}
+                color={theme.colors.accentPrimary}
+              />
               <Text
                 style={{
                   color: theme.colors.textPrimary,
@@ -139,7 +163,7 @@ export function RecordMomentModal({
                   marginLeft: YanjiSpacing.sm,
                 }}
               >
-                记录此刻
+                {editingNote ? '编辑记录' : '记录此刻'}
               </Text>
             </View>
             <YanjiIconButton

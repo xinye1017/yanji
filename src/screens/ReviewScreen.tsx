@@ -35,6 +35,7 @@ import {
   YanjiStackedBarChart,
 } from '../components/YanjiUI';
 import { YanjiPieChart } from '../components/YanjiPieChart';
+import { RecordMomentModal } from '../components/RecordMomentModal';
 import { SessionNoteModal } from '../components/SessionNoteModal';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
@@ -112,6 +113,8 @@ export function ReviewScreen(): React.JSX.Element {
     isExam: boolean;
     subjectName: string;
   } | null>(null);
+  /** The quick note being edited, or null when the editor is closed. */
+  const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null);
 
   const refresh = useCallback(async (targetDate: string, targetScope: ReviewScope) => {
     try {
@@ -367,6 +370,9 @@ export function ReviewScreen(): React.JSX.Element {
                     <NoteRow
                       note={entry}
                       onToggleFavorite={() => void toggleFavorite(entry.noteId)}
+                      onEdit={() =>
+                        setEditingNote({ id: entry.noteId, content: entry.content })
+                      }
                     />
                   )}
                 </View>
@@ -708,6 +714,14 @@ export function ReviewScreen(): React.JSX.Element {
         onSaved={() => setNoteTarget(null)}
       />
 
+      <RecordMomentModal
+        visible={editingNote !== null}
+        date={date}
+        editingNote={editingNote}
+        onClose={() => setEditingNote(null)}
+        onSaved={() => setEditingNote(null)}
+      />
+
       {pendingDelete ? (
         <YanjiCard
           style={{
@@ -919,9 +933,11 @@ function TaskRow({ task }: { task: StudyTask }): React.JSX.Element {
 function NoteRow({
   note,
   onToggleFavorite,
+  onEdit,
 }: {
   note: Extract<TimelineEntry, { kind: 'note' }>;
   onToggleFavorite: () => void;
+  onEdit: () => void;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   return (
@@ -934,6 +950,12 @@ function NoteRow({
           {formatClockFromEpoch(note.timestamp)}
         </Text>
         <View style={{ flex: 1 }} />
+        <YanjiIconButton
+          icon="compose"
+          accessibilityLabel="编辑这条记录"
+          onPress={onEdit}
+          iconSize={16}
+        />
         <YanjiIconButton
           icon={note.isFavorite ? 'star' : 'starOutline'}
           accessibilityLabel={note.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}

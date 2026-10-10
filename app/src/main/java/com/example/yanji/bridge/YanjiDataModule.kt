@@ -230,6 +230,31 @@ class YanjiDataModule(
         }
     }
 
+    /**
+     * 更新一条快速记录的正文。content 为空串 / 纯空白一律拒绝（与 [saveQuickNote] 同规则）；
+     * id 不存在 reject `E_NOTE_NOT_FOUND`。
+     *
+     * 只更新 content 与 updatedAt：日期、绑定的 sessionId、收藏状态与 createdAt 均保持不变，
+     * 「记录此刻」的归属事实不会被编辑动作改写。
+     */
+    @ReactMethod
+    fun updateNote(noteId: String, content: String, promise: Promise) {
+        val cleanContent = content.trim()
+        if (cleanContent.isEmpty()) {
+            promise.reject("E_EMPTY_NOTE", "Note content cannot be empty")
+            return
+        }
+        scope.launch {
+            val updated = repository.updateNoteContentAndAwait(noteId, cleanContent)
+            if (!updated) {
+                promise.reject("E_NOTE_NOT_FOUND", "Note not found")
+                return@launch
+            }
+            emitDataChanged("notes")
+            promise.resolve(true)
+        }
+    }
+
     // ------------------------------------------------------------ 学科
 
     @ReactMethod

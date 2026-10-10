@@ -186,6 +186,13 @@ interface NoteEntryDao {
     @Query("UPDATE journal_entries SET isFavorite = :value, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setFavorite(id: String, value: Int, updatedAt: Long)
 
+    /**
+     * 更新正文。只改 content 与 updatedAt，不触碰 createdAt、收藏状态与归属日期。
+     * 返回受影响行数：0 表示 id 不存在。
+     */
+    @Query("UPDATE journal_entries SET content = :content, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateContent(id: String, content: String, updatedAt: Long): Int
+
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun deleteById(id: String)
 

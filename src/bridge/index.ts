@@ -251,6 +251,11 @@ interface YanjiDataModuleNative {
   getNotesForDate(date: string): Promise<NoteEntry[]>;
   toggleFavoriteNote(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
+  /**
+   * 编辑一条「记录此刻」的正文。空内容 reject `E_EMPTY_NOTE`；
+   * id 不存在 reject `E_NOTE_NOT_FOUND`。日期、归属会话与收藏状态不变。
+   */
+  updateNote(noteId: string, content: string): Promise<boolean>;
   getSubjects(): Promise<Subject[]>;
   /**
    * 回顾页的趋势概览。
