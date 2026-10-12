@@ -1,23 +1,24 @@
+/** Navigation material and geometry. Keep glass confined to the floating dock. */
 export const YanjiLiquidGlass = {
   targetId: 'yanji-tab-content',
-  padding: 2,
-  minHeight: 52,
-  iconSize: 22,
-  labelSize: 0,
-  labelLineHeight: 0,
-  labelGap: 0,
-  itemPadding: 12,
-  blurRadius: 16,
+  padding: 5,
+  minHeight: 72,
+  iconSize: 20,
+  labelSize: 14,
+  labelLineHeight: 20,
+  labelGap: 4,
+  itemPadding: 8,
+  blurRadius: 10,
   downsampling: 2,
   maxUpdateFps: 60,
   saturation: 1.35,
   light: {
-    tint: 'rgba(255, 255, 255, 0.72)',
-    selection: 'rgba(59, 111, 246, 0.12)',
+    tint: 'rgba(242,247,255,0.36)',
+    selection: 'rgba(53,106,230,0.12)',
   },
   dark: {
-    tint: 'rgba(21, 27, 40, 0.82)',
-    selection: 'rgba(90, 136, 248, 0.22)',
+    tint: 'rgba(13,17,26,0.76)',
+    selection: 'rgba(113,151,247,0.20)',
   },
 } as const;
 
