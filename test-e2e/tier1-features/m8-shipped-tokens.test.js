@@ -46,7 +46,7 @@ export function registerShippedTokenTests() {
     });
 
     it('light mode is soft blue-gray, not pure white page background', () => {
-      assertEqual(tokens.YanjiColors.light.bgPrimary, '#F2F4F7', 'Light page background must be #F2F4F7');
+      assertEqual(tokens.YanjiColors.light.bgPrimary, '#F6F8FA', 'Light page background must be #F6F8FA');
       assert(
         tokens.YanjiColors.light.bgPrimary !== '#FFFFFF',
         'A pure-white page background would leave white cards indistinguishable (§三.6)'
@@ -80,9 +80,9 @@ export function registerShippedTokenTests() {
       assertEqual(tokens.YanjiRadius.full, 9999, 'full radius step must be 9999');
     });
 
-    it('card rule declares zero border in both light and dark', () => {
-      assertEqual(tokens.YanjiCardRules.borderWidth, 0, 'Card borderWidth must be 0');
-      assertEqual(tokens.YanjiCardRules.hasBorderStroke, false, 'Card must not carry a BorderStroke');
+    it('card rule declares subtle hairline border in both light and dark', () => {
+      assertEqual(tokens.YanjiCardRules.borderWidth, 1, 'Card borderWidth must be 1');
+      assertEqual(tokens.YanjiCardRules.hasBorderStroke, true, 'Card must carry subtle hairline border');
     });
   });
 }

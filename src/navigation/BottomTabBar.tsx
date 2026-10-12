@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
 import Animated, {
   useAnimatedStyle,
@@ -17,7 +17,7 @@ import Animated, {
   useReducedMotion,
   withSpring,
 } from 'react-native-reanimated';
-import { useNavigation, TABS } from './NavigationShell';
+import { useNavigationActions, useNavigationState, TABS } from './NavigationShell';
 import type { TabKey } from './NavigationShell';
 import { YanjiIcon } from '../components/YanjiUI';
 import type { YanjiIconName } from '../components/icons';
@@ -41,7 +41,8 @@ export function BottomTabBar(): React.JSX.Element {
   const { height, bottom } = useBottomTabLayout();
   const reduceMotion = useReducedMotion();
   const material = theme.isDark ? YanjiLiquidGlass.dark : YanjiLiquidGlass.light;
-  const { activeTab, selectTab } = useNavigation();
+  const { activeTab } = useNavigationState();
+  const { selectTab } = useNavigationActions();
 
   const [slotWidth, setSlotWidth] = useState(0);
   const index = Math.max(0, TABS.findIndex(tab => tab.key === activeTab));
@@ -78,6 +79,8 @@ export function BottomTabBar(): React.JSX.Element {
         bottom,
         height,
         borderRadius: height / 2,
+        borderWidth: 1,
+        borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.55)',
         ...theme.shadow.floating(theme.isDark),
       }}
     >
@@ -105,7 +108,7 @@ export function BottomTabBar(): React.JSX.Element {
             padding: CAPSULE_PADDING,
           }}
         >
-          {/* Sliding selection pill — behind the labels, one slot wide. */}
+          {/* Sliding selection pill — behind the icons, one slot wide. */}
           {slotWidth > 0 ? (
             <Animated.View
               pointerEvents="none"
@@ -126,8 +129,9 @@ export function BottomTabBar(): React.JSX.Element {
 
           {TABS.map((tab, tabIndex) => {
             const isActive = tabIndex === index;
-            const foreground = isActive && !theme.isDark
-              ? theme.colors.accentStrong : theme.colors.textPrimary;
+            const foreground = isActive
+              ? (theme.isDark ? theme.colors.accentPrimary : theme.colors.accentStrong)
+              : theme.colors.textTertiary;
             return (
               <Pressable
                 key={tab.key}
@@ -136,9 +140,9 @@ export function BottomTabBar(): React.JSX.Element {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
                 accessibilityLabel={tab.label}
+                hitSlop={8}
                 style={{
                   flex: 1,
-                  flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   paddingVertical: YanjiLiquidGlass.itemPadding,
@@ -151,19 +155,8 @@ export function BottomTabBar(): React.JSX.Element {
                   name={TAB_ICONS[tab.key]}
                   size={YanjiLiquidGlass.iconSize}
                   color={foreground}
+                  strokeWidth={isActive ? 2.3 : 1.8}
                 />
-                <Text
-                  style={{
-                    fontSize: YanjiLiquidGlass.labelSize,
-                    lineHeight: YanjiLiquidGlass.labelLineHeight,
-                    marginTop: YanjiLiquidGlass.labelGap,
-                    fontWeight: isActive ? '700' : '500',
-                    color: foreground,
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {tab.label}
-                </Text>
               </Pressable>
             );
           })}

@@ -22,13 +22,16 @@ export function registerM3Tests() {
       }
     });
 
-    it('verifies card containers mandate ZERO borders in both light and dark themes', () => {
+    it('verifies card containers mandate subtle hairline border (<= 1) in both light and dark themes', () => {
       const borderCheckZero = YanjiThemeTokens.validateCardBorder(0);
       assertEqual(borderCheckZero.valid, true, 'Zero border width must be valid');
 
-      const borderCheckNonZero = YanjiThemeTokens.validateCardBorder(1);
-      assertEqual(borderCheckNonZero.valid, false, 'Card border > 0 must be rejected');
-      assert(borderCheckNonZero.error.includes('Card Zero-Border'), 'Error message must cite Card Zero-Border rule');
+      const borderCheckHairline = YanjiThemeTokens.validateCardBorder(1);
+      assertEqual(borderCheckHairline.valid, true, 'Hairline border (1px) must be valid');
+
+      const borderCheckThick = YanjiThemeTokens.validateCardBorder(2);
+      assertEqual(borderCheckThick.valid, false, 'Card border > 1 must be rejected');
+      assert(borderCheckThick.error.includes('Card subtle hairline border'), 'Error message must cite Card subtle hairline border rule');
     });
 
     it('verifies all radius tokens adhere to semantic YanjiRadius scale', () => {

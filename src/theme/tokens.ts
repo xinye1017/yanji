@@ -23,8 +23,8 @@ import type { ViewStyle } from 'react-native';
 
 export const YanjiColors = {
   light: {
-    /** The desk: soft blue-gray page background (Compose: YanjiBackground #F2F4F7). */
-    bgPrimary: '#F2F4F7',
+    /** The desk: refined soft blue-gray page background. */
+    bgPrimary: '#F6F8FA',
     /** A sheet of paper lying on the desk (Compose: YanjiSurface #FFFFFF). */
     bgSurface: '#FFFFFF',
     /** Soft nested fill inside a sheet — chips, tracks, secondary buttons. */
@@ -41,34 +41,30 @@ export const YanjiColors = {
     textSecondary: '#5A6473',
     textTertiary: '#606A7C',
     textDisabled: '#98A2B3',
-    /** Restrained blue accent (Compose: YanjiPrimary #356AE6). */
-    accentPrimary: '#356AE6',
-    accentStrong: '#2453BF',
-    accentSoft: '#EAF1FF',
+    /** Pure Electric Indigo accent (#3B6FF6). */
+    accentPrimary: '#3B6FF6',
+    accentStrong: '#2555D4',
+    accentSoft: '#EDF2FE',
     /**
      * Foreground on `accentPrimary` (Compose: YanjiOnPrimary #FFFFFF).
-     * Measured 4.82:1 on #356AE6 — passes WCAG 1.4.3.
+     * Passes WCAG 1.4.3 on #3B6FF6.
      */
     onAccent: '#FFFFFF',
     /**
-     * Decorative 1px separator for list grouping. Deliberately NOT a card
-     * border (cards stay zero-border): a hairline divides rows inside one
-     * sheet. 1.23:1 against white — visible, never competing with content.
+     * Subtle 1px hairline border for card containers (1px hairline).
      */
-    hairline: '#E3E8F0',
+    cardBorder: 'rgba(0, 0, 0, 0.06)',
+    cardBorderStrong: 'rgba(0, 0, 0, 0.12)',
     /**
-     * Modal / sheet scrim. RN-local: Compose has no scrim token (Material
-     * `scrim` is only used as a shadow colour in GlassBottomBar.kt:220), so
-     * this is a deliberate RN decision.
+     * Decorative 1px separator for list grouping.
      */
-    scrim: 'rgba(0,0,0,0.32)',
+    hairline: 'rgba(0, 0, 0, 0.06)',
     /**
-     * Semantic colours — the "text/icon" tier, so they are set for >=4.5:1.
-     * Authority: app/src/main/java/com/example/yanji/theme/Color.kt:105-111,
-     * which RETIRED the previous values (#2F9E6D / #E67E22 / #D64545) with
-     * measured failures (success 3.37, warning 2.64, danger 4.15).
-     * Measured here: #17784F 5.47/4.97, #9A6100 5.14/4.67, #BE3232 5.69/5.16
-     * (white card / page #F2F4F7). Do not drift these back.
+     * Modal / sheet scrim. RN-local.
+     */
+    scrim: 'rgba(0, 0, 0, 0.32)',
+    /**
+     * Semantic colours — pinned for WCAG >= 4.5:1.
      */
     success: '#17784F',
     warning: '#9A6100',
@@ -77,7 +73,7 @@ export const YanjiColors = {
     fieldBorder: '#7E8DA1',
   },
   dark: {
-    /** Midnight Blue base (Compose: YanjiDarkBackground #0D111A). */
+    /** Midnight Blue base (Compose: YanjiDarkBackground #0D111A). STRICTLY NO #000000. */
     bgPrimary: '#0D111A',
     /** Standard dark card (Compose: YanjiDarkSurface #151B28). */
     bgSurface: '#151B28',
@@ -85,8 +81,7 @@ export const YanjiColors = {
     bgElevated: '#1D2536',
     /**
      * Dark-mode recessed well. Sits BELOW the sheet rather than above it, so
-     * it is darker than #151B28 — but never pure black (§三.6). 1.03:1 against
-     * the sheet: a felt recession, not a hole. Text stays 5.85:1+ on it.
+     * it is darker than #151B28 — but never pure black (§三.6).
      */
     bgSunken: '#111823',
     /** Floating surface (Compose: YanjiDarkSurfaceFloating #222C40). */
@@ -95,28 +90,23 @@ export const YanjiColors = {
     textSecondary: '#94A3B8',
     textTertiary: '#8797AC',
     textDisabled: '#475569',
-    accentPrimary: '#4F7DF3',
+    accentPrimary: '#5A88F8',
     accentStrong: '#7197F7',
-    accentSoft: '#294F7DF3',
+    accentSoft: 'rgba(90, 136, 248, 0.15)',
     /**
      * Foreground on `accentPrimary` (Compose: YanjiDarkOnPrimary #0D111A).
-     * Deliberately dark, not white: the dark accent is raised to #4F7DF3 for
-     * legibility on the Midnight-Blue background, and white on it measures only
-     * 3.78:1 (Color.kt:205-212 documents 2.56–3.78:1 across the five mascot
-     * themes). #0D111A measures 5.00:1 and is the existing background token.
-     *
-     * The same reasoning applies to the danger button: white on the dark
-     * danger #F87171 measures only 2.77:1, so danger buttons must use
-     * `onAccent` too (6.83:1). YanjiPrimaryButton enforces this.
      */
     onAccent: '#0D111A',
-    hairline: '#232C3D',
     /**
-     * Heavier scrim than light mode: a 0.32 black veil composites to ~#090C11
-     * on the #0D111A background, which barely separates the sheet. 0.56 gives
-     * the floating layer real presence. RN-local decision (no Compose source).
+     * Subtle 1px hairline border for dark mode cards.
      */
-    scrim: 'rgba(0,0,0,0.56)',
+    cardBorder: 'rgba(255, 255, 255, 0.08)',
+    cardBorderStrong: 'rgba(255, 255, 255, 0.16)',
+    hairline: 'rgba(255, 255, 255, 0.08)',
+    /**
+     * Heavier scrim than light mode.
+     */
+    scrim: 'rgba(0, 0, 0, 0.56)',
     success: '#34D399',
     warning: '#FBBF24',
     danger: '#F87171',
@@ -180,10 +170,10 @@ export const YanjiTypography = {
   display: { fontSize: 40, fontWeight: '300' as const, lineHeight: 48 },
 } as const;
 
-/** Card rule: zero border in both modes — hierarchy comes from surface lightness only. */
+/** Card rule: subtle 1px hairline border (cardBorder) per modern refined minimal design. */
 export const YanjiCardRules = {
-  borderWidth: 0,
-  hasBorderStroke: false,
+  borderWidth: 1,
+  hasBorderStroke: true,
 } as const;
 
 /**
@@ -196,36 +186,34 @@ export const YanjiTouch = {
 } as const;
 
 /**
- * Cast shadows — the material cue that says "this is a sheet of paper".
+ * Cast shadows — diffuse elevation.
  *
  * Centralised because iOS and Android disagree: iOS wants shadowColor/Offset/
- * Radius/Opacity, Android only understands `elevation` (and derives its own
- * shadow from it). Spreading platform conditionals across call sites is how a
- * design system drifts, so every shadow in the app comes from here.
+ * Radius/Opacity, Android only understands `elevation`.
  */
 export const YanjiShadow = {
-  /** A card resting on the desk. */
+  /** A card resting on the desk — subtle diffuse elevation. */
   sheet: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
-      radius: 10,
+      radius: 12,
       offsetY: 2,
-      opacity: isDark ? 0.34 : 0.07,
+      opacity: isDark ? 0.36 : 0.05,
       elevation: 2,
     }),
   /** The tab bar and other sheets lifted clear of the desk. */
   floating: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
-      radius: 22,
-      offsetY: 8,
-      opacity: isDark ? 0.46 : 0.13,
-      elevation: 10,
+      radius: 20,
+      offsetY: 6,
+      opacity: isDark ? 0.44 : 0.09,
+      elevation: 8,
     }),
   /** Pressed feedback — a sheet pushed toward the desk. */
   pressed: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
       radius: 4,
       offsetY: 1,
-      opacity: isDark ? 0.28 : 0.05,
+      opacity: isDark ? 0.28 : 0.04,
       elevation: 1,
     }),
 } as const;

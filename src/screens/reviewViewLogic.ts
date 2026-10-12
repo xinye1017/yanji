@@ -13,8 +13,8 @@
  */
 
 import type {
-  DailyTimeline,
-  DailyTimelineSession,
+  DailySession,
+  DailySnapshot,
   ReviewPeriodDay,
   ReviewScope,
   ReviewSubjectSlice,
@@ -90,7 +90,7 @@ export function formatPercent(share: number): string {
 // ---------------------------------------------------------------------------
 
 export type TimelineEntry =
-  | { key: string; kind: 'session'; at: number; session: DailyTimelineSession }
+  | { key: string; kind: 'session'; at: number; session: DailySession }
   | { key: string; kind: 'task'; at: number; task: StudyTask }
   | {
       key: string;
@@ -114,10 +114,10 @@ export type TimelineEntry =
  * Newest first. The key breaks ties so the order never depends on the order in
  * which the three source arrays happened to arrive.
  */
-export function buildTimelineEntries(timeline: DailyTimeline | null): TimelineEntry[] {
-  if (!timeline) return [];
+export function buildTimelineEntries(snapshot: DailySnapshot | null): TimelineEntry[] {
+  if (!snapshot) return [];
   const entries: TimelineEntry[] = [
-    ...timeline.sessions.map(
+    ...snapshot.sessions.map(
       (session): TimelineEntry => ({
         key: `session-${session.id}`,
         kind: 'session',
@@ -125,10 +125,10 @@ export function buildTimelineEntries(timeline: DailyTimeline | null): TimelineEn
         session,
       })
     ),
-    ...timeline.completedTasks.map(
+    ...snapshot.tasks.filter(task => task.completed).map(
       (task): TimelineEntry => ({ key: `task-${task.id}`, kind: 'task', at: task.createdAt, task })
     ),
-    ...timeline.notes.map(
+    ...snapshot.notes.map(
       (note): TimelineEntry => ({
         key: `note-${note.id}`,
         kind: 'note',

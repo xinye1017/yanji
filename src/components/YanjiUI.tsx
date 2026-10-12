@@ -71,22 +71,25 @@ export function YanjiCard({
   children: React.ReactNode;
   style?: ViewStyle;
   /**
-   * `default`  a sheet lying flat on the desk
-   * `hero`     the sheet the eye should land on first (soft cast shadow)
+   * `default`  a sheet lying flat on the desk with subtle hairline border
+   * `hero`     the sheet the eye should land on first (diffuse cast shadow & strong border)
    * `sunken`   a well pressed into a sheet — empty states and recessed content
    */
   variant?: 'default' | 'hero' | 'sunken';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
 
-  const radius = variant === 'hero' ? YanjiRadius.xxl : YanjiRadius.xl;
+  const radius = variant === 'hero' ? YanjiRadius.xxl : variant === 'sunken' ? YanjiRadius.lg : YanjiRadius.xl;
 
   const backgroundColor =
     variant === 'sunken' ? theme.colors.bgSunken : theme.colors.bgSurface;
 
+  const borderColor =
+    variant === 'hero' ? theme.colors.cardBorderStrong : theme.colors.cardBorder;
+
   const padding = variant === 'hero' ? 22 : variant === 'sunken' ? 16 : 18;
 
-  const shadow = variant === 'hero' ? theme.shadow.sheet(theme.isDark) : null;
+  const shadow = variant === 'sunken' ? null : theme.shadow.sheet(theme.isDark);
 
   return (
     <View
@@ -94,8 +97,8 @@ export function YanjiCard({
         {
           backgroundColor,
           borderRadius: radius,
-          // Zero border — strictly zero border per design system.
-          borderWidth: 0,
+          borderWidth: 1,
+          borderColor,
           padding,
         },
         shadow,
@@ -156,6 +159,8 @@ export function YanjiBadge({
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: theme.colors.accentSoft,
+          borderWidth: 1,
+          borderColor: theme.colors.cardBorder,
           paddingVertical: 4,
           paddingHorizontal: 10,
           borderRadius: YanjiRadius.full,
@@ -221,6 +226,8 @@ export function YanjiPrimaryButton({
       style={({ pressed }) => ({
         backgroundColor,
         borderRadius: YanjiRadius.xl,
+        borderWidth: secondary ? 1 : 0,
+        borderColor: secondary ? theme.colors.cardBorder : 'transparent',
         paddingVertical: 15,
         paddingHorizontal: 24,
         flexDirection: 'row',
@@ -940,6 +947,8 @@ export function YanjiChip({
           // accent pills reads as "many primary actions", and this screen has
           // only one (the start button below).
           backgroundColor: selected ? theme.colors.accentSoft : theme.colors.bgSurface,
+          borderWidth: 1,
+          borderColor: selected ? theme.colors.accentPrimary : theme.colors.cardBorder,
           opacity: pressed ? 0.7 : 1,
         },
         style,
@@ -990,6 +999,8 @@ export function YanjiTextInput({
         {
           backgroundColor: theme.colors.bgSunken,
           borderRadius: YanjiRadius.md,
+          borderWidth: 1,
+          borderColor: theme.colors.cardBorder,
           padding: theme.spacing.md,
           color: theme.colors.textPrimary,
           fontSize: 15,

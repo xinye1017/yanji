@@ -12,12 +12,11 @@
  * - No streak counters, leaderboards or achievement walls as primary content.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
-import { YanjiDataNative, onDataChanged } from '../bridge';
+import { YanjiDataNative } from '../bridge';
 import type {
-  DailyTimeline,
-  DailyTimelineSession,
+  DailySession,
   ReviewOverview,
   ReviewScope,
   ReviewPeriodDay,
@@ -40,6 +39,11 @@ import { SessionNoteModal } from '../components/SessionNoteModal';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+import {
+  useDailySnapshot,
+  useReviewDataVisibility,
+  useReviewOverview,
+} from '../state/dataRefresh';
 
 import {
   buildHourBuckets,
@@ -72,9 +76,6 @@ const DATE_PILL_MIN_WIDTH = 130;
 /** Trend chart height in px. Tall enough for a column to stay legible. */
 const TREND_CHART_HEIGHT = 64;
 
-/** The subject colour rail on a session row: tall enough to read as a bar. */
-const SUBJECT_RAIL_WIDTH = 3;
-const SUBJECT_RAIL_HEIGHT = 34;
 
 /** Colour dot beside a subject name in the distribution list. */
 const SUBJECT_DOT_SIZE = 8;
@@ -90,16 +91,27 @@ const SCOPES: ReadonlyArray<{ scope: ReviewScope; label: string }> = [
 /** Hour ticks under the single-day curve; all 24 would crowd the axis. */
 const HOUR_TICKS = [0, 6, 12, 18];
 
-export function ReviewScreen(): React.JSX.Element {
+export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
   const { contentPadding } = useBottomTabLayout();
   const [date, setDate] = useState(todayIso);
-  const [timeline, setTimeline] = useState<DailyTimeline | null>(null);
-  const [overview, setOverview] = useState<ReviewOverview | null>(null);
-  const [dayTasks, setDayTasks] = useState<StudyTask[]>([]);
   const [scope, setScope] = useState<ReviewScope>('TODAY');
-  /** The previous window's total, for the「较上一周期」line. */
-  const [prevTotalSeconds, setPrevTotalSeconds] = useState<number | null>(null);
+  const snapshot = useDailySnapshot('review', date, visible);
+  const overviewRequest = useMemo(
+    () => ({ scope, periodsBack: 0, anchorDate: date }),
+    [date, scope]
+  );
+  const previousRequest = useMemo(() => previousWindowArgs(scope, date), [date, scope]);
+  const reviewRequests = useMemo(
+    () => [overviewRequest, previousRequest],
+    [overviewRequest, previousRequest]
+  );
+  const overview = useReviewOverview(overviewRequest, visible);
+  const previousOverview = useReviewOverview(previousRequest, visible);
+  useReviewDataVisibility('review', reviewRequests, visible);
+  const dayTasks = snapshot?.tasks ?? [];
+  const sessions = snapshot?.sessions ?? [];
+  const prevTotalSeconds = previousOverview?.totalSeconds ?? null;
   /** Measured width of the trend-chart column, so the SVG matches its labels. */
   const [chartWidth, setChartWidth] = useState(0);
   const [noteTarget, setNoteTarget] = useState<{
@@ -116,34 +128,7 @@ export function ReviewScreen(): React.JSX.Element {
   /** The quick note being edited, or null when the editor is closed. */
   const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null);
 
-  const refresh = useCallback(async (targetDate: string, targetScope: ReviewScope) => {
-    try {
-      const previous = previousWindowArgs(targetScope, targetDate);
-      const [day, stats, tasks, prev] = await Promise.all([
-        YanjiDataNative.getDailyTimeline(targetDate),
-        YanjiDataNative.getReviewOverview(targetScope, 0, targetDate),
-        YanjiDataNative.getTodayTasks(targetDate),
-        YanjiDataNative.getReviewOverview(previous.scope, previous.periodsBack, previous.anchorDate),
-      ]);
-      setTimeline(day);
-      setOverview(stats);
-      setDayTasks(tasks);
-      setPrevTotalSeconds(prev.totalSeconds);
-    } catch {
-      // Keep the previous snapshot rather than inventing entries.
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh(date, scope);
-  }, [date, scope, refresh]);
-
-  useEffect(() => {
-    const unsub = onDataChanged(() => void refresh(date, scope));
-    return () => unsub();
-  }, [date, scope, refresh]);
-
-  const entries = useMemo(() => buildTimelineEntries(timeline), [timeline]);
+  const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
 
   // A planned-but-unfinished task is still something the user did that day:
   // the day has a record even when nothing was completed.
@@ -183,8 +168,8 @@ export function ReviewScreen(): React.JSX.Element {
   const delta = periodDelta(overview?.totalSeconds ?? 0, prevTotalSeconds);
   /** The single-day view: how the selected day's focus sits across its 24 hours. */
   const hourBuckets = useMemo(
-    () => (scope === 'TODAY' ? buildHourBuckets(timeline?.sessions ?? []) : []),
-    [scope, timeline]
+    () => (scope === 'TODAY' ? buildHourBuckets(sessions) : []),
+    [scope, sessions]
   );
   const peakHour = peakHourBucket(hourBuckets);
   const hourCenters = useMemo(() => lineCenters(24, chartWidth), [chartWidth]);
@@ -225,9 +210,12 @@ export function ReviewScreen(): React.JSX.Element {
               alignItems: 'center',
               backgroundColor: theme.colors.bgSurface,
               borderRadius: YanjiRadius.full,
+              borderWidth: 1,
+              borderColor: theme.colors.cardBorder,
               paddingVertical: YanjiSpacing.xs,
               paddingHorizontal: YanjiSpacing.xs,
               minWidth: DATE_PILL_MIN_WIDTH,
+              ...theme.shadow.sheet(theme.isDark),
             }}
           >
             <YanjiIconButton
@@ -279,7 +267,10 @@ export function ReviewScreen(): React.JSX.Element {
                 paddingHorizontal: YanjiSpacing.md,
                 borderRadius: YanjiRadius.full,
                 backgroundColor: theme.colors.bgSurface,
+                borderWidth: 1,
+                borderColor: theme.colors.cardBorder,
                 opacity: pressed ? 0.7 : 1,
+                ...theme.shadow.sheet(theme.isDark),
               })}
             >
               <Text
@@ -328,14 +319,14 @@ export function ReviewScreen(): React.JSX.Element {
                     },
                   ]}
                 >
-                  {timeline ? formatDuration(timeline.totalDurationSeconds) : '—'}
+                  {snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—'}
                 </Text>
               </View>
               <YanjiHairline style={{ marginTop: YanjiSpacing.sm, marginBottom: YanjiSpacing.sm }} />
               <View style={{ flexDirection: 'row' }}>
-                <ReviewStat label="专注" value={`${timeline?.focusCount ?? 0} 段`} />
+                <ReviewStat label="专注" value={`${snapshot?.focusCount ?? 0} 段`} />
                 <ReviewStat label="完成" value={`${completedTaskCount} / ${dayTasks.length}`} />
-                <ReviewStat label="随笔" value={`${timeline?.notes.length ?? 0} 篇`} />
+                <ReviewStat label="随笔" value={`${snapshot?.notes.length ?? 0} 篇`} />
               </View>
             </YanjiCard>
 
@@ -396,11 +387,14 @@ export function ReviewScreen(): React.JSX.Element {
                   hitSlop={6}
                   style={{
                     marginLeft: YanjiSpacing.sm,
-                    paddingHorizontal: YanjiSpacing.sm,
-                    paddingVertical: SCOPE_PILL_PADDING_V,
+                    paddingHorizontal: YanjiSpacing.sm + 2,
+                    paddingVertical: SCOPE_PILL_PADDING_V + 1,
                     borderRadius: YanjiRadius.full,
                     backgroundColor:
                       scope === item.scope ? theme.colors.accentSoft : 'transparent',
+                    borderWidth: 1,
+                    borderColor:
+                      scope === item.scope ? theme.colors.accentPrimary : theme.colors.cardBorder,
                   }}
                 >
                   <Text
@@ -827,7 +821,7 @@ function SessionRow({
   onEdit,
   onDelete,
 }: {
-  session: DailyTimelineSession;
+  session: DailySession;
   onEdit: () => void;
   onDelete: () => void;
 }): React.JSX.Element {
@@ -841,16 +835,29 @@ function SessionRow({
         paddingHorizontal: YanjiSpacing.lg,
       }}
     >
-      {/* The subject's own colour, so a long day can be scanned by colour. */}
+      {/* 22x22 timeline node matching TaskRow and NoteRow for strict horizontal alignment */}
       <View
         style={{
-          width: SUBJECT_RAIL_WIDTH,
-          height: SUBJECT_RAIL_HEIGHT,
+          width: 22,
+          height: 22,
           borderRadius: YanjiRadius.full,
-          backgroundColor: session.subjectColor,
+          backgroundColor: session.subjectColor ? `${session.subjectColor}20` : theme.colors.accentSoft,
+          borderWidth: 1,
+          borderColor: theme.colors.cardBorder,
+          alignItems: 'center',
+          justifyContent: 'center',
           marginRight: YanjiSpacing.md,
         }}
-      />
+      >
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: YanjiRadius.full,
+            backgroundColor: session.subjectColor || theme.colors.accentPrimary,
+          }}
+        />
+      </View>
       <Pressable
         onPress={onEdit}
         accessibilityRole="button"
@@ -914,8 +921,20 @@ function TaskRow({ task }: { task: StudyTask }): React.JSX.Element {
         paddingHorizontal: YanjiSpacing.lg,
       }}
     >
-      <View style={{ marginRight: YanjiSpacing.md }}>
-        <YanjiIcon name="check" size={14} color={theme.colors.success} strokeWidth={2.5} />
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: YanjiRadius.full,
+          backgroundColor: theme.colors.accentSoft,
+          borderWidth: 1,
+          borderColor: theme.colors.cardBorder,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: YanjiSpacing.md,
+        }}
+      >
+        <YanjiIcon name="check" size={13} color={theme.colors.success} strokeWidth={2.5} />
       </View>
       <Text
         numberOfLines={2}
@@ -942,27 +961,47 @@ function NoteRow({
   const theme = useYanjiTheme();
   return (
     <View style={{ paddingVertical: YanjiSpacing.md, paddingHorizontal: YanjiSpacing.lg }}>
-      <Text style={{ color: theme.colors.textPrimary, ...theme.typography.body, lineHeight: 22 }}>
-        {note.content}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: YanjiSpacing.xs }}>
-        <Text style={{ color: theme.colors.textTertiary, ...theme.typography.meta }}>
-          {formatClockFromEpoch(note.timestamp)}
-        </Text>
-        <View style={{ flex: 1 }} />
-        <YanjiIconButton
-          icon="compose"
-          accessibilityLabel="编辑这条记录"
-          onPress={onEdit}
-          iconSize={16}
-        />
-        <YanjiIconButton
-          icon={note.isFavorite ? 'star' : 'starOutline'}
-          accessibilityLabel={note.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
-          selected={note.isFavorite}
-          onPress={onToggleFavorite}
-          iconSize={16}
-        />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: YanjiRadius.full,
+            backgroundColor: theme.colors.bgSunken,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: YanjiSpacing.md,
+            marginTop: 2,
+          }}
+        >
+          <YanjiIcon name="compose" size={12} color={theme.colors.accentPrimary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.colors.textPrimary, ...theme.typography.body, lineHeight: 22 }}>
+            {note.content}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: YanjiSpacing.xs }}>
+            <Text style={{ color: theme.colors.textTertiary, ...theme.typography.meta }}>
+              {formatClockFromEpoch(note.timestamp)}
+            </Text>
+            <View style={{ flex: 1 }} />
+            <YanjiIconButton
+              icon="compose"
+              accessibilityLabel="编辑这条记录"
+              onPress={onEdit}
+              iconSize={16}
+            />
+            <YanjiIconButton
+              icon={note.isFavorite ? 'star' : 'starOutline'}
+              accessibilityLabel={note.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
+              selected={note.isFavorite}
+              onPress={onToggleFavorite}
+              iconSize={16}
+            />
+          </View>
+        </View>
       </View>
     </View>
   );

@@ -8,11 +8,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
-import type { ThemeMode, UserSettings } from '../bridge';
+import type { ThemeMode } from '../bridge';
 import { YanjiChip, YanjiIconButton, YanjiPrimaryButton, YanjiSectionHeader } from '../components/YanjiUI';
-import { useNavigation } from '../navigation/NavigationShell';
+import { useNavigationActions } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+import { useSettingsSnapshot } from '../state/dataRefresh';
 
 const THEME_OPTIONS: Array<{ mode: ThemeMode; label: string }> = [
   { mode: 'SYSTEM', label: '跟随系统' },
@@ -22,23 +23,18 @@ const THEME_OPTIONS: Array<{ mode: ThemeMode; label: string }> = [
 
 export function SettingsScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
-  const { closeSettings } = useNavigation();
-  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const { closeSettings } = useNavigationActions();
+  const settingsSnapshot = useSettingsSnapshot('settings', true);
+  const settings = settingsSnapshot?.settings ?? null;
   const [mode, setMode] = useState<ThemeMode>(theme.mode);
 
-  const refresh = useCallback(async () => {
-    try {
-      setSettings(await (await import('../bridge')).YanjiDataNative.getUserSettings());
-      const pref = await YanjiThemeNative.getThemePreference();
-      setMode(pref.mode);
-    } catch {
-      // Native bridge unavailable — leave the panel empty rather than faking values.
-    }
-  }, []);
-
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    YanjiThemeNative.getThemePreference()
+      .then(pref => setMode(pref.mode))
+      .catch(() => {
+        // Keep the current theme selection if the bridge read fails.
+      });
+  }, []);
 
   useEffect(() => {
     return onThemeChanged(pref => setMode(pref.mode));

@@ -18,13 +18,15 @@ export const YanjiThemeTokens = {
    */
   colors: {
     light: {
-      bgPrimary: '#F2F4F7',      // Soft blue-gray page background
+      bgPrimary: '#F6F8FA',      // Refined soft blue-gray page background
       bgSurface: '#FFFFFF',
       bgElevated: '#F1F5FB',
       textPrimary: '#172033',
       textSecondary: '#5A6473',
-      accentPrimary: '#356AE6',  // Restrained blue accent
+      accentPrimary: '#3B6FF6',  // Pure Electric Indigo accent
       onAccent: '#FFFFFF',       // Matches YanjiOnPrimary
+      cardBorder: 'rgba(0, 0, 0, 0.06)',
+      cardBorderStrong: 'rgba(0, 0, 0, 0.12)',
       success: '#17784F',
       warning: '#9A6100',
       danger: '#BE3232',
@@ -35,8 +37,10 @@ export const YanjiThemeTokens = {
       bgElevated: '#1D2536',
       textPrimary: '#F0F4FC',
       textSecondary: '#94A3B8',
-      accentPrimary: '#4F7DF3',  // Raised for dark-background contrast
-      onAccent: '#0D111A',       // Matches YanjiDarkOnPrimary — white on the raised dark primary fails WCAG
+      accentPrimary: '#5A88F8',  // Raised for dark-background contrast
+      onAccent: '#0D111A',       // Matches YanjiDarkOnPrimary
+      cardBorder: 'rgba(255, 255, 255, 0.08)',
+      cardBorderStrong: 'rgba(255, 255, 255, 0.16)',
       success: '#34D399',
       warning: '#FBBF24',
       danger: '#F87171',
@@ -53,8 +57,8 @@ export const YanjiThemeTokens = {
     full: 9999,
   },
   cardRules: {
-    borderWidth: 0,
-    hasBorderStroke: false,
+    borderWidth: 1,
+    hasBorderStroke: true,
   },
 
   validateBackgroundColor(colorHex, isDark) {
@@ -71,10 +75,10 @@ export const YanjiThemeTokens = {
   },
 
   validateCardBorder(borderWidth) {
-    if (borderWidth && borderWidth > 0) {
+    if (borderWidth && borderWidth > 1) {
       return {
         valid: false,
-        error: `VIOLATION: Card border width is ${borderWidth}. Active constraint mandates Card Zero-Border across light and dark modes.`,
+        error: `VIOLATION: Card border width is ${borderWidth}. Active constraint mandates Card subtle hairline border <= 1 across light and dark modes.`,
       };
     }
     return { valid: true };
