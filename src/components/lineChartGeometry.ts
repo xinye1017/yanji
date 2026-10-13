@@ -8,6 +8,22 @@
  *   never invents an unrecorded larger peak or a negative valley.
  */
 export interface ChartPoint { x: number; y: number }
+
+/** Shared horizontal plot domain for points, peak markers, guides and axis ticks. */
+export function lineChartHorizontalBounds(width: number, horizontalPadding: number) {
+  const safeWidth = Math.max(0, width);
+  const plotLeft = Math.min(safeWidth / 2, Math.max(0, horizontalPadding));
+  return { plotLeft, plotRight: safeWidth - plotLeft };
+}
+
+export function lineChartXCenters(count: number, width: number, horizontalPadding: number): number[] {
+  if (count <= 0) return [];
+  const { plotLeft, plotRight } = lineChartHorizontalBounds(width, horizontalPadding);
+  if (count === 1) return [(plotLeft + plotRight) / 2];
+  return Array.from({ length: count }, (_, index) =>
+    plotLeft + (plotRight - plotLeft) * index / (count - 1)
+  );
+}
 export interface ChartSegment {
   from: ChartPoint;
   control1: ChartPoint;
@@ -20,6 +36,7 @@ export function buildLineChartGeometry(
   width: number,
   height: number,
   padding = 8,
+  horizontalPadding = padding,
 ): {
   points: ChartPoint[];
   segments: ChartSegment[];
@@ -27,20 +44,24 @@ export function buildLineChartGeometry(
   areaPath: string;
   plotTop: number;
   plotBottom: number;
+  plotLeft: number;
+  plotRight: number;
   scale: number;
 } {
   const plotTop = Math.min(Math.max(0, padding), height / 4);
   const plotBottom = height - plotTop;
   const max = Math.max(0, ...values);
   const scale = max > 0 ? (plotBottom - plotTop) / max : 0;
-  const step = values.length > 1 ? width / (values.length - 1) : 0;
+  const { plotLeft, plotRight } = lineChartHorizontalBounds(width, horizontalPadding);
+  const centers = lineChartXCenters(values.length, width, horizontalPadding);
+  const step = values.length > 1 ? (plotRight - plotLeft) / (values.length - 1) : 0;
   const points = values.map((value, index) => ({
-    x: values.length > 1 ? index * step : width / 2,
+    x: centers[index],
     y: plotBottom - Math.max(0, value) * scale,
   }));
 
   if (points.length === 0) {
-    return { points, segments: [], linePath: '', areaPath: '', plotTop, plotBottom, scale };
+    return { points, segments: [], linePath: '', areaPath: '', plotTop, plotBottom, plotLeft, plotRight, scale };
   }
 
   // Uniform x spacing: a harmonic mean of same-sign slopes preserves
@@ -70,5 +91,5 @@ export function buildLineChartGeometry(
   const last = points[points.length - 1];
   const first = points[0];
   const areaPath = `${linePath} L ${last.x} ${plotBottom} L ${first.x} ${plotBottom} Z`;
-  return { points, segments, linePath, areaPath, plotTop, plotBottom, scale };
+  return { points, segments, linePath, areaPath, plotTop, plotBottom, plotLeft, plotRight, scale };
 }

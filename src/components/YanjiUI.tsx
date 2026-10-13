@@ -643,7 +643,7 @@ export function YanjiLineChart({
   // Monotone cubic segments pass through every genuine data point. The old
   // midpoint-quadratic used points as *controls*, so its visible curve missed
   // the marked peak; the highest point was also clipped at y=0.
-  const chart = buildLineChartGeometry(values, width, height, YanjiSpacing.sm);
+  const chart = buildLineChartGeometry(values, width, height, YanjiSpacing.sm, YanjiSpacing.xl);
   const averageY =
     averageValue !== undefined && averageValue > 0
       ? Math.max(chart.plotTop, Math.min(chart.plotBottom, chart.plotBottom - averageValue * chart.scale))
@@ -663,9 +663,9 @@ export function YanjiLineChart({
         />
         {averageY !== null ? (
           <Line
-            x1={0}
+            x1={chart.plotLeft}
             y1={averageY}
-            x2={width}
+            x2={chart.plotRight}
             y2={averageY}
             stroke={theme.colors.textTertiary}
             strokeWidth={1}
@@ -687,7 +687,7 @@ export function YanjiLineChart({
         <Text
           style={{
             position: 'absolute',
-            right: 0,
+            right: chart.plotLeft,
             top: Math.max(0, averageY - 15),
             paddingHorizontal: 3,
             backgroundColor: theme.colors.bgSurface,

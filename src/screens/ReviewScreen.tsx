@@ -45,6 +45,7 @@ import {
   useReviewOverview,
 } from '../state/dataRefresh';
 
+import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
   buildHourBuckets,
   buildTimelineEntries,
@@ -58,7 +59,6 @@ import {
   formatDuration,
   formatMonthDaySlash,
   formatPercent,
-  lineCenters,
   peakHourBucket,
   peakTrendDay,
   periodDelta,
@@ -172,13 +172,17 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     [scope, sessions]
   );
   const peakHour = peakHourBucket(hourBuckets);
-  const hourCenters = useMemo(() => lineCenters(24, chartWidth), [chartWidth]);
-  /** Exact collision-free positioned axis labels. The month curve spaces its
-      points edge-to-edge, so its labels sit on line centers, not bar centers. */
+  const hourCenters = useMemo(
+    () => lineChartXCenters(24, chartWidth, YanjiSpacing.xl),
+    [chartWidth]
+  );
+  /** Axis labels share the same horizontally inset X domain as the SVG curve. */
   const axisLabelItems = useMemo(
     () =>
       computeAxisLabelsLayout(columns, chartWidth, {
-        centers: scope === 'CALENDAR_MONTH' ? lineCenters(columns.length, chartWidth) : undefined,
+        centers: scope === 'CALENDAR_MONTH'
+          ? lineChartXCenters(columns.length, chartWidth, YanjiSpacing.xl)
+          : undefined,
       }),
     [columns, chartWidth, scope]
   );
