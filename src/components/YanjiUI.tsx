@@ -20,6 +20,7 @@ import Animated, {
 import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiCardRules, YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { buildLineChartGeometry } from './lineChartGeometry';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
 
@@ -322,6 +323,7 @@ export function YanjiStepper({
   step = 1,
   suffix,
   label,
+  alignment = 'start',
 }: {
   value: number;
   onChange: (next: number) => void;
@@ -330,6 +332,8 @@ export function YanjiStepper({
   step?: number;
   suffix?: string;
   label: string;
+  /** Keep form steppers left-aligned; the focus timer opts into the central axis. */
+  alignment?: 'start' | 'center';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const canDecrease = value - step >= min;
@@ -340,7 +344,7 @@ export function YanjiStepper({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
+        alignSelf: alignment === 'center' ? 'center' : 'flex-start',
         backgroundColor: theme.colors.bgSunken,
         borderRadius: YanjiRadius.full,
         padding: 4,
@@ -636,36 +640,22 @@ export function YanjiLineChart({
     );
   }
 
-  const scale = height / max;
-  const step = values.length > 1 ? width / (values.length - 1) : 0;
-  const points = values.map((value, index) => ({
-    x: values.length > 1 ? index * step : width / 2,
-    y: height - value * scale,
-  }));
-
-  // Midpoint quadratics: straight segments read as a zigzag at 30 points, while
-  // a heavy spline would invent peaks the data never had.
-  let linePath = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const midX = (points[i].x + points[i + 1].x) / 2;
-    const midY = (points[i].y + points[i + 1].y) / 2;
-    linePath += ` Q ${points[i].x} ${points[i].y} ${midX} ${midY}`;
-  }
-  linePath += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
-
+  // Monotone cubic segments pass through every genuine data point. The old
+  // midpoint-quadratic used points as *controls*, so its visible curve missed
+  // the marked peak; the highest point was also clipped at y=0.
+  const chart = buildLineChartGeometry(values, width, height, YanjiSpacing.sm);
   const averageY =
     averageValue !== undefined && averageValue > 0
-      ? Math.max(0, Math.min(height, height - averageValue * scale))
+      ? Math.max(chart.plotTop, Math.min(chart.plotBottom, chart.plotBottom - averageValue * chart.scale))
       : null;
-  const peak = peakIndex !== undefined ? points[peakIndex] : undefined;
+  const peak = peakIndex !== undefined ? chart.points[peakIndex] : undefined;
 
   return (
     <View style={{ width, height }}>
       <Svg width={width} height={height}>
-        <Path d={areaPath} fill={theme.colors.accentPrimary} fillOpacity={0.14} />
+        <Path d={chart.areaPath} fill={theme.colors.accentPrimary} fillOpacity={0.14} />
         <Path
-          d={linePath}
+          d={chart.linePath}
           stroke={theme.colors.accentPrimary}
           strokeWidth={2}
           strokeLinecap="round"

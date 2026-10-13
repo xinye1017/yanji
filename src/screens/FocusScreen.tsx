@@ -399,6 +399,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 {/* 细调节步进器 */}
                 <YanjiStepper
                   label="微调时长"
+                  alignment="center"
                   value={durationMinutes}
                   onChange={setDurationMinutes}
                   min={MIN_MINUTES}

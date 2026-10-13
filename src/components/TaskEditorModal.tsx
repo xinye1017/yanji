@@ -16,6 +16,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { StudyTask, Subject } from '../bridge';
 import {
@@ -53,6 +54,7 @@ export function TaskEditorModal({
   editingTask = null,
 }: TaskEditorModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
+  const insets = useSafeAreaInsets();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -163,7 +165,9 @@ export function TaskEditorModal({
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: YanjiSpacing.page,
-            paddingTop: YanjiSpacing.lg,
+            // Modal is a separate edge-to-edge window on Android. Its heading
+            // must clear the status bar even when RN reports a zero top inset.
+            paddingTop: Math.max(insets.top, YanjiSpacing.lg) + YanjiSpacing.lg,
             paddingBottom: YanjiSpacing.xxl,
           }}
         >
