@@ -1,22 +1,7 @@
 /**
- * Yanji Design Tokens — React Native side.
- *
- * Authority: test-e2e/contracts/theme-tokens.js (machine-asserted) +
- * app/src/main/java/com/example/yanji/theme/*.kt (Compose source of truth).
- *
- * Visual language: 「纸上研迹」— surfaces are sheets of paper on a desk.
- * Depth is expressed by a five-step surface ladder plus soft cast shadows;
- * cards carry NO borders (see YanjiCardRules). Hierarchy comes from surface
- * lightness, shadow and typography — never from outlines.
- *
- * Hard constraints (AGENTS.md §三.6), machine-asserted by
- * test-e2e/tier1-features/m8-shipped-tokens.test.js:
- * - Dark mode MUST be Midnight Blue family; pure black #000000 is forbidden.
- * - Light page background MUST be the soft blue-gray #F2F4F7 (never pure white,
- *   or white cards would vanish into the page).
- * - onAccent / success / warning / danger light values are pinned.
- * - Radius xxl=28 and full=9999 are first-class steps.
- * - Card containers have ZERO borders in both light and dark.
+ * Yanji visual language: quiet study journal.
+ * Semantic surfaces may be elevated controls or unboxed plans and timelines.
+ * Typography and readable rhythm, rather than card outlines, establish hierarchy.
  */
 
 import type { ViewStyle } from 'react-native';
@@ -41,13 +26,13 @@ export const YanjiColors = {
     textSecondary: '#5A6473',
     textTertiary: '#606A7C',
     textDisabled: '#98A2B3',
-    /** Pure Electric Indigo accent (#3B6FF6). */
-    accentPrimary: '#3B6FF6',
+    /** Indigo dark enough for 4.5:1 ordinary white labels and tinted-chip text. */
+    accentPrimary: '#3462DC',
     accentStrong: '#2555D4',
     accentSoft: '#EDF2FE',
     /**
      * Foreground on `accentPrimary` (Compose: YanjiOnPrimary #FFFFFF).
-     * Passes WCAG 1.4.3 on #3B6FF6.
+     * Maintains WCAG 1.4.3 normal-text contrast on accentPrimary.
      */
     onAccent: '#FFFFFF',
     /**
@@ -90,8 +75,8 @@ export const YanjiColors = {
     textSecondary: '#94A3B8',
     textTertiary: '#8797AC',
     textDisabled: '#475569',
-    accentPrimary: '#5A88F8',
-    accentStrong: '#7197F7',
+    accentPrimary: '#7197F7',
+    accentStrong: '#83A8FF',
     accentSoft: 'rgba(90, 136, 248, 0.15)',
     /**
      * Foreground on `accentPrimary` (Compose: YanjiDarkOnPrimary #0D111A).
@@ -137,9 +122,21 @@ export const YanjiSpacing = {
   page: 20,
 } as const;
 
+/** Shared composition rhythm for the three main screens. */
+export const YanjiLayout = {
+  sectionGap: 28,
+  titleGap: 10,
+  heroInset: 22,
+  listRowMinHeight: 56,
+  timerTopGap: 36,
+} as const;
+
 /** Typography scale — hierarchy by size and weight, not color dilution. */
 export const YanjiTypography = {
-  pageTitle: { fontSize: 28, fontWeight: '700' as const, lineHeight: 34 },
+  pageTitle: { fontSize: 29, fontWeight: '700' as const, lineHeight: 38 },
+  dayTitle: { fontSize: 25, fontWeight: '600' as const, lineHeight: 34 },
+  heroTitle: { fontSize: 23, fontWeight: '600' as const, lineHeight: 32 },
+  focusValue: { fontSize: 68, fontWeight: '300' as const, lineHeight: 82 },
   sectionTitle: { fontSize: 20, fontWeight: '600' as const, lineHeight: 26 },
   body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
   bodyStrong: { fontSize: 15, fontWeight: '600' as const, lineHeight: 22 },
@@ -174,6 +171,7 @@ export const YanjiTypography = {
 export const YanjiCardRules = {
   borderWidth: 1,
   hasBorderStroke: true,
+  plainBorderWidth: 0,
 } as const;
 
 /**

@@ -195,12 +195,20 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           paddingBottom: contentPadding,
         }}
       >
-        {/* Top date navigation with dynamic left-translation & 回到今天 button */}
+        <View style={{ marginBottom: YanjiSpacing.lg }}>
+          <Text accessibilityRole="header" style={[theme.typography.pageTitle, { color: theme.colors.textPrimary }]}>回顾</Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 4 }]}>这一天的专注、计划和想法</Text>
+        </View>
+
+        {/* Date navigation */}
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: isToday ? 'center' : 'space-between',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            rowGap: YanjiSpacing.sm,
+            columnGap: YanjiSpacing.sm,
             marginBottom: YanjiSpacing.md,
           }}
         >
@@ -287,52 +295,21 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         </View>
 
         {/* 当日记录 */}
-        <YanjiSectionHeader title="当日记录" />
+        <YanjiSectionHeader title="这一天" />
         {!hasRecords ? (
-          <YanjiCard variant="sunken" style={{ paddingVertical: YanjiSpacing.xs }}>
+          <YanjiCard variant="plain" style={{ paddingVertical: YanjiSpacing.md }}>
             <YanjiEmptyState
               compact
               icon="calendar"
-              title={relativeLabel ? `${relativeLabel}还没有记录` : '当日还没有记录'}
-              hint="专注、任务与随笔都会出现在这里"
+              title={!snapshot ? '正在读取这一天的记录…' : relativeLabel ? `${relativeLabel}还没有记录` : '今天还没有记录'}
+              hint={snapshot ? '每一个专注片段和随笔，都会留在这里' : '若长时间未更新，可以切换日期后重试'}
             />
           </YanjiCard>
         ) : (
           <View>
-            <YanjiCard style={{ paddingVertical: YanjiSpacing.md, paddingHorizontal: YanjiSpacing.lg }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                }}
-              >
-                <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
-                  当日专注
-                </Text>
-                <Text
-                  style={[
-                    theme.typography.sectionTitle,
-                    {
-                      color: theme.colors.textPrimary,
-                      fontVariant: ['tabular-nums'],
-                    },
-                  ]}
-                >
-                  {snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—'}
-                </Text>
-              </View>
-              <YanjiHairline style={{ marginTop: YanjiSpacing.sm, marginBottom: YanjiSpacing.sm }} />
-              <View style={{ flexDirection: 'row' }}>
-                <ReviewStat label="专注" value={`${snapshot?.focusCount ?? 0} 段`} />
-                <ReviewStat label="完成" value={`${completedTaskCount} / ${dayTasks.length}`} />
-                <ReviewStat label="随笔" value={`${snapshot?.notes.length ?? 0} 篇`} />
-              </View>
-            </YanjiCard>
-
             {/* One chronological sheet: sessions, tasks and notes interleaved by
                 when they actually happened. */}
-            <YanjiCard style={{ marginTop: YanjiSpacing.md, padding: 0 }}>
+            <YanjiCard variant="plain" style={{ paddingHorizontal: YanjiSpacing.xs }}>
               {entries.map((entry, index) => (
                 <View key={entry.key}>
                   {index > 0 ? <YanjiHairline inset={YanjiSpacing.lg} /> : null}
@@ -369,6 +346,37 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
                 </View>
               ))}
             </YanjiCard>
+            <YanjiCard variant="plain" style={{ marginTop: YanjiSpacing.lg, paddingVertical: YanjiSpacing.md }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                }}
+              >
+                <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
+                  当日专注
+                </Text>
+                <Text
+                  style={[
+                    theme.typography.sectionTitle,
+                    {
+                      color: theme.colors.textPrimary,
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—'}
+                </Text>
+              </View>
+              <YanjiHairline style={{ marginTop: YanjiSpacing.sm, marginBottom: YanjiSpacing.sm }} />
+              <View style={{ flexDirection: 'row' }}>
+                <ReviewStat label="专注" value={`${snapshot?.focusCount ?? 0} 段`} />
+                <ReviewStat label="完成" value={`${completedTaskCount} / ${dayTasks.length}`} />
+                <ReviewStat label="随笔" value={`${snapshot?.notes.length ?? 0} 篇`} />
+              </View>
+            </YanjiCard>
+
           </View>
         )}
 
@@ -376,7 +384,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         <YanjiSectionHeader
           title="学习趋势"
           rightAction={
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', flexShrink: 1 }}>
               {SCOPES.map(item => (
                 <Pressable
                   key={item.scope}
@@ -416,16 +424,19 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         />
 
         {days.length === 0 ? (
-          <YanjiCard variant="sunken">
-            <YanjiEmptyState icon="chartMinimal" title="暂无统计数据" />
+          <YanjiCard variant="plain" style={{ paddingVertical: YanjiSpacing.lg }}>
+            <YanjiEmptyState compact icon="chartMinimal" title="暂无统计数据" />
           </YanjiCard>
         ) : (
-          <YanjiCard>
+          <YanjiCard variant="plain" style={{ paddingVertical: YanjiSpacing.sm }}>
             <View
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                rowGap: YanjiSpacing.sm,
+                columnGap: YanjiSpacing.sm,
                 paddingBottom: YanjiSpacing.md,
               }}
             >
@@ -453,7 +464,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
               {/* A single day has no "daily average" — the day sheet above already
                   carries its total, so the header keeps only the comparison. */}
               {scope === 'TODAY' ? null : (
-                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', maxWidth: '100%' }}>
                   <Text
                     style={[
                       theme.typography.caption,
@@ -611,7 +622,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
                 </Text>
               }
             />
-            <YanjiCard style={{ padding: YanjiSpacing.lg }}>
+            <YanjiCard variant="plain" style={{ paddingVertical: YanjiSpacing.md }}>
               <YanjiPieChart
                 slices={overview.subjectDistribution}
                 size={144}

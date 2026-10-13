@@ -22,6 +22,7 @@ import { useColorScheme } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
 import {
   YanjiColors,
+  YanjiLayout,
   YanjiMotion,
   YanjiRadius,
   YanjiShadow,
@@ -37,6 +38,7 @@ export interface YanjiTheme {
   colors: typeof YanjiColors.light | typeof YanjiColors.dark;
   radius: typeof YanjiRadius;
   spacing: typeof YanjiSpacing;
+  layout: typeof YanjiLayout;
   typography: typeof YanjiTypography;
   touch: typeof YanjiTouch;
   motion: typeof YanjiMotion;
@@ -81,6 +83,7 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
     colors: isDark ? YanjiColors.dark : YanjiColors.light,
     radius: YanjiRadius,
     spacing: YanjiSpacing,
+    layout: YanjiLayout,
     typography: YanjiTypography,
     touch: YanjiTouch,
     motion: YanjiMotion,

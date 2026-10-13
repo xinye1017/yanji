@@ -18,6 +18,26 @@ import { assert, assertEqual } from '../framework/assertions.js';
 const PROJECT_ROOT = path.resolve(process.cwd());
 const TOKENS_PATH = path.join(PROJECT_ROOT, 'src', 'theme', 'tokens.ts');
 
+function luminance(hex) {
+  const components = hex.slice(1).match(/../g).map(s => parseInt(s, 16) / 255);
+  const [r, g, b] = components.map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(a, b) {
+  const x = luminance(a);
+  const y = luminance(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+function resolveTint(tint, surface) {
+  if (tint.startsWith('#')) return tint;
+  const [r, g, b, alpha] = tint.match(/[\d.]+/g).map(Number);
+  const background = surface.slice(1).match(/../g).map(s => parseInt(s, 16));
+  const result = [r, g, b].map((v, i) => Math.round(v * alpha + background[i] * (1 - alpha)));
+  return '#' + result.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 export function registerShippedTokenTests() {
   let tokens = null;
 
@@ -60,6 +80,14 @@ export function registerShippedTokenTests() {
       assertEqual(tokens.YanjiColors.dark.onAccent, '#0D111A', 'Dark onAccent must be #0D111A');
     });
 
+    it('actual shipped accent text meets normal-size 4.5:1 contrast in both themes', () => {
+      for (const [mode, colors] of Object.entries(tokens.YanjiColors)) {
+        assert(contrastRatio(colors.onAccent, colors.accentPrimary) >= 4.5, `${mode} CTA text contrast`);
+        assert(contrastRatio(colors.accentPrimary, resolveTint(colors.accentSoft, colors.bgSurface)) >= 4.5, `${mode} accent text on tinted control contrast`);
+        assert(contrastRatio(colors.accentStrong, resolveTint(colors.accentSoft, colors.bgSurface)) >= 4.5, `${mode} selected Chip contrast`);
+      }
+    });
+
     it('semantic light colors adopt the retired-replacement values', () => {
       // #2F9E6D / #E67E22 / #D64545 were retired on measured WCAG failures.
       assertEqual(tokens.YanjiColors.light.success, '#17784F', 'Light success must be #17784F');
@@ -80,9 +108,12 @@ export function registerShippedTokenTests() {
       assertEqual(tokens.YanjiRadius.full, 9999, 'full radius step must be 9999');
     });
 
-    it('card rule declares subtle hairline border in both light and dark', () => {
+    it('cards distinguish raised controls from borderless journal groups', () => {
       assertEqual(tokens.YanjiCardRules.borderWidth, 1, 'Card borderWidth must be 1');
-      assertEqual(tokens.YanjiCardRules.hasBorderStroke, true, 'Card must carry subtle hairline border');
+      assertEqual(tokens.YanjiCardRules.hasBorderStroke, true, 'Raised card may have a hairline');
+      assertEqual(tokens.YanjiCardRules.plainBorderWidth, 0, 'Journal group is borderless');
+      assert(tokens.YanjiLayout.sectionGap >= tokens.YanjiSpacing.xl, 'Page sections need a legible rhythm');
+      assert(tokens.YanjiTypography.focusValue.fontSize > tokens.YanjiTypography.pageTitle.fontSize, 'Timer must dominate heading');
     });
   });
 }

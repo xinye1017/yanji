@@ -23,7 +23,7 @@ export const YanjiThemeTokens = {
       bgElevated: '#F1F5FB',
       textPrimary: '#172033',
       textSecondary: '#5A6473',
-      accentPrimary: '#3B6FF6',  // Pure Electric Indigo accent
+      accentPrimary: '#3462DC',  // Normal-text contrast on light CTA and chip
       onAccent: '#FFFFFF',       // Matches YanjiOnPrimary
       cardBorder: 'rgba(0, 0, 0, 0.06)',
       cardBorderStrong: 'rgba(0, 0, 0, 0.12)',
@@ -37,7 +37,7 @@ export const YanjiThemeTokens = {
       bgElevated: '#1D2536',
       textPrimary: '#F0F4FC',
       textSecondary: '#94A3B8',
-      accentPrimary: '#5A88F8',  // Raised for dark-background contrast
+      accentPrimary: '#7197F7',  // Normal-text contrast on dark tinted controls
       onAccent: '#0D111A',       // Matches YanjiDarkOnPrimary
       cardBorder: 'rgba(255, 255, 255, 0.08)',
       cardBorderStrong: 'rgba(255, 255, 255, 0.16)',
@@ -59,6 +59,7 @@ export const YanjiThemeTokens = {
   cardRules: {
     borderWidth: 1,
     hasBorderStroke: true,
+    plainBorderWidth: 0,
   },
 
   validateBackgroundColor(colorHex, isDark) {

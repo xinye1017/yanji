@@ -238,7 +238,7 @@ export function TodayScreen({
         </View>
 
         {/* 整合式专注主控卡 (Integrated Focus Hero) */}
-        <YanjiCard variant="hero" style={{ padding: 20 }}>
+        <YanjiCard variant="hero" style={{ padding: theme.layout.heroInset }}>
           {active ? (
             /* 活跃专注态：脉动沉浸展示 */
             <View>
@@ -291,17 +291,19 @@ export function TodayScreen({
               </Pressable>
             </View>
           ) : (
-            /* 常规态：今日累计与一触即发入口 */
+            /* 常规态：先明确行动，再提供轻量统计 */
             <View>
+              <Text style={[theme.typography.label, { color: accent, marginBottom: 6 }]}>下一步</Text>
+              <Text style={[theme.typography.heroTitle, { color: ink, marginBottom: YanjiSpacing.md }]}>给自己一段安静的时间</Text>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={[theme.typography.caption, { color: muted, letterSpacing: 0.2 }]}>今日累计专注</Text>
-                  <Text style={{ color: ink, fontSize: 34, fontWeight: '700', marginTop: 4, fontVariant: ['tabular-nums'] }}>
-                    {duration(effectiveSeconds)}
+                  <Text style={[theme.typography.heroTitle, { color: ink, marginTop: 4, fontVariant: ['tabular-nums'] }]}>
+                    {hasFocus ? duration(effectiveSeconds) : '尚未开始'}
                   </Text>
                 </View>
 
-                {goalSeconds > 0 ? (
+                {hasFocus && goalSeconds > 0 ? (
                   <Pressable
                     onPress={openGoal}
                     accessibilityRole="button"
@@ -321,7 +323,7 @@ export function TodayScreen({
                     <Text style={{ fontSize: 15, fontWeight: '700', color: accent, fontVariant: ['tabular-nums'] }}>{pct}%</Text>
                     <Text style={[theme.typography.axisLabel, { color: muted }]}>目标 {duration(goalSeconds)}</Text>
                   </Pressable>
-                ) : (
+                ) : hasFocus ? (
                   <Pressable
                     onPress={openGoal}
                     accessibilityRole="button"
@@ -339,16 +341,16 @@ export function TodayScreen({
                   >
                     <Text style={[theme.typography.caption, { color: accent, fontWeight: '600' }]}>设目标 +</Text>
                   </Pressable>
-                )}
+                ) : null}
               </View>
 
-              {goalSeconds > 0 ? (
+              {hasFocus && goalSeconds > 0 ? (
                 <View style={{ marginTop: 12, marginBottom: 16 }}>
                   <View style={{ height: 6, borderRadius: YanjiRadius.full, backgroundColor: faint, overflow: 'hidden' }}>
                     <View style={{ height: '100%', width: `${Math.min(100, pct)}%`, backgroundColor: accent, borderRadius: YanjiRadius.full }} />
                   </View>
                   <Text style={[theme.typography.meta, { color: subtle, marginTop: 8 }]}>
-                    {effectiveSeconds >= goalSeconds ? `已超额达成目标 ${duration(effectiveSeconds - goalSeconds)} 🎉` : `距离今日目标还差 ${duration(goalSeconds - effectiveSeconds)}`}
+                    {effectiveSeconds >= goalSeconds ? `已超过今日目标 ${duration(effectiveSeconds - goalSeconds)}` : `距离今日目标还差 ${duration(goalSeconds - effectiveSeconds)}`}
                     {snapshot ? ` · 专注 ${snapshot.focusCount + snapshot.examCount} 次` : ''}
                   </Text>
                 </View>
@@ -356,7 +358,7 @@ export function TodayScreen({
                 <Text style={[theme.typography.meta, { color: subtle, marginTop: 6, marginBottom: 16 }]}>
                   {snapshot && (snapshot.focusCount + snapshot.examCount > 0)
                     ? `今日已专注 ${snapshot.focusCount + snapshot.examCount} 次`
-                    : '还没有专注记录，选一个任务开启心流吧'}
+                    : '可以从下面的计划开始，也可以自由专注'}
                 </Text>
               )}
 
@@ -383,17 +385,114 @@ export function TodayScreen({
                 })}
               >
                 <YanjiIcon name="play" color={theme.colors.onAccent} size={18} />
-                <Text style={{ color: theme.colors.onAccent, fontSize: 15, fontWeight: '700', marginLeft: 8 }}>
-                  {pending.length > 0 ? `继续学习 · ${pending[0].title}` : '开始专注'}
+                <Text numberOfLines={1} ellipsizeMode="tail" style={{ flexShrink: 1, color: theme.colors.onAccent, fontSize: 15, fontWeight: '600', marginLeft: 8 }}>
+                  {pending.length > 0 ? `从「${pending[0].title}」开始` : '开始专注'}
                 </Text>
               </Pressable>
             </View>
           )}
         </YanjiCard>
 
+        {/* 今日任务卡片 */}
+        <View style={{ marginTop: YanjiSpacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <View>
+              <Text style={[theme.typography.sectionTitle, { color: ink }]}>今日任务</Text>
+              <Text style={[theme.typography.meta, { color: subtle, marginTop: 2 }]}>已完成 {tasks.filter(task => task.completed).length}/{tasks.length}</Text>
+            </View>
+            <Pressable onPress={openTaskEditor} accessibilityRole="button" accessibilityLabel="添加任务" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingHorizontal: 8 }}>
+              <YanjiIcon name="add" size={16} color={accent} />
+              <Text style={{ color: accent, marginLeft: 4, fontWeight: '600', fontSize: 14 }}>添加</Text>
+            </Pressable>
+          </View>
+          <YanjiCard variant="plain" style={{ paddingHorizontal: YanjiSpacing.xs }}>
+            {pending.length === 0 ? (
+              <Pressable onPress={openTaskEditor} accessibilityRole="button" style={{ paddingVertical: 10, alignItems: 'center' }}>
+                <Text style={[theme.typography.caption, { color: muted }]}>{!snapshot ? '正在读取今日计划…' : tasks.length ? '今天的任务都完成了' : '写下今天想完成的一件事'}</Text>
+              </Pressable>
+            ) : pending.map((task, i) => (
+              <View key={task.id}>
+                {i > 0 ? <YanjiHairline inset={12} /> : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: theme.layout.listRowMinHeight, paddingHorizontal: 2 }}>
+                  <Pressable
+                    onPress={() => void toggleTask(task)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: false }}
+                    accessibilityLabel={`完成任务：${task.title}`}
+                    hitSlop={8}
+                    style={{ width: 44, height: 48, justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    <View
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: YanjiRadius.full,
+                        borderWidth: 1.5,
+                        borderColor: subtle,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    />
+                  </Pressable>
+                  <Pressable onPress={() => setTaskInfo(task)} accessibilityRole="button"
+                    accessibilityLabel={`查看任务：${task.title}`} style={{ flex: 1, paddingVertical: 8 }}>
+                    <Text numberOfLines={1} style={[theme.typography.bodyStrong, { color: ink }]}>{task.title}</Text>
+                    <Text style={[theme.typography.meta, { color: subtle, marginTop: 2 }]}>{task.subjectName} · 预计 {task.plannedMinutes} 分钟</Text>
+                  </Pressable>
+                  <Pressable onPress={() => startTask(task)} accessibilityRole="button" accessibilityLabel={`为${task.title}设置专注`}
+                    hitSlop={8}
+                    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                    <YanjiIcon name="play" size={18} color={accent} />
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </YanjiCard>
+          {tasks.filter(t => !t.completed).length > 3 ? (
+            <Text style={[theme.typography.meta, { color: muted, marginTop: 8, paddingHorizontal: 4 }]}>另外还有 {tasks.filter(t => !t.completed).length - 3} 项未完成任务</Text>
+          ) : null}
+        </View>
+
+        {/* 今日记录卡片 */}
+        <View style={{ marginTop: YanjiSpacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={[theme.typography.sectionTitle, { color: ink }]}>今日记录</Text>
+            <Pressable onPress={() => { setEditingNote(null); setRecordOpen(true); }}
+              accessibilityRole="button" accessibilityLabel="新建今日记录"
+              hitSlop={8}
+              style={{ minHeight: 40, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' }}>
+              <YanjiIcon name="add" size={16} color={accent} />
+              <Text style={{ color: accent, marginLeft: 4, fontWeight: '600', fontSize: 14 }}>新建</Text>
+            </Pressable>
+          </View>
+          <YanjiCard variant="plain" style={{ paddingHorizontal: YanjiSpacing.xs }}>
+            {latestNotes.length ? latestNotes.map((note, i) => (
+              <View key={note.id}>
+                {i > 0 ? <YanjiHairline inset={12} /> : null}
+                <Pressable onPress={() => { setEditingNote(note); setRecordOpen(true); }}
+                  accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
+                  style={{ paddingVertical: 10, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', minHeight: 46 }}>
+                  <YanjiIcon name="compose" color={subtle} size={16} />
+                  <Text style={[theme.typography.body, { color: ink, marginHorizontal: 10, flex: 1 }]} numberOfLines={1}>{noteTitle(note)}</Text>
+                  <Text style={[theme.typography.meta, { color: subtle }]}>{new Date(note.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</Text>
+                </Pressable>
+              </View>
+            )) : (
+              <Pressable onPress={() => { setEditingNote(null); setRecordOpen(true); }} accessibilityRole="button" style={{ paddingVertical: 10, alignItems: 'center' }}>
+                <Text style={[theme.typography.caption, { color: muted }]}>{snapshot ? '随时记下今天的第一个想法' : '正在读取今日记录…'}</Text>
+              </Pressable>
+            )}
+          </YanjiCard>
+          {notes.length > 2 ? (
+            <Pressable onPress={() => selectTab('review')} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 4 }}>
+              <Text style={[theme.typography.caption, { color: accent }]}>前往回顾查看今天全部 {notes.length} 篇记录 ›</Text>
+            </Pressable>
+          ) : null}
+        </View>
         {/* 科目与时段图表 */}
         {hasFocus && subjects.length > 0 ? (
-          <YanjiCard style={{ marginTop: YanjiSpacing.lg, padding: 16 }}>
+          <YanjiCard variant="plain" style={{ marginTop: theme.layout.sectionGap, paddingBottom: YanjiSpacing.md }}>
+            <Text accessibilityRole="header" style={[theme.typography.sectionTitle, { color: ink, marginBottom: YanjiSpacing.sm }]}>今日节奏</Text>
             <View style={{ backgroundColor: faint, borderRadius: YanjiRadius.md, flexDirection: 'row', padding: 4 }}>
               {([{ id: 'subjects', label: '科目时长分布' }, { id: 'timeline', label: '今日专注时段' }] as const).map(mode => (
                 <Pressable
@@ -489,102 +588,6 @@ export function TodayScreen({
           </YanjiCard>
         ) : null}
 
-        {/* 今日任务卡片 */}
-        <View style={{ marginTop: YanjiSpacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <View>
-              <Text style={[theme.typography.sectionTitle, { color: ink }]}>今日任务</Text>
-              <Text style={[theme.typography.meta, { color: subtle, marginTop: 2 }]}>已完成 {tasks.filter(task => task.completed).length}/{tasks.length}</Text>
-            </View>
-            <Pressable onPress={openTaskEditor} accessibilityRole="button" accessibilityLabel="添加任务" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 40, paddingHorizontal: 8 }}>
-              <YanjiIcon name="add" size={16} color={accent} />
-              <Text style={{ color: accent, marginLeft: 4, fontWeight: '600', fontSize: 14 }}>添加</Text>
-            </Pressable>
-          </View>
-          <YanjiCard style={{ padding: pending.length === 0 ? 16 : 4 }}>
-            {pending.length === 0 ? (
-              <Pressable onPress={openTaskEditor} accessibilityRole="button" style={{ paddingVertical: 10, alignItems: 'center' }}>
-                <Text style={[theme.typography.caption, { color: muted }]}>{tasks.length ? '今日任务已全部完成 🎉' : '还没有任务，点击添加今天的计划'}</Text>
-              </Pressable>
-            ) : pending.map((task, i) => (
-              <View key={task.id}>
-                {i > 0 ? <YanjiHairline inset={12} /> : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 10 }}>
-                  <Pressable
-                    onPress={() => void toggleTask(task)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: false }}
-                    accessibilityLabel={`完成任务：${task.title}`}
-                    hitSlop={8}
-                    style={{ width: 36, height: 44, justifyContent: 'center', alignItems: 'center' }}
-                  >
-                    <View
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: YanjiRadius.full,
-                        borderWidth: 1.5,
-                        borderColor: subtle,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    />
-                  </Pressable>
-                  <Pressable onPress={() => setTaskInfo(task)} accessibilityRole="button"
-                    accessibilityLabel={`查看任务：${task.title}`} style={{ flex: 1, paddingVertical: 8 }}>
-                    <Text numberOfLines={1} style={[theme.typography.bodyStrong, { color: ink }]}>{task.title}</Text>
-                    <Text style={[theme.typography.meta, { color: subtle, marginTop: 2 }]}>{task.subjectName} · 预计 {task.plannedMinutes} 分钟</Text>
-                  </Pressable>
-                  <Pressable onPress={() => startTask(task)} accessibilityRole="button" accessibilityLabel={`为${task.title}设置专注`}
-                    hitSlop={8}
-                    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                    <YanjiIcon name="play" size={18} color={accent} />
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </YanjiCard>
-          {tasks.filter(t => !t.completed).length > 3 ? (
-            <Text style={[theme.typography.meta, { color: muted, marginTop: 8, paddingHorizontal: 4 }]}>另外还有 {tasks.filter(t => !t.completed).length - 3} 项未完成任务</Text>
-          ) : null}
-        </View>
-
-        {/* 今日记录卡片 */}
-        <View style={{ marginTop: YanjiSpacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={[theme.typography.sectionTitle, { color: ink }]}>今日记录</Text>
-            <Pressable onPress={() => { setEditingNote(null); setRecordOpen(true); }}
-              accessibilityRole="button" accessibilityLabel="新建今日记录"
-              hitSlop={8}
-              style={{ minHeight: 40, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' }}>
-              <YanjiIcon name="add" size={16} color={accent} />
-              <Text style={{ color: accent, marginLeft: 4, fontWeight: '600', fontSize: 14 }}>新建</Text>
-            </Pressable>
-          </View>
-          <YanjiCard style={{ padding: latestNotes.length === 0 ? 16 : 4 }}>
-            {latestNotes.length ? latestNotes.map((note, i) => (
-              <View key={note.id}>
-                {i > 0 ? <YanjiHairline inset={12} /> : null}
-                <Pressable onPress={() => { setEditingNote(note); setRecordOpen(true); }}
-                  accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                  style={{ paddingVertical: 10, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', minHeight: 46 }}>
-                  <YanjiIcon name="compose" color={subtle} size={16} />
-                  <Text style={[theme.typography.body, { color: ink, marginHorizontal: 10, flex: 1 }]} numberOfLines={1}>{noteTitle(note)}</Text>
-                  <Text style={[theme.typography.meta, { color: subtle }]}>{new Date(note.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</Text>
-                </Pressable>
-              </View>
-            )) : (
-              <Pressable onPress={() => { setEditingNote(null); setRecordOpen(true); }} accessibilityRole="button" style={{ paddingVertical: 10, alignItems: 'center' }}>
-                <Text style={[theme.typography.caption, { color: muted }]}>随时记下今天的第一个想法</Text>
-              </Pressable>
-            )}
-          </YanjiCard>
-          {notes.length > 2 ? (
-            <Pressable onPress={() => selectTab('review')} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 4 }}>
-              <Text style={[theme.typography.caption, { color: accent }]}>前往回顾查看今天全部 {notes.length} 篇记录 ›</Text>
-            </Pressable>
-          ) : null}
-        </View>
       </ScrollView>
 
       <RecordMomentModal
@@ -605,21 +608,21 @@ export function TodayScreen({
             <Text style={[theme.typography.sectionTitle, { color: ink }]}>调整日常学习目标</Text>
             <Text style={[theme.typography.caption, { color: muted, marginTop: 5 }]}>修改后影响今天及未来，不更改已记录的学习时长。</Text>
             <Text style={{ color: accent, fontSize: 30, fontWeight: '700', textAlign: 'center', marginTop: 22 }}>{goalDraft ? duration(goalDraft * 60) : '未设置'}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 14, gap: 24 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', marginTop: 14, gap: YanjiSpacing.md }}>
               <Pressable onPress={() => setGoalDraft(Math.max(0, goalDraft - 30))}
                 accessibilityRole="button" accessibilityLabel="减少30分钟" style={{ width: 48, height: 48, backgroundColor: faint, borderRadius: YanjiRadius.full, alignItems: 'center', justifyContent: 'center' }}>
                 <YanjiIcon name="remove" color={ink} />
               </Pressable>
-              <Text style={[theme.typography.bodyStrong, { color: ink }]}>每次调整30分钟</Text>
+              <Text style={[theme.typography.bodyStrong, { color: ink, flexShrink: 1, textAlign: 'center' }]}>每次调整30分钟</Text>
               <Pressable onPress={() => setGoalDraft(Math.min(720, goalDraft + 30))}
                 accessibilityRole="button" accessibilityLabel="增加30分钟" style={{ width: 48, height: 48, backgroundColor: faint, borderRadius: YanjiRadius.full, alignItems: 'center', justifyContent: 'center' }}>
                 <YanjiIcon name="add" color={ink} />
               </Pressable>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: YanjiSpacing.sm, marginTop: 16 }}>
               {[240, 360, 480, 600].map(value => (
-                <Pressable key={value} onPress={() => setGoalDraft(value)}
-                  style={{ paddingVertical: 9, paddingHorizontal: 10, borderRadius: YanjiRadius.sm, backgroundColor: goalDraft === value ? theme.colors.accentSoft : faint }}>
+                <Pressable key={value} onPress={() => setGoalDraft(value)} accessibilityRole="button" accessibilityState={{ selected: goalDraft === value }}
+                  style={{ minHeight: YanjiTouch.min, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: YanjiSpacing.md, borderRadius: YanjiRadius.sm, backgroundColor: goalDraft === value ? theme.colors.accentSoft : faint }}>
                   <Text style={{ color: goalDraft === value ? accent : muted, fontSize: 12 }}>{duration(value * 60)}</Text>
                 </Pressable>
               ))}

@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import {
   YanjiDataNative,
   YanjiTimerNative,
@@ -82,6 +82,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
   const session = useActiveSession(visible);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectLoadState, setSubjectLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
@@ -92,15 +93,22 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const { focusPreset } = useNavigationState();
   const { clearFocusPreset } = useNavigationActions();
 
-  useEffect(() => {
-    YanjiDataNative.getSubjects()
+  const loadSubjects = useCallback(() => {
+    setSubjectLoadState('loading');
+    void YanjiDataNative.getSubjects()
       .then(list => {
         const selectable = list.filter(s => s.enabled && !s.isCategory);
         setSubjects(selectable);
-        setSelectedSubjectId(prev => prev ?? selectable[0]?.id ?? null);
+        setSelectedSubjectId(prev => selectable.some(s => s.id === prev) ? prev : selectable[0]?.id ?? null);
+        setSubjectLoadState('ready');
       })
-      .catch(() => setSubjects([]));
+      .catch(() => {
+        setSubjects([]);
+        setSubjectLoadState('error');
+      });
   }, []);
+
+  useEffect(() => { loadSubjects(); }, [loadSubjects]);
 
   useEffect(() => {
     setStartError(null);
@@ -210,7 +218,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 { color: theme.colors.textPrimary, letterSpacing: -0.5 },
               ]}
             >
-              专注工作台
+              专注
             </Text>
             <Text
               style={[
@@ -218,7 +226,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 { color: theme.colors.textTertiary, marginTop: 3 },
               ]}
             >
-              心无旁骛 · 沉浸于当下的每一刻
+              选好科目和时间，就开始
             </Text>
           </View>
 
@@ -249,6 +257,8 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     style={({ pressed }) => ({
                       paddingVertical: 8,
                       paddingHorizontal: 16,
+                      minHeight: YanjiTouch.comfortable,
+                      justifyContent: 'center',
                       borderRadius: YanjiRadius.full,
                       marginRight: 8,
                       backgroundColor: isSelected ? theme.colors.accentSoft : theme.colors.bgSurface,
@@ -270,22 +280,29 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 );
               })}
               {subjects.length === 0 ? (
-                <Text style={{ color: theme.colors.textTertiary, fontSize: 13, paddingVertical: 8 }}>暂无可用科目</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: YanjiTouch.comfortable }}>
+                  <Text style={[theme.typography.caption, { color: subjectLoadState === 'error' ? theme.colors.danger : theme.colors.textSecondary, flexShrink: 1 }]}>
+                    {subjectLoadState === 'loading' ? '正在读取科目…' : subjectLoadState === 'error' ? '科目读取失败' : '暂无可用科目，请在设置中添加'}
+                  </Text>
+                  {subjectLoadState === 'error' ? (
+                    <Pressable onPress={loadSubjects} accessibilityRole="button" accessibilityLabel="重新读取科目" style={{ minHeight: YanjiTouch.comfortable, justifyContent: 'center', paddingHorizontal: YanjiSpacing.md }}>
+                      <Text style={[theme.typography.bodyStrong, { color: theme.colors.accentPrimary }]}>重试</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
             </ScrollView>
           </View>
 
           {/* 禅意计时台仪表卡 (Zen Studio Station) */}
-          <YanjiCard variant="hero" style={{ padding: 22, marginTop: 4 }}>
+          <YanjiCard variant="plain" style={{ paddingTop: theme.layout.titleGap }}>
             {/* 模式选择分段器 */}
             <View
               style={{
                 flexDirection: 'row',
-                backgroundColor: theme.colors.bgSunken,
+                backgroundColor: theme.colors.bgElevated,
                 borderRadius: YanjiRadius.full,
                 padding: 4,
-                borderWidth: 1,
-                borderColor: theme.colors.cardBorder,
               }}
             >
               {TIMER_MODES.map(entry => {
@@ -301,10 +318,10 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       alignItems: 'center',
                       justifyContent: 'center',
                       paddingVertical: 8,
+                      minHeight: YanjiTouch.comfortable,
                       borderRadius: YanjiRadius.full,
                       backgroundColor: isSelected ? theme.colors.bgSurface : 'transparent',
-                      borderWidth: isSelected ? 1 : 0,
-                      borderColor: isSelected ? theme.colors.cardBorder : 'transparent',
+                      borderWidth: 0,
                     }}
                   >
                     <Text
@@ -323,15 +340,14 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
             {/* 时长设定区域 */}
             {timerMode === 'COUNTDOWN' ? (
-              <View style={{ alignItems: 'center', marginTop: 20, marginBottom: 16 }}>
-                <Text style={[theme.typography.axisLabel, { color: theme.colors.textTertiary, letterSpacing: 0.5 }]}>
+              <View style={{ alignItems: 'center', marginTop: theme.layout.timerTopGap, marginBottom: YanjiSpacing.lg }}>
+                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
                   计划专注时长
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6, marginBottom: 16 }}>
                   <Text
                     style={{
-                      fontSize: 48,
-                      fontWeight: '700',
+                      ...theme.typography.focusValue,
                       color: theme.colors.textPrimary,
                       fontVariant: ['tabular-nums'],
                       letterSpacing: -1,
@@ -455,7 +471,9 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   accessibilityLabel="取消关联任务"
                   hitSlop={6}
                 >
-                  <YanjiIcon name="close" size={14} color={theme.colors.textTertiary} />
+                  <View style={{ minHeight: YanjiTouch.min, minWidth: YanjiTouch.min, alignItems: 'center', justifyContent: 'center' }}>
+                    <YanjiIcon name="close" size={16} color={theme.colors.textSecondary} />
+                  </View>
                 </Pressable>
               </View>
             ) : null}
@@ -579,6 +597,9 @@ function FocusTimerReadout({
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const tick = useTimerTick(visible);
+  // This layout depends on the window but does not touch the screen-level timer store.
+  const { width } = useWindowDimensions();
+  const ringSize = Math.min(RING_SIZE, Math.max(160, width - YanjiSpacing.page * 2 - YanjiSpacing.md));
   const elapsed = tick?.elapsedSeconds ?? session.elapsedSeconds;
   const remaining = Math.max(0, tick?.remainingSeconds ?? session.remainingSeconds);
   const total = elapsed + remaining;
@@ -591,16 +612,21 @@ function FocusTimerReadout({
       <View style={{ marginTop: YanjiSpacing.lg }}>
         <YanjiProgressRing
           progress={ringProgress ?? 0}
-          size={RING_SIZE}
+          size={ringSize}
           thickness={RING_THICKNESS}
           color={isPaused ? theme.colors.textDisabled : theme.colors.accentPrimary}
         >
           <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.42}
+            numberOfLines={1}
             style={[
               theme.typography.timerDisplay,
               {
                 color: theme.colors.textPrimary,
                 fontVariant: ['tabular-nums'],
+                width: ringSize - RING_THICKNESS * 5,
+                textAlign: 'center',
               },
             ]}
           >
@@ -616,7 +642,7 @@ function FocusTimerReadout({
         ]}
       >
         {isPaused
-          ? '已暂停'
+          ? '已暂停 · 可以随时继续'
           : session.isCountdown
             ? ringProgress === null
               ? '倒计时'
@@ -646,10 +672,8 @@ function RecordMomentLink({ onPress }: { onPress: () => void }): React.JSX.Eleme
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: YanjiRadius.full,
-        backgroundColor: theme.colors.bgSurface,
-        borderWidth: 1,
-        borderColor: theme.colors.cardBorder,
-        minHeight: YanjiTouch.min,
+        backgroundColor: theme.colors.bgElevated,
+        minHeight: YanjiTouch.comfortable,
         opacity: pressed ? 0.7 : 1,
       })}
     >

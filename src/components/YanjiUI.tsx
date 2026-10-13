@@ -1,15 +1,4 @@
-/**
- * Yanji shared UI components — React Native.
- *
- * Visual language: 「纸上研迹」. Surfaces are sheets of paper on a desk, so
- * depth is expressed by a five-step surface ladder plus a soft cast shadow —
- * never by an outline. AGENTS.md §三.6 requires card containers to have ZERO
- * borders in both light and dark modes, and `YanjiCardRules` is machine-asserted
- * on that; `YanjiHairline` is the only place a 1px line appears, and it divides
- * rows inside a sheet rather than outlining one.
- *
- * Every glyph in this file comes from `./icons` (lucide vector icons). No Emoji.
- */
+/** Shared RN UI primitives: semantic tokens, accessible controls, calm surfaces. */
 
 import React, { useEffect } from 'react';
 import {
@@ -22,6 +11,7 @@ import {
 import Animated, {
   Easing,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSequence,
   withSpring,
@@ -29,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { YanjiCardRules, YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
 
@@ -60,7 +50,7 @@ export function YanjiIcon({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiCard — zero-border paper surface
+// YanjiCard — semantic paper or borderless journal surface
 // ---------------------------------------------------------------------------
 
 export function YanjiCard({
@@ -74,22 +64,24 @@ export function YanjiCard({
    * `default`  a sheet lying flat on the desk with subtle hairline border
    * `hero`     the sheet the eye should land on first (diffuse cast shadow & strong border)
    * `sunken`   a well pressed into a sheet — empty states and recessed content
+   * `plain`    unboxed typography for daily plans and journal entries
    */
-  variant?: 'default' | 'hero' | 'sunken';
+  variant?: 'default' | 'hero' | 'sunken' | 'plain';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
 
   const radius = variant === 'hero' ? YanjiRadius.xxl : variant === 'sunken' ? YanjiRadius.lg : YanjiRadius.xl;
+  const plain = variant === 'plain';
 
   const backgroundColor =
-    variant === 'sunken' ? theme.colors.bgSunken : theme.colors.bgSurface;
+    plain ? 'transparent' : variant === 'sunken' ? theme.colors.bgSunken : theme.colors.bgSurface;
 
   const borderColor =
     variant === 'hero' ? theme.colors.cardBorderStrong : theme.colors.cardBorder;
 
-  const padding = variant === 'hero' ? 22 : variant === 'sunken' ? 16 : 18;
+  const padding = plain ? 0 : variant === 'hero' ? theme.layout.heroInset : variant === 'sunken' ? 16 : 18;
 
-  const shadow = variant === 'sunken' ? null : theme.shadow.sheet(theme.isDark);
+  const shadow = plain || variant === 'sunken' ? null : theme.shadow.sheet(theme.isDark);
 
   return (
     <View
@@ -97,7 +89,7 @@ export function YanjiCard({
         {
           backgroundColor,
           borderRadius: radius,
-          borderWidth: 1,
+          borderWidth: plain ? YanjiCardRules.plainBorderWidth : YanjiCardRules.borderWidth,
           borderColor,
           padding,
         },
@@ -745,9 +737,10 @@ export function YanjiBreathButton({
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const scale = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (disabled) return;
+    if (disabled || reduceMotion) { scale.value = 1; return; }
     // One gentle settle: 1 -> 1.025 -> 1.
     scale.value = withSequence(
       withTiming(1.025, { duration: theme.motion.duration.slow, easing: Easing.out(Easing.quad) }),
@@ -756,7 +749,7 @@ export function YanjiBreathButton({
     // `theme` is intentionally omitted: this must fire once per mount, not on
     // every theme toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled]);
+  }, [disabled, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -770,10 +763,10 @@ export function YanjiBreathButton({
         accessibilityRole="button"
         accessibilityLabel={label}
         onPressIn={() => {
-          scale.value = withSpring(0.97, theme.motion.spring.press);
+          if (!reduceMotion) scale.value = withSpring(0.97, theme.motion.spring.press);
         }}
         onPressOut={() => {
-          scale.value = withSpring(1, theme.motion.spring.press);
+          if (!reduceMotion) scale.value = withSpring(1, theme.motion.spring.press);
         }}
         style={({ pressed }) => ({
           backgroundColor: disabled
@@ -895,8 +888,10 @@ export function YanjiSectionHeader({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: YanjiSpacing.md,
-        marginTop: YanjiSpacing.xl,
+        flexWrap: 'wrap',
+        gap: YanjiSpacing.sm,
+        marginBottom: theme.layout.titleGap,
+        marginTop: theme.layout.sectionGap,
       }}
     >
       {/* Marked as a heading so TalkBack users can jump between sections instead
@@ -904,8 +899,8 @@ export function YanjiSectionHeader({
       <Text
         accessibilityRole="header"
         style={[
-          theme.typography.label,
-          { color: theme.colors.textSecondary, textTransform: 'uppercase' },
+          theme.typography.sectionTitle,
+          { color: theme.colors.textPrimary },
         ]}
       >
         {title}
@@ -940,6 +935,8 @@ export function YanjiChip({
         {
           paddingVertical: 8,
           paddingHorizontal: 14,
+          minHeight: YanjiTouch.comfortable,
+          justifyContent: 'center',
           borderRadius: YanjiRadius.full,
           marginRight: theme.spacing.sm,
           marginBottom: theme.spacing.sm,
@@ -956,7 +953,7 @@ export function YanjiChip({
     >
       <Text
         style={{
-          color: selected ? theme.colors.accentPrimary : theme.colors.textSecondary,
+          color: selected ? theme.colors.accentStrong : theme.colors.textSecondary,
           fontSize: 14,
           fontWeight: selected ? '600' : '400',
         }}
