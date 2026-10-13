@@ -24,15 +24,15 @@ export function registerTier4Tests() {
       const countdown = await bridge.getExamCountdown();
       assert(countdown.daysRemaining > 0, 'Morning check: valid days remaining until exam');
 
-      const morningStats = await bridge.getTodayStats(today);
-      assertEqual(morningStats.totalFocusMinutes, 0, 'Morning check: 0 minutes studied');
+      const morningStats = await bridge.getDailySnapshot(today);
+      assertEqual(Math.floor(morningStats.totalDurationSeconds / 60), 0, 'Morning check: 0 minutes studied');
 
       // Create 3 study tasks for the day
       const taskMath = await bridge.createTask(today, 'sub-math', '数学', '高等数学真题强化卷一', 60);
       const taskEng = await bridge.createTask(today, 'sub-eng', '英语', '英语二阅读真题2020 Text 1', 45);
       const taskCS = await bridge.createTask(today, 'sub-cs', '专业课', '数据结构树与二叉树算法', 50);
 
-      const morningTasks = await bridge.getTodayTasks(today);
+      const morningTasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(morningTasks.length, 3, 'Today tasks list should have 3 tasks');
 
       // -------------------------------------------------------------
@@ -50,7 +50,7 @@ export function registerTier4Tests() {
       await bridge.completeTimer();
 
       // Math task actual minutes updated
-      const tasksAfterMath = await bridge.getTodayTasks(today);
+      const tasksAfterMath = (await bridge.getDailySnapshot(today)).tasks;
       const updatedMath = tasksAfterMath.find(t => t.id === taskMath.id);
       assertEqual(updatedMath.actualMinutes, 60, 'Math task should have 60 actual study minutes');
 
@@ -68,16 +68,16 @@ export function registerTier4Tests() {
       // 4. Evening Review: Switch to Review tab and inspect stats
       // -------------------------------------------------------------
       // Today Stats check
-      const eveningStats = await bridge.getTodayStats(today);
-      assertEqual(eveningStats.totalFocusMinutes, 105, 'Total study time must be 105 minutes (60m + 45m)');
-      assertEqual(eveningStats.completedTasksCount, 1, '1 task completed');
-      assertEqual(eveningStats.notesCount, 1, '1 note recorded');
+      const eveningStats = await bridge.getDailySnapshot(today);
+      assertEqual(Math.floor(eveningStats.totalDurationSeconds / 60), 105, 'Total study time must be 105 minutes (60m + 45m)');
+      assertEqual(eveningStats.tasks.filter(task => task.completed).length, 1, '1 task completed');
+      assertEqual(eveningStats.notes.length, 1, '1 note recorded');
 
       // Daily Timeline check
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.sessions.length, 2, 'Timeline must show 2 sessions');
-      assertEqual(timeline.completedTasks.length, 1, 'Timeline must show 1 completed task');
-      assertEqual(timeline.completedTasks[0].title, '英语二阅读真题2020 Text 1');
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 1, 'Timeline must show 1 completed task');
+      assertEqual(timeline.tasks.filter(task => task.completed)[0].title, '英语二阅读真题2020 Text 1');
       assertEqual(timeline.notes.length, 1, 'Timeline must show 1 note');
 
       // Trend & Subject Breakdown check
@@ -115,7 +115,7 @@ export function registerTier4Tests() {
       const today = '2026-10-08';
 
       // 1. Fresh state with 0 tasks
-      const tasks = await bridge.getTodayTasks(today);
+      const tasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(tasks.length, 0);
 
       // 2. Direct start via Single CTA
@@ -129,10 +129,10 @@ export function registerTier4Tests() {
       await bridge.completeTimer();
 
       // 4. Verification in Today & Review
-      const stats = await bridge.getTodayStats(today);
-      assertEqual(stats.totalFocusMinutes, 25);
+      const stats = await bridge.getDailySnapshot(today);
+      assertEqual(Math.floor(stats.totalDurationSeconds / 60), 25);
 
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.sessions.length, 1);
       assertEqual(timeline.sessions[0].subjectName, '专业课');
     });
@@ -154,12 +154,12 @@ export function registerTier4Tests() {
       assertEqual(active, null);
 
       // No phantom record created in Today stats
-      const stats = await bridge.getTodayStats(today);
-      assertEqual(stats.totalFocusSeconds, 0);
-      assertEqual(stats.totalFocusMinutes, 0);
+      const stats = await bridge.getDailySnapshot(today);
+      assertEqual(stats.totalDurationSeconds, 0);
+      assertEqual(Math.floor(stats.totalDurationSeconds / 60), 0);
 
       // No phantom session in Review timeline
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.sessions.length, 0);
     });
   });

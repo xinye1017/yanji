@@ -51,16 +51,16 @@ export function registerTier3Tests() {
 
       // 6. Verify Room sync:
       // - Task actual study minutes updated by 35 minutes
-      const tasks = await bridge.getTodayTasks(today);
+      const tasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(tasks[0].actualMinutes, 35, 'Task actualMinutes must reflect completed session duration');
 
       // - Today stats reflect 35m total focus and 2 notes
-      const stats = await bridge.getTodayStats(today);
-      assertEqual(stats.totalFocusMinutes, 35);
-      assertEqual(stats.notesCount, 2);
+      const stats = await bridge.getDailySnapshot(today);
+      assertEqual(Math.floor(stats.totalDurationSeconds / 60), 35);
+      assertEqual(stats.notes.length, 2);
 
       // - Review timeline reflects 1 session and 2 linked notes
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.sessions.length, 1);
       assertEqual(timeline.sessions[0].durationMinutes, 35);
       assertEqual(timeline.notes.length, 2);
@@ -110,29 +110,29 @@ export function registerTier3Tests() {
       const task = await bridge.createTask(today, 'sub-pol', '政治', '肖秀荣1000题马原单选', 40);
 
       // Initial stats
-      let stats = await bridge.getTodayStats(today);
-      assertEqual(stats.completedTasksCount, 0);
+      let stats = await bridge.getDailySnapshot(today);
+      assertEqual(stats.tasks.filter(task => task.completed).length, 0);
 
-      let timeline = await bridge.getDailyTimeline(today);
-      assertEqual(timeline.completedTasks.length, 0);
+      let timeline = await bridge.getDailySnapshot(today);
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 0);
 
       // Mark task as completed
       await bridge.toggleTask(task.id, true);
 
       // Updated stats
-      stats = await bridge.getTodayStats(today);
-      assertEqual(stats.completedTasksCount, 1, 'completedTasksCount must increment to 1');
+      stats = await bridge.getDailySnapshot(today);
+      assertEqual(stats.tasks.filter(task => task.completed).length, 1, 'completedTasksCount must increment to 1');
 
-      timeline = await bridge.getDailyTimeline(today);
-      assertEqual(timeline.completedTasks.length, 1, 'timeline completedTasks must contain 1 item');
-      assertEqual(timeline.completedTasks[0].id, task.id);
+      timeline = await bridge.getDailySnapshot(today);
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 1, 'timeline completedTasks must contain 1 item');
+      assertEqual(timeline.tasks.filter(task => task.completed)[0].id, task.id);
 
       // Toggle back to uncompleted
       await bridge.toggleTask(task.id, false);
-      stats = await bridge.getTodayStats(today);
-      assertEqual(stats.completedTasksCount, 0);
-      timeline = await bridge.getDailyTimeline(today);
-      assertEqual(timeline.completedTasks.length, 0);
+      stats = await bridge.getDailySnapshot(today);
+      assertEqual(stats.tasks.filter(task => task.completed).length, 0);
+      timeline = await bridge.getDailySnapshot(today);
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 0);
     });
   });
 

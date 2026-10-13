@@ -56,6 +56,9 @@ export interface NavigationState {
   taskEditorOpen: boolean;
   /** Task the Focus tab should prepare a session for; null once consumed. */
   focusPreset: FocusPreset | null;
+}
+
+export interface NavigationActions {
   selectTab: (tab: TabKey) => void;
   openSettings: () => void;
   closeSettings: () => void;
@@ -66,7 +69,8 @@ export interface NavigationState {
   clearFocusPreset: () => void;
 }
 
-const NavigationContext = createContext<NavigationState | null>(null);
+const NavigationStateContext = createContext<NavigationState | null>(null);
+const NavigationActionsContext = createContext<NavigationActions | null>(null);
 
 export function NavigationProvider({
   children,
@@ -98,12 +102,18 @@ export function NavigationProvider({
 
   const clearFocusPreset = useCallback(() => setFocusPreset(null), []);
 
-  const value = useMemo<NavigationState>(
+  const state = useMemo<NavigationState>(
     () => ({
       activeTab,
       settingsOpen,
       taskEditorOpen,
       focusPreset,
+    }),
+    [activeTab, settingsOpen, taskEditorOpen, focusPreset]
+  );
+
+  const actions = useMemo<NavigationActions>(
+    () => ({
       selectTab,
       openSettings,
       closeSettings,
@@ -113,10 +123,6 @@ export function NavigationProvider({
       clearFocusPreset,
     }),
     [
-      activeTab,
-      settingsOpen,
-      taskEditorOpen,
-      focusPreset,
       selectTab,
       openSettings,
       closeSettings,
@@ -127,13 +133,27 @@ export function NavigationProvider({
     ]
   );
 
-  return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;
+  return (
+    <NavigationActionsContext.Provider value={actions}>
+      <NavigationStateContext.Provider value={state}>
+        {children}
+      </NavigationStateContext.Provider>
+    </NavigationActionsContext.Provider>
+  );
 }
 
-export function useNavigation(): NavigationState {
-  const state = useContext(NavigationContext);
+export function useNavigationState(): NavigationState {
+  const state = useContext(NavigationStateContext);
   if (!state) {
-    throw new Error('useNavigation must be used inside NavigationProvider');
+    throw new Error('useNavigationState must be used inside NavigationProvider');
   }
   return state;
+}
+
+export function useNavigationActions(): NavigationActions {
+  const actions = useContext(NavigationActionsContext);
+  if (!actions) {
+    throw new Error('useNavigationActions must be used inside NavigationProvider');
+  }
+  return actions;
 }

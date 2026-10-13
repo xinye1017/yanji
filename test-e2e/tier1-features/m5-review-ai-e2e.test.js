@@ -61,12 +61,12 @@ export function registerM5Tests() {
       const note = await bridge.saveQuickNote('真题长难句倒装语序分析', today);
 
       // Query timeline
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.date, today);
       assertEqual(timeline.sessions.length, 1);
       assertEqual(timeline.sessions[0].subjectName, '数学');
-      assertEqual(timeline.completedTasks.length, 1);
-      assertEqual(timeline.completedTasks[0].title, '长难句精炼');
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 1);
+      assertEqual(timeline.tasks.filter(task => task.completed)[0].title, '长难句精炼');
       assertEqual(timeline.notes.length, 1);
       assertEqual(timeline.notes[0].content, '真题长难句倒装语序分析');
     });
@@ -75,8 +75,8 @@ export function registerM5Tests() {
       const today = '2026-10-08';
       await bridge.createTask(today, 'sub-math', '数学', '未完成大题', 60);
 
-      const timeline = await bridge.getDailyTimeline(today);
-      assertEqual(timeline.completedTasks.length, 0, 'Uncompleted tasks must not appear in timeline completedTasks');
+      const timeline = await bridge.getDailySnapshot(today);
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 0, 'Uncompleted tasks must not appear in timeline completedTasks');
     });
   });
 
@@ -448,7 +448,7 @@ export function registerM5Tests() {
       assertEqual(record.note, '二次订正：先化到标准形式', 'Note must be trimmed and persisted');
       assertDeepEqual(events, ['sessions'], 'Editing a note must announce a sessions change');
 
-      const timeline = await bridge.getDailyTimeline(record.date);
+      const timeline = await bridge.getDailySnapshot(record.date);
       assertEqual(timeline.sessions[0].note, '二次订正：先化到标准形式', 'Read path must see the edit');
       unsubscribe();
     });
@@ -531,7 +531,7 @@ export function registerM5Tests() {
       const saved = await bridge.saveQuickNote('绑定会话的随笔', today, session.sessionId);
       assertEqual(saved.sessionId, session.sessionId, 'Saved note must persist the session binding');
 
-      const readBack = await bridge.getNotesForDate(today);
+      const readBack = (await bridge.getDailySnapshot(today)).notes;
       assertEqual(readBack[0].sessionId, session.sessionId, 'Read path must return the persisted sessionId');
       assert(BridgeSchemas.isValidNoteEntry(readBack[0]), 'Read-back note must satisfy the contract');
 

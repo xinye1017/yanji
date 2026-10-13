@@ -53,18 +53,6 @@ export const BridgeSchemas = {
     );
   },
 
-  isValidTodayStats(obj) {
-    if (!obj || typeof obj !== 'object') return false;
-    return (
-      typeof obj.date === 'string' &&
-      typeof obj.totalFocusSeconds === 'number' &&
-      typeof obj.totalFocusMinutes === 'number' &&
-      typeof obj.completedTasksCount === 'number' &&
-      typeof obj.totalTasksCount === 'number' &&
-      typeof obj.notesCount === 'number'
-    );
-  },
-
   isValidReviewOverview(obj) {
     if (!obj || typeof obj !== 'object') return false;
     if (!REVIEW_SCOPES.includes(obj.scope)) return false;
@@ -99,13 +87,19 @@ export const BridgeSchemas = {
     return true;
   },
 
-  isValidDailyTimeline(obj) {
+  isValidDailySnapshot(obj) {
     if (!obj || typeof obj !== 'object') return false;
     return (
       typeof obj.date === 'string' &&
-      Array.isArray(obj.sessions) &&
-      Array.isArray(obj.completedTasks) &&
-      Array.isArray(obj.notes)
+      typeof obj.formattedDate === 'string' &&
+      Number.isFinite(obj.totalDurationSeconds) && obj.totalDurationSeconds >= 0 &&
+      Number.isInteger(obj.focusCount) && obj.focusCount >= 0 &&
+      Number.isInteger(obj.examCount) && obj.examCount >= 0 &&
+      Array.isArray(obj.sessions) && obj.sessions.every(s =>
+        typeof s.id === 'string' && Number.isFinite(s.durationSeconds) && s.durationSeconds >= 0) &&
+      Array.isArray(obj.tasks) && obj.tasks.every(task => this.isValidStudyTask(task)) &&
+      Array.isArray(obj.notes) && obj.notes.every(note => this.isValidNoteEntry(note)) &&
+      !('completedTasks' in obj) && !('totalFocusSeconds' in obj)
     );
   },
 

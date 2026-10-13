@@ -410,6 +410,20 @@ class YanjiRepository private constructor() {
         requireDatabase().studyTaskDao().observeByDate(date)
             .map { rows -> rows.map(StudyTaskEntity::toDomainModel) }
 
+    /** Data-module events are driven only by changes to the persisted source tables. */
+    fun observeDataTableChanges(): Flow<Set<String>> =
+        requireDatabase().invalidationTracker.createFlow(
+            "study_tasks",
+            "journal_entries",
+            "focus_sessions",
+            "exam_sessions",
+            "user_settings",
+            emitInitialState = false
+        )
+
+    suspend fun getDailySnapshot(date: String): DailyStudySnapshot =
+        DailySnapshotReader.read(requireDatabase(), date)
+
     suspend fun saveStudyTask(task: StudyTask) {
         requireDatabase().studyTaskDao().insert(StudyTaskEntity.fromDomainModel(task))
     }

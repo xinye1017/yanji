@@ -15,18 +15,21 @@
  * tabs can never interrupt the timer.
  */
 
-import React, { useEffect } from 'react';
-import { BackHandler, StatusBar, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurTarget } from 'react-native-blur-overlay';
 import { YanjiLiquidGlass } from './src/theme/liquidGlass';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
-import { NavigationProvider, useNavigation } from './src/navigation/NavigationShell';
+import { NavigationProvider, useNavigationActions, useNavigationState } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { YanjiThemeProvider, useYanjiTheme } from './src/theme/ThemeProvider';
+import { onDataChanged } from './src/bridge';
+import { dataRefreshCoordinator } from './src/state/dataRefresh';
+import { setTimerForeground } from './src/state/timerStore';
 
 /**
  * All panes stay mounted and fill the same content area, preserving local
@@ -59,8 +62,43 @@ function TabPane({
 function AppShell(): React.JSX.Element {
   const theme = useYanjiTheme();
   const insets = useSafeAreaInsets();
-  const { activeTab, settingsOpen, taskEditorOpen, closeSettings, closeTaskEditor } =
-    useNavigation();
+  const { activeTab, settingsOpen, taskEditorOpen } = useNavigationState();
+  const { closeSettings, closeTaskEditor } = useNavigationActions();
+  const [foreground, setForeground] = useState(() => AppState.currentState === 'active');
+  const [foregroundRevision, setForegroundRevision] = useState(0);
+
+  useEffect(() => {
+    const unsubscribeData = onDataChanged(event =>
+      dataRefreshCoordinator.enqueueDataChanged(event.type)
+    );
+    const appState = AppState.addEventListener('change', next => {
+      const isForeground = next === 'active';
+      dataRefreshCoordinator.setForeground(isForeground);
+      setTimerForeground(isForeground);
+      setForeground(isForeground);
+      if (isForeground) {
+        dataRefreshCoordinator.handleForeground();
+        setForegroundRevision(revision => revision + 1);
+      }
+    });
+    // AppState may change between the initial render and listener attachment.
+    // Reconcile its current native cache after subscribing so a resumed shell
+    // cannot remain hidden or keep its readers suspended until another event.
+    const currentForeground = AppState.currentState === 'active';
+    dataRefreshCoordinator.setForeground(currentForeground);
+    setTimerForeground(currentForeground);
+    if (currentForeground !== foreground) {
+      setForeground(currentForeground);
+      if (currentForeground) {
+        dataRefreshCoordinator.handleForeground();
+        setForegroundRevision(revision => revision + 1);
+      }
+    }
+    return () => {
+      unsubscribeData();
+      appState.remove();
+    };
+  }, []);
 
   // Android back: dismiss the topmost overlay first, only then leave the app.
   useEffect(() => {
@@ -89,14 +127,17 @@ function AppShell(): React.JSX.Element {
       <BlurTarget id={YanjiLiquidGlass.targetId} style={{ flex: 1, paddingTop: topInset }}>
         {/* Keep the safe-area padding outside the absolute-positioning parent. */}
         <View testID="tab-content" style={{ flex: 1 }}>
-          <TabPane testID="pane-today" active={activeTab === 'today'}>
-            <TodayScreen />
+          <TabPane testID="pane-today" active={foreground && !settingsOpen && activeTab === 'today'}>
+            <TodayScreen
+              visible={foreground && !settingsOpen && activeTab === 'today'}
+              foregroundRevision={foregroundRevision}
+            />
           </TabPane>
-          <TabPane testID="pane-focus" active={activeTab === 'focus'}>
-            <FocusScreen />
+          <TabPane testID="pane-focus" active={foreground && !settingsOpen && activeTab === 'focus'}>
+            <FocusScreen visible={foreground && !settingsOpen && activeTab === 'focus'} />
           </TabPane>
-          <TabPane testID="pane-review" active={activeTab === 'review'}>
-            <ReviewScreen />
+          <TabPane testID="pane-review" active={foreground && !settingsOpen && activeTab === 'review'}>
+            <ReviewScreen visible={foreground && !settingsOpen && activeTab === 'review'} />
           </TabPane>
         </View>
       </BlurTarget>

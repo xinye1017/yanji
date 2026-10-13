@@ -15,7 +15,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { StudyTask, Subject } from '../bridge';
@@ -63,6 +63,25 @@ export function TaskEditorModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // An RN Modal owns a separate Android window. The window does not reliably
+  // resize its ScrollView when the IME opens, so reserve actual keyboard-height
+  // scroll room: the stepper and save action remain reachable without saving.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') {
+      setKeyboardHeight(0);
+      return;
+    }
+    const sync = () => setKeyboardHeight(Keyboard.metrics()?.height ?? 0);
+    sync();
+    const show = Keyboard.addListener('keyboardDidShow', sync);
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -160,15 +179,23 @@ export function TaskEditorModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}
+        // Keep the entire scroll viewport below the status bar, not merely
+        // its initial contents: focused fields must never scroll over system UI.
+        style={{
+          flex: 1,
+          backgroundColor: theme.colors.bgPrimary,
+          paddingTop: Math.max(insets.top, YanjiSpacing.lg),
+        }}
       >
         <ScrollView
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
           contentContainerStyle={{
             paddingHorizontal: YanjiSpacing.page,
-            // Modal is a separate edge-to-edge window on Android. Its heading
-            // must clear the status bar even when RN reports a zero top inset.
-            paddingTop: Math.max(insets.top, YanjiSpacing.lg) + YanjiSpacing.lg,
-            paddingBottom: YanjiSpacing.xxl,
+            // The scroll viewport itself owns the safe-area inset above.
+            // Preserve the original heading's extra visual breathing room.
+            paddingTop: YanjiSpacing.lg,
+            paddingBottom: YanjiSpacing.xxl + keyboardHeight,
           }}
         >
           <View

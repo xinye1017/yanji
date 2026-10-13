@@ -7,17 +7,19 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.example.yanji.data.DailyStudySnapshot
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -40,66 +42,33 @@ class YanjiDataModule(
     private val repository: YanjiRepository get() = YanjiRepository.getInstance()
 
     init {
-        observeTasks()
-        observeNotes()
-        observeSessions()
-        observeSettings()
+        observeDataChanges()
     }
 
     override fun getName(): String = "YanjiDataModule"
 
-    // ------------------------------------------------------------ 今日统计
-
-    /**
-     * 一次性快照读取用仓库自身惯用法 `flow.first()`。
-     *
-     * 历史教训：这里曾有一个私有的 `collectFirst`，在 collector 里 `throw` 一个私有异常
-     * 来中断采集。异常会穿出 `suspend` 函数，`return result` 不可达，而三个调用点
-     * （`getTodayStats` / `getTodayTasks` / `getDailyTimeline`）的 `promise.resolve`
-     * 都在其后且没有 catch —— JS promise 因此永不 settle（Today 与 Review 全废）。
-     * `app/src/main` 全树也没有 `CoroutineExceptionHandler` 兜底。
-     * 语义契约见 `CollectFirstSemanticsTest`。
-     */
-
     @ReactMethod
-    fun getTodayStats(date: String, promise: Promise) {
+    fun getDailySnapshot(date: String, promise: Promise) {
         scope.launch {
-            val focusList = repository.focusSessions.value
-            val examList = repository.examSessions.value
-            val tasks = repository.observeStudyTasks(date).first()
-            val notes = repository.noteEntries.value.filter { it.date == date }
-
-            val totalFocusSeconds = focusList.filter {
-                it.status.name == "COMPLETED" && YanjiTime.localDate(it.startTime).toString() == date
-            }.sumOf { it.durationSeconds } + examList.filter {
-                it.status.name == "COMPLETED" && YanjiTime.localDate(it.startTime).toString() == date
-            }.sumOf { it.actualDurationSeconds }
-
-            val completed = tasks.count { it.isCompleted }
-            val payload = Arguments.createMap().apply {
-                putString("date", date)
-                putDouble("totalFocusSeconds", totalFocusSeconds.toDouble())
-                putInt("totalFocusMinutes", (totalFocusSeconds / 60).toInt())
-                putInt("completedTasksCount", completed)
-                putInt("totalTasksCount", tasks.size)
-                putInt("notesCount", notes.size)
+            try {
+                promise.resolve(dailySnapshotMap(repository.getDailySnapshot(date)))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject(
+                    "E_DAILY_SNAPSHOT",
+                    error.message ?: "Failed to read daily snapshot"
+                )
             }
-            promise.resolve(payload)
         }
+    }
+
+    override fun invalidate() {
+        scope.cancel()
+        super.invalidate()
     }
 
     // ------------------------------------------------------------ 任务
-
-    @ReactMethod
-    fun getTodayTasks(date: String, promise: Promise) {
-        scope.launch {
-            val tasks = repository.observeStudyTasks(date).first()
-            val actualSecondsByTask = repository.observeTaskActualSeconds().first()
-            val array = Arguments.createArray()
-            tasks.forEach { array.pushMap(taskMap(it, actualSecondsByTask[it.id])) }
-            promise.resolve(array)
-        }
-    }
 
     @ReactMethod
     fun createTask(
@@ -126,7 +95,6 @@ class YanjiDataModule(
                 plannedMinutes = minutes
             )
             repository.saveStudyTask(task)
-            emitDataChanged("tasks")
             promise.resolve(taskMap(task))
         }
     }
@@ -144,7 +112,6 @@ class YanjiDataModule(
                 promise.reject("E_TASK_NOT_FOUND", "Task no longer exists")
                 return@launch
             }
-            emitDataChanged("tasks")
             promise.resolve(true)
         }
     }
@@ -153,7 +120,6 @@ class YanjiDataModule(
     fun toggleTask(taskId: String, completed: Boolean, promise: Promise) {
         scope.launch {
             repository.setStudyTaskCompleted(taskId, completed)
-            emitDataChanged("tasks")
             promise.resolve(true)
         }
     }
@@ -162,7 +128,6 @@ class YanjiDataModule(
     fun deleteTask(taskId: String, promise: Promise) {
         scope.launch {
             repository.deleteStudyTask(taskId)
-            emitDataChanged("tasks")
             promise.resolve(true)
         }
     }
@@ -197,7 +162,6 @@ class YanjiDataModule(
                 sessionId = sessionId?.takeIf { it.isNotBlank() }
             )
             repository.addOrUpdateNoteAndAwait(entry)
-            emitDataChanged("notes")
             promise.resolve(noteMap(BridgeMappers.noteFields(entry)))
         }
     }
@@ -215,17 +179,6 @@ class YanjiDataModule(
     }
 
     @ReactMethod
-    fun getNotesForDate(date: String, promise: Promise) {
-        scope.launch {
-            val array = Arguments.createArray()
-            repository.noteEntries.value.filter { it.date == date }
-                .sortedBy { it.createdAt }
-                .forEach { array.pushMap(noteMap(BridgeMappers.noteFields(it))) }
-            promise.resolve(array)
-        }
-    }
-
-    @ReactMethod
     fun toggleFavoriteNote(noteId: String, promise: Promise) {
         scope.launch {
             val note = repository.noteEntries.value.find { it.id == noteId }
@@ -234,7 +187,6 @@ class YanjiDataModule(
                 return@launch
             }
             repository.setNoteFavorite(noteId, !note.isFavorite)
-            emitDataChanged("notes")
             promise.resolve(true)
         }
     }
@@ -243,7 +195,6 @@ class YanjiDataModule(
     fun deleteNote(noteId: String, promise: Promise) {
         scope.launch {
             repository.deleteNote(noteId)
-            emitDataChanged("notes")
             promise.resolve(true)
         }
     }
@@ -268,7 +219,6 @@ class YanjiDataModule(
                 promise.reject("E_NOTE_NOT_FOUND", "Note not found")
                 return@launch
             }
-            emitDataChanged("notes")
             promise.resolve(true)
         }
     }
@@ -458,7 +408,6 @@ class YanjiDataModule(
                 return@launch
             }
             repository.updateFocusSessionNote(sessionId, cleanNote)
-            emitDataChanged("sessions")
             promise.resolve(true)
         }
     }
@@ -487,54 +436,7 @@ class YanjiDataModule(
             } else {
                 repository.deleteFocusSession(sessionId)
             }
-            emitDataChanged("sessions")
             promise.resolve(true)
-        }
-    }
-
-    /** 指定日期的确定性时间线：专注/模考 + 已完成任务 + 记录，全部来自 Room。 */
-    @ReactMethod
-    fun getDailyTimeline(date: String, promise: Promise) {
-        scope.launch {
-            val summary = StudyStatisticsRepository(repository).getDailyStudySummary(date)
-            val sessions = Arguments.createArray()
-            summary.sessions.forEach { item ->
-                sessions.pushMap(Arguments.createMap().apply {
-                    putString("id", item.id)
-                    putString("title", item.title)
-                    putString("subjectId", item.subjectId)
-                    putString("subjectName", item.subjectName)
-                    putString("subjectColor", item.subjectColor)
-                    putDouble("startTime", item.startTime.toDouble())
-                    putDouble("endTime", item.endTime.toDouble())
-                    putDouble("durationSeconds", item.durationSeconds.toDouble())
-                    putBoolean("isExam", item.isExam)
-                    putString("note", item.note)
-                    putInt("pauseCount", item.pauseCount)
-                    putString("mode", item.mode)
-                })
-            }
-            val completedTasks = Arguments.createArray()
-            val actualSecondsByTask = repository.observeTaskActualSeconds().first()
-            repository.observeStudyTasks(date).first()
-                .filter { it.isCompleted }
-                .forEach { completedTasks.pushMap(taskMap(it, actualSecondsByTask[it.id])) }
-            val notes = Arguments.createArray()
-            repository.noteEntries.value.filter { it.date == date }
-                .sortedBy { it.createdAt }
-                .forEach { notes.pushMap(noteMap(BridgeMappers.noteFields(it))) }
-
-            val payload = Arguments.createMap().apply {
-                putString("date", date)
-                putString("formattedDate", summary.formattedDate)
-                putDouble("totalDurationSeconds", summary.totalDurationSeconds.toDouble())
-                putInt("focusCount", summary.focusCount)
-                putInt("examCount", summary.examCount)
-                putArray("sessions", sessions)
-                putArray("completedTasks", completedTasks)
-                putArray("notes", notes)
-            }
-            promise.resolve(payload)
         }
     }
 
@@ -589,40 +491,11 @@ class YanjiDataModule(
 
     // ------------------------------------------------------------ 事件
 
-    private fun observeTasks() {
+    private fun observeDataChanges() {
         scope.launch {
-            repository.observeStudyTasks(YanjiTime.todayIso()).collectLatest {
-                emitDataChanged("tasks")
+            repository.observeDataTableChanges().collect { tables ->
+                dataEventTypesForTables(tables).forEach(::emitDataChanged)
             }
-        }
-    }
-
-    private fun observeNotes() {
-        scope.launch {
-            repository.noteEntries.collectLatest { emitDataChanged("notes") }
-        }
-    }
-
-    /**
-     * 专注 **与** 模考都在监听：只订阅 `focusSessions` 时，删掉 / 改掉一条模考后
-     * 回顾页收不到任何事件，界面上那条记录会一直留着。
-     *
-     * `combine` 在两条 Flow 中**任意一条**发射时都会发射，因此写路径
-     * （`updateSessionNote` / `deleteSessionRecord`）里显式的 `emitDataChanged`
-     * 与这里的 Flow 发射会对同一次写重复发事件。前端按 `type` 不去重、
-     * 「可重复刷新」是已接受的现状 —— 这里刻意**不做**节流 / 去抖：
-     * 桥接层少发一次事件，界面就少刷新一次。
-     */
-    private fun observeSessions() {
-        scope.launch {
-            combine(repository.focusSessions, repository.examSessions) { _, _ -> Unit }
-                .collectLatest { emitDataChanged("sessions") }
-        }
-    }
-
-    private fun observeSettings() {
-        scope.launch {
-            repository.settings.collectLatest { emitDataChanged("settings") }
         }
     }
 
@@ -634,6 +507,52 @@ class YanjiDataModule(
     }
 
     // ------------------------------------------------------------ 映射
+
+    private fun dailySnapshotMap(snapshot: DailyStudySnapshot): WritableMap =
+        Arguments.createMap().apply {
+            putString("date", snapshot.date)
+            putString("formattedDate", snapshot.formattedDate)
+            putDouble("totalDurationSeconds", snapshot.totalDurationSeconds.toDouble())
+            putInt("focusCount", snapshot.focusCount)
+            putInt("examCount", snapshot.examCount)
+            putArray(
+                "sessions",
+                Arguments.createArray().apply {
+                    snapshot.sessions.forEach { item ->
+                        pushMap(Arguments.createMap().apply {
+                            putString("id", item.id)
+                            putString("title", item.title)
+                            putString("subjectId", item.subjectId)
+                            putString("subjectName", item.subjectName)
+                            putString("subjectColor", item.subjectColor)
+                            putDouble("startTime", item.startTime.toDouble())
+                            putDouble("endTime", item.endTime.toDouble())
+                            putDouble("durationSeconds", item.durationSeconds.toDouble())
+                            putBoolean("isExam", item.isExam)
+                            putString("note", item.note)
+                            putInt("pauseCount", item.pauseCount)
+                            putString("mode", item.mode)
+                        })
+                    }
+                }
+            )
+            putArray(
+                "tasks",
+                Arguments.createArray().apply {
+                    snapshot.tasks.forEach { task ->
+                        pushMap(taskMap(task, snapshot.taskActualSeconds[task.id]))
+                    }
+                }
+            )
+            putArray(
+                "notes",
+                Arguments.createArray().apply {
+                    snapshot.notes.forEach { note ->
+                        pushMap(noteMap(BridgeMappers.noteFields(note)))
+                    }
+                }
+            )
+        }
 
     /**
      * 只装配 `WritableMap`；契约语义全部在 [BridgeMappers] 里，可在 JVM 单测逐字段断言。
@@ -734,4 +653,11 @@ class YanjiDataModule(
     companion object {
         const val EVENT_DATA_CHANGED = "onDataChanged"
     }
+}
+
+internal fun dataEventTypesForTables(tables: Set<String>): Set<String> = buildSet {
+    if ("study_tasks" in tables) add("tasks")
+    if ("journal_entries" in tables) add("notes")
+    if ("focus_sessions" in tables || "exam_sessions" in tables) add("sessions")
+    if ("user_settings" in tables) add("settings")
 }

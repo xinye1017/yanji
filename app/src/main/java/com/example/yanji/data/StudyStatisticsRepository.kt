@@ -207,49 +207,14 @@ class StudyStatisticsRepository(
     /** 汇总构建期的兜底阈值：Flow 尚未吐出首个值时与用户默认值一致。 */
     private val activeDayThresholdSecondsFallback = 30L * 60L
 
-    private fun getSubjectColor(subjectId: String, subjectName: String): String {
-        val found = SubjectCatalog.find(subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
-            ?: repo.subjects.value.find { it.id == subjectId || it.name == subjectName }
-        if (found != null) return found.colorHex
-        return SubjectCatalog.find(SubjectCatalog.inferCategoryId(subjectId, subjectName))?.colorHex
-            ?: SubjectCatalog.DEFAULT_FALLBACK_COLOR
-    }
+    private fun getSubjectColor(subjectId: String, subjectName: String): String =
+        resolveStudySubjectColor(subjectId, subjectName, repo.subjects.value)
 
-    private fun focusToSessionItem(fs: FocusSession): DailySessionItem {
-        return DailySessionItem(
-            id = fs.id,
-            title = if (fs.note.isNotBlank()) fs.note else "${fs.subjectName} 专注",
-            subjectId = fs.subjectId,
-            subjectName = fs.subjectName,
-            subjectColor = getSubjectColor(fs.subjectId, fs.subjectName),
-            startTime = fs.startTime,
-            endTime = fs.endTime,
-            durationSeconds = fs.durationSeconds,
-            isExam = false,
-            note = fs.note,
-            pauseCount = fs.pauseCount,
-            mode = fs.mode
-        )
-    }
+    private fun focusToSessionItem(fs: FocusSession): DailySessionItem =
+        toDailyFocusSessionItem(fs, ::getSubjectColor)
 
-    private fun examToSessionItem(es: ExamSession): DailySessionItem {
-        return DailySessionItem(
-            id = es.id,
-            title = es.subjectName,
-            subjectId = es.subjectId,
-            subjectName = es.subjectName,
-            subjectColor = getSubjectColor(es.subjectId, es.subjectName),
-            startTime = es.startTime,
-            endTime = es.endTime,
-            durationSeconds = es.actualDurationSeconds,
-            isExam = true,
-            score = es.score,
-            maxScore = es.maxScore,
-            note = es.note,
-            pauseCount = 0,
-            mode = "全真模拟"
-        )
-    }
+    private fun examToSessionItem(es: ExamSession): DailySessionItem =
+        toDailyExamSessionItem(es, ::getSubjectColor)
 
     /**
      * Get summary for a specific date (defaults to today).
@@ -268,45 +233,12 @@ class StudyStatisticsRepository(
         }
     }
 
-    fun getDailyStudySummary(dateStr: String): DailyStudySummary {
-        val date = YanjiTime.parseIsoDate(dateStr) ?: return buildDailyStudySummary(dateStr, emptyList(), emptyList())
-        val range = YanjiTime.dayRange(date)
-        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildDailyStudySummary(dateStr, focusList, examList)
-    }
-
     private fun buildDailyStudySummary(
         dateStr: String,
         focusList: List<FocusSession>,
         examList: List<ExamSession>
-    ): DailyStudySummary {
-        val requestedDate = YanjiTime.parseIsoDate(dateStr)
-        val dayFocus = focusList.filter {
-            it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == requestedDate
-        }
-        val dayExams = examList.filter {
-            it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == requestedDate
-        }
-
-        val allItems = mutableListOf<DailySessionItem>()
-        allItems.addAll(dayFocus.map { focusToSessionItem(it) })
-        allItems.addAll(dayExams.map { examToSessionItem(it) })
-        allItems.sortByDescending { it.startTime }
-
-        val totalDuration = allItems.sumOf { it.durationSeconds }
-        val subjectDist = buildNamedDistribution(allItems, SubjectStatsLevel.SUBCATEGORY)
-
-        return DailyStudySummary(
-            date = dateStr,
-            formattedDate = DurationFormatter.formatFullDateWithWeekday(dateStr),
-            totalDurationSeconds = totalDuration,
-            focusCount = dayFocus.size,
-            examCount = dayExams.size,
-            subjectDistribution = subjectDist,
-            sessions = allItems
-        )
-    }
+    ): DailyStudySummary =
+        buildDailyStudySummary(dateStr, focusList, examList, repo.subjects.value)
 
     /**
      * Get subject study summary across a given time range.
@@ -541,18 +473,7 @@ class StudyStatisticsRepository(
     private fun buildNamedDistribution(
         items: List<DailySessionItem>,
         level: SubjectStatsLevel
-    ): Map<String, Long> {
-        val result = linkedMapOf<String, Long>()
-        items.forEach { item ->
-            val id = when (level) {
-                SubjectStatsLevel.CATEGORY -> SubjectCatalog.inferCategoryId(item.subjectId, item.subjectName)
-                SubjectStatsLevel.SUBCATEGORY -> SubjectCatalog.subcategoryBucketId(item.subjectId, item.subjectName)
-            }
-            val name = SubjectCatalog.displayName(id) ?: item.subjectName
-            result[name] = (result[name] ?: 0L) + item.durationSeconds
-        }
-        return result
-    }
+    ): Map<String, Long> = buildNamedSessionDistribution(items, level)
 
     private fun cutoffFor(timeRange: StudyTimeRange): Long {
         return YanjiTime.rangeFor(timeRange).startInclusive
@@ -923,4 +844,102 @@ class StudyStatisticsRepository(
             repo.updateFocusSessionNote(sessionId, note)
         }
     }
+}
+
+internal fun buildDailyStudySummary(
+    dateStr: String,
+    focusList: List<FocusSession>,
+    examList: List<ExamSession>,
+    subjects: List<Subject>
+): DailyStudySummary {
+    val requestedDate = YanjiTime.parseIsoDate(dateStr)
+    val dayFocus = focusList.filter {
+        it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == requestedDate
+    }
+    val dayExams = examList.filter {
+        it.status == SessionStatus.COMPLETED && YanjiTime.localDate(it.startTime) == requestedDate
+    }
+
+    val colorFor: (String, String) -> String = { subjectId, subjectName ->
+        resolveStudySubjectColor(subjectId, subjectName, subjects)
+    }
+    val allItems = (dayFocus.map { toDailyFocusSessionItem(it, colorFor) } +
+        dayExams.map { toDailyExamSessionItem(it, colorFor) })
+        .sortedByDescending { it.startTime }
+
+    return DailyStudySummary(
+        date = dateStr,
+        formattedDate = DurationFormatter.formatFullDateWithWeekday(dateStr),
+        totalDurationSeconds = allItems.sumOf { it.durationSeconds },
+        focusCount = dayFocus.size,
+        examCount = dayExams.size,
+        subjectDistribution = buildNamedSessionDistribution(allItems, SubjectStatsLevel.SUBCATEGORY),
+        sessions = allItems
+    )
+}
+
+private fun toDailyFocusSessionItem(
+    session: FocusSession,
+    subjectColor: (String, String) -> String
+): DailySessionItem = DailySessionItem(
+    id = session.id,
+    title = if (session.note.isNotBlank()) session.note else "${session.subjectName} 专注",
+    subjectId = session.subjectId,
+    subjectName = session.subjectName,
+    subjectColor = subjectColor(session.subjectId, session.subjectName),
+    startTime = session.startTime,
+    endTime = session.endTime,
+    durationSeconds = session.durationSeconds,
+    isExam = false,
+    note = session.note,
+    pauseCount = session.pauseCount,
+    mode = session.mode
+)
+
+private fun toDailyExamSessionItem(
+    session: ExamSession,
+    subjectColor: (String, String) -> String
+): DailySessionItem = DailySessionItem(
+    id = session.id,
+    title = session.subjectName,
+    subjectId = session.subjectId,
+    subjectName = session.subjectName,
+    subjectColor = subjectColor(session.subjectId, session.subjectName),
+    startTime = session.startTime,
+    endTime = session.endTime,
+    durationSeconds = session.actualDurationSeconds,
+    isExam = true,
+    score = session.score,
+    maxScore = session.maxScore,
+    note = session.note,
+    pauseCount = 0,
+    mode = "全真模拟"
+)
+
+private fun resolveStudySubjectColor(
+    subjectId: String,
+    subjectName: String,
+    subjects: List<Subject>
+): String {
+    val found = SubjectCatalog.find(subjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
+        ?: subjects.find { it.id == subjectId || it.name == subjectName }
+    if (found != null) return found.colorHex
+    return SubjectCatalog.find(SubjectCatalog.inferCategoryId(subjectId, subjectName))?.colorHex
+        ?: SubjectCatalog.DEFAULT_FALLBACK_COLOR
+}
+
+private fun buildNamedSessionDistribution(
+    items: List<DailySessionItem>,
+    level: SubjectStatsLevel
+): Map<String, Long> {
+    val result = linkedMapOf<String, Long>()
+    items.forEach { item ->
+        val id = when (level) {
+            SubjectStatsLevel.CATEGORY -> SubjectCatalog.inferCategoryId(item.subjectId, item.subjectName)
+            SubjectStatsLevel.SUBCATEGORY -> SubjectCatalog.subcategoryBucketId(item.subjectId, item.subjectName)
+        }
+        val name = SubjectCatalog.displayName(id) ?: item.subjectName
+        result[name] = (result[name] ?: 0L) + item.durationSeconds
+    }
+    return result
 }

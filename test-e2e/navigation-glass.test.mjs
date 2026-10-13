@@ -22,9 +22,10 @@ test('the backdrop excludes the dock and secondary settings layer', () => {
   const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
   const targetEnd = app.indexOf('</BlurTarget>');
   assert.ok(app.includes('<BlurTarget id={YanjiLiquidGlass.targetId}'));
-  assert.ok(targetEnd > app.indexOf('<TodayScreen />'));
-  assert.ok(targetEnd > app.indexOf('<FocusScreen />'));
-  assert.ok(targetEnd > app.indexOf('<ReviewScreen />'));
+  for (const screen of ['Today', 'Focus', 'Review']) {
+    const position = app.indexOf(`<${screen}Screen`);
+    assert.ok(position >= 0 && targetEnd > position);
+  }
   assert.ok(targetEnd < app.indexOf('<BottomTabBar />'));
   assert.ok(app.indexOf('<BottomTabBar />') < app.indexOf('<SettingsScreen />'));
   for (const screen of ['Today', 'Focus', 'Review']) {

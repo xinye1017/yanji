@@ -46,10 +46,10 @@ export function registerM4Tests() {
       bridge.advanceTime(5400); // 90 minutes = 1h 30m
       await bridge.completeTimer();
 
-      const stats = await bridge.getTodayStats(today);
-      assertEqual(stats.totalFocusMinutes, 90);
-      const hours = Math.floor(stats.totalFocusMinutes / 60);
-      const minutes = stats.totalFocusMinutes % 60;
+      const stats = await bridge.getDailySnapshot(today);
+      assertEqual(Math.floor(stats.totalDurationSeconds / 60), 90);
+      const hours = Math.floor(Math.floor(stats.totalDurationSeconds / 60) / 60);
+      const minutes = Math.floor(stats.totalDurationSeconds / 60) % 60;
       assertEqual(hours, 1);
       assertEqual(minutes, 30);
     });
@@ -71,7 +71,7 @@ export function registerM4Tests() {
       await bridge.completeTimer();
 
       // Check task updated actual minutes
-      const tasks = await bridge.getTodayTasks(today);
+      const tasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(tasks[0].actualMinutes, 60, 'Task actualMinutes must reflect completed session');
     });
   });

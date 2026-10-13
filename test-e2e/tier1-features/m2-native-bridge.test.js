@@ -61,8 +61,8 @@ export function registerM2Tests() {
       assertEqual(active, null, 'Session should be null after discard');
 
       const today = new Date().toISOString().split('T')[0];
-      const stats = await bridge.getTodayStats(today);
-      assertEqual(stats.totalFocusSeconds, 0, 'Discarded session must not commit study seconds');
+      const stats = await bridge.getDailySnapshot(today);
+      assertEqual(stats.totalDurationSeconds, 0, 'Discarded session must not commit study seconds');
     });
 
     it('prevents starting a concurrent second session while one is already running', async () => {
@@ -119,9 +119,9 @@ export function registerM2Tests() {
       await bridge.completeTimer();
 
       const today = new Date(bridge.virtualClockMs).toISOString().split('T')[0];
-      const stats = await bridge.getTodayStats(today);
+      const stats = await bridge.getDailySnapshot(today);
       assertEqual(
-        stats.totalFocusSeconds,
+        stats.totalDurationSeconds,
         90 * 60,
         'A completed STOPWATCH must persist its real accumulated duration'
       );
@@ -135,18 +135,18 @@ export function registerM2Tests() {
       assert(BridgeSchemas.isValidStudyTask(created), 'Created task must match StudyTask schema');
       assertEqual(created.completed, false);
 
-      const tasks = await bridge.getTodayTasks(today);
+      const tasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(tasks.length, 1);
       assertEqual(tasks[0].title, '高等数学极限大题');
 
       // Toggle completed
       await bridge.toggleTask(created.id, true);
-      const updatedTasks = await bridge.getTodayTasks(today);
+      const updatedTasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(updatedTasks[0].completed, true, 'Task completed status should be updated');
 
       // Delete task
       await bridge.deleteTask(created.id);
-      const remainingTasks = await bridge.getTodayTasks(today);
+      const remainingTasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(remainingTasks.length, 0, 'Task should be deleted');
     });
 
@@ -156,7 +156,7 @@ export function registerM2Tests() {
       assert(BridgeSchemas.isValidNoteEntry(note), 'Saved note must match NoteEntry schema');
       assertEqual(note.content, '微分中值定理构造辅助函数四种经典套路');
 
-      const notes = await bridge.getNotesForDate(today);
+      const notes = (await bridge.getDailySnapshot(today)).notes;
       assertEqual(notes.length, 1);
       assertEqual(notes[0].id, note.id);
     });
@@ -215,14 +215,12 @@ export function registerM2Tests() {
   describe('Tier 1: Feature 8 — TypeScript Bridge Interface Contracts', () => {
     it('validates schema conformance for all returned data models', async () => {
       const today = '2026-10-08';
-      const stats = await bridge.getTodayStats(today);
-      assert(BridgeSchemas.isValidTodayStats(stats), 'TodayStats must strictly conform to contract');
+      const stats = await bridge.getDailySnapshot(today);
+      assert(BridgeSchemas.isValidDailySnapshot(stats), 'DailySnapshot must strictly conform to contract');
 
       const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);
       assert(BridgeSchemas.isValidReviewOverview(overview), 'ReviewOverview must strictly conform to contract');
 
-      const timeline = await bridge.getDailyTimeline(today);
-      assert(BridgeSchemas.isValidDailyTimeline(timeline), 'DailyTimeline must strictly conform to contract');
     });
   });
 }

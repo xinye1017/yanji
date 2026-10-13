@@ -203,30 +203,6 @@ export class MockYanjiBridge {
   }
 
   // --- YanjiDataModule Interface ---
-  async getTodayStats(date) {
-    const todaySessions = this.sessionRecords.filter(s => s.date === date);
-    const totalFocusSeconds = todaySessions.reduce((acc, s) => acc + s.elapsedSeconds, 0);
-    const totalFocusMinutes = Math.floor(totalFocusSeconds / 60);
-
-    const todayTasks = this.tasks.filter(t => t.date === date);
-    const completedTasksCount = todayTasks.filter(t => t.completed).length;
-
-    const todayNotes = this.notes.filter(n => n.date === date);
-
-    return {
-      date,
-      totalFocusSeconds,
-      totalFocusMinutes,
-      completedTasksCount,
-      totalTasksCount: todayTasks.length,
-      notesCount: todayNotes.length,
-    };
-  }
-
-  async getTodayTasks(date) {
-    return this.tasks.filter(t => t.date === date).map(t => ({ ...t }));
-  }
-
   async createTask(date, subjectId, subjectName, title, plannedMinutes) {
     if (!title || title.trim().length === 0) {
       throw new Error('Task title cannot be empty');
@@ -287,10 +263,6 @@ export class MockYanjiBridge {
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(start, start + limit)
       .map(n => ({ ...n }));
-  }
-
-  async getNotesForDate(date) {
-    return this.notes.filter(n => n.date === date).map(n => ({ ...n }));
   }
 
   async toggleFavoriteNote(noteId) {
@@ -549,11 +521,28 @@ export class MockYanjiBridge {
     return this._isoOfLocalDate(this._shiftLocalDate(new Date(epochMs), deltaDays));
   }
 
-  async getDailyTimeline(date) {
+  async getDailySnapshot(date) {
+    const sessions = this.sessionRecords.filter(s => s.date === date).map(s => ({
+      ...s,
+      durationSeconds: s.elapsedSeconds ?? s.durationSeconds ?? 0,
+    }));
+    const actualSeconds = new Map();
+    for (const session of this.sessionRecords) {
+      if (session.taskId && !session.isExam) {
+        actualSeconds.set(session.taskId, (actualSeconds.get(session.taskId) ?? 0)
+          + (session.elapsedSeconds ?? session.durationSeconds ?? 0));
+      }
+    }
     return {
       date,
-      sessions: this.sessionRecords.filter(s => s.date === date).map(s => ({ ...s })),
-      completedTasks: this.tasks.filter(t => t.date === date && t.completed).map(t => ({ ...t })),
+      formattedDate: date,
+      totalDurationSeconds: sessions.reduce((sum, s) => sum + s.durationSeconds, 0),
+      focusCount: sessions.filter(s => !s.isExam).length,
+      examCount: sessions.filter(s => s.isExam).length,
+      sessions,
+      tasks: this.tasks.filter(t => t.date === date).map(t => ({
+        ...t, actualMinutes: Math.floor((actualSeconds.get(t.id) ?? 0) / 60),
+      })),
       notes: this.notes.filter(n => n.date === date).map(n => ({ ...n })),
     };
   }

@@ -22,6 +22,13 @@ data class TaskActualSecondsRow(
     val seconds: Long
 )
 
+/** A dated task together with its completed focus time across every session date. */
+data class StudyTaskActualSecondsRow(
+    @Embedded(prefix = "task_")
+    val task: StudyTaskEntity,
+    val actualSeconds: Long
+)
+
 @Dao
 interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
@@ -39,6 +46,13 @@ interface FocusSessionDao {
             "ORDER BY startTime DESC"
     )
     fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<FocusSessionEntity>>
+
+    @Query(
+        "SELECT * FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
 
     @Query(
         "SELECT subjectId, subjectName, " +
@@ -112,6 +126,13 @@ interface ExamSessionDao {
     fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<ExamSessionEntity>>
 
     @Query(
+        "SELECT * FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
+            "ORDER BY startTime DESC"
+    )
+    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<ExamSessionEntity>
+
+    @Query(
         "SELECT subjectId, subjectName, " +
             "COALESCE(SUM(actualDurationSeconds), 0) AS durationSeconds, " +
             "COUNT(*) AS sessionCount, COALESCE(MAX(actualDurationSeconds), 0) AS longestSessionSeconds " +
@@ -166,6 +187,9 @@ interface NoteEntryDao {
 
     @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt DESC LIMIT 1")
     suspend fun getByDate(date: String): NoteEntryEntity?
+
+    @Query("SELECT * FROM journal_entries WHERE date = :date ORDER BY createdAt ASC")
+    suspend fun getAllByDate(date: String): List<NoteEntryEntity>
 
     @Query("SELECT COUNT(*) FROM journal_entries")
     suspend fun count(): Int
@@ -379,6 +403,23 @@ interface StudyTaskDao {
             "ORDER BY isCompleted ASC, createdAt ASC"
     )
     fun observeByDate(date: String): Flow<List<StudyTaskEntity>>
+
+    @Query(
+        "SELECT " +
+            "t.id AS task_id, t.date AS task_date, t.subjectId AS task_subjectId, " +
+            "t.subjectName AS task_subjectName, t.title AS task_title, " +
+            "t.plannedMinutes AS task_plannedMinutes, t.isCompleted AS task_isCompleted, " +
+            "t.createdAt AS task_createdAt, t.updatedAt AS task_updatedAt, " +
+            "COALESCE(SUM(f.durationSeconds), 0) AS actualSeconds " +
+            "FROM study_tasks AS t " +
+            "LEFT JOIN focus_sessions AS f " +
+            "ON f.taskId = t.id AND f.status = 'COMPLETED' " +
+            "WHERE t.date = :date " +
+            "GROUP BY t.id, t.date, t.subjectId, t.subjectName, t.title, " +
+            "t.plannedMinutes, t.isCompleted, t.createdAt, t.updatedAt " +
+            "ORDER BY t.isCompleted ASC, t.createdAt ASC"
+    )
+    suspend fun getByDateWithActualSeconds(date: String): List<StudyTaskActualSecondsRow>
 
     @Query("SELECT * FROM study_tasks ORDER BY date DESC, createdAt ASC")
     fun getAllFlow(): Flow<List<StudyTaskEntity>>

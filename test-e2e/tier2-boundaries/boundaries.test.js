@@ -17,20 +17,20 @@ export function registerTier2Tests() {
   describe('Tier 2: Empty Data & Zero State Boundaries', () => {
     it('verifies day 1 first launch with 0 tasks, 0 notes, and 0 focus time returns valid zero states without NaN', async () => {
       const today = '2026-10-08';
-      const stats = await bridge.getTodayStats(today);
+      const stats = await bridge.getDailySnapshot(today);
 
-      assertEqual(stats.totalFocusSeconds, 0);
-      assertEqual(stats.totalFocusMinutes, 0);
-      assertEqual(stats.completedTasksCount, 0);
-      assertEqual(stats.totalTasksCount, 0);
-      assertEqual(stats.notesCount, 0);
+      assertEqual(stats.totalDurationSeconds, 0);
+      assertEqual(Math.floor(stats.totalDurationSeconds / 60), 0);
+      assertEqual(stats.tasks.filter(task => task.completed).length, 0);
+      assertEqual(stats.tasks.length, 0);
+      assertEqual(stats.notes.length, 0);
 
-      const tasks = await bridge.getTodayTasks(today);
+      const tasks = (await bridge.getDailySnapshot(today)).tasks;
       assertEqual(tasks.length, 0);
 
-      const timeline = await bridge.getDailyTimeline(today);
+      const timeline = await bridge.getDailySnapshot(today);
       assertEqual(timeline.sessions.length, 0);
-      assertEqual(timeline.completedTasks.length, 0);
+      assertEqual(timeline.tasks.filter(task => task.completed).length, 0);
       assertEqual(timeline.notes.length, 0);
 
       const overview = await bridge.getReviewOverview('CALENDAR_WEEK', 0);

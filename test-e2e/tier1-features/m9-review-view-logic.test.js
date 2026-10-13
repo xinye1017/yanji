@@ -77,7 +77,7 @@ function timeline(overrides = {}) {
     focusCount: 2,
     examCount: 0,
     sessions: [],
-    completedTasks: [],
+    tasks: [],
     notes: [],
     ...overrides,
   };
@@ -101,7 +101,7 @@ export function registerReviewViewLogicTests() {
 
     it('refuses to step past today instead of browsing an empty future', () => {
       // The bug: pressing 后一天 at today walked into the future, where
-      // getDailyTimeline returns an empty summary and the page reads as blank.
+      // getDailySnapshot returns an empty summary and the page reads as blank.
       assertEqual(
         logic.stepForwardWithinToday('2026-10-08', '2026-10-08'),
         '2026-10-08',
@@ -135,7 +135,7 @@ export function registerReviewViewLogicTests() {
           // Deliberately listed sessions-first, newest-first inside each group —
           // the merge must not inherit any of that ordering.
           sessions: [session('s-late', at(2026, 10, 8, 14, 0)), session('s-early', at(2026, 10, 8, 9, 0))],
-          completedTasks: [task('t-mid', at(2026, 10, 8, 10, 30))],
+          tasks: [task('t-mid', at(2026, 10, 8, 10, 30))],
           notes: [note('n-noon', at(2026, 10, 8, 12, 0)), note('n-night', at(2026, 10, 8, 21, 0))],
         })
       );
@@ -155,7 +155,7 @@ export function registerReviewViewLogicTests() {
             timeline({
               sessions: [session('s-b', sameTime)],
               notes: [note('n-a', sameTime)],
-              completedTasks: [task('t-c', sameTime)],
+              tasks: [task('t-c', sameTime)],
             })
           )
           .map(entry => entry.key);
@@ -168,7 +168,7 @@ export function registerReviewViewLogicTests() {
           timeline({
             sessions: [session('s-b', sameTime)],
             notes: [note('n-a', sameTime)],
-            completedTasks: [task('t-c', sameTime)],
+            tasks: [task('t-c', sameTime)],
           })
         )
         .map(entry => entry.key);
@@ -188,7 +188,7 @@ export function registerReviewViewLogicTests() {
       const entries = logic.buildTimelineEntries(
         timeline({
           sessions: [session('s1', at(2026, 10, 8, 9, 0))],
-          completedTasks: [task('t1', at(2026, 10, 8, 10, 0))],
+          tasks: [task('t1', at(2026, 10, 8, 10, 0))],
           notes: [note('n1', at(2026, 10, 8, 11, 0))],
         })
       );
@@ -197,6 +197,17 @@ export function registerReviewViewLogicTests() {
         ['note', 'task', 'session'],
         'The kind discriminator must survive the merge'
       );
+    });
+
+    it('filters unfinished plans from the timeline while preserving the full snapshot', () => {
+      const snapshot = timeline({ tasks: [
+        task('done', at(2026, 10, 8, 9), true),
+        task('pending', at(2026, 10, 8, 10), false),
+      ] });
+      const entries = logic.buildTimelineEntries(snapshot);
+      assertDeepEqual(entries.map(entry => entry.key), ['task-done']);
+      assertEqual(snapshot.tasks.length, 2, 'View filtering must not mutate the native snapshot');
+      assert(logic.dayHasRecords([], [snapshot.tasks[1]]), 'An unfinished plan is still a day record');
     });
   });
 

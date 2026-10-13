@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "patch-package --error-on-fail",
     "start": "react-native start",
-    "test": "node test-e2e/runner.js",
+    "test": "node test-e2e/runner.js && node --test test-e2e/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "bundle:android": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output app/src/main/assets/index.android.bundle --assets-dest app/src/main/res"
   },

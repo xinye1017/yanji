@@ -1,7 +1,7 @@
 /**
  * Yanji Native Bridge — Strongly typed TypeScript bindings for Kotlin Native Modules.
  *
- * Contract authority: PROJECT.md § Interface Contracts + test-e2e/contracts/bridge-schema.js.
+ * Contract authority: the native module mappings + test-e2e/contracts/bridge-schema.js.
  * Any field rename must be mirrored here, in bridge-schema.js, and in the Kotlin module.
  */
 
@@ -22,7 +22,7 @@ export interface ActiveSessionState {
   subjectId: string;
   subjectName: string;
   mode: TimerMode;
-  /** ISO date string `yyyy-MM-dd` of the session start, or null when unbound. */
+  /** Bound study task id, or null when unbound. */
   taskId: string | null;
   startTime: number;
   elapsedSeconds: number;
@@ -52,15 +52,6 @@ export interface NoteEntry {
   isFavorite: boolean;
   /** Focus session id, or null when the note is not bound to a session. Never empty string. */
   sessionId: string | null;
-}
-
-export interface TodayStats {
-  date: string;
-  totalFocusSeconds: number;
-  totalFocusMinutes: number;
-  completedTasksCount: number;
-  totalTasksCount: number;
-  notesCount: number;
 }
 
 /**
@@ -129,7 +120,7 @@ export interface ReviewOverview {
   subjectDistribution: ReviewSubjectSlice[];
 }
 
-export interface DailyTimelineSession {
+export interface DailySession {
   id: string;
   title: string;
   subjectId: string;
@@ -144,14 +135,16 @@ export interface DailyTimelineSession {
   mode: string;
 }
 
-export interface DailyTimeline {
+/** One Room transaction, shared by Today and Review. */
+export interface DailySnapshot {
   date: string;
   formattedDate: string;
   totalDurationSeconds: number;
   focusCount: number;
   examCount: number;
-  sessions: DailyTimelineSession[];
-  completedTasks: StudyTask[];
+  sessions: DailySession[];
+  /** All plans for the requested day; completed plans are filtered by the view. */
+  tasks: StudyTask[];
   notes: NoteEntry[];
 }
 
@@ -237,8 +230,7 @@ interface YanjiTimerModuleNative {
 }
 
 interface YanjiDataModuleNative {
-  getTodayStats(date: string): Promise<TodayStats>;
-  getTodayTasks(date: string): Promise<StudyTask[]>;
+  getDailySnapshot(date: string): Promise<DailySnapshot>;
   createTask(
     date: string,
     subjectId: string,
@@ -251,7 +243,6 @@ interface YanjiDataModuleNative {
   deleteTask(taskId: string): Promise<boolean>;
   saveQuickNote(content: string, date: string, sessionId: string | null): Promise<NoteEntry>;
   getNotes(page: number, limit: number): Promise<NoteEntry[]>;
-  getNotesForDate(date: string): Promise<NoteEntry[]>;
   toggleFavoriteNote(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
   /**
@@ -280,7 +271,6 @@ interface YanjiDataModuleNative {
   updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>;
   /** 删除一条专注/模考记录。找不到会话 reject `E_SESSION_NOT_FOUND`。 */
   deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>;
-  getDailyTimeline(date: string): Promise<DailyTimeline>;
   getUserSettings(): Promise<UserSettings>;
   updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>;
   getExamCountdown(): Promise<ExamCountdown>;
