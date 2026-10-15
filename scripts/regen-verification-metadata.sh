@@ -21,8 +21,8 @@
 #   This script is additive-only by construction: it aborts and restores the previous file
 #   if any previously recorded checksum would be dropped or changed. It still cannot prove
 #   the new checksums are correct, so it prints the added entries and requires you to
-#   confirm them against the upstream repositories before committing. Tracked procedure:
-#   docs/migration/repo-hardening-plan.md, "Change controls".
+#   confirm them against the upstream repositories before committing. Change controls:
+#   AGENTS.md §三 (Active Constraints) and §七 (提交与忽略决策表).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

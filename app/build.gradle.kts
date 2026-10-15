@@ -222,8 +222,8 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 
-  // Navigation：当前为 Navigation.kt 内的手写路由（YanjiTab + YanjiSubScreen），
-  // 不依赖 androidx.navigation3。YANJI-A 审计已移除未使用的 navigation3 依赖。
+  // Navigation：全部由 React Native 侧的 src/navigation/** 承担，
+  // 原生层不引入 androidx.navigation3。YANJI-A 审计已移除该未使用依赖。
 
   // Room Database
   implementation(libs.androidx.room.runtime)

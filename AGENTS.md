@@ -111,7 +111,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
 4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
 5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 工程底线与设计自由**：品牌气质和页面信息架构参考 `DESIGN.md`，但不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。现有 Compose `Modifier.hazeEffect` 若仍被使用，必须显式设置 `backgroundColor` 以规避已知崩溃；此条是技术安全约束，不是材质设计禁令。
+6. **UI 工程底线与设计自由**：品牌气质和页面信息架构参考 `DESIGN.md`，但不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。
 7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。

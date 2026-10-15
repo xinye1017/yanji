@@ -38,6 +38,9 @@ node_modules/
 *.db-shm
 device-backup/
 
+# --- Agent 协作草稿（BRIEFING / DISPATCH / progress / handoff，不入库） ---
+.agents/teamwork/
+
 # TypeSafe local env (contains key)
 .agents/skills/*/ENVIRONMENT.local.md
 scripts/jev/.env.local

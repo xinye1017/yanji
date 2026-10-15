@@ -7,6 +7,7 @@
 - **当前 UI = React Native 0.87.1 + React 19.2.3 + TypeScript**，运行在 Android Add-to-App 宿主；Kotlin + Room 仍负责所有真实业务。**旧 Jetpack Compose 页面不是现在的主 UI**，不可据旧笔记对 `app/src/main/java/.../ui/**` 开发后宣称修改了当前 UI。
 - RN 入口：`App.tsx`、`src/screens/**`、`src/navigation/**`、`src/components/**`。主导航仅「今天 / 专注 / 回顾」三 Tab，设置从「今天」打开。三屏常驻挂载，切页保留本地编辑状态。
 - RN 主题：`src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`；悬浮玻璃底栏：`src/navigation/BottomTabBar.tsx`、`src/theme/liquidGlass.ts`。旧 Compose 的 `YanjiPageHeader`、`TopFadeScrim`、`hazeEffect` 等不是 RN 设计约束。
+- **主题只有一个颜色/字阶域**：`YanjiPaper*`（素笺与寸阴，暖色纸面）。`YanjiSpacing / YanjiRadius / YanjiShadow / YanjiMotion / YanjiTouch` 是不带颜色的度量标尺。玻璃底栏的采样底色与选中色也取自 paper 域（`canvas` / `brand`），只保留玻璃渲染器与几何参数。
 - 宿主：`YanjiApplication.kt` / `MainActivity.kt`（Hermes、新架构、手工链接原生包）。新原生 UI 依赖需检查 Gradle、注册与 JNI/codegen，不能只 npm install。
 - Kotlin ↔ JS 合同：`app/src/main/java/com/example/yanji/bridge/{YanjiTimerModule,YanjiDataModule,YanjiThemeModule}.kt` 与 `src/bridge/index.ts`，更改接口必须两侧及合同测试同步。
 
@@ -24,10 +25,8 @@
 - 质量入口：`test-e2e/`（JS 合同/逻辑和工作流测试）、`app/src/test/**`（Kotlin JVM）、`.github/workflows/android-quality.yml`（原生门禁/插桩）。**旧日期中“全绿”的记录不代表当前提交已测试**；应区分执行成功与缓存复用。
 - 保护用户数据和工作树、避免破坏性 Git 操作；改动前检查 `git status`；真机授权遵循最新版 `AGENTS.md` 与当次用户指示。提交后及时 push，其他 Agent 的工作区需再同步 Git。
 
-## 2026-10-10 待检查（只代表静态疑点，不代表已复现）
+## 待检查（只代表静态疑点，不代表已复现）
 
-- `README.md` 顶部 `project-facts` 声明 Room v21，当前代码是 v22，可能使 `scripts/check-project-facts.sh` 拦截。
-- `TodayScreen` / `FocusScreen` 将当天日期初始化一次，三页常驻时跨午夜日期可能陈旧。
-- RN 多处 `catch {}` 缺乏面向用户的失败反馈；CI 是否显式执行 RN typecheck/test/bundle 需要确认。
+- `FocusScreen` 将当天日期初始化一次（`const [date] = useState(todayIso)`），三页常驻时跨午夜日期可能陈旧；`TodayScreen` 已改为 30 秒轮询 `now`，不受此影响。
 
 > 记忆维护：重大架构变更后更新本文件；不要将旧 UI 操作记录、历史测试数字、临时设备状态持续累加为长期记忆。
