@@ -1,6 +1,6 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
@@ -84,7 +84,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [goalDraft, setGoalDraft] = useState(0);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -104,13 +104,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
     return () => clearInterval(timer);
   }, [visible, foregroundRevision]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
+  const retryRead = useCallback(async () => {
+    setRetrying(true);
     setActionError(null);
     try {
       await Promise.all([refreshDailySnapshot(date), refreshSettingsSnapshot(), syncActiveSession()]);
-    } catch { setActionError('刷新失败，请下拉或点击重试。'); }
-    finally { setRefreshing(false); }
+    } catch { setActionError('读取失败，请点击“重新读取”重试。'); }
+    finally { setRetrying(false); }
   }, [date]);
 
   const tasks = snapshot?.tasks;
@@ -182,7 +182,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
       <ScrollView testID="scroll-today" style={{ flex: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.brandInk} />}
+        showsVerticalScrollIndicator={false} overScrollMode="never"
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
         <YanjiEditorialHeader
           eyebrow={displayDate(date)}
@@ -251,14 +251,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
               ))}
             </View>
           ) : <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-            {snapshot ? '按自己的步调开始今天的第一轮专注。' : '正在读取今日记录，可下拉重试。'}
+            {snapshot ? '按自己的步调开始今天的第一轮专注。' : '正在读取今日记录，可点击下方重新读取。'}
           </Text>}
           {selection?.key.startsWith('subject:') ? (
             <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
               {selection.subjectName} · {duration(selection.seconds)}
             </Text>
           ) : null}
-          {!snapshot ? <YanjiTextAction label={refreshing ? '读取中…' : '重新读取'} onPress={() => void handleRefresh()} disabled={refreshing} /> : null}
+          {!snapshot ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}
           {active ? (
             <View style={{ marginTop: YanjiSpacing.md, padding: YanjiSpacing.md, backgroundColor: colors.elevated, borderRadius: radius.surface, borderWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
@@ -399,7 +399,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
       <Modal visible={goalOpen} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => { if (!savingGoal) setGoalOpen(false); }}>
         <View style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}>
-          <ScrollView contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}
+          <ScrollView showsVerticalScrollIndicator={false} overScrollMode="never"
+            contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}
             style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}>
             <YanjiPaperSheetHeading title="日常学习目标" subtitle="调整默认目标，不更改已记录的学习时长。" onClose={() => { if (!savingGoal) setGoalOpen(false); }} />
             <Text style={[typography.metricHero, { color: colors.ink, marginVertical: YanjiSpacing.lg, textAlign: 'center' }]}>{goalDraft ? duration(goalDraft * 60) : '未设置'}</Text>
