@@ -1,48 +1,49 @@
 /**
  * Yanji E2E Test Suite - Theme & Design Tokens Specification
  * Validates design system constraints:
- * 1. Dark mode uses Midnight Blue palette, STRICTLY NO '#000000' pure black background.
- * 2. Light mode uses soft blue-gray palette.
- * 3. Card containers have ZERO borders (no BorderStroke, border-width 0).
+ * 1. Dark mode uses a warm near-black canvas, STRICTLY NO '#000000' pure black.
+ * 2. Light mode uses parchment.
+ * 3. Card containers stay at a subtle hairline border (<= 1).
  * 4. Corner radius strictly follows YanjiRadius semantic scale.
  */
 
 export const YanjiThemeTokens = {
   /**
-   * Authoritative palette. Mirrors src/theme/tokens.ts (RN) and
-   * app/src/main/java/com/example/yanji/theme/Color.kt (Compose).
+   * Authoritative palette — the 素笺与寸阴 paper domain. Mirrors
+   * `YanjiPaperColors` in src/theme/tokens.ts.
    *
-   * Semantic light values adopt Compose's retired-replacement numbers
-   * (success #17784F / warning #9A6100 / danger #BE3232) — the previous
-   * #2F9E6D / #E67E22 / #D64545 failed WCAG and were formally retired.
+   * Light danger adopts the retired-replacement value #BE3232; the previous
+   * #D64545 failed WCAG and was formally retired.
    */
   colors: {
     light: {
-      bgPrimary: '#F6F8FA',      // Refined soft blue-gray page background
-      bgSurface: '#FFFFFF',
-      bgElevated: '#F1F5FB',
-      textPrimary: '#172033',
-      textSecondary: '#5A6473',
-      accentPrimary: '#3462DC',  // Normal-text contrast on light CTA and chip
-      onAccent: '#FFFFFF',       // Matches YanjiOnPrimary
-      cardBorder: 'rgba(0, 0, 0, 0.06)',
-      cardBorderStrong: 'rgba(0, 0, 0, 0.12)',
-      success: '#17784F',
-      warning: '#9A6100',
+      canvas: '#F6F4EF',         // Parchment page background
+      surface: '#FFFFFF',
+      subtle: '#EDEAE2',
+      ink: '#1C1E21',
+      secondary: '#5C5F66',
+      muted: '#94969C',
+      hairline: 'rgba(28,30,33,0.08)',
+      brand: '#C84B31',          // Fills only; text uses brandInk
+      brandInk: '#B23A22',       // Readable brand text on parchment (5.43:1)
+      onBrand: '#FFFFFF',
+      amber: '#9A6100',
+      scrim: 'rgba(28,30,33,0.32)',
       danger: '#BE3232',
     },
     dark: {
-      bgPrimary: '#0D111A',      // Midnight Blue base (never #000000)
-      bgSurface: '#151B28',
-      bgElevated: '#1D2536',
-      textPrimary: '#F0F4FC',
-      textSecondary: '#94A3B8',
-      accentPrimary: '#7197F7',  // Normal-text contrast on dark tinted controls
-      onAccent: '#0D111A',       // Matches YanjiDarkOnPrimary
-      cardBorder: 'rgba(255, 255, 255, 0.08)',
-      cardBorderStrong: 'rgba(255, 255, 255, 0.16)',
-      success: '#34D399',
-      warning: '#FBBF24',
+      canvas: '#111315',         // Warm near-black (never #000000)
+      surface: '#1A1D21',
+      subtle: '#23272D',
+      ink: '#EAE6DF',
+      secondary: '#9BA0A8',
+      muted: '#636870',
+      hairline: 'rgba(234,230,223,0.08)',
+      brand: '#E06D53',
+      brandInk: '#E06D53',       // Dark brand already clears 4.5:1 on canvas
+      onBrand: '#111315',
+      amber: '#DDA059',
+      scrim: 'rgba(0,0,0,0.56)',
       danger: '#F87171',
     },
   },
@@ -68,7 +69,7 @@ export const YanjiThemeTokens = {
       if (normalized === '#000' || normalized === '#000000' || normalized === 'black') {
         return {
           valid: false,
-          error: `VIOLATION: Dark mode background is pure black (${colorHex}). Active constraint forbids #000000, must use Midnight Blue.`,
+          error: `VIOLATION: Dark mode background is pure black (${colorHex}). Active constraint forbids #000000; use the warm paper canvas instead.`,
         };
       }
     }

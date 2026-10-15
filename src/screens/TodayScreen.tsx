@@ -71,8 +71,7 @@ function sessionPrecise(s: DailySession): boolean {
 export function TodayScreen({ visible, foregroundRevision }: {
   visible: boolean; foregroundRevision: number;
 }): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const { paper } = theme;
+  const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
   const insets = useSafeAreaInsets();
@@ -342,7 +341,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
       <RecordMomentModal visible={recordOpen} date={date} editingNote={editingNote} onClose={() => { setRecordOpen(false); setEditingNote(null); }} />
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
       <Modal visible={goalOpen} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => { if (!savingGoal) setGoalOpen(false); }}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.scrim, justifyContent: 'flex-end' }}>
+        <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>
           <ScrollView contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}
             style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}>
             <YanjiPaperSheetHeading title="日常学习目标" subtitle="调整默认目标，不更改已记录的学习时长。" onClose={() => { if (!savingGoal) setGoalOpen(false); }} />

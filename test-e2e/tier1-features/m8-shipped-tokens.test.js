@@ -30,14 +30,6 @@ function contrastRatio(a, b) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-function resolveTint(tint, surface) {
-  if (tint.startsWith('#')) return tint;
-  const [r, g, b, alpha] = tint.match(/[\d.]+/g).map(Number);
-  const background = surface.slice(1).match(/../g).map(s => parseInt(s, 16));
-  const result = [r, g, b].map((v, i) => Math.round(v * alpha + background[i] * (1 - alpha)));
-  return '#' + result.map(v => v.toString(16).padStart(2, '0')).join('');
-}
-
 export function registerShippedTokenTests() {
   let tokens = null;
 
@@ -50,14 +42,17 @@ export function registerShippedTokenTests() {
   describe('Tier 1: Feature 8b — Shipped tokens.ts red lines (no #000000 in dark)', () => {
     it('loads the shipped src/theme/tokens.ts module', async () => {
       assert(tokens && typeof tokens === 'object', 'tokens.ts must export an object');
-      assert(tokens.YanjiColors && typeof tokens.YanjiColors === 'object', 'YanjiColors must be exported');
+      assert(tokens.YanjiPaperColors && typeof tokens.YanjiPaperColors === 'object', 'YanjiPaperColors must be exported');
       assert(tokens.YanjiRadius && typeof tokens.YanjiRadius === 'object', 'YanjiRadius must be exported');
     });
 
-    it('dark background is Midnight Blue #0D111A and no dark token is pure black', () => {
-      assertEqual(tokens.YanjiColors.dark.bgPrimary, '#0D111A', 'Dark background must be Midnight Blue #0D111A');
-      for (const [key, value] of Object.entries(tokens.YanjiColors.dark)) {
-        const normalized = String(value).trim().toUpperCase();
+    it('no dark token is pure black', () => {
+      // §三.6: pure black is forbidden as a background. The paper canvas is a
+      // warm near-black (#111315), never #000000.
+      assertEqual(tokens.YanjiPaperColors.dark.canvas, '#111315', 'Dark canvas must be #111315');
+      for (const [key, value] of Object.entries(tokens.YanjiPaperColors.dark)) {
+        if (typeof value !== 'string' || !value.startsWith('#')) continue;
+        const normalized = value.trim().toUpperCase();
         assert(
           normalized !== '#000000' && normalized !== '#000' && normalized !== 'BLACK',
           'Dark token ' + key + ' = ' + value + ' is pure black; §三.6 forbids it'
@@ -65,34 +60,35 @@ export function registerShippedTokenTests() {
       }
     });
 
-    it('light mode is soft blue-gray, not pure white page background', () => {
-      assertEqual(tokens.YanjiColors.light.bgPrimary, '#F6F8FA', 'Light page background must be #F6F8FA');
+    it('light mode is parchment, not a pure white page background', () => {
+      assertEqual(tokens.YanjiPaperColors.light.canvas, '#F6F4EF', 'Light canvas must be #F6F4EF');
       assert(
-        tokens.YanjiColors.light.bgPrimary !== '#FFFFFF',
+        tokens.YanjiPaperColors.light.canvas !== '#FFFFFF',
         'A pure-white page background would leave white cards indistinguishable (§三.6)'
       );
     });
 
-    it('onAccent exists in both modes with the planned values', () => {
-      // F11/F12: the previous hardcoded #FFFFFF on-accent foreground failed WCAG
-      // on the raised dark primary. Both modes must declare an explicit token.
-      assertEqual(tokens.YanjiColors.light.onAccent, '#FFFFFF', 'Light onAccent must be #FFFFFF');
-      assertEqual(tokens.YanjiColors.dark.onAccent, '#0D111A', 'Dark onAccent must be #0D111A');
+    it('onBrand exists in both modes with the planned values', () => {
+      // The on-brand foreground must be explicit, not assumed: light brand is
+      // dark enough for white, dark brand is light enough to need dark ink.
+      assertEqual(tokens.YanjiPaperColors.light.onBrand, '#FFFFFF', 'Light onBrand must be #FFFFFF');
+      assertEqual(tokens.YanjiPaperColors.dark.onBrand, '#111315', 'Dark onBrand must be #111315');
     });
 
-    it('actual shipped accent text meets normal-size 4.5:1 contrast in both themes', () => {
-      for (const [mode, colors] of Object.entries(tokens.YanjiColors)) {
-        assert(contrastRatio(colors.onAccent, colors.accentPrimary) >= 4.5, `${mode} CTA text contrast`);
-        assert(contrastRatio(colors.accentPrimary, resolveTint(colors.accentSoft, colors.bgSurface)) >= 4.5, `${mode} accent text on tinted control contrast`);
-        assert(contrastRatio(colors.accentStrong, resolveTint(colors.accentSoft, colors.bgSurface)) >= 4.5, `${mode} selected Chip contrast`);
+    it('actual shipped brand text meets normal-size 4.5:1 contrast in both themes', () => {
+      for (const [mode, colors] of Object.entries(tokens.YanjiPaperColors)) {
+        assert(contrastRatio(colors.onBrand, colors.brand) >= 4.5, `${mode} on-brand CTA text contrast`);
+        assert(contrastRatio(colors.brandInk, colors.canvas) >= 4.5, `${mode} brandInk on canvas contrast`);
+        assert(contrastRatio(colors.brandInk, colors.surface) >= 4.5, `${mode} brandInk on surface contrast`);
+        assert(contrastRatio(colors.ink, colors.canvas) >= 4.5, `${mode} ink on canvas contrast`);
+        assert(contrastRatio(colors.secondary, colors.canvas) >= 4.5, `${mode} secondary on canvas contrast`);
+        assert(contrastRatio(colors.danger, colors.surface) >= 4.5, `${mode} danger on surface contrast`);
       }
     });
 
-    it('semantic light colors adopt the retired-replacement values', () => {
-      // #2F9E6D / #E67E22 / #D64545 were retired on measured WCAG failures.
-      assertEqual(tokens.YanjiColors.light.success, '#17784F', 'Light success must be #17784F');
-      assertEqual(tokens.YanjiColors.light.warning, '#9A6100', 'Light warning must be #9A6100');
-      assertEqual(tokens.YanjiColors.light.danger, '#BE3232', 'Light danger must be #BE3232');
+    it('danger carries the retired-replacement value in light mode', () => {
+      // #D64545 was retired on a measured WCAG failure.
+      assertEqual(tokens.YanjiPaperColors.light.danger, '#BE3232', 'Light danger must be #BE3232');
     });
 
     it('every radius value used in the scale belongs to the YanjiRadius scale', () => {
@@ -113,7 +109,10 @@ export function registerShippedTokenTests() {
       assertEqual(tokens.YanjiCardRules.hasBorderStroke, true, 'Raised card may have a hairline');
       assertEqual(tokens.YanjiCardRules.plainBorderWidth, 0, 'Journal group is borderless');
       assert(tokens.YanjiLayout.sectionGap >= tokens.YanjiSpacing.xl, 'Page sections need a legible rhythm');
-      assert(tokens.YanjiTypography.focusValue.fontSize > tokens.YanjiTypography.pageTitle.fontSize, 'Timer must dominate heading');
+      assert(
+        tokens.YanjiPaperTypography.displayTimer.fontSize > tokens.YanjiPaperTypography.titleEditorial.fontSize,
+        'Timer must dominate heading'
+      );
     });
   });
 }

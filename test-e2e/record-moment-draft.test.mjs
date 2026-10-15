@@ -21,10 +21,9 @@ import { loadTypeScript } from './framework/load-typescript.js';
 
 const theme = {
   isDark: false,
-  colors: { scrim: 'rgba(0,0,0,0.32)', danger: '#be3232' },
   shadow: { floating: () => ({}) },
   paper: {
-    colors: { surface: '#ffffff', hairline: 'rgba(28,30,33,0.08)' },
+    colors: { surface: '#ffffff', hairline: 'rgba(28,30,33,0.08)', scrim: 'rgba(28,30,33,0.32)', danger: '#be3232' },
     radius: { sheet: 26, pill: 9999 },
     layout: { pageGutter: 22 },
     typography: { captionMeta: { fontSize: 12 } },
@@ -117,7 +116,7 @@ function modalHarness({ save, activeSession = null } = {}) {
     const carriesDanger = node => {
       const style = node.props?.style;
       const layers = Array.isArray(style) ? style : [style];
-      return layers.some(layer => layer && layer.color === theme.colors.danger);
+      return layers.some(layer => layer && layer.color === theme.paper.colors.danger);
     };
     return {
       tree,

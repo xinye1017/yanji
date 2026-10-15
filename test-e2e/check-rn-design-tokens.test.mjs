@@ -60,34 +60,29 @@ function fixtureTree(overrides = {}) {
 
 const paperDarkPalette = `  dark: { canvas: '#111315', surface: '#1a1d21', subtle: '#23272d', ink: '#eae6df',
     secondary: '#9ba0a8', muted: '#636870', hairline: 'rgba(234,230,223,0.08)',
-    brand: '#e06d53', brandInk: '#e06d53', onBrand: '#111315' },
+    brand: '#e06d53', brandInk: '#e06d53', onBrand: '#111315', amber: '#dda059',
+    scrim: 'rgba(0,0,0,0.56)', danger: '#f87171' },
 `;
 
 const pausedImmersivePalette = `  paused: { canvas: '#1c1917', ink: '#f6f4ef', secondary: '#9ba0a8', accent: '#dda059' },
 `;
 
-const providerImport = `import { YanjiColors, YanjiRadius, YanjiSpacing, YanjiTypography, YanjiTouch,
+const providerImport = `import { YanjiRadius, YanjiSpacing, YanjiTouch,
   YanjiMotion, YanjiShadow, YanjiPaperColors, YanjiPaperImmersive, YanjiPaperRadius,
   YanjiPaperLayout, YanjiPaperMotion, YanjiPaperTypography } from './tokens';
 `;
 
 const tokensSource = `
-export const YanjiColors = {
-  light: { bgPrimary: '#ffffff', bgSurface: '#ffffff', textPrimary: '#000000',
-    accentPrimary: '#0000ff', onAccent: '#ffffff' },
-  dark: { bgPrimary: '#000000', bgSurface: '#000000', textPrimary: '#ffffff',
-    accentPrimary: '#0000ff', onAccent: '#ffffff' },
-};
 export const YanjiRadius = { sm: 8, pill: 9999 };
 export const YanjiSpacing = { sm: 8 };
-export const YanjiTypography = { body: { fontSize: 15 } };
 export const YanjiTouch = { min: 44, comfortable: 48 };
 export const YanjiMotion = { duration: { fast: 120 } };
 export const YanjiShadow = { sheet: () => ({}) };
 export const YanjiPaperColors = {
   light: { canvas: '#f6f4ef', surface: '#ffffff', subtle: '#edeae2', ink: '#1c1e21',
     secondary: '#5c5f66', muted: '#94969c', hairline: 'rgba(28,30,33,0.08)',
-    brand: '#c84b31', brandInk: '#b23a22', onBrand: '#ffffff' },
+    brand: '#c84b31', brandInk: '#b23a22', onBrand: '#ffffff', amber: '#9a6100',
+    scrim: 'rgba(28,30,33,0.32)', danger: '#be3232' },
 ${paperDarkPalette}};
 export const YanjiPaperImmersive = {
   running: { canvas: '#15181c', ink: '#f6f4ef', secondary: '#9ba0a8', accent: '#e06d53' },
@@ -102,8 +97,8 @@ const providerSource = `
 ${providerImport}export function YanjiThemeProvider() { return null; }
 export function useYanjiTheme() {
   return { isDark: false, mode: 'SYSTEM',
-    colors: YanjiColors.light, radius: YanjiRadius, spacing: YanjiSpacing,
-    layout: {}, typography: YanjiTypography, touch: YanjiTouch, motion: YanjiMotion,
+    radius: YanjiRadius, spacing: YanjiSpacing,
+    layout: {}, touch: YanjiTouch, motion: YanjiMotion,
     shadow: YanjiShadow,
     paper: { colors: YanjiPaperColors.light, immersive: YanjiPaperImmersive,
       typography: YanjiPaperTypography, layout: YanjiPaperLayout,
@@ -117,8 +112,8 @@ import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 export function YanjiThing() {
   const theme = useYanjiTheme();
   const paper = theme.paper;
-  return { colors: theme.colors.bgSurface, radius: YanjiRadius.sm,
-    spacing: YanjiSpacing.sm, typography: theme.typography.body, touch: YanjiTouch.min,
+  return { radius: YanjiRadius.sm,
+    spacing: YanjiSpacing.sm, touch: YanjiTouch.min,
     motion: theme.motion.duration, shadow: theme.shadow.sheet,
     paperColors: paper.colors.canvas, paperRadius: paper.radius.pill,
     paperLayout: paper.layout.pageGutter, paperTypography: paper.typography.bodyPrimary,
@@ -140,8 +135,8 @@ import { YanjiSpacing } from '../theme/tokens';
 export function Screen() {
   const theme = useYanjiTheme();
   const paper = theme.paper;
-  return { colors: theme.colors.bgPrimary, radius: theme.radius.sm,
-    spacing: YanjiSpacing.sm, typography: theme.typography.body, touch: theme.touch.min,
+  return { radius: theme.radius.sm,
+    spacing: YanjiSpacing.sm, touch: theme.touch.min,
     motion: theme.motion.duration, shadow: theme.shadow.sheet,
     paperColors: paper.colors.surface, paperRadius: paper.radius.tick,
     paperLayout: paper.layout.pageGutter, paperTypography: paper.typography.bodyPrimary,
@@ -164,7 +159,7 @@ export default function App() { return YanjiThemeProvider; }
 test('the real repository tree passes the guard', async () => {
   const { errors, scanned } = await runGuard(repoRoot);
   assert.deepEqual(errors, [], `the real tree must be clean:\n${errors.join('\n')}`);
-  assert.ok(scanned >= 24, `expected the whole-src scan surface, saw ${scanned}`);
+  assert.ok(scanned >= 22, `expected the whole-src scan surface, saw ${scanned}`);
 });
 
 test('a correct minimal token contract passes with no node_modules present', async () => {
@@ -340,14 +335,14 @@ test('a vanished scanned root fails instead of silently scanning nothing', async
 
 test('disconnecting the provider from a token scale fails', async () => {
   // Drop the import *and* its only use: a mutation that removed just the import
-  // would leave `YanjiColors.light` in the body and prove nothing.
+  // would leave `YanjiPaperColors.light` in the body and prove nothing.
   const tree = fixtureTree({
     'src/theme/ThemeProvider.tsx': providerSource
       .replace(providerImport, "import { YanjiRadius, YanjiSpacing } from './tokens';")
-      .replace('colors: YanjiColors.light', 'colors: {}'),
+      .replace('colors: YanjiPaperColors.light', 'colors: {}'),
   });
   const { errors } = await runGuard(tree.root);
-  assert.ok(errors.some(e => e.includes('ThemeProvider uses YanjiColors')), errors.join('\n'));
+  assert.ok(errors.some(e => e.includes('ThemeProvider uses YanjiPaperColors')), errors.join('\n'));
   tree.cleanup();
 });
 

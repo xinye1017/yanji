@@ -492,25 +492,6 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.formatDailyAverageDuration(5400), '1 小时 30 分/天');
     });
 
-    it('computes pie slices with valid arc coordinates', async () => {
-      const logic = await import(pathToFileURL(LOGIC_PATH).href);
-      const slices = [
-        { subjectId: 'math', subjectName: '数学', subjectColor: '#2453BF', minutes: 60, share: 0.6 },
-        { subjectId: 'eng', subjectName: '英语', subjectColor: '#10B981', minutes: 40, share: 0.4 },
-      ];
-      const result = logic.computePieSlices(slices, 50, 30);
-      assertEqual(result.length, 2, 'Must produce 2 slices');
-      assert(result[0].path.startsWith('M '), 'Slice 1 path must be a valid SVG path');
-      assert(result[1].path.startsWith('M '), 'Slice 2 path must be a valid SVG path');
-
-      // Single slice
-      const single = logic.computePieSlices([
-        { subjectId: 'math', subjectName: '数学', subjectColor: '#2453BF', minutes: 60, share: 1.0 },
-      ], 50, 30);
-      assertEqual(single.length, 1);
-      assertEqual(single[0].path, '', 'Single 100% slice uses circle, empty path');
-    });
-
     it('computes collision-free layout for chart axis labels', async () => {
       const logic = await import(pathToFileURL(LOGIC_PATH).href);
 

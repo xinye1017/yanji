@@ -39,8 +39,7 @@ const HOUR_TICKS = [0, 6, 12, 18];
 const TREND_CHART_HEIGHT = 96;
 
 export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const { paper } = theme;
+  const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
   const { fontScale } = useWindowDimensions();
@@ -257,7 +256,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       initialNote={noteTarget?.note ?? ''} examSession={noteTarget?.isExam ?? false} onClose={() => setNoteTarget(null)} onSaved={() => setNoteTarget(null)} />
     <RecordMomentModal visible={editingNote !== null} date={date} editingNote={editingNote} onClose={() => setEditingNote(null)} onSaved={() => setEditingNote(null)} />
     <Modal visible={pendingDelete !== null} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (!deleting) setPendingDelete(null); }}>
-      <View style={{ flex: 1, backgroundColor: theme.colors.scrim, justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>
         <ScrollView style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}
           contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}>
           <YanjiPaperSheetHeading title={`删除「${pendingDelete?.subjectName ?? ''}」记录？`} subtitle="该记录与它的学习时长会一并删除，无法恢复。" onClose={() => { if (!deleting) setPendingDelete(null); }} />

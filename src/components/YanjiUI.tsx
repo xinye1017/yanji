@@ -2,18 +2,12 @@
  * Shared RN UI primitives for the 素笺与寸阴 (Paper & Chrono) body.
  *
  * Two rules keep this file coherent:
- *  1. Every control, input and section reads its colour, type, radius and
- *     motion from `theme.paper`. Raw hex / dp literals are not allowed here.
- *  2. The frozen liquid-glass navigation is NOT restyled. It imports only
- *     `YanjiIcon` from this module plus the untouched legacy token scales, so
- *     the glass bar keeps sampling the exact same renderer inputs it always
- *     did. `YanjiIconButton` likewise pins its circle to `YanjiRadius.full` —
- *     the same step the dock uses — so the one primitive shared by nav and body
- *     cannot drift into a second geometry.
- *
- * The data-visualisation primitives (ring, stacked columns, line) deliberately
- * stay on the legacy accent: they are charts rather than buttons, inputs or
- * sections, and they are consumed by the Review / Focus surfaces.
+ *  1. Every control, input, section and chart reads its colour, type, radius
+ *     and motion from `theme.paper`. Raw hex / dp literals are not allowed here.
+ *  2. The liquid-glass navigation imports only `YanjiIcon` from this module.
+ *     `YanjiIconButton` pins its circle to `YanjiRadius.full` — the same step
+ *     the dock uses — so the one primitive shared by nav and body cannot drift
+ *     into a second geometry.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -45,8 +39,8 @@ import type { YanjiIconName } from './icons';
 // ---------------------------------------------------------------------------
 // YanjiIcon — the only way a glyph enters the tree
 //
-// Untouched on purpose: the bottom dock renders through this component, so its
-// defaults are part of the frozen navigation surface.
+// The bottom dock renders through this component, so its default colour is the
+// same ink the body uses.
 // ---------------------------------------------------------------------------
 
 export function YanjiIcon({
@@ -60,12 +54,12 @@ export function YanjiIcon({
   color?: string;
   strokeWidth?: number;
 }): React.JSX.Element {
-  const theme = useYanjiTheme();
+  const { paper } = useYanjiTheme();
   const Glyph = getYanjiIcon(name);
   return (
     <Glyph
       size={size}
-      color={color ?? theme.colors.textPrimary}
+      color={color ?? paper.colors.ink}
       strokeWidth={strokeWidth}
     />
   );
@@ -827,72 +821,6 @@ export function YanjiStepper({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiProgressRing — SVG circular progress with centre content
-//
-// Data visualisation, so it stays on the legacy accent scale together with the
-// two charts below.
-// ---------------------------------------------------------------------------
-
-export function YanjiProgressRing({
-  progress,
-  size = 132,
-  thickness = 8,
-  color,
-  trackColor,
-  children,
-  style,
-}: {
-  /** 0..1. Values outside the range are clamped, never wrapped. */
-  progress: number;
-  size?: number;
-  thickness?: number;
-  color?: string;
-  trackColor?: string;
-  children?: React.ReactNode;
-  style?: ViewStyle;
-}): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const clamped = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
-  const radius = (size - thickness) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const strokeColor = color ?? theme.colors.accentPrimary;
-  const strokeTrack = trackColor ?? theme.colors.bgElevated;
-
-  return (
-    <View
-      style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}
-      accessibilityRole="progressbar"
-      accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
-    >
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={strokeTrack}
-          strokeWidth={thickness}
-          fill="none"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={strokeColor}
-          strokeWidth={thickness}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={`${circumference} ${circumference}`}
-          // Start at 12 o'clock rather than 3 o'clock.
-          strokeDashoffset={circumference * (1 - clamped)}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </Svg>
-      {children}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // YanjiStackedBarChart — SVG column chart stacked by subject, honest about
 // empty data and about days that have not happened yet
 // ---------------------------------------------------------------------------
@@ -920,7 +848,7 @@ export function YanjiStackedBarChart({
   averageLabel?: string;
   emptyLabel?: string;
 }): React.JSX.Element {
-  const theme = useYanjiTheme();
+  const { paper } = useYanjiTheme();
   const max = Math.max(1, ...columns.map(column => column.totalMinutes));
 
   if (columns.length === 0) {
@@ -931,8 +859,8 @@ export function YanjiStackedBarChart({
           <Text
             style={{
               marginTop: 8,
-              color: theme.colors.textTertiary,
-              ...theme.typography.caption,
+              color: paper.colors.muted,
+              ...paper.typography.captionMeta,
               textAlign: 'center',
             }}
           >
@@ -966,7 +894,7 @@ export function YanjiStackedBarChart({
                 width={barWidth}
                 height={2}
                 rx={Math.min(3, barWidth / 2)}
-                fill={theme.colors.bgElevated}
+                fill={paper.colors.subtle}
               />
             );
           }
@@ -1013,7 +941,7 @@ export function YanjiStackedBarChart({
             y1={averageY}
             x2={width}
             y2={averageY}
-            stroke={theme.colors.textTertiary}
+            stroke={paper.colors.muted}
             strokeWidth={1}
             strokeDasharray="3 3"
           />
@@ -1026,9 +954,9 @@ export function YanjiStackedBarChart({
             right: 0,
             top: Math.max(0, averageY - 15),
             paddingHorizontal: 3,
-            backgroundColor: theme.colors.bgSurface,
-            color: theme.colors.textTertiary,
-            ...theme.typography.axisLabel,
+            backgroundColor: paper.colors.surface,
+            color: paper.colors.muted,
+            ...paper.typography.captionMeta,
           }}
         >
           {averageLabel}
@@ -1061,7 +989,7 @@ export function YanjiLineChart({
   peakIndex?: number;
   emptyLabel?: string;
 }): React.JSX.Element {
-  const theme = useYanjiTheme();
+  const { paper } = useYanjiTheme();
   const max = Math.max(0, ...values);
 
   if (values.length === 0 || max <= 0) {
@@ -1072,8 +1000,8 @@ export function YanjiLineChart({
           <Text
             style={{
               marginTop: 8,
-              color: theme.colors.textTertiary,
-              ...theme.typography.caption,
+              color: paper.colors.muted,
+              ...paper.typography.captionMeta,
               textAlign: 'center',
             }}
           >
@@ -1097,10 +1025,10 @@ export function YanjiLineChart({
   return (
     <View style={{ width, height }}>
       <Svg width={width} height={height}>
-        <Path d={chart.areaPath} fill={theme.colors.accentPrimary} fillOpacity={0.14} />
+        <Path d={chart.areaPath} fill={paper.colors.brand} fillOpacity={0.14} />
         <Path
           d={chart.linePath}
-          stroke={theme.colors.accentPrimary}
+          stroke={paper.colors.brand}
           strokeWidth={2}
           strokeLinecap="round"
           fill="none"
@@ -1111,7 +1039,7 @@ export function YanjiLineChart({
             y1={averageY}
             x2={chart.plotRight}
             y2={averageY}
-            stroke={theme.colors.textTertiary}
+            stroke={paper.colors.muted}
             strokeWidth={1}
             strokeDasharray="3 3"
           />
@@ -1121,8 +1049,8 @@ export function YanjiLineChart({
             cx={peak.x}
             cy={peak.y}
             r={3.5}
-            fill={theme.colors.accentPrimary}
-            stroke={theme.colors.bgSurface}
+            fill={paper.colors.brand}
+            stroke={paper.colors.surface}
             strokeWidth={2}
           />
         ) : null}
@@ -1134,9 +1062,9 @@ export function YanjiLineChart({
             right: chart.plotLeft,
             top: Math.max(0, averageY - 15),
             paddingHorizontal: 3,
-            backgroundColor: theme.colors.bgSurface,
-            color: theme.colors.textTertiary,
-            ...theme.typography.axisLabel,
+            backgroundColor: paper.colors.surface,
+            color: paper.colors.muted,
+            ...paper.typography.captionMeta,
           }}
         >
           {averageLabel}

@@ -56,8 +56,7 @@ export function TaskEditorModal({
   onSaved,
   editingTask = null,
 }: TaskEditorModalProps): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const paper = theme.paper;
+  const { paper } = useYanjiTheme();
   const insets = useSafeAreaInsets();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [title, setTitle] = useState('');
@@ -350,7 +349,7 @@ export function TaskEditorModal({
             <Text
               style={[
                 paper.typography.captionMeta,
-                { color: theme.colors.danger, marginTop: YanjiSpacing.md },
+                { color: paper.colors.danger, marginTop: YanjiSpacing.md },
               ]}
             >
               {error}
@@ -378,7 +377,7 @@ export function TaskEditorModal({
                     opacity: pressed ? 0.6 : 1,
                   })}
                 >
-                  <Text style={[paper.typography.bodyPrimary, { color: theme.colors.danger }]}>
+                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.danger }]}>
                     删除这个任务
                   </Text>
                 </Pressable>
@@ -412,7 +411,7 @@ export function TaskEditorModal({
                     <Text
                       style={[
                         paper.typography.bodyPrimary,
-                        { color: theme.colors.danger, fontWeight: '600' },
+                        { color: paper.colors.danger, fontWeight: '600' },
                       ]}
                     >
                       确认删除

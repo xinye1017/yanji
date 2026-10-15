@@ -409,7 +409,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           </View>
           {actionError ? (
             <Text accessibilityRole="alert" style={[paper.typography.bodyPrimary, {
-              color: theme.colors.danger, textAlign: 'center', marginTop: 12,
+              color: paper.colors.danger, textAlign: 'center', marginTop: 12,
             }]}>
               {actionError}
             </Text>

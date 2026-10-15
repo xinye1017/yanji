@@ -1,7 +1,8 @@
 /**
  * Yanji E2E Test Suite - Bridge Interface Schema & Validation
  * Defines and verifies interface contracts between Native Kotlin Core and React Native TypeScript.
- * Derived strictly from PROJECT.md § Interface Contracts.
+ * Derived strictly from the shipped Kotlin ↔ JS contract in src/bridge/index.ts
+ * and the Kotlin modules under app/src/main/java/com/example/yanji/bridge/**.
  */
 
 /** 回顾页时间粒度白名单：与 TS `ReviewScope` / Kotlin `BridgeMappers.REVIEW_SCOPES` 逐字一致。 */
@@ -46,7 +47,7 @@ export const BridgeSchemas = {
       typeof obj.timestamp === 'number' &&
       typeof obj.content === 'string' &&
       typeof obj.isFavorite === 'boolean' &&
-      // Contract (BATCH_FIX_PLAN / PROJECT.md): sessionId is a nullable string.
+      // Contract (src/bridge/index.ts): sessionId is a nullable string.
       // null means the note is not bound to a focus session. Empty string is NOT a
       // valid representation of "unbound" - it must be null.
       (obj.sessionId === null || (typeof obj.sessionId === 'string' && obj.sessionId.length > 0))

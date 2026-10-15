@@ -9,7 +9,7 @@ const NEUTRAL_SUBJECT_COLOR = '#667085';
 /**
  * Yanji E2E Test Suite - Reference Bridge Oracle & In-Memory Driver
  * Implements authoritative Room DB & ActiveSessionCoordinator behavior
- * derived from PROJECT.md § Interface Contracts.
+ * derived from the shipped Kotlin ↔ JS contract in src/bridge/index.ts.
  * Serves as the independent test harness driver and oracle.
  */
 

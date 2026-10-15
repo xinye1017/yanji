@@ -7,17 +7,18 @@ import { assert, assertEqual } from '../framework/assertions.js';
 import { YanjiThemeTokens } from '../contracts/theme-tokens.js';
 
 export function registerM3Tests() {
-  describe('Tier 1: Feature 9 — Design Tokens (Midnight Blue, Radius, Zero-Border)', () => {
-    it('verifies dark mode palette is Midnight Blue and forbids #000000 pure black', () => {
-      const darkBg = YanjiThemeTokens.colors.dark.bgPrimary;
-      assertEqual(darkBg, '#0D111A', 'Dark mode primary background must be Midnight Blue #0D111A');
+  describe('Tier 1: Feature 9 — Design Tokens (Paper, Radius, Hairline Border)', () => {
+    it('verifies the dark palette is a warm near-black canvas and forbids #000000 pure black', () => {
+      const darkBg = YanjiThemeTokens.colors.dark.canvas;
+      assertEqual(darkBg, '#111315', 'Dark mode canvas must be #111315');
 
       const validation = YanjiThemeTokens.validateBackgroundColor('#000000', true);
       assertEqual(validation.valid, false, 'Validation must reject #000000 in dark mode');
       assert(validation.error.includes('#000000'), 'Error must explicitly identify pure black violation');
 
-      // No shipped dark surface may ever be pure black.
+      // No shipped dark colour may ever be pure black.
       for (const [key, value] of Object.entries(YanjiThemeTokens.colors.dark)) {
+        if (typeof value !== 'string' || !value.startsWith('#')) continue;
         assert(value !== '#000000' && value !== '#000', 'Dark token ' + key + ' must never be pure black');
       }
     });

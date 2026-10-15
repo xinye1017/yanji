@@ -67,7 +67,7 @@ test('App shell reconciles a foreground transition that happened before its list
       useNavigationState: () => ({ activeTab: 'today', settingsOpen: false, taskEditorOpen: false }),
       useNavigationActions: () => ({ closeSettings: dummy, closeTaskEditor: dummy }) },
     './src/theme/ThemeProvider': { YanjiThemeProvider: dummy,
-      useYanjiTheme: () => ({ isDark: false, colors: { bgPrimary: '#ffffff' },
+      useYanjiTheme: () => ({ isDark: false,
         paper: { colors: { canvas: '#f6f4ef' }, immersive: {
           running: { canvas: '#15181c' }, paused: { canvas: '#1c1917' },
         } },

@@ -130,7 +130,6 @@ if (tokens) {
   for (const name of [
     'YanjiRadius',
     'YanjiSpacing',
-    'YanjiTypography',
     'YanjiTouch',
     'YanjiMotion',
     'YanjiShadow',
@@ -141,26 +140,8 @@ if (tokens) {
     }
   }
 
-  const lightColors = tokens.YanjiColors?.light;
-  const darkColors = tokens.YanjiColors?.dark;
-  if (!lightColors || !darkColors || typeof lightColors !== 'object' || typeof darkColors !== 'object') {
-    fail('YanjiColors must provide both light and dark semantic palettes.');
-  } else {
-    const lightKeys = Object.keys(lightColors).sort();
-    const darkKeys = Object.keys(darkColors).sort();
-    if (JSON.stringify(lightKeys) !== JSON.stringify(darkKeys)) {
-      fail('Light and dark palettes must expose the same semantic color roles.');
-    }
-    for (const role of ['bgPrimary', 'bgSurface', 'textPrimary', 'accentPrimary', 'onAccent']) {
-      if (typeof lightColors[role] !== 'string' || typeof darkColors[role] !== 'string') {
-        fail(`Both color palettes must define the ${role} semantic role.`);
-      }
-    }
-  }
-
-  // 素笺与寸阴 paper domain — the palette every body surface actually renders
-  // with. The frozen navigation domain above is not a substitute: a regression
-  // in the paper palette is what the user sees.
+  // 素笺与寸阴 paper domain — the only colour and type vocabulary. It carries
+  // the whole screen: body surfaces, shared controls and the navigation dock.
   const paperLight = tokens.YanjiPaperColors?.light;
   const paperDark = tokens.YanjiPaperColors?.dark;
   if (!paperLight || !paperDark || typeof paperLight !== 'object' || typeof paperDark !== 'object') {
@@ -171,7 +152,10 @@ if (tokens) {
     if (JSON.stringify(paperLightKeys) !== JSON.stringify(paperDarkKeys)) {
       fail('Paper light and dark palettes must expose the same semantic color roles.');
     }
-    for (const role of ['canvas', 'surface', 'subtle', 'ink', 'secondary', 'muted', 'hairline', 'brand', 'brandInk', 'onBrand']) {
+    for (const role of [
+      'canvas', 'surface', 'subtle', 'ink', 'secondary', 'muted', 'hairline',
+      'brand', 'brandInk', 'onBrand', 'amber', 'scrim', 'danger',
+    ]) {
       if (typeof paperLight[role] !== 'string' || typeof paperDark[role] !== 'string') {
         fail(`Both paper palettes must define the ${role} semantic role.`);
       }
@@ -211,10 +195,8 @@ if (tokens) {
 }
 
 for (const tokenName of [
-  'YanjiColors',
   'YanjiRadius',
   'YanjiSpacing',
-  'YanjiTypography',
   'YanjiTouch',
   'YanjiMotion',
   'YanjiShadow',
@@ -227,7 +209,7 @@ for (const tokenName of [
 ]) {
   requireSourceMatch(providerSource, new RegExp(`\\b${tokenName}\\b`), `ThemeProvider uses ${tokenName}`);
 }
-for (const category of ['colors', 'radius', 'spacing', 'typography', 'touch', 'motion', 'shadow']) {
+for (const category of ['radius', 'spacing', 'touch', 'motion', 'shadow']) {
   requireSourceMatch(providerSource, new RegExp(`\\b${category}:`), `ThemeProvider exposes ${category}`);
 }
 requireSourceMatch(providerSource, /\bpaper:\s*\{/, 'ThemeProvider exposes the paper domain');
@@ -237,10 +219,8 @@ for (const paperCategory of ['colors', 'immersive', 'typography', 'layout', 'rad
 requireSourceMatch(providerSource, /\buseYanjiTheme\b/, 'ThemeProvider exports useYanjiTheme');
 
 for (const [description, pattern, sharedFileToo] of [
-  ['theme colors', /\btheme\.colors\./, true],
   ['semantic radii', /\bYanjiRadius\./, true],
   ['semantic spacing', /\bYanjiSpacing\./, true],
-  ['theme typography', /\btheme\.typography\./, true],
   ['minimum touch targets', /\bYanjiTouch\./, true],
   ['theme motion', /\btheme\.motion\./, true],
   ['theme shadows', /\btheme\.shadow\./, true],
@@ -284,7 +264,7 @@ requireSourceMatch(tabSource, /\btheme\.motion\./, 'navigation uses the shared m
 // ---------------------------------------------------------------------------
 
 const hexColorPattern = /#[0-9A-Fa-f]{3,8}\b/;
-const staticPalettePattern = /\b(?:YanjiColors|YanjiPaperColors|YanjiPaperImmersive)\.(?:light|dark|running|paused)\b/;
+const staticPalettePattern = /\b(?:YanjiPaperColors|YanjiPaperImmersive)\.(?:light|dark|running|paused)\b/;
 // A numeric radius literal is flagged only when the number IS the whole value.
 // Computed geometry such as `borderRadius: height / 2` or `borderRadius: 100 / 2`
 // is valid capsule geometry, not a raw literal, so the captured value must be

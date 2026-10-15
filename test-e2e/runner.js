@@ -2,7 +2,7 @@
 /**
  * Yanji E2E Test Suite - Main Executable Runner
  * Opaque-box requirement-driven test suite for 「研迹」 React Native refactoring.
- * Executes Tiers 1-4 covering all 21 features from PROJECT.md.
+ * Executes Tiers 1-4 across the feature registry below.
  */
 
 import { harness } from './framework/harness.js';

@@ -1,4 +1,11 @@
-/** Navigation material and geometry. Keep glass confined to the floating dock. */
+/**
+ * Navigation material and geometry. Keep glass confined to the floating dock.
+ *
+ * The tint and selection are the paper domain's `canvas` and `brand` in RGBA:
+ * the dock samples the paper behind it, so its veil has to be the same warmth
+ * or it reads as a cold pane laid over warm paper. The geometry, blur radius,
+ * downsampling and saturation below are the renderer's own inputs and stay put.
+ */
 export const YanjiLiquidGlass = {
   targetId: 'yanji-tab-content',
   padding: 5,
@@ -13,12 +20,16 @@ export const YanjiLiquidGlass = {
   maxUpdateFps: 60,
   saturation: 1.35,
   light: {
-    tint: 'rgba(242,247,255,0.36)',
-    selection: 'rgba(53,106,230,0.12)',
+    /** paper light `canvas` #F6F4EF */
+    tint: 'rgba(246,244,239,0.36)',
+    /** paper light `brand` #C84B31 */
+    selection: 'rgba(200,75,49,0.14)',
   },
   dark: {
-    tint: 'rgba(13,17,26,0.76)',
-    selection: 'rgba(113,151,247,0.20)',
+    /** paper dark `canvas` #111315 */
+    tint: 'rgba(17,19,21,0.76)',
+    /** paper dark `brand` #E06D53 */
+    selection: 'rgba(224,109,83,0.20)',
   },
 } as const;
 

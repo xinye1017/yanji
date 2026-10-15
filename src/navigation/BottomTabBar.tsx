@@ -38,6 +38,7 @@ const CAPSULE_PADDING = YanjiLiquidGlass.padding;
 
 export function BottomTabBar({ visible = true }: { visible?: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const { paper } = theme;
   const { height, bottom } = useBottomTabLayout();
   const reduceMotion = useReducedMotion();
   const material = theme.isDark ? YanjiLiquidGlass.dark : YanjiLiquidGlass.light;
@@ -131,8 +132,8 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
           {TABS.map((tab, tabIndex) => {
             const isActive = tabIndex === index;
             const foreground = isActive && !theme.isDark
-              ? theme.colors.accentStrong
-              : (isActive ? theme.colors.accentPrimary : theme.colors.textPrimary);
+              ? paper.colors.brandInk
+              : (isActive ? paper.colors.brand : paper.colors.ink);
             return (
               <Pressable
                 key={tab.key}

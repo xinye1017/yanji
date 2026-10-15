@@ -206,7 +206,7 @@ test('paused discard opens native confirmation; cancellation never calls discard
       useNavigationActions: () => ({ clearFocusPreset: noop, selectTab: noop }),
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 110 }) },
-    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper, colors: { danger: '#f00' } }) },
+    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
     '../state/timerStore': {
       useActiveSession: () => active,
       useTimerTick: () => { throw new Error('Root FocusScreen must not subscribe to second ticks'); },

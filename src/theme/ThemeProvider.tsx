@@ -16,17 +16,16 @@
  * on platforms without an app-level override and avoids a light flash while the
  * native promise is in flight.
  *
- * Two colour domains are exposed on purpose: `colors` is what the frozen
- * liquid-glass navigation reads, `paper` is what the body renders with. They
- * resolve together from the same preference, so a theme switch never leaves the
- * two halves of the screen disagreeing.
+ * The 素笺与寸阴 paper domain is the single colour and type vocabulary, for the
+ * navigation dock as much as for the body. The remaining scales — radius,
+ * spacing, layout, touch, motion, shadow — are neutral measurements that carry
+ * no colour of their own.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
 import {
-  YanjiColors,
   YanjiLayout,
   YanjiMotion,
   YanjiPaperColors,
@@ -39,24 +38,21 @@ import {
   YanjiShadow,
   YanjiSpacing,
   YanjiTouch,
-  YanjiTypography,
 } from './tokens';
 import type { ThemeMode } from '../bridge';
 
 export interface YanjiTheme {
   isDark: boolean;
   mode: ThemeMode;
-  colors: typeof YanjiColors.light | typeof YanjiColors.dark;
   radius: typeof YanjiRadius;
   spacing: typeof YanjiSpacing;
   layout: typeof YanjiLayout;
-  typography: typeof YanjiTypography;
   touch: typeof YanjiTouch;
   motion: typeof YanjiMotion;
   shadow: typeof YanjiShadow;
   /**
-   * 素笺与寸阴 body domain. `colors` resolves with the theme; `immersive` is
-   * always the full pair because a focus screen picks running vs paused itself.
+   * 素笺与寸阴 domain. `colors` resolves with the theme; `immersive` is always
+   * the full pair because a focus screen picks running vs paused itself.
    */
   paper: {
     colors: (typeof YanjiPaperColors)['light'] | (typeof YanjiPaperColors)['dark'];
@@ -103,11 +99,9 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
   const theme: YanjiTheme = {
     isDark,
     mode,
-    colors: isDark ? YanjiColors.dark : YanjiColors.light,
     radius: YanjiRadius,
     spacing: YanjiSpacing,
     layout: YanjiLayout,
-    typography: YanjiTypography,
     touch: YanjiTouch,
     motion: YanjiMotion,
     shadow: YanjiShadow,

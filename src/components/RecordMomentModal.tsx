@@ -1,7 +1,7 @@
 /**
  * Yanji "Record Moment" — the shared lightweight capture sheet.
  *
- * Behaviour contract (PROJECT.md § R3 + E2E Feature 15/16):
+ * Behaviour contract (E2E Feature 15/16):
  * - Plain text only. No title, tag, mood or rating fields.
  * - Saving never pauses or disturbs a running focus session.
  * - Empty / whitespace-only input is rejected.
@@ -113,7 +113,7 @@ export function RecordMomentModal({
         style={{
           flex: 1,
           justifyContent: 'flex-end',
-          backgroundColor: theme.colors.scrim,
+          backgroundColor: paper.colors.scrim,
           // Lift the whole sheet clear of the keyboard. `paddingBottom` (not a
           // bottom offset) keeps the scrim filling the screen so the backdrop
           // still swallows taps above the sheet while it is raised.
@@ -172,7 +172,7 @@ export function RecordMomentModal({
             <Text
               style={[
                 paper.typography.captionMeta,
-                { color: theme.colors.danger, marginTop: YanjiSpacing.sm },
+                { color: paper.colors.danger, marginTop: YanjiSpacing.sm },
               ]}
             >
               {error}
