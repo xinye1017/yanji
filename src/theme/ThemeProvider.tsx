@@ -15,6 +15,11 @@
  * `useColorScheme()` is kept only as the pre-hydration fallback: it is correct
  * on platforms without an app-level override and avoids a light flash while the
  * native promise is in flight.
+ *
+ * Two colour domains are exposed on purpose: `colors` is what the frozen
+ * liquid-glass navigation reads, `paper` is what the body renders with. They
+ * resolve together from the same preference, so a theme switch never leaves the
+ * two halves of the screen disagreeing.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -24,6 +29,12 @@ import {
   YanjiColors,
   YanjiLayout,
   YanjiMotion,
+  YanjiPaperColors,
+  YanjiPaperImmersive,
+  YanjiPaperLayout,
+  YanjiPaperMotion,
+  YanjiPaperRadius,
+  YanjiPaperTypography,
   YanjiRadius,
   YanjiShadow,
   YanjiSpacing,
@@ -43,6 +54,18 @@ export interface YanjiTheme {
   touch: typeof YanjiTouch;
   motion: typeof YanjiMotion;
   shadow: typeof YanjiShadow;
+  /**
+   * 素笺与寸阴 body domain. `colors` resolves with the theme; `immersive` is
+   * always the full pair because a focus screen picks running vs paused itself.
+   */
+  paper: {
+    colors: (typeof YanjiPaperColors)['light'] | (typeof YanjiPaperColors)['dark'];
+    immersive: typeof YanjiPaperImmersive;
+    typography: typeof YanjiPaperTypography;
+    layout: typeof YanjiPaperLayout;
+    radius: typeof YanjiPaperRadius;
+    motion: typeof YanjiPaperMotion;
+  };
 }
 
 const ThemeContext = createContext<YanjiTheme | null>(null);
@@ -88,6 +111,14 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
     touch: YanjiTouch,
     motion: YanjiMotion,
     shadow: YanjiShadow,
+    paper: {
+      colors: isDark ? YanjiPaperColors.dark : YanjiPaperColors.light,
+      immersive: YanjiPaperImmersive,
+      typography: YanjiPaperTypography,
+      layout: YanjiPaperLayout,
+      radius: YanjiPaperRadius,
+      motion: YanjiPaperMotion,
+    },
   };
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;

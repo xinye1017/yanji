@@ -12,23 +12,23 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from 'react-native-reanimated';
 import { YanjiDataNative } from '../bridge';
 import {
   YanjiHairline,
-  YanjiIcon,
-  YanjiIconButton,
+  YanjiPaperSheetHeading,
   YanjiPrimaryButton,
   YanjiTextInput,
+  useYanjiKeyboardInset,
 } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+import { YanjiSpacing } from '../theme/tokens';
 
 export interface SessionNoteModalProps {
   visible: boolean;
@@ -53,6 +53,10 @@ export function SessionNoteModal({
   onSaved,
 }: SessionNoteModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
+  const reduceMotion = useReducedMotion();
+  const paper = theme.paper;
+  const insets = useSafeAreaInsets();
+  const keyboardInset = useYanjiKeyboardInset();
   const [note, setNote] = useState(initialNote);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,13 +100,16 @@ export function SessionNoteModal({
   }, [onClose]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={handleClose}>
+      <View
         style={{
           flex: 1,
           justifyContent: 'flex-end',
           backgroundColor: theme.colors.scrim,
+          // Lift the whole sheet clear of the keyboard. `paddingBottom` (not a
+          // bottom offset) keeps the scrim filling the screen so the backdrop
+          // still swallows taps above the sheet while it is raised.
+          paddingBottom: keyboardInset,
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
@@ -111,12 +118,12 @@ export function SessionNoteModal({
         <View
           style={[
             {
-              backgroundColor: theme.colors.bgFloating,
-              borderTopLeftRadius: YanjiRadius.xxl,
-              borderTopRightRadius: YanjiRadius.xxl,
-              paddingHorizontal: YanjiSpacing.xl,
+              backgroundColor: paper.colors.surface,
+              borderTopLeftRadius: paper.radius.sheet,
+              borderTopRightRadius: paper.radius.sheet,
+              paddingHorizontal: paper.layout.pageGutter,
               paddingTop: YanjiSpacing.md,
-              paddingBottom: YanjiSpacing.xxl,
+              paddingBottom: YanjiSpacing.lg + insets.bottom,
             },
             theme.shadow.floating(theme.isDark),
           ]}
@@ -126,71 +133,42 @@ export function SessionNoteModal({
               alignSelf: 'center',
               width: 36,
               height: 4,
-              borderRadius: YanjiRadius.full,
-              backgroundColor: theme.colors.hairline,
+              borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.hairline,
               marginBottom: YanjiSpacing.md,
             }}
           />
 
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: YanjiSpacing.md,
-            }}
-          >
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-              <YanjiIcon name="compose" size={17} color={theme.colors.accentPrimary} />
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: theme.colors.textPrimary,
-                  ...theme.typography.valueStrong,
-                  marginLeft: YanjiSpacing.sm,
-                  flex: 1,
-                }}
-              >
-                专注随笔
-              </Text>
-            </View>
-            <YanjiIconButton
-              icon="close"
-              accessibilityLabel="取消"
-              onPress={handleClose}
-              size={36}
-              iconSize={16}
-              tone="filled"
-            />
-          </View>
+          <YanjiPaperSheetHeading
+            title="专注随笔"
+            subtitle={sessionTitle}
+            onClose={handleClose}
+          />
 
           {examSession ? (
-            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                paper.typography.bodyJournal,
+                { color: paper.colors.secondary, marginTop: YanjiSpacing.lg },
+              ]}
+            >
               模考记录不保存随笔，这里只展示它的时间和时长。
             </Text>
           ) : (
-            <>
-              <Text
-                numberOfLines={1}
-                style={[theme.typography.caption, { color: theme.colors.textTertiary }]}
-              >
-                {sessionTitle}
-              </Text>
-              <YanjiTextInput
-                value={note}
-                onChangeText={setNote}
-                placeholder="这段专注里做了什么、卡在哪里…"
-                multiline
-                accessibilityLabel="专注随笔"
-                style={{ minHeight: 96, maxHeight: 200, marginTop: YanjiSpacing.sm }}
-              />
-            </>
+            <YanjiTextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="这段专注里做了什么、卡在哪里…"
+              multiline
+              accessibilityLabel="专注随笔"
+              style={{ minHeight: 96, maxHeight: 200, marginTop: YanjiSpacing.lg }}
+            />
           )}
 
           {error ? (
             <Text
               style={[
-                theme.typography.caption,
+                paper.typography.captionMeta,
                 { color: theme.colors.danger, marginTop: YanjiSpacing.sm },
               ]}
             >
@@ -213,7 +191,7 @@ export function SessionNoteModal({
             </>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

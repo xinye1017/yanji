@@ -67,12 +67,16 @@ test('App shell reconciles a foreground transition that happened before its list
       useNavigationState: () => ({ activeTab: 'today', settingsOpen: false, taskEditorOpen: false }),
       useNavigationActions: () => ({ closeSettings: dummy, closeTaskEditor: dummy }) },
     './src/theme/ThemeProvider': { YanjiThemeProvider: dummy,
-      useYanjiTheme: () => ({ isDark: false, colors: { bgPrimary: '#ffffff' } }) },
+      useYanjiTheme: () => ({ isDark: false, colors: { bgPrimary: '#ffffff' },
+        paper: { colors: { canvas: '#f6f4ef' }, immersive: {
+          running: { canvas: '#15181c' }, paused: { canvas: '#1c1917' },
+        } },
+      }) },
     './src/bridge': { onDataChanged: () => dummy },
     './src/state/dataRefresh': { dataRefreshCoordinator: {
       setForeground: value => gates.push(value), enqueueDataChanged: dummy, handleForeground: dummy,
     } },
-    './src/state/timerStore': { setTimerForeground: dummy },
+    './src/state/timerStore': { setTimerForeground: dummy, useActiveSession: () => null },
   };
   for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
     mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
@@ -84,6 +88,154 @@ test('App shell reconciles a foreground transition that happened before its list
   effects[0]();
   assert.equal(gates.at(-1), true);
   assert.equal(states[0].at(-1), true);
+});
+
+test('App shell keeps one dock mounted and gates its visibility using native session transitions', () => {
+  // Run the actual AppShell with deterministic hook outputs. This tests the
+  // element props it produces, rather than mirroring its boolean expression.
+  function harness(initialAppState = 'active') {
+    const dummy = () => null;
+    function MockDock() { return null; }
+    const nav = { activeTab: 'focus', settingsOpen: false, taskEditorOpen: false };
+    let nativeSession = null;
+    const sessionReaderGates = [];
+    const appState = {
+      currentState: initialAppState,
+      addEventListener: () => ({ remove() {} }),
+    };
+    const paper = {
+      colors: { canvas: '#paper' },
+      immersive: {
+        running: { canvas: '#running' },
+        paused: { canvas: '#paused' },
+      },
+    };
+    const mocks = {
+      react: {
+        useEffect: () => {},
+        useState: initial => [typeof initial === 'function' ? initial() : initial, dummy],
+      },
+      'react-native': {
+        AppState: appState, BackHandler: { addEventListener: () => ({ remove() {} }) },
+        View: 'View', StatusBar: 'StatusBar', StyleSheet: { absoluteFill: {} },
+      },
+      'react-native-safe-area-context': {
+        SafeAreaProvider: dummy, useSafeAreaInsets: () => ({ top: 0 }),
+      },
+      'react-native-blur-overlay': { BlurTarget: dummy },
+      './src/theme/liquidGlass': { YanjiLiquidGlass: { targetId: 'test' } },
+      './src/navigation/BottomTabBar': { BottomTabBar: MockDock },
+      './src/navigation/NavigationShell': {
+        NavigationProvider: dummy,
+        useNavigationState: () => nav,
+        useNavigationActions: () => ({ closeSettings: dummy, closeTaskEditor: dummy }),
+      },
+      './src/theme/ThemeProvider': {
+        YanjiThemeProvider: dummy,
+        useYanjiTheme: () => ({ isDark: false, paper }),
+      },
+      './src/bridge': { onDataChanged: () => dummy },
+      './src/state/dataRefresh': { dataRefreshCoordinator: {
+        setForeground: dummy, enqueueDataChanged: dummy, handleForeground: dummy,
+      } },
+      './src/state/timerStore': {
+        setTimerForeground: dummy,
+        useActiveSession: enabled => {
+          sessionReaderGates.push(enabled);
+          return nativeSession;
+        },
+        useTimerTick: () => { throw new Error('AppShell must not subscribe to second ticks'); },
+      },
+    };
+    for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
+      mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
+    }
+    const app = loadTypeScript('App.tsx', mocks);
+    let element = app.default();
+    while (element.type.name !== 'AppShell') element = element.props.children;
+
+    function findNodes(node, predicate, found = []) {
+      if (Array.isArray(node)) {
+        for (const child of node) findNodes(child, predicate, found);
+      } else if (node && typeof node === 'object' && 'type' in node) {
+        if (predicate(node)) found.push(node);
+        findNodes(node.props?.children, predicate, found);
+      }
+      return found;
+    }
+    function render() {
+      const shell = element.type();
+      const docks = findNodes(shell, node => node.type === MockDock);
+      const statuses = findNodes(shell, node => node.type === 'StatusBar');
+      const panes = findNodes(shell, node => /^pane-(today|focus|review)$/.test(node.props?.testID ?? ''));
+      assert.equal(docks.length, 1, 'hidden dock must remain mounted');
+      assert.equal(statuses.length, 1);
+      assert.equal(panes.length, 3, 'all three tab panes must stay mounted');
+      return {
+        visible: docks[0].props.visible,
+        barStyle: statuses[0].props.barStyle,
+        backdrop: shell.props.style.backgroundColor,
+        activePanes: panes.filter(node => node.props.active).map(node => node.props.testID),
+        readerGate: sessionReaderGates.at(-1),
+      };
+    }
+    return {
+      nav, render, sessionReaderGates,
+      setSession: value => { nativeSession = value; },
+    };
+  }
+
+  const f = harness();
+  assert.deepEqual(f.render(), {
+    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    activePanes: ['pane-focus'], readerGate: true,
+  });
+
+  f.setSession(session(30));
+  assert.deepEqual(f.render(), {
+    visible: false, barStyle: 'light-content', backdrop: '#running',
+    activePanes: ['pane-focus'], readerGate: true,
+  });
+
+  f.setSession({ ...session(40), isPaused: true });
+  assert.deepEqual(f.render(), {
+    visible: false, barStyle: 'light-content', backdrop: '#paused',
+    activePanes: ['pane-focus'], readerGate: true,
+  });
+
+  f.nav.activeTab = 'today';
+  assert.deepEqual(f.render(), {
+    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    activePanes: ['pane-today'], readerGate: false,
+  });
+  f.nav.activeTab = 'review';
+  assert.deepEqual(f.render(), {
+    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    activePanes: ['pane-review'], readerGate: false,
+  });
+
+  f.nav.activeTab = 'focus';
+  f.setSession({ ...session(42), phase: 'BREAK' });
+  assert.equal(f.render().visible, true, 'non-focus phases must not hide the dock');
+  f.setSession(null);
+  assert.equal(f.render().visible, true, 'a completed/absent native session restores the dock');
+
+  f.setSession(session(60));
+  f.nav.settingsOpen = true;
+  assert.deepEqual(f.render(), {
+    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    activePanes: [], readerGate: false,
+  });
+  f.nav.settingsOpen = false;
+  assert.equal(f.render().visible, false, 'closing settings restores focus immersion');
+
+  const background = harness('background');
+  background.setSession(session(60));
+  assert.deepEqual(background.render(), {
+    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    activePanes: [], readerGate: false,
+  });
+  assert.equal(f.sessionReaderGates.length, 9, 'one low-frequency session read per AppShell render');
 });
 
 test('native timer subscriptions are shared and ticks notify only visible clock readers', async () => {

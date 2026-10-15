@@ -10,58 +10,20 @@
  *   active focus session id.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Keyboard,
-  Modal,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Modal, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from 'react-native-reanimated';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
 import {
   YanjiHairline,
-  YanjiIcon,
-  YanjiIconButton,
+  YanjiPaperSheetHeading,
   YanjiPrimaryButton,
   YanjiTextInput,
+  useYanjiKeyboardInset,
 } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
-
-/**
- * Height of the on-screen keyboard, sampled from `Keyboard.metrics()` the
- * moment the input takes focus and re-read on every keyboard frame change.
- *
- * Why not `KeyboardAvoidingView`: this sheet lives in an RN `Modal`, whose
- * window is a separate Dialog. `KeyboardAvoidingView` derives its offset from
- * its own on-screen frame, and Android delivers the keyboard event from the
- * Activity's root view — inside a Modal the two never agree, so the offset
- * comes out as 0 and the sheet is left underneath the keyboard.
- */
-function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
-  const lastRef = useRef(-1);
-
-  useEffect(() => {
-    const sync = () => {
-      const next = Keyboard.metrics()?.height ?? 0;
-      if (next !== lastRef.current) {
-        lastRef.current = next;
-        setHeight(next);
-      }
-    };
-    sync();
-    const show = Keyboard.addListener('keyboardDidShow', sync);
-    const hide = Keyboard.addListener('keyboardDidHide', sync);
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-
-  return height;
-}
+import { YanjiSpacing } from '../theme/tokens';
 
 export interface RecordMomentModalProps {
   visible: boolean;
@@ -85,6 +47,7 @@ export function RecordMomentModal({
   editingNote = null,
 }: RecordMomentModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
+  const reduceMotion = useReducedMotion();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,10 +100,14 @@ export function RecordMomentModal({
     onClose();
   }, [onClose]);
 
-  const keyboardHeight = useKeyboardHeight();
+  // View constants for the paper sheet, grouped with the keyboard inset they
+  // have to agree with.
+  const paper = theme.paper;
+  const insets = useSafeAreaInsets();
+  const keyboardInset = useYanjiKeyboardInset();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={handleClose}>
       <View
         style={{
           flex: 1,
@@ -149,7 +116,7 @@ export function RecordMomentModal({
           // Lift the whole sheet clear of the keyboard. `paddingBottom` (not a
           // bottom offset) keeps the scrim filling the screen so the backdrop
           // still swallows taps above the sheet while it is raised.
-          paddingBottom: keyboardHeight,
+          paddingBottom: keyboardInset,
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
@@ -158,12 +125,12 @@ export function RecordMomentModal({
         <View
           style={[
             {
-              backgroundColor: theme.colors.bgFloating,
-              borderTopLeftRadius: YanjiRadius.xxl,
-              borderTopRightRadius: YanjiRadius.xxl,
-              paddingHorizontal: YanjiSpacing.xl,
+              backgroundColor: paper.colors.surface,
+              borderTopLeftRadius: paper.radius.sheet,
+              borderTopRightRadius: paper.radius.sheet,
+              paddingHorizontal: paper.layout.pageGutter,
               paddingTop: YanjiSpacing.md,
-              paddingBottom: YanjiSpacing.xxl,
+              paddingBottom: YanjiSpacing.lg + insets.bottom,
             },
             theme.shadow.floating(theme.isDark),
           ]}
@@ -173,47 +140,21 @@ export function RecordMomentModal({
               alignSelf: 'center',
               width: 36,
               height: 4,
-              borderRadius: YanjiRadius.full,
-              backgroundColor: theme.colors.hairline,
-              marginBottom: YanjiSpacing.md,
+              borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.hairline,
+              marginBottom: YanjiSpacing.lg,
             }}
           />
 
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: YanjiSpacing.md,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <YanjiIcon
-                name="compose"
-                size={17}
-                color={theme.colors.accentPrimary}
-              />
-              <Text
-                style={{
-                  color: theme.colors.textPrimary,
-                  fontSize: 17,
-                  fontWeight: '600',
-                  marginLeft: YanjiSpacing.sm,
-                }}
-              >
-                {editingNote ? '编辑记录' : '记录此刻'}
-              </Text>
-            </View>
-            <YanjiIconButton
-              icon="close"
-              accessibilityLabel="取消"
-              onPress={handleClose}
-              size={36}
-              iconSize={16}
-              tone="filled"
-            />
-          </View>
+          <YanjiPaperSheetHeading
+            title={editingNote ? '编辑记录' : '记录此刻'}
+            subtitle={date}
+            onClose={handleClose}
+          />
 
+          {/* The journal well: `multiline` is what makes `YanjiTextInput` pick
+              the serif body face, so the sheet no longer overrides the font per
+              call site. The 96–200 dp well height stays sheet-owned. */}
           <YanjiTextInput
             value={text}
             onChangeText={setText}
@@ -226,7 +167,7 @@ export function RecordMomentModal({
           {error ? (
             <Text
               style={[
-                theme.typography.caption,
+                paper.typography.captionMeta,
                 { color: theme.colors.danger, marginTop: YanjiSpacing.sm },
               ]}
             >

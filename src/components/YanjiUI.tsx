@@ -1,7 +1,25 @@
-/** Shared RN UI primitives: semantic tokens, accessible controls, calm surfaces. */
+/**
+ * Shared RN UI primitives for the 素笺与寸阴 (Paper & Chrono) body.
+ *
+ * Two rules keep this file coherent:
+ *  1. Every control, input and section reads its colour, type, radius and
+ *     motion from `theme.paper`. Raw hex / dp literals are not allowed here.
+ *  2. The frozen liquid-glass navigation is NOT restyled. It imports only
+ *     `YanjiIcon` from this module plus the untouched legacy token scales, so
+ *     the glass bar keeps sampling the exact same renderer inputs it always
+ *     did. `YanjiIconButton` likewise pins its circle to `YanjiRadius.full` —
+ *     the same step the dock uses — so the one primitive shared by nav and body
+ *     cannot drift into a second geometry.
+ *
+ * The data-visualisation primitives (ring, stacked columns, line) deliberately
+ * stay on the legacy accent: they are charts rather than buttons, inputs or
+ * sections, and they are consumed by the Review / Focus surfaces.
+ */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Keyboard,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -19,13 +37,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiCardRules, YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { buildLineChartGeometry } from './lineChartGeometry';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
 
 // ---------------------------------------------------------------------------
 // YanjiIcon — the only way a glyph enters the tree
+//
+// Untouched on purpose: the bottom dock renders through this component, so its
+// defaults are part of the frozen navigation surface.
 // ---------------------------------------------------------------------------
 
 export function YanjiIcon({
@@ -51,7 +72,419 @@ export function YanjiIcon({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiCard — semantic paper or borderless journal surface
+// useYanjiKeyboardInset — real Android IME height for sheets
+//
+// Why not `KeyboardAvoidingView` alone: a sheet inside an RN `Modal` lives in a
+// separate Android window, and the view derives its offset from its own
+// on-screen frame while the IME event is delivered against the Activity root.
+// The two never agree inside a Modal, so the offset comes out 0 and the sheet
+// ends up underneath the keyboard. Sampling `Keyboard.metrics()` and reserving
+// that many points of scroll room is what actually keeps the save action
+// reachable.
+// ---------------------------------------------------------------------------
+
+export function useYanjiKeyboardInset(): number {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      setHeight(0);
+      return;
+    }
+    const sync = () => setHeight(Keyboard.metrics()?.height ?? 0);
+    sync();
+    const show = Keyboard.addListener('keyboardDidShow', sync);
+    const hide = Keyboard.addListener('keyboardDidHide', () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  return height;
+}
+
+// ---------------------------------------------------------------------------
+// YanjiPaperSheetHeading — the one sheet header (style only)
+//
+// The sheet itself owns its keyboard, back and save semantics; this only draws
+// the title block and a reachable close control.
+// ---------------------------------------------------------------------------
+
+export function YanjiPaperSheetHeading({
+  title,
+  subtitle,
+  onClose,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: paper.layout.gridGap,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text
+          accessibilityRole="header"
+          style={[paper.typography.titleEditorial, { color: paper.colors.ink }]}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text
+            style={[
+              paper.typography.captionMeta,
+              { color: paper.colors.secondary, marginTop: YanjiSpacing.xs },
+            ]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <YanjiIconButton
+        icon="close"
+        accessibilityLabel="关闭"
+        onPress={onClose}
+        size={paper.layout.rowMinHeight}
+        iconSize={17}
+        tone="filled"
+      />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiEditorialHeader — the page's opening line
+// ---------------------------------------------------------------------------
+
+export interface YanjiEditorialHeaderProps {
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+  trailing?: React.ReactNode;
+}
+
+export function YanjiEditorialHeader({
+  eyebrow,
+  title,
+  subtitle,
+  trailing,
+}: YanjiEditorialHeaderProps): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: paper.layout.gridGap,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        {eyebrow ? (
+          <Text
+            style={[
+              paper.typography.captionMeta,
+              { color: paper.colors.brandInk, marginBottom: YanjiSpacing.xs },
+            ]}
+          >
+            {eyebrow}
+          </Text>
+        ) : null}
+        <Text
+          accessibilityRole="header"
+          style={[paper.typography.titleEditorial, { color: paper.colors.ink }]}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text
+            style={[
+              paper.typography.bodyPrimary,
+              { color: paper.colors.secondary, marginTop: YanjiSpacing.xs },
+            ]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {trailing}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiPaperSectionHeading — typographic grouping with an optional accessory
+// ---------------------------------------------------------------------------
+
+export function YanjiPaperSectionHeading({
+  title,
+  right,
+}: {
+  title: string;
+  right?: React.ReactNode;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: YanjiSpacing.sm,
+        marginBottom: YanjiSpacing.sm,
+        marginTop: paper.layout.sectionGap,
+      }}
+    >
+      {/* Marked as a heading so TalkBack users can jump between sections instead
+          of reading the page as one unbroken stream of rows. */}
+      <Text
+        accessibilityRole="header"
+        style={[paper.typography.titleSection, { color: paper.colors.ink }]}
+      >
+        {title}
+      </Text>
+      {right}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiPaperSegmentedControl — one-of-N switch inside a subtle track
+// ---------------------------------------------------------------------------
+
+export interface YanjiPaperSegmentedOption<T extends string> {
+  value: T;
+  label: string;
+}
+
+export function YanjiPaperSegmentedControl<T extends string>({
+  value,
+  options,
+  onChange,
+  accessibilityLabel,
+}: {
+  value: T;
+  options: readonly YanjiPaperSegmentedOption<T>[];
+  onChange: (value: T) => void;
+  accessibilityLabel: string;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      accessibilityLabel={accessibilityLabel}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        alignSelf: 'flex-start',
+        backgroundColor: paper.colors.subtle,
+        borderRadius: paper.radius.pill,
+        padding: YanjiSpacing.xs,
+      }}
+    >
+      {options.map(option => (
+        <PaperSegment
+          key={option.value}
+          label={option.label}
+          selected={option.value === value}
+          reduceMotion={reduceMotion}
+          onPress={() => onChange(option.value)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function PaperSegment({
+  label,
+  selected,
+  reduceMotion,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  reduceMotion: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  const emphasis = useSharedValue(selected ? 1 : 0);
+
+  useEffect(() => {
+    // Reduced motion: the fill appears and disappears rather than crossfading.
+    if (reduceMotion) {
+      emphasis.value = selected ? 1 : 0;
+      return;
+    }
+    emphasis.value = withTiming(selected ? 1 : 0, { duration: paper.motion.selectionMs });
+  }, [selected, reduceMotion, paper.motion.selectionMs, emphasis]);
+
+  const fill = useAnimatedStyle(() => ({ opacity: emphasis.value }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={({ pressed }) => ({
+        minHeight: paper.layout.rowMinHeight,
+        minWidth: paper.layout.rowMinHeight,
+        paddingHorizontal: YanjiSpacing.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: paper.radius.pill,
+        // Press feedback is an instant state change, not an animation, so
+        // reduced motion keeps it — only the fill crossfade above is gated.
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            backgroundColor: paper.colors.surface,
+            borderRadius: paper.radius.pill,
+          },
+          fill,
+        ]}
+      />
+      <Text
+        style={[
+          paper.typography.bodyPrimary,
+          { color: selected ? paper.colors.ink : paper.colors.secondary },
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiChronoSpectrum — 今日光阴光谱尺
+//
+// Segments are sized by their own measured sum, so the bar never claims a total
+// the records do not add up to. The goal tick is drawn only when a real goal
+// exists; past 100% it is pinned to the end of the track and the excess is
+// announced instead of drawn.
+// ---------------------------------------------------------------------------
+
+export interface YanjiSpectrumSegment {
+  id: string;
+  label: string;
+  seconds: number;
+  color: string;
+}
+
+export interface YanjiChronoSpectrumProps {
+  segments: readonly YanjiSpectrumSegment[];
+  totalSeconds: number;
+  goalSeconds: number | null;
+  accessibilityLabel?: string;
+}
+
+function formatSpectrumDuration(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.round((safe % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+export function YanjiChronoSpectrum({
+  segments,
+  totalSeconds,
+  goalSeconds,
+  accessibilityLabel,
+}: YanjiChronoSpectrumProps): React.JSX.Element {
+  const theme = useYanjiTheme();
+  const paper = theme.paper;
+  const hasGoal = goalSeconds !== null && goalSeconds > 0;
+  const ratio = hasGoal ? totalSeconds / (goalSeconds as number) : 0;
+  const overGoal = hasGoal && ratio > 1;
+  const markerPercent = Math.max(0, Math.min(100, ratio * 100));
+
+  // Segments are laid out with `flexGrow`, so the bar is proportional to the
+  // real sum of the records without ever needing that sum as a denominator.
+  const filled = segments.filter(segment => segment.seconds > 0);
+  const defaultLabel = [
+    `今日专注 ${formatSpectrumDuration(totalSeconds)}`,
+    hasGoal
+      ? `，目标 ${formatSpectrumDuration(goalSeconds as number)}${
+          overGoal ? '，已超出目标' : ''
+        }`
+      : '，未设置目标',
+    filled.length > 0
+      ? `：${filled
+          .map(segment => `${segment.label} ${formatSpectrumDuration(segment.seconds)}`)
+          .join('，')}`
+      : '，暂无记录',
+  ].join('');
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel ?? defaultLabel}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(markerPercent) }}
+      style={{
+        height: paper.layout.spectrumHeight,
+        borderRadius: paper.radius.pill,
+        backgroundColor: paper.colors.subtle,
+        overflow: 'hidden',
+        flexDirection: 'row',
+      }}
+    >
+      {filled.map(segment => (
+        <View
+          key={segment.id}
+          style={{
+            flexGrow: segment.seconds,
+            flexBasis: 0,
+            backgroundColor: segment.color,
+          }}
+        />
+      ))}
+      {hasGoal ? (
+        // 2dp goal tick, centred on its own width so it never hangs off the
+        // end of the track when the goal is met exactly.
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: `${markerPercent}%`,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            marginLeft: -1,
+            backgroundColor: paper.colors.brand,
+          }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiCard — a sheet on the desk, or an unboxed journal group
 // ---------------------------------------------------------------------------
 
 export function YanjiCard({
@@ -62,39 +495,42 @@ export function YanjiCard({
   children: React.ReactNode;
   style?: ViewStyle;
   /**
-   * `default`  a sheet lying flat on the desk with subtle hairline border
-   * `hero`     the sheet the eye should land on first (diffuse cast shadow & strong border)
+   * `default`  a sheet lying flat on the desk with a hairline rule
+   * `hero`     the sheet the eye should land on first (diffuse cast shadow)
    * `sunken`   a well pressed into a sheet — empty states and recessed content
    * `plain`    unboxed typography for daily plans and journal entries
    */
   variant?: 'default' | 'hero' | 'sunken' | 'plain';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
 
-  const radius = variant === 'hero' ? YanjiRadius.xxl : variant === 'sunken' ? YanjiRadius.lg : YanjiRadius.xl;
   const plain = variant === 'plain';
+  const backgroundColor = plain
+    ? 'transparent'
+    : variant === 'sunken'
+      ? paper.colors.subtle
+      : paper.colors.surface;
 
-  const backgroundColor =
-    plain ? 'transparent' : variant === 'sunken' ? theme.colors.bgSunken : theme.colors.bgSurface;
-
-  const borderColor =
-    variant === 'hero' ? theme.colors.cardBorderStrong : theme.colors.cardBorder;
-
-  const padding = plain ? 0 : variant === 'hero' ? theme.layout.heroInset : variant === 'sunken' ? 16 : 18;
-
-  const shadow = plain || variant === 'sunken' ? null : theme.shadow.sheet(theme.isDark);
+  const padding = plain
+    ? 0
+    : variant === 'sunken'
+      ? YanjiSpacing.lg
+      : YanjiSpacing.lg + YanjiSpacing.xs;
 
   return (
     <View
       style={[
         {
           backgroundColor,
-          borderRadius: radius,
-          borderWidth: plain ? YanjiCardRules.plainBorderWidth : YanjiCardRules.borderWidth,
-          borderColor,
+          borderRadius: paper.radius.surface,
+          borderWidth: plain ? 0 : paper.layout.hairlineWidth,
+          borderColor: paper.colors.hairline,
           padding,
         },
-        shadow,
+        // Only a lifted sheet casts a shadow — otherwise every block on screen
+        // would look equally important.
+        variant === 'hero' ? theme.shadow.sheet(theme.isDark) : null,
         style,
       ]}
     >
@@ -104,7 +540,7 @@ export function YanjiCard({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiHairline — the one legitimate 1px line
+// YanjiHairline — the one legitimate 1px rule
 // ---------------------------------------------------------------------------
 
 export function YanjiHairline({
@@ -116,14 +552,15 @@ export function YanjiHairline({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   return (
     <View
       style={[
         {
-          height: 1,
+          height: paper.layout.hairlineWidth,
           marginLeft: inset,
           marginRight: inset,
-          backgroundColor: theme.colors.hairline,
+          backgroundColor: paper.colors.hairline,
         },
         style,
       ]}
@@ -145,18 +582,19 @@ export function YanjiBadge({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   return (
     <View
       style={[
         {
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: theme.colors.accentSoft,
-          borderWidth: 1,
-          borderColor: theme.colors.cardBorder,
+          backgroundColor: paper.colors.subtle,
+          borderWidth: paper.layout.hairlineWidth,
+          borderColor: paper.colors.hairline,
           paddingVertical: 4,
           paddingHorizontal: 10,
-          borderRadius: YanjiRadius.full,
+          borderRadius: paper.radius.pill,
           alignSelf: 'flex-start',
         },
         style,
@@ -164,15 +602,14 @@ export function YanjiBadge({
     >
       {icon ? (
         <View style={{ marginRight: 5 }}>
-          <YanjiIcon name={icon} size={12} color={theme.colors.accentPrimary} />
+          <YanjiIcon name={icon} size={12} color={paper.colors.brandInk} />
         </View>
       ) : null}
       <Text
-        style={{
-          color: theme.colors.accentPrimary,
-          fontSize: 12,
-          fontWeight: '600',
-        }}
+        style={[
+          paper.typography.captionMeta,
+          { color: paper.colors.brandInk },
+        ]}
       >
         {label}
       </Text>
@@ -181,7 +618,7 @@ export function YanjiBadge({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiPrimaryButton — restrained single accent action with tactile feel
+// YanjiPrimaryButton — the one accent action, with tactile press feedback
 // ---------------------------------------------------------------------------
 
 export function YanjiPrimaryButton({
@@ -201,14 +638,16 @@ export function YanjiPrimaryButton({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
+  const reduceMotion = useReducedMotion();
   const secondary = variant === 'secondary';
 
-  const backgroundColor = disabled || secondary ? theme.colors.bgElevated : theme.colors.accentPrimary;
+  const backgroundColor = disabled || secondary ? paper.colors.subtle : paper.colors.brand;
   const textColor = disabled
-    ? theme.colors.textDisabled
+    ? paper.colors.muted
     : secondary
-    ? theme.colors.textPrimary
-    : theme.colors.onAccent;
+      ? paper.colors.ink
+      : paper.colors.onBrand;
 
   return (
     <Pressable
@@ -218,9 +657,9 @@ export function YanjiPrimaryButton({
       accessibilityLabel={label}
       style={({ pressed }) => ({
         backgroundColor,
-        borderRadius: YanjiRadius.xl,
-        borderWidth: secondary ? 1 : 0,
-        borderColor: secondary ? theme.colors.cardBorder : 'transparent',
+        borderRadius: paper.radius.pill,
+        borderWidth: secondary ? paper.layout.hairlineWidth : 0,
+        borderColor: secondary ? paper.colors.hairline : 'transparent',
         paddingVertical: 15,
         paddingHorizontal: 24,
         flexDirection: 'row',
@@ -228,15 +667,12 @@ export function YanjiPrimaryButton({
         justifyContent: 'center',
         minHeight: YanjiTouch.comfortable,
         opacity: pressed ? 0.88 : 1,
-        transform: [{ scale: pressed ? 0.985 : 1 }],
-        ...(pressed ? theme.shadow.pressed(theme.isDark) : null),
-        // Only the accent action casts a shadow — otherwise every button on
-        // screen would look equally important.
+        transform: [{ scale: pressed && !reduceMotion ? 0.985 : 1 }],
         ...(!disabled && !secondary ? theme.shadow.sheet(theme.isDark) : null),
       })}
     >
       {icon ? (
-        <View style={{ marginRight: 8 }}>
+        <View style={{ marginRight: YanjiSpacing.sm }}>
           <YanjiIcon name={icon} size={17} color={textColor} />
         </View>
       ) : null}
@@ -245,7 +681,7 @@ export function YanjiPrimaryButton({
           color: textColor,
           fontSize: 16,
           fontWeight: '600',
-          letterSpacing: 0.3,
+          fontVariant: ['tabular-nums'],
         }}
       >
         {label}
@@ -256,13 +692,16 @@ export function YanjiPrimaryButton({
 
 // ---------------------------------------------------------------------------
 // YanjiIconButton — icon-only control, guaranteed touch target
+//
+// The circle stays on `YanjiRadius.full`, the same step the frozen dock uses,
+// so nav and body cannot end up with two different round geometries.
 // ---------------------------------------------------------------------------
 
 export function YanjiIconButton({
   icon,
   onPress,
   accessibilityLabel,
-  size = YanjiTouch.min,
+  size = YanjiTouch.comfortable,
   iconSize = 20,
   tone = 'plain',
   disabled = false,
@@ -282,7 +721,8 @@ export function YanjiIconButton({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
-  const color = disabled ? theme.colors.textDisabled : theme.colors.textSecondary;
+  const paper = theme.paper;
+  const color = disabled ? paper.colors.muted : paper.colors.secondary;
 
   return (
     <Pressable
@@ -299,8 +739,7 @@ export function YanjiIconButton({
           borderRadius: YanjiRadius.full,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor:
-            tone === 'filled' ? theme.colors.bgElevated : 'transparent',
+          backgroundColor: tone === 'filled' ? paper.colors.subtle : 'transparent',
           opacity: pressed ? 0.6 : 1,
         },
         style,
@@ -336,6 +775,7 @@ export function YanjiStepper({
   alignment?: 'start' | 'center';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   const canDecrease = value - step >= min;
   const canIncrease = value + step <= max;
 
@@ -345,8 +785,8 @@ export function YanjiStepper({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: alignment === 'center' ? 'center' : 'flex-start',
-        backgroundColor: theme.colors.bgSunken,
-        borderRadius: YanjiRadius.full,
+        backgroundColor: paper.colors.subtle,
+        borderRadius: paper.radius.pill,
         padding: 4,
       }}
       accessibilityRole="adjustable"
@@ -358,16 +798,17 @@ export function YanjiStepper({
         accessibilityLabel={`减少${label}`}
         onPress={() => canDecrease && onChange(value - step)}
         disabled={!canDecrease}
-        size={YanjiTouch.min}
+        size={paper.layout.rowMinHeight}
         iconSize={16}
       />
       <Text
         style={{
           minWidth: 56,
           textAlign: 'center',
-          color: theme.colors.textPrimary,
+          color: paper.colors.ink,
           fontSize: 16,
           fontWeight: '600',
+          fontVariant: ['tabular-nums'],
         }}
       >
         {value}
@@ -378,7 +819,7 @@ export function YanjiStepper({
         accessibilityLabel={`增加${label}`}
         onPress={() => canIncrease && onChange(value + step)}
         disabled={!canIncrease}
-        size={YanjiTouch.min}
+        size={paper.layout.rowMinHeight}
         iconSize={16}
       />
     </View>
@@ -387,6 +828,9 @@ export function YanjiStepper({
 
 // ---------------------------------------------------------------------------
 // YanjiProgressRing — SVG circular progress with centre content
+//
+// Data visualisation, so it stays on the legacy accent scale together with the
+// two charts below.
 // ---------------------------------------------------------------------------
 
 export function YanjiProgressRing({
@@ -711,6 +1155,7 @@ export function YanjiLineChart({
  *
  * Deliberately NOT a looping animation: DESIGN.md rules out sustained motion,
  * and a CTA that never stops moving competes with the content it points at.
+ * Reduced motion skips both the breath and the press spring.
  */
 export function YanjiBreathButton({
   label,
@@ -726,6 +1171,7 @@ export function YanjiBreathButton({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   const scale = useSharedValue(1);
   const reduceMotion = useReducedMotion();
 
@@ -759,10 +1205,8 @@ export function YanjiBreathButton({
           if (!reduceMotion) scale.value = withSpring(1, theme.motion.spring.press);
         }}
         style={({ pressed }) => ({
-          backgroundColor: disabled
-            ? theme.colors.bgElevated
-            : theme.colors.accentPrimary,
-          borderRadius: YanjiRadius.xl,
+          backgroundColor: disabled ? paper.colors.subtle : paper.colors.brand,
+          borderRadius: paper.radius.pill,
           paddingVertical: 16,
           paddingHorizontal: 26,
           flexDirection: 'row',
@@ -778,16 +1222,16 @@ export function YanjiBreathButton({
             <YanjiIcon
               name={icon}
               size={19}
-              color={disabled ? theme.colors.textDisabled : theme.colors.onAccent}
+              color={disabled ? paper.colors.muted : paper.colors.onBrand}
             />
           </View>
         ) : null}
         <Text
           style={{
-            color: disabled ? theme.colors.textDisabled : theme.colors.onAccent,
+            color: disabled ? paper.colors.muted : paper.colors.onBrand,
             fontSize: 16,
             fontWeight: '600',
-            letterSpacing: 0.3,
+            fontVariant: ['tabular-nums'],
           }}
         >
           {label}
@@ -813,6 +1257,7 @@ export function YanjiEmptyState({
   compact?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   return (
     <View
       style={{
@@ -826,32 +1271,33 @@ export function YanjiEmptyState({
         style={{
           width: compact ? 36 : 48,
           height: compact ? 36 : 48,
-          borderRadius: YanjiRadius.full,
-          backgroundColor: theme.colors.bgElevated,
+          borderRadius: paper.radius.pill,
+          backgroundColor: paper.colors.subtle,
           alignItems: 'center',
           justifyContent: 'center',
           marginBottom: compact ? YanjiSpacing.xs : YanjiSpacing.md,
         }}
       >
-        <YanjiIcon name={icon} size={compact ? 18 : 22} color={theme.colors.textSecondary} />
+        <YanjiIcon name={icon} size={compact ? 18 : 22} color={paper.colors.secondary} />
       </View>
       <Text
-        style={{
-          color: theme.colors.textPrimary,
-          ...(compact ? theme.typography.label : theme.typography.bodyStrong),
-          textAlign: 'center',
-        }}
+        style={[
+          compact ? paper.typography.captionMeta : paper.typography.bodyPrimary,
+          { color: paper.colors.ink, textAlign: 'center' },
+        ]}
       >
         {title}
       </Text>
       {hint ? (
         <Text
-          style={{
-            color: theme.colors.textTertiary,
-            ...theme.typography.caption,
-            marginTop: compact ? 2 : YanjiSpacing.xs,
-            textAlign: 'center',
-          }}
+          style={[
+            paper.typography.captionMeta,
+            {
+              color: paper.colors.secondary,
+              marginTop: compact ? 2 : YanjiSpacing.xs,
+              textAlign: 'center',
+            },
+          ]}
         >
           {hint}
         </Text>
@@ -861,7 +1307,7 @@ export function YanjiEmptyState({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiSectionHeader — typographic grouping with optional right accessory
+// YanjiSectionHeader — legacy grouping header, kept for the existing screens
 // ---------------------------------------------------------------------------
 
 export function YanjiSectionHeader({
@@ -872,6 +1318,7 @@ export function YanjiSectionHeader({
   rightAction?: React.ReactNode;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   return (
     <View
       style={{
@@ -880,18 +1327,13 @@ export function YanjiSectionHeader({
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
-        marginBottom: theme.layout.titleGap,
-        marginTop: theme.layout.sectionGap,
+        marginBottom: YanjiSpacing.sm,
+        marginTop: paper.layout.sectionGap,
       }}
     >
-      {/* Marked as a heading so TalkBack users can jump between sections instead
-          of reading the page as one unbroken stream of rows. */}
       <Text
         accessibilityRole="header"
-        style={[
-          theme.typography.sectionTitle,
-          { color: theme.colors.textPrimary },
-        ]}
+        style={[paper.typography.titleSection, { color: paper.colors.ink }]}
       >
         {title}
       </Text>
@@ -916,6 +1358,7 @@ export function YanjiChip({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
   return (
     <Pressable
       onPress={onPress}
@@ -923,30 +1366,29 @@ export function YanjiChip({
       accessibilityState={{ selected }}
       style={({ pressed }) => [
         {
-          paddingVertical: 8,
+          paddingVertical: YanjiSpacing.sm,
           paddingHorizontal: 14,
           minHeight: YanjiTouch.comfortable,
           justifyContent: 'center',
-          borderRadius: YanjiRadius.full,
-          marginRight: theme.spacing.sm,
-          marginBottom: theme.spacing.sm,
+          borderRadius: paper.radius.pill,
+          marginRight: YanjiSpacing.sm,
+          marginBottom: YanjiSpacing.sm,
           // Selected chips stay soft-tinted rather than filled: a wall of solid
-          // accent pills reads as "many primary actions", and this screen has
-          // only one (the start button below).
-          backgroundColor: selected ? theme.colors.accentSoft : theme.colors.bgSurface,
-          borderWidth: 1,
-          borderColor: selected ? theme.colors.accentPrimary : theme.colors.cardBorder,
+          // accent pills reads as "many primary actions", and a screen has only
+          // one (its start / save button).
+          backgroundColor: selected ? paper.colors.subtle : paper.colors.surface,
+          borderWidth: paper.layout.hairlineWidth,
+          borderColor: selected ? paper.colors.brand : paper.colors.hairline,
           opacity: pressed ? 0.7 : 1,
         },
         style,
       ]}
     >
       <Text
-        style={{
-          color: selected ? theme.colors.accentStrong : theme.colors.textSecondary,
-          fontSize: 14,
-          fontWeight: selected ? '600' : '400',
-        }}
+        style={[
+          paper.typography.bodyPrimary,
+          { color: selected ? paper.colors.brandInk : paper.colors.secondary },
+        ]}
       >
         {label}
       </Text>
@@ -974,24 +1416,29 @@ export function YanjiTextInput({
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
+  const paper = theme.paper;
+  // A multiline field in this product is always a journal capture (记录此刻 /
+  // 专注随笔), so it takes the serif journal face rather than the sans body.
+  const type = multiline ? paper.typography.bodyJournal : paper.typography.bodyPrimary;
   return (
     <TextInput
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor={theme.colors.textTertiary}
+      placeholderTextColor={paper.colors.secondary}
       multiline={multiline}
       accessibilityLabel={accessibilityLabel ?? placeholder}
       style={[
         {
-          backgroundColor: theme.colors.bgSunken,
-          borderRadius: YanjiRadius.md,
-          borderWidth: 1,
-          borderColor: theme.colors.cardBorder,
-          padding: theme.spacing.md,
-          color: theme.colors.textPrimary,
-          fontSize: 15,
-          lineHeight: 22,
+          backgroundColor: paper.colors.subtle,
+          borderRadius: paper.radius.surface,
+          borderWidth: paper.layout.hairlineWidth,
+          borderColor: paper.colors.hairline,
+          padding: YanjiSpacing.md,
+          color: paper.colors.ink,
+          fontSize: type.fontSize,
+          lineHeight: type.lineHeight,
+          ...('fontFamily' in type ? { fontFamily: type.fontFamily } : {}),
           textAlignVertical: multiline ? 'top' : 'center',
         },
         style,

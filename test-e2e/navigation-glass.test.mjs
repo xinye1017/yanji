@@ -26,8 +26,13 @@ test('the backdrop excludes the dock and secondary settings layer', () => {
     const position = app.indexOf(`<${screen}Screen`);
     assert.ok(position >= 0 && targetEnd > position);
   }
-  assert.ok(targetEnd < app.indexOf('<BottomTabBar />'));
-  assert.ok(app.indexOf('<BottomTabBar />') < app.indexOf('<SettingsScreen />'));
+  // The dock now receives a visibility prop, but remains one mounted sibling
+  // of BlurTarget and below the secondary settings overlay in source order.
+  const dockNodes = [...app.matchAll(/<BottomTabBar\b/g)];
+  assert.equal(dockNodes.length, 1, 'the shell must render exactly one glass dock');
+  const dockPosition = dockNodes[0].index;
+  assert.ok(targetEnd < dockPosition, 'glass dock must not be inside its sampled BlurTarget');
+  assert.ok(dockPosition < app.indexOf('<SettingsScreen />'), 'settings overlay must cover the dock');
   for (const screen of ['Today', 'Focus', 'Review']) {
     const source = readFileSync(new URL(`../src/screens/${screen}Screen.tsx`, import.meta.url), 'utf8');
     assert.match(source, /paddingBottom: contentPadding/);

@@ -36,7 +36,7 @@ const TAB_ICONS: Record<TabKey, YanjiIconName> = {
 /** Shared capsule inset keeps the selection aligned with the measured slots. */
 const CAPSULE_PADDING = YanjiLiquidGlass.padding;
 
-export function BottomTabBar(): React.JSX.Element {
+export function BottomTabBar({ visible = true }: { visible?: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
   const { height, bottom } = useBottomTabLayout();
   const reduceMotion = useReducedMotion();
@@ -72,7 +72,10 @@ export function BottomTabBar(): React.JSX.Element {
   return (
     <View
       testID="bottom-tab-bar"
-      style={{
+      pointerEvents={visible ? 'auto' : 'none'}
+      accessibilityElementsHidden={!visible}
+      importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+      style={[{
         position: 'absolute',
         left: theme.spacing.lg,
         right: theme.spacing.lg,
@@ -80,10 +83,10 @@ export function BottomTabBar(): React.JSX.Element {
         height,
         borderRadius: height / 2,
         ...theme.shadow.floating(theme.isDark),
-      }}
+      }, { opacity: visible ? 1 : 0 }]}
     >
       <BlurOverlay
-        visible
+        visible={visible}
         blurMode="glass"
         blurTargetId={YanjiLiquidGlass.targetId}
         glassVariant="clear"

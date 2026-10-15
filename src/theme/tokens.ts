@@ -2,6 +2,12 @@
  * Yanji visual language: quiet study journal.
  * Semantic surfaces may be elevated controls or unboxed plans and timelines.
  * Typography and readable rhythm, rather than card outlines, establish hierarchy.
+ *
+ * Two domains live here and they are not interchangeable:
+ *  - the original scales (`YanjiColors` … `YanjiMotion`) which the frozen
+ *    liquid-glass navigation still consumes verbatim;
+ *  - the 素笺与寸阴 paper domain (`YanjiPaper*`) which every body surface and
+ *    every shared component in `YanjiUI.tsx` renders with.
  */
 
 import type { ViewStyle } from 'react-native';
@@ -250,4 +256,156 @@ export const YanjiMotion = {
     base: 220,
     slow: 360,
   },
+} as const;
+
+// ---------------------------------------------------------------------------
+// 素笺与寸阴 (Paper & Chrono) — the body design domain.
+//
+// The scales above stay exactly as the liquid-glass navigation consumes them
+// (BottomTabBar / liquidGlass / useBottomTabLayout are frozen). Everything the
+// *body* renders — Today, Review, Focus, Settings and the shared sheets — moves
+// onto this domain instead, so there is one paper vocabulary rather than a
+// second set of numbers scattered across screens.
+//
+// Contrast policy (measured, WCAG 2.1 relative luminance):
+//   `ink`      > 11:1 on every canvas/surface/subtle step of its own mode.
+//   `secondary` >= 4.5:1 on every step — this is the readable body/meta tier.
+//   `muted`     < 4.5:1 by design: decorative rules, tick marks, disabled
+//               controls and struck-through archive rows only. It must never
+//               carry a timestamp, an axis label or an unread task title.
+//   `brandInk` is the readable brand text tier on the warm parchment canvas
+//               (plain `brand` is only 4.24:1 there — good enough for a CTA
+//               fill, not for text). Use `brand` + `onBrand` for fills.
+// ---------------------------------------------------------------------------
+
+export const YanjiPaperColors = {
+  light: {
+    canvas: '#F6F4EF',
+    surface: '#FFFFFF',
+    subtle: '#EDEAE2',
+    ink: '#1C1E21',
+    secondary: '#5C5F66',
+    muted: '#94969C',
+    hairline: 'rgba(28,30,33,0.08)',
+    brand: '#C84B31',
+    /** Readable brand text on parchment. Measured 5.43:1 on canvas. */
+    brandInk: '#B23A22',
+    onBrand: '#FFFFFF',
+    amber: '#9A6100',
+  },
+  dark: {
+    canvas: '#111315',
+    surface: '#1A1D21',
+    subtle: '#23272D',
+    ink: '#EAE6DF',
+    secondary: '#9BA0A8',
+    muted: '#636870',
+    hairline: 'rgba(234,230,223,0.08)',
+    brand: '#E06D53',
+    /** Dark `brand` already clears 4.5:1 on canvas, so the ink tier is itself. */
+    brandInk: '#E06D53',
+    onBrand: '#111315',
+    amber: '#DDA059',
+  },
+} as const;
+
+/**
+ * The immersion field for a running / paused focus session. The navigation is
+ * hidden there, so this palette owns the whole screen — including the area
+ * behind the status bar.
+ */
+export const YanjiPaperImmersive = {
+  running: {
+    canvas: '#15181C',
+    ink: '#F6F4EF',
+    secondary: '#9BA0A8',
+    muted: '#5C616B',
+    accent: '#E06D53',
+    subtle: 'rgba(255,255,255,0.08)',
+  },
+  paused: {
+    canvas: '#1C1917',
+    ink: '#F6F4EF',
+    secondary: '#9BA0A8',
+    muted: '#5C616B',
+    accent: '#DDA059',
+    subtle: 'rgba(255,255,255,0.08)',
+  },
+} as const;
+
+/**
+ * Paper type scale. `fontFamily`/`fontVariant` are additive to the frozen
+ * numeric scale: Android ships `serif` and `monospace` system faces, so the
+ * editorial serif and tabular figures need no bundled font file. Letter
+ * tracking from the HTML source is expressed in `em` and is deliberately NOT
+ * ported — RN takes dp, and a negative dp track on CJK serif clips strokes.
+ */
+export const YanjiPaperTypography = {
+  displayTimer: {
+    fontSize: 92,
+    lineHeight: 100,
+    fontWeight: '300' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  displayDial: {
+    fontSize: 84,
+    lineHeight: 92,
+    fontWeight: '700' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  metricHero: {
+    fontSize: 44,
+    lineHeight: 52,
+    fontWeight: '700' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  titleEditorial: {
+    fontSize: 22,
+    lineHeight: 31,
+    fontWeight: '700' as const,
+    fontFamily: 'serif',
+  },
+  titleSection: {
+    fontSize: 15,
+    lineHeight: 23,
+    fontWeight: '700' as const,
+  },
+  bodyPrimary: {
+    fontSize: 14,
+    lineHeight: 23,
+    fontWeight: '500' as const,
+  },
+  bodyJournal: {
+    fontSize: 14,
+    lineHeight: 23,
+    fontWeight: '400' as const,
+    fontFamily: 'serif',
+  },
+  captionMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '500' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+} as const;
+
+export const YanjiPaperLayout = {
+  pageGutter: 22,
+  sectionGap: 24,
+  rowMinHeight: 48,
+  hairlineWidth: 1,
+  spectrumHeight: 10,
+  timelineTimeColumn: 52,
+  sheetTopRadius: 26,
+  gridGap: 8,
+} as const;
+
+export const YanjiPaperRadius = { tick: 1, tag: 5, surface: 14, sheet: 26, pill: 9999 } as const;
+
+export const YanjiPaperMotion = {
+  pressMs: 120,
+  sheetEnterMs: 280,
+  sheetExitMs: 210,
+  selectionMs: 160,
+  opacityReducedMs: 120,
 } as const;

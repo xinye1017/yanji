@@ -29,7 +29,7 @@ import { TodayScreen } from './src/screens/TodayScreen';
 import { YanjiThemeProvider, useYanjiTheme } from './src/theme/ThemeProvider';
 import { onDataChanged } from './src/bridge';
 import { dataRefreshCoordinator } from './src/state/dataRefresh';
-import { setTimerForeground } from './src/state/timerStore';
+import { setTimerForeground, useActiveSession } from './src/state/timerStore';
 
 /**
  * All panes stay mounted and fill the same content area, preserving local
@@ -66,6 +66,11 @@ function AppShell(): React.JSX.Element {
   const { closeSettings, closeTaskEditor } = useNavigationActions();
   const [foreground, setForeground] = useState(() => AppState.currentState === 'active');
   const [foregroundRevision, setForegroundRevision] = useState(0);
+  // Session listeners are low-frequency native state transitions, never second ticks.
+  // Paused sessions remain immersive; another tab must keep the glass dock visible.
+  const activeSession = useActiveSession(foreground && activeTab === 'focus' && !settingsOpen);
+  const focusImmersive = foreground && activeTab === 'focus' && !settingsOpen
+    && activeSession !== null && activeSession.phase === 'FOCUS';
 
   useEffect(() => {
     const unsubscribeData = onDataChanged(event =>
@@ -119,10 +124,13 @@ function AppShell(): React.JSX.Element {
   // Keep page content below the status bar using the native safe-area inset.
   // StatusBar controls icon contrast; the tab bar owns the bottom safe area.
   const topInset = insets.top;
+  const backdrop = focusImmersive
+    ? (activeSession?.isPaused ? theme.paper.immersive.paused.canvas : theme.paper.immersive.running.canvas)
+    : theme.paper.colors.canvas;
 
   return (
-    <View testID="app-shell" style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+    <View testID="app-shell" style={{ flex: 1, backgroundColor: backdrop }}>
+      <StatusBar barStyle={focusImmersive || theme.isDark ? 'light-content' : 'dark-content'} />
 
       <BlurTarget id={YanjiLiquidGlass.targetId} style={{ flex: 1, paddingTop: topInset }}>
         {/* Keep the safe-area padding outside the absolute-positioning parent. */}
@@ -142,7 +150,7 @@ function AppShell(): React.JSX.Element {
         </View>
       </BlurTarget>
 
-      <BottomTabBar />
+      <BottomTabBar visible={!focusImmersive} />
 
       {settingsOpen ? (
         <View
@@ -152,7 +160,7 @@ function AppShell(): React.JSX.Element {
             right: 0,
             top: 0,
             bottom: 0,
-            backgroundColor: theme.colors.bgPrimary,
+            backgroundColor: theme.paper.colors.canvas,
             paddingTop: topInset,
           }}
         >
