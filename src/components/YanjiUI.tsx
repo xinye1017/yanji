@@ -539,125 +539,18 @@ export function YanjiChronoSpectrum({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiDayPartRhythmGrid — 四时辰光阴刻度网格
+// YanjiEmptyLedgerRow — the ledger's first, still-blank row
 //
-// Used when the day has no saved focus session yet: it grounds the rhythm
-// section in real time-of-day progress (which part of the day is running out)
-// instead of leaving a barren line of text. Everything shown is derived from
-// the clock, never from fabricated records.
-// ---------------------------------------------------------------------------
-
-export interface YanjiDayPartItem {
-  name: string;
-  from: number;
-  to: number;
-}
-
-export function YanjiDayPartRhythmGrid({
-  parts,
-  nowHour,
-  nowMinute,
-}: {
-  parts: readonly YanjiDayPartItem[];
-  nowHour: number;
-  nowMinute: number;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
-  const currentTotalMinutes = nowHour * 60 + nowMinute;
-
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: layout.gridGap, marginTop: YanjiSpacing.sm }}>
-      {parts.map(part => {
-        const startMins = part.from * 60;
-        const endMins = part.to * 60;
-        const isCurrent = nowHour >= part.from && nowHour < part.to;
-        const isPast = nowHour >= part.to;
-        const windowProgress = isCurrent
-          ? Math.max(0, Math.min(100, Math.round((currentTotalMinutes - startMins) / (endMins - startMins) * 100)))
-          : isPast ? 100 : 0;
-
-        return (
-          <View
-            key={part.name}
-            style={{
-              flexGrow: 1,
-              flexBasis: '46%',
-              padding: YanjiSpacing.md,
-              borderRadius: radius.surface,
-              // The running part is `elevated` with a brand hairline rather
-              // than a brand wash: a tint on a tint composites and drops the
-              // 12sp label under 4.5:1 in dark mode.
-              backgroundColor: isCurrent ? colors.elevated : colors.subtle,
-              borderWidth: layout.hairlineWidth,
-              borderColor: isCurrent ? colors.brand : colors.hairline,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs + 2 }}>
-                <View
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: radius.pill,
-                    backgroundColor: isCurrent ? colors.brand : colors.secondary,
-                    opacity: isCurrent ? 1 : 0.45,
-                  }}
-                />
-                <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: isCurrent ? '700' : '500' }]}>
-                  {part.name}
-                </Text>
-              </View>
-              <Text style={[typography.captionMeta, { color: isCurrent ? colors.brandInk : colors.secondary }]}>
-                {isCurrent ? '当前时段' : isPast ? '已过' : '待至'}
-              </Text>
-            </View>
-
-            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-              {String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00
-            </Text>
-
-            <View
-              style={{
-                height: 4,
-                borderRadius: radius.pill,
-                backgroundColor: isCurrent ? colors.subtle : colors.canvas,
-                overflow: 'hidden',
-                marginTop: YanjiSpacing.sm,
-              }}
-            >
-              <View
-                style={{
-                  width: `${windowProgress}%`,
-                  height: 4,
-                  borderRadius: radius.pill,
-                  backgroundColor: isCurrent ? colors.brand : colors.secondary,
-                  opacity: isCurrent ? 0.85 : 0.25,
-                }}
-              />
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// YanjiEmptyLedgerRow — structured ledger prompt when the plan list is empty
-//
-// A dashed tick box plus a call to action reads as "a row waiting to be
-// filled in", which keeps the page's grid order at zero data instead of
-// dropping a lone sentence onto bare canvas.
+// Only the invitation remains: the dashed tick box, the hint line and the
+// action capsule were all furniture that described the control instead of
+// being the control. The row stays pressable so tapping it opens the editor.
 // ---------------------------------------------------------------------------
 
 export function YanjiEmptyLedgerRow({
   prompt,
-  hint,
   onPress,
 }: {
   prompt: string;
-  hint: string;
   onPress: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
@@ -668,46 +561,18 @@ export function YanjiEmptyLedgerRow({
       accessibilityRole="button"
       accessibilityLabel={prompt}
       style={({ pressed }) => ({
+        minHeight: layout.rowMinHeight,
+        justifyContent: 'center',
         paddingVertical: YanjiSpacing.md,
         paddingHorizontal: YanjiSpacing.md,
         borderRadius: radius.surface,
         backgroundColor: colors.elevated,
         borderWidth: layout.hairlineWidth,
         borderColor: colors.hairline,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: layout.gridGap + 4,
         opacity: pressed ? 0.72 : 1,
       })}
     >
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: radius.tag,
-          borderWidth: 1.5,
-          borderStyle: 'dashed',
-          borderColor: colors.brand,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <YanjiIcon name="add" size={13} color={colors.brandInk} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[typography.bodyJournal, { color: colors.ink }]}>{prompt}</Text>
-        <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>{hint}</Text>
-      </View>
-      <View
-        style={{
-          paddingHorizontal: YanjiSpacing.sm + 2,
-          paddingVertical: YanjiSpacing.xs,
-          borderRadius: radius.pill,
-          backgroundColor: colors.brandSubtle,
-        }}
-      >
-        <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>立项 ›</Text>
-      </View>
+      <Text style={[typography.bodyJournal, { color: colors.ink }]}>{prompt}</Text>
     </Pressable>
   );
 }

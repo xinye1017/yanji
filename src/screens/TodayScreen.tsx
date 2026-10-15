@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, DailySession, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayPartRhythmGrid,
+  YanjiBadge, YanjiCard, YanjiChronoSpectrum,
   YanjiEditorialHeader, YanjiEmptyJournalWell, YanjiEmptyLedgerRow,
   YanjiHairline, YanjiIcon, YanjiIconButton, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
@@ -39,7 +39,7 @@ function localDay(d: Date): string {
 }
 function greeting(hour: number): string {
   if (hour < 5) return '夜深了';
-  if (hour < 11) return '早上好，新的一天';
+  if (hour < 11) return '早上好';
   if (hour < 14) return '中午好';
   if (hour < 18) return '下午好';
   return '晚上好';
@@ -130,6 +130,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
   }, [date]);
 
   const effectiveSeconds = snapshot?.totalDurationSeconds ?? 0;
+  // A day with no saved focus has nothing for the hero card to report, so the
+  // card keeps only the goal entry, the live-session well and the start
+  // action. The reading branch (`!snapshot`) is a separate state and stays as
+  // it is: it still needs its retry affordance.
+  const emptyDay = snapshot !== null && effectiveSeconds === 0;
   const pending = tasks.filter(task => !task.completed);
   const completed = tasks.filter(task => task.completed);
   const latestNotes = useMemo(() => [...notes].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
@@ -214,8 +219,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
       <ScrollView testID="scroll-today" style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.brandInk} />}
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
-        <YanjiEditorialHeader eyebrow={displayDate(date)} title={greeting(now.getHours())}
-          trailing={<YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} tone="filled" />} />
+        <YanjiEditorialHeader title={greeting(nowHour)}
+          trailing={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs + 2 }}>
+              <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.brand }} />
+              <Text style={[typography.captionMeta, { color: colors.brandInk, letterSpacing: 0.6 }]}>{displayDate(date)}</Text>
+              <YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} tone="filled" />
+            </View>
+          } />
         {(countdown?.examDate || targetLabel) ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: layout.gridGap, marginTop: YanjiSpacing.xs }}>
             {countdown?.examDate ? (
@@ -223,7 +234,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
                 style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
                 <YanjiBadge icon="target" tone={countdown.daysRemaining >= 0 ? 'brand' : 'neutral'}
-                  label={`${countdown.daysRemaining > 0 ? `距初试还有 ${countdown.daysRemaining} 天` : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'} · ${countdown.examDate}`} />
+                  label={countdown.daysRemaining > 0 ? `距初试还有 ${countdown.daysRemaining} 天` : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'} />
               </Pressable>
             ) : null}
             {targetLabel ? (
@@ -236,36 +247,47 @@ export function TodayScreen({ visible, foregroundRevision }: {
         ) : null}
 
         <YanjiCard style={{ marginTop: YanjiSpacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日累计专注 · 已保存</Text>
+          <View style={{ flexDirection: 'row', justifyContent: emptyDay ? 'flex-end' : 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
+            {emptyDay ? null : <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日累计专注 · 已保存</Text>}
             <Pressable onPress={openGoal} accessibilityRole="button" accessibilityLabel="调整日常学习目标"
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
               <Text style={[typography.captionMeta, { color: colors.brandInk }]}>
-                {goalSeconds === null ? '设置与学习目标' : goalSeconds > 0 ? `日常目标 ${duration(goalSeconds)}${snapshot ? ` · ${Math.round(effectiveSeconds / goalSeconds * 100)}%` : ''}` : '设置日常学习目标'} ›
+                {goalSeconds === null ? '设置与学习目标' : goalSeconds > 0 ? `日常目标 ${duration(goalSeconds)}${!emptyDay ? ` · ${Math.round(effectiveSeconds / goalSeconds * 100)}%` : ''}` : '设置日常学习目标'} ›
               </Text>
             </Pressable>
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: layout.gridGap }}>
-              {snapshot ? <>
-                <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> h</Text></Text>
-                <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> m</Text></Text>
-              </> : <Text style={[typography.metricHero, { color: colors.ink }]}>—</Text>}
+          {emptyDay ? (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
+              <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> h</Text></Text>
+              <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> m</Text></Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, paddingBottom: YanjiSpacing.xs }}>
-              <YanjiStatCell label="今日待办" value={snapshot ? `${pending.length} 项` : '—'} />
-              <YanjiStatCell label="今日随笔" value={snapshot ? `${notes.length} 篇` : '—'} />
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: layout.gridGap }}>
+                {snapshot ? <>
+                  <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> h</Text></Text>
+                  <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> m</Text></Text>
+                </> : <Text style={[typography.metricHero, { color: colors.ink }]}>—</Text>}
+              </View>
+              <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, paddingBottom: YanjiSpacing.xs }}>
+                <YanjiStatCell label="今日待办" value={snapshot ? `${pending.length} 项` : '—'} />
+                <YanjiStatCell label="今日随笔" value={snapshot ? `${notes.length} 篇` : '—'} />
+              </View>
             </View>
-          </View>
+          )}
 
-          <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
-            accessibilityLabel={snapshot ? undefined : '正在读取今日专注'} />
-          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-            {!snapshot ? '正在读取今日记录，可下拉重试。' : effectiveSeconds > 0
-              ? `${snapshot.focusCount} 段专注 · ${snapshot.examCount} 场模考${goalSeconds && effectiveSeconds > goalSeconds ? ` · 超出目标 ${duration(effectiveSeconds - goalSeconds)}` : ''}`
-              : active ? '当前这一轮尚未结算，会保留在专注工作台。' : '今天的纸页还很安静，按自己的步调开始。'}
-          </Text>
+          {emptyDay ? null : (
+            <>
+              <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
+                accessibilityLabel={snapshot ? undefined : '正在读取今日专注'} />
+              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
+                {!snapshot ? '正在读取今日记录，可下拉重试。' : effectiveSeconds > 0
+                  ? `${snapshot.focusCount} 段专注 · ${snapshot.examCount} 场模考${goalSeconds && effectiveSeconds > goalSeconds ? ` · 超出目标 ${duration(effectiveSeconds - goalSeconds)}` : ''}`
+                  : active ? '当前这一轮尚未结算，会保留在专注工作台。' : '今天的纸页还很安静，按自己的步调开始。'}
+              </Text>
+            </>
+          )}
           {!snapshot ? <Pressable onPress={() => void handleRefresh()} disabled={refreshing} accessibilityRole="button"
             style={{ minHeight: layout.rowMinHeight, justifyContent: 'center' }}><Text style={[typography.bodyPrimary, { color: colors.brandInk }]}>{refreshing ? '读取中…' : '重新读取'}</Text></Pressable> : null}
 
@@ -361,7 +383,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
         {!tasks.length ? (
           <YanjiEmptyLedgerRow
             prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
-            hint="设定所属学科与预计分钟，开始专注时可一键带入"
             onPress={openTaskEditor}
           />
         ) : null}
@@ -403,7 +424,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 <Text style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.xs }]}>
                   {snapshot ? '还没有已保存的学科投入。' : '正在读取学科记录…'}
                 </Text>
-                <YanjiDayPartRhythmGrid parts={DAY_PARTS} nowHour={nowHour} nowMinute={nowMinute} />
                 {plannedSubjects.length > 0 ? (
                   <View style={{ marginTop: YanjiSpacing.md }}>
                     <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.xs }]}>
