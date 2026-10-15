@@ -164,7 +164,7 @@ Level 2  架构决策记录 —— docs/adr/**（分歧时无条件服从 ADR）
 Level 3  项目门面与验证事实 —— README.md（受 check-project-facts.sh 保护的字段）
 Level 4  当前运行 UI 的设计 Token 与组件代码 —— `src/theme/**`、`src/components/**`、`src/screens/**`；`DESIGN.md` 提供可迭代的创作方向，历史 Compose 主题仅作迁移参考
 Level 5  长期沉淀事实 —— .workbuddy/memory/MEMORY.md（经验证的环境与平台坑）
-Level 6  历史阶段性留档（仅供回溯，禁止作为改动依据）—— 开发手册/**、历史 Prompt 模板、旧重构报告
+Level 6  历史阶段性留档（仅供回溯，禁止作为改动依据）—— 开发手册/**（仅存成就系统重构提示词）、历史 Prompt 模板
 ```
 
 **裁决准则**：① 代码与构建配置永远拥有最高真实性；② ADR 具有裁决性法律地位，历史文档与 ADR 分歧时**无条件服从 ADR**；③ 禁止把历史 Prompt / 留档当作既定事实。
@@ -282,10 +282,10 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 | `README.md` | 产品 / 架构 / 构建门禁门面；`project-facts` 由 CI 校验 | 事实来源 |
 | `docs/adr/**` | 架构决策记录（ADR） | **决策分歧时以 ADR 为准** |
 | `docs/audits/**` | 安全 / CI / 后端审计报告 | 历史证据 |
-| `DESIGN.md`、`docs/design/**`、`FrontEnd.md` | 设计与前端资料 | **以新版 `DESIGN.md` 为创作方向，其他旧版文档仅供回溯，不可将其固定参数当作新 UI 红线** |
-| `docs/migration/**` | 仓库加固 / 迁移计划 | 规划参考 |
+| `DESIGN.md` | 当前 UI 设计方向与视觉创作依据 | **UI 改动前必读** |
+| `docs/IP_AS_LOGO_ASSETS.md` | 品牌图形资产说明 | 参考 |
 | `.workbuddy/memory/MEMORY.md` | 长期沉淀的环境与平台坑 | 经验事实（Level 5） |
-| `开发手册/**` | 阶段性重构报告、技术栈、架构状态 | **历史留档（Level 6，禁止作为改动依据）**；`技术栈.md` / `架构与能力状态.md` 可能仍在 v11 阶段，以代码与 `gradle/libs.versions.toml` 为准 |
+| `开发手册/**` | 阶段性重构留档（当前仅存成就系统重构提示词） | **历史留档（Level 6，禁止作为改动依据）** |
 | `build/orca-reports/**` | 临时分析/设计报告（**不入库**） | 任务产物 |
 
 ---
