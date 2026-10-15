@@ -8,7 +8,7 @@
  * the three behaviours that were silently wrong before:
  *
  *  1. the date could be pushed past today, rendering a record from the future;
- *  2. sessions / tasks / notes were three stacked lists instead of one timeline;
+ *  2. sessions and notes were stacked lists instead of one timeline;
  *  3. a day whose only content was an unfinished plan read as "nothing happened".
  *
  * Node 22 strips TypeScript types natively, so the module loads directly.
@@ -129,21 +129,20 @@ export function registerReviewViewLogicTests() {
   });
 
   describe('Tier 1: Review view logic — one chronological timeline', () => {
-    it('interleaves sessions, tasks and notes by their real event times', () => {
+    it('interleaves sessions and notes by their real event times', () => {
       const entries = logic.buildTimelineEntries(
         timeline({
           // Deliberately listed sessions-first, newest-first inside each group —
           // the merge must not inherit any of that ordering.
           sessions: [session('s-late', at(2026, 10, 8, 14, 0)), session('s-early', at(2026, 10, 8, 9, 0))],
-          tasks: [task('t-mid', at(2026, 10, 8, 10, 30))],
           notes: [note('n-noon', at(2026, 10, 8, 12, 0)), note('n-night', at(2026, 10, 8, 21, 0))],
         })
       );
 
       assertDeepEqual(
         entries.map(entry => entry.key),
-        ['note-n-night', 'session-s-late', 'note-n-noon', 'task-t-mid', 'session-s-early'],
-        'Entries must come out newest-first across all three sources, not grouped by type'
+        ['note-n-night', 'session-s-late', 'note-n-noon', 'session-s-early'],
+        'Entries must come out newest-first across both sources, not grouped by type'
       );
     });
 
@@ -155,7 +154,6 @@ export function registerReviewViewLogicTests() {
             timeline({
               sessions: [session('s-b', sameTime)],
               notes: [note('n-a', sameTime)],
-              tasks: [task('t-c', sameTime)],
             })
           )
           .map(entry => entry.key);
@@ -166,16 +164,15 @@ export function registerReviewViewLogicTests() {
       const reversed = logic
         .buildTimelineEntries(
           timeline({
-            sessions: [session('s-b', sameTime)],
             notes: [note('n-a', sameTime)],
-            tasks: [task('t-c', sameTime)],
+            sessions: [session('s-b', sameTime)],
           })
         )
         .map(entry => entry.key);
       assertDeepEqual(reversed, first, 'Tie-break ordering must be stable across calls');
       assertDeepEqual(
         first,
-        ['note-n-a', 'session-s-b', 'task-t-c'],
+        ['note-n-a', 'session-s-b'],
         'Equal timestamps must fall back to the entry key in ascending order'
       );
     });
@@ -188,26 +185,28 @@ export function registerReviewViewLogicTests() {
       const entries = logic.buildTimelineEntries(
         timeline({
           sessions: [session('s1', at(2026, 10, 8, 9, 0))],
-          tasks: [task('t1', at(2026, 10, 8, 10, 0))],
           notes: [note('n1', at(2026, 10, 8, 11, 0))],
         })
       );
       assertDeepEqual(
         entries.map(entry => entry.kind),
-        ['note', 'task', 'session'],
+        ['note', 'session'],
         'The kind discriminator must survive the merge'
       );
     });
 
-    it('filters unfinished plans from the timeline while preserving the full snapshot', () => {
+    it('keeps plans out of the timeline while leaving the snapshot untouched', () => {
+      // A plan has no completion timestamp in the domain model, so the screen
+      // renders plans in their own sections instead of guessing a slot for them
+      // in the timeline.
       const snapshot = timeline({ tasks: [
         task('done', at(2026, 10, 8, 9), true),
         task('pending', at(2026, 10, 8, 10), false),
       ] });
       const entries = logic.buildTimelineEntries(snapshot);
-      assertDeepEqual(entries.map(entry => entry.key), ['task-done']);
-      assertEqual(snapshot.tasks.length, 2, 'View filtering must not mutate the native snapshot');
-      assert(logic.dayHasRecords([], [snapshot.tasks[1]]), 'An unfinished plan is still a day record');
+      assertDeepEqual(entries.map(entry => entry.key), [], 'No plan may enter the timeline');
+      assertEqual(snapshot.tasks.length, 2, 'Building the timeline must not mutate the snapshot');
+      assert(logic.dayHasRecords(entries, [snapshot.tasks[1]]), 'An unfinished plan is still a day record');
     });
   });
 

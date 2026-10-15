@@ -72,7 +72,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const entries = useMemo(() => buildTimelineEntries(snapshot).filter(entry => entry.kind !== 'task'), [snapshot]);
+  const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
   const hasRecords = dayHasRecords(entries, dayTasks);
   const completedTasks = dayTasks.filter(task => task.completed);
   const pendingTasks = dayTasks.filter(task => !task.completed);
@@ -204,8 +204,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           {entry.kind === 'session' ? <SessionRow session={entry.session}
             onEdit={() => setNoteTarget({ sessionId: entry.session.id, isExam: entry.session.isExam, title: entry.session.title, note: entry.session.note })}
             onDelete={() => { setDeleteError(null); setPendingDelete({ sessionId: entry.session.id, isExam: entry.session.isExam, subjectName: entry.session.subjectName }); }} />
-            : entry.kind === 'note' ? <NoteRow note={entry} busy={busyNote !== null}
-              onToggleFavorite={() => void toggleFavorite(entry.noteId)} onEdit={() => setEditingNote({ id: entry.noteId, content: entry.content })} /> : null}
+            : <NoteRow note={entry} busy={busyNote !== null}
+              onToggleFavorite={() => void toggleFavorite(entry.noteId)} onEdit={() => setEditingNote({ id: entry.noteId, content: entry.content })} />}
           <YanjiHairline />
         </View>)}
 

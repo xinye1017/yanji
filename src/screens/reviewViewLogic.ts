@@ -4,7 +4,7 @@
  *
  * Why this file exists: the timeline merge, the date clamp and the relative day
  * naming are the parts that can silently be WRONG (a future date renders a blank
- * day, a task sorted by the wrong clock lands in the wrong slot). Keeping them
+ * day, a session sorted by the wrong clock lands in the wrong slot). Keeping them
  * out of the .tsx means `test-e2e/tier1-features/m9-review-view-logic.test.js`
  * can import and assert them directly — the same trick
  * `m8-shipped-tokens.test.js` uses to reach `src/theme/tokens.ts`.
@@ -91,7 +91,6 @@ export function formatPercent(share: number): string {
 
 export type TimelineEntry =
   | { key: string; kind: 'session'; at: number; session: DailySession }
-  | { key: string; kind: 'task'; at: number; task: StudyTask }
   | {
       key: string;
       kind: 'note';
@@ -103,16 +102,13 @@ export type TimelineEntry =
     };
 
 /**
- * One chronological stream out of three Room sources.
+ * One chronological stream out of two Room sources.
  *
- * Sort keys are the real event times: a session starts at `startTime`, a task
- * was created at `createdAt`, a note was written at `timestamp`. The domain
- * model has no completion timestamp for a task, so a completed task sits where
- * it was *planned* — the bridge does not expose when it was ticked off, and
- * guessing one would be a second source of truth.
+ * Sort keys are the real event times: a session starts at `startTime`, a note
+ * was written at `timestamp`.
  *
  * Newest first. The key breaks ties so the order never depends on the order in
- * which the three source arrays happened to arrive.
+ * which the two source arrays happened to arrive.
  */
 export function buildTimelineEntries(snapshot: DailySnapshot | null): TimelineEntry[] {
   if (!snapshot) return [];
@@ -124,9 +120,6 @@ export function buildTimelineEntries(snapshot: DailySnapshot | null): TimelineEn
         at: session.startTime,
         session,
       })
-    ),
-    ...snapshot.tasks.filter(task => task.completed).map(
-      (task): TimelineEntry => ({ key: `task-${task.id}`, kind: 'task', at: task.createdAt, task })
     ),
     ...snapshot.notes.map(
       (note): TimelineEntry => ({
