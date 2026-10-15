@@ -275,6 +275,7 @@ export function TaskEditorModal({
                   style={{
                     flexDirection: 'row',
                     flexWrap: 'wrap',
+                    gap: YanjiSpacing.sm,
                     marginTop: YanjiSpacing.md,
                   }}
                 >
@@ -299,7 +300,7 @@ export function TaskEditorModal({
               )}
             </>
           ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
               {categories.map(category => (
                 <YanjiChip
                   key={category.id}
@@ -323,7 +324,7 @@ export function TaskEditorModal({
           <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
 
           <YanjiPaperSectionHeading title="时长" />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
             {DURATION_PRESETS.map(preset => (
               <YanjiChip
                 key={preset}

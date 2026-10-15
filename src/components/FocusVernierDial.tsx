@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { YanjiSpacing } from '../theme/tokens';
 
 const TICK_WIDTH = 26;
 
@@ -95,12 +96,12 @@ export function FocusVernierDial({
   const horizontalInset = Math.max(0, (width - TICK_WIDTH) / 2);
   // Scale the label *container*, not just its font. At fontScale >= 2 the
   // original fixed 90dp cells clipped two- and three-digit major labels.
-  const labelTop = 68;
+  const labelTop = 64;
   const labelHeight = Math.ceil(paper.typography.captionMeta.lineHeight * Math.max(1, fontScale));
-  const tickHeight = Math.max(96, labelTop + labelHeight + 8);
+  const tickHeight = Math.max(92, labelTop + labelHeight + 8);
 
   return (
-    <View testID="focus-vernier" style={{ marginTop: 12 }}>
+    <View testID="focus-vernier" style={{ marginTop: YanjiSpacing.sm }}>
       <View
         accessible
         accessibilityRole="adjustable"
@@ -112,8 +113,27 @@ export function FocusVernierDial({
           if (event.nativeEvent.actionName === 'decrement') adjust(-1);
         }}
         onLayout={e => setWidth(e.nativeEvent.layout.width)}
-        style={{ minHeight: tickHeight + 10, justifyContent: 'center' }}
+        style={{
+          minHeight: tickHeight + 8,
+          justifyContent: 'center',
+          backgroundColor: paper.colors.subtle,
+          borderRadius: paper.radius.surface,
+          borderWidth: paper.layout.hairlineWidth,
+          borderColor: paper.colors.hairline,
+          overflow: 'hidden',
+        }}
       >
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 22,
+            height: paper.layout.hairlineWidth,
+            backgroundColor: paper.colors.hairline,
+          }}
+        />
         <ScrollView
           ref={list}
           testID="focus-vernier-ruler"
@@ -134,7 +154,7 @@ export function FocusVernierDial({
             minHeight: tickHeight,
           }}
         >
-          {ticks.map((minutes, index) => {
+          {ticks.map(minutes => {
             const major = minutes % 30 === 0;
             const medium = minutes % 15 === 0;
             const selected = minutes === valueMinutes;
@@ -143,20 +163,27 @@ export function FocusVernierDial({
                 <View
                   style={{
                     position: 'absolute',
-                    top: 25,
-                    width: selected ? 2 : 1,
-                    height: major ? 32 : medium ? 24 : 15,
+                    top: 22,
+                    width: selected ? 2 : major ? 1.5 : 1,
+                    height: major ? 34 : medium ? 24 : 14,
+                    borderRadius: paper.radius.tick,
                     backgroundColor: selected ? paper.colors.brandInk : paper.colors.secondary,
-                    opacity: selected ? 1 : 0.65,
+                    opacity: selected ? 1 : major ? 0.85 : 0.55,
                   }}
                 />
                 {major ? (
-                  <Text style={[paper.typography.captionMeta, {
-                    color: paper.colors.secondary,
-                    position: 'absolute',
-                    top: labelTop,
-                    textAlign: 'center',
-                  }]}>
+                  <Text
+                    style={[
+                      paper.typography.captionMeta,
+                      {
+                        color: selected ? paper.colors.brandInk : paper.colors.secondary,
+                        fontWeight: selected ? '700' : '500',
+                        position: 'absolute',
+                        top: labelTop,
+                        textAlign: 'center',
+                      },
+                    ]}
+                  >
                     {minutes}
                   </Text>
                 ) : null}
@@ -169,31 +196,62 @@ export function FocusVernierDial({
           style={{
             position: 'absolute',
             alignSelf: 'center',
-            top: 2,
-            width: 2,
-            height: 58,
-            borderRadius: paper.radius.tick,
-            backgroundColor: paper.colors.brand,
+            top: 6,
+            alignItems: 'center',
           }}
-        />
+        >
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.brand,
+            }}
+          />
+          <View
+            style={{
+              width: 2,
+              height: 52,
+              borderRadius: paper.radius.tick,
+              backgroundColor: paper.colors.brand,
+            }}
+          />
+        </View>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, gap: 16 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: YanjiSpacing.sm,
+          paddingHorizontal: YanjiSpacing.xs,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`减少${stepMinutes}分钟`}
           disabled={disabled || valueMinutes <= minMinutes}
           onPress={() => adjust(-1)}
           style={({ pressed }) => ({
-            minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center',
-            borderRadius: paper.radius.pill, backgroundColor: paper.colors.subtle,
+            minWidth: 48,
+            minHeight: 48,
+            paddingHorizontal: YanjiSpacing.md,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderRadius: paper.radius.pill,
+            backgroundColor: paper.colors.subtle,
+            borderWidth: paper.layout.hairlineWidth,
+            borderColor: paper.colors.hairline,
             opacity: disabled || valueMinutes <= minMinutes ? 0.45 : pressed ? 0.7 : 1,
           })}
         >
-          <Text style={{ fontSize: 23, color: paper.colors.ink }}>−</Text>
+          <Text style={[paper.typography.bodyPrimary, { fontWeight: '700', color: paper.colors.ink }]}>
+            − {stepMinutes}m
+          </Text>
         </Pressable>
         <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-          每格 {stepMinutes} 分钟
+          寸阴尺 · 每格 {stepMinutes} 分钟
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -201,12 +259,21 @@ export function FocusVernierDial({
           disabled={disabled || valueMinutes >= maxMinutes}
           onPress={() => adjust(1)}
           style={({ pressed }) => ({
-            minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center',
-            borderRadius: paper.radius.pill, backgroundColor: paper.colors.subtle,
+            minWidth: 48,
+            minHeight: 48,
+            paddingHorizontal: YanjiSpacing.md,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderRadius: paper.radius.pill,
+            backgroundColor: paper.colors.subtle,
+            borderWidth: paper.layout.hairlineWidth,
+            borderColor: paper.colors.hairline,
             opacity: disabled || valueMinutes >= maxMinutes ? 0.45 : pressed ? 0.7 : 1,
           })}
         >
-          <Text style={{ fontSize: 23, color: paper.colors.ink }}>+</Text>
+          <Text style={[paper.typography.bodyPrimary, { fontWeight: '700', color: paper.colors.ink }]}>
+            + {stepMinutes}m
+          </Text>
         </Pressable>
       </View>
     </View>

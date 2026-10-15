@@ -30,9 +30,16 @@ function dialHarness({ value = 37, width = 358, fontScale = 1, step = 5 } = {}) 
     useCallback: fn => fn,
   };
   const paper = {
-    colors: { brand: '#c84b31', brandInk: '#b23a22', secondary: '#555', ink: '#111', subtle: '#eee' },
-    radius: { pill: 9999, tick: 1 },
-    typography: { captionMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500' } },
+    colors: {
+      brand: '#c84b31', brandInk: '#b23a22', secondary: '#555', ink: '#111',
+      subtle: '#eee', hairline: 'rgba(0,0,0,0.08)',
+    },
+    radius: { pill: 9999, tick: 1, surface: 14 },
+    layout: { hairlineWidth: 1 },
+    typography: {
+      captionMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500' },
+      bodyPrimary: { fontSize: 14, lineHeight: 23, fontWeight: '500' },
+    },
   };
   const component = loadTypeScript('src/components/FocusVernierDial.tsx', {
     react,

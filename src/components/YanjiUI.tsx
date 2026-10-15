@@ -68,8 +68,8 @@ export function YanjiIcon({
 // ---------------------------------------------------------------------------
 // useYanjiKeyboardInset — real Android IME height for sheets
 //
-// Why not `KeyboardAvoidingView` alone: a sheet inside an RN `Modal` lives in a
-// separate Android window, and the view derives its offset from its own
+// Why not `KeyboardAvoidingView` alone: a sheet inside an RN `Modal` lives in
+// a separate Android window, and the view derives its offset from its own
 // on-screen frame while the IME event is delivered against the Activity root.
 // The two never agree inside a Modal, so the offset comes out 0 and the sheet
 // ends up underneath the keyboard. Sampling `Keyboard.metrics()` and reserving
@@ -185,14 +185,31 @@ export function YanjiEditorialHeader({
     >
       <View style={{ flex: 1 }}>
         {eyebrow ? (
-          <Text
-            style={[
-              paper.typography.captionMeta,
-              { color: paper.colors.brandInk, marginBottom: YanjiSpacing.xs },
-            ]}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: YanjiSpacing.xs + 2,
+              marginBottom: YanjiSpacing.xs,
+            }}
           >
-            {eyebrow}
-          </Text>
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: paper.radius.pill,
+                backgroundColor: paper.colors.brand,
+              }}
+            />
+            <Text
+              style={[
+                paper.typography.captionMeta,
+                { color: paper.colors.brandInk, letterSpacing: 0.6 },
+              ]}
+            >
+              {eyebrow}
+            </Text>
+          </View>
         ) : null}
         <Text
           accessibilityRole="header"
@@ -243,12 +260,22 @@ export function YanjiPaperSectionHeading({
     >
       {/* Marked as a heading so TalkBack users can jump between sections instead
           of reading the page as one unbroken stream of rows. */}
-      <Text
-        accessibilityRole="header"
-        style={[paper.typography.titleSection, { color: paper.colors.ink }]}
-      >
-        {title}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
+        <View
+          style={{
+            width: 3,
+            height: 14,
+            borderRadius: paper.radius.tick,
+            backgroundColor: paper.colors.brand,
+          }}
+        />
+        <Text
+          accessibilityRole="header"
+          style={[paper.typography.titleSection, { color: paper.colors.ink }]}
+        >
+          {title}
+        </Text>
+      </View>
       {right}
     </View>
   );
@@ -288,6 +315,8 @@ export function YanjiPaperSegmentedControl<T extends string>({
         alignSelf: 'flex-start',
         backgroundColor: paper.colors.subtle,
         borderRadius: paper.radius.pill,
+        borderWidth: paper.layout.hairlineWidth,
+        borderColor: paper.colors.hairline,
         padding: YanjiSpacing.xs,
       }}
     >
@@ -336,7 +365,7 @@ function PaperSegment({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       style={({ pressed }) => ({
-        minHeight: paper.layout.rowMinHeight,
+        minHeight: paper.layout.rowMinHeight - YanjiSpacing.xs,
         minWidth: paper.layout.rowMinHeight,
         paddingHorizontal: YanjiSpacing.lg,
         alignItems: 'center',
@@ -357,6 +386,8 @@ function PaperSegment({
             bottom: 0,
             backgroundColor: paper.colors.surface,
             borderRadius: paper.radius.pill,
+            borderWidth: paper.layout.hairlineWidth,
+            borderColor: paper.colors.hairline,
           },
           fill,
         ]}
@@ -364,7 +395,10 @@ function PaperSegment({
       <Text
         style={[
           paper.typography.bodyPrimary,
-          { color: selected ? paper.colors.ink : paper.colors.secondary },
+          {
+            color: selected ? paper.colors.ink : paper.colors.secondary,
+            fontWeight: selected ? '700' : '500',
+          },
         ]}
       >
         {label}
@@ -447,13 +481,14 @@ export function YanjiChronoSpectrum({
         flexDirection: 'row',
       }}
     >
-      {filled.map(segment => (
+      {filled.map((segment, index) => (
         <View
           key={segment.id}
           style={{
             flexGrow: segment.seconds,
             flexBasis: 0,
             backgroundColor: segment.color,
+            marginRight: index < filled.length - 1 ? 1 : 0,
           }}
         />
       ))}
@@ -504,7 +539,9 @@ export function YanjiCard({
     ? 'transparent'
     : variant === 'sunken'
       ? paper.colors.subtle
-      : paper.colors.surface;
+      : variant === 'hero'
+        ? paper.colors.surface
+        : paper.colors.elevated;
 
   const padding = plain
     ? 0
@@ -569,21 +606,36 @@ export function YanjiHairline({
 export function YanjiBadge({
   label,
   icon,
+  tone = 'brand',
   style,
 }: {
   label: string;
   icon?: YanjiIconName;
+  tone?: 'brand' | 'neutral' | 'amber';
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
+  const bg =
+    tone === 'brand'
+      ? paper.colors.brandSubtle
+      : tone === 'amber'
+        ? paper.colors.amberSubtle
+        : paper.colors.subtle;
+  const fg =
+    tone === 'brand'
+      ? paper.colors.brandInk
+      : tone === 'amber'
+        ? paper.colors.amber
+        : paper.colors.secondary;
+
   return (
     <View
       style={[
         {
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: paper.colors.subtle,
+          backgroundColor: bg,
           borderWidth: paper.layout.hairlineWidth,
           borderColor: paper.colors.hairline,
           paddingVertical: 4,
@@ -596,17 +648,272 @@ export function YanjiBadge({
     >
       {icon ? (
         <View style={{ marginRight: 5 }}>
-          <YanjiIcon name={icon} size={12} color={paper.colors.brandInk} />
+          <YanjiIcon name={icon} size={12} color={fg} />
         </View>
       ) : null}
       <Text
         style={[
           paper.typography.captionMeta,
-          { color: paper.colors.brandInk },
+          { color: fg },
         ]}
       >
         {label}
       </Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiStatCell — compact typographic metric block for summaries
+// ---------------------------------------------------------------------------
+
+export function YanjiStatCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  return (
+    <View style={{ flexGrow: 1, flexBasis: 84 }}>
+      <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          paper.typography.bodyPrimary,
+          {
+            color: paper.colors.ink,
+            fontWeight: '700',
+            fontVariant: ['tabular-nums'],
+            marginTop: YanjiSpacing.xs,
+          },
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiSubjectProportionRow — subject investment row with proportional bar
+// ---------------------------------------------------------------------------
+
+export function YanjiSubjectProportionRow({
+  label,
+  color,
+  metaText,
+  ratio,
+  selected = false,
+  onPress,
+}: {
+  label: string;
+  color: string;
+  metaText: string;
+  ratio: number;
+  selected?: boolean;
+  onPress?: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const clamped = Math.max(0, Math.min(1, ratio));
+  const content = (
+    <View
+      style={{
+        paddingVertical: YanjiSpacing.sm + 2,
+        paddingHorizontal: selected ? YanjiSpacing.sm : 0,
+        borderRadius: paper.radius.tag,
+        backgroundColor: selected ? paper.colors.brandSubtle : 'transparent',
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: paper.layout.gridGap,
+        }}
+      >
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: paper.radius.pill,
+            backgroundColor: color,
+          }}
+        />
+        <Text
+          numberOfLines={1}
+          style={[paper.typography.bodyPrimary, { color: paper.colors.ink, flex: 1 }]}
+        >
+          {label}
+        </Text>
+        <Text
+          style={[
+            paper.typography.captionMeta,
+            { color: selected ? paper.colors.brandInk : paper.colors.secondary, flexShrink: 0 },
+          ]}
+        >
+          {metaText}
+        </Text>
+      </View>
+      <View
+        style={{
+          height: 4,
+          borderRadius: paper.radius.pill,
+          backgroundColor: paper.colors.subtle,
+          overflow: 'hidden',
+          marginTop: YanjiSpacing.xs + 2,
+          marginLeft: 16,
+        }}
+      >
+        <View
+          style={{
+            width: `${Math.round(clamped * 100)}%`,
+            height: 4,
+            borderRadius: paper.radius.pill,
+            backgroundColor: color,
+          }}
+        />
+      </View>
+    </View>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        style={{
+          borderBottomWidth: paper.layout.hairlineWidth,
+          borderColor: paper.colors.hairline,
+        }}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={({ pressed }) => ({
+        minHeight: paper.layout.rowMinHeight,
+        justifyContent: 'center',
+        borderBottomWidth: paper.layout.hairlineWidth,
+        borderColor: paper.colors.hairline,
+        opacity: pressed ? 0.68 : 1,
+      })}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiTaskLedgerRow — unboxed study task row with checkbox, metadata & play
+// ---------------------------------------------------------------------------
+
+export function YanjiTaskLedgerRow({
+  title,
+  meta,
+  completed,
+  busy = false,
+  disabled = false,
+  onToggle,
+  onEdit,
+  onStartFocus,
+}: {
+  title: string;
+  meta: string;
+  completed: boolean;
+  busy?: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onStartFocus: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  return (
+    <View>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: layout.gridGap,
+          paddingVertical: YanjiSpacing.sm,
+        }}
+      >
+        <Pressable
+          onPress={onToggle}
+          disabled={disabled}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: completed, disabled, busy }}
+          accessibilityLabel={`${completed ? '恢复待办' : '完成任务'}：${title}`}
+          style={({ pressed }) => ({
+            width: layout.rowMinHeight,
+            minHeight: layout.rowMinHeight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderWidth: completed ? 0 : 1.5,
+              borderColor: colors.secondary,
+              backgroundColor: completed ? colors.brand : 'transparent',
+              borderRadius: radius.tag,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {completed ? <YanjiIcon name="check" size={14} color={colors.onBrand} /> : null}
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onEdit}
+          accessibilityRole="button"
+          accessibilityLabel={`编辑任务：${title}`}
+          style={({ pressed }) => ({
+            flex: 1,
+            minHeight: layout.rowMinHeight,
+            justifyContent: 'center',
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <Text
+            style={[
+              typography.bodyPrimary,
+              {
+                color: completed ? colors.secondary : colors.ink,
+                textDecorationLine: completed ? 'line-through' : 'none',
+              },
+            ]}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[
+              typography.captionMeta,
+              { color: colors.secondary, marginTop: YanjiSpacing.xs },
+            ]}
+          >
+            {meta}
+          </Text>
+        </Pressable>
+        <YanjiIconButton
+          icon="play"
+          onPress={onStartFocus}
+          accessibilityLabel={`为${title}设置专注`}
+          size={layout.rowMinHeight}
+          tone={completed ? 'plain' : 'filled'}
+        />
+      </View>
+      <YanjiHairline />
     </View>
   );
 }
@@ -649,21 +956,24 @@ export function YanjiPrimaryButton({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => ({
-        backgroundColor,
-        borderRadius: paper.radius.pill,
-        borderWidth: secondary ? paper.layout.hairlineWidth : 0,
-        borderColor: secondary ? paper.colors.hairline : 'transparent',
-        paddingVertical: 15,
-        paddingHorizontal: 24,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: YanjiTouch.comfortable,
-        opacity: pressed ? 0.88 : 1,
-        transform: [{ scale: pressed && !reduceMotion ? 0.985 : 1 }],
-        ...(!disabled && !secondary ? theme.shadow.sheet(theme.isDark) : null),
-      })}
+      style={({ pressed }) => [
+        {
+          backgroundColor,
+          borderRadius: paper.radius.pill,
+          borderWidth: secondary ? paper.layout.hairlineWidth : 0,
+          borderColor: secondary ? paper.colors.hairline : 'transparent',
+          paddingVertical: 15,
+          paddingHorizontal: 24,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: YanjiTouch.comfortable + 4,
+          opacity: pressed ? 0.88 : 1,
+          transform: [{ scale: pressed && !reduceMotion ? 0.985 : 1 }],
+          ...(!disabled && !secondary ? theme.shadow.sheet(theme.isDark) : null),
+        },
+        style,
+      ]}
     >
       {icon ? (
         <View style={{ marginRight: YanjiSpacing.sm }}>
@@ -716,7 +1026,11 @@ export function YanjiIconButton({
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
-  const color = disabled ? paper.colors.muted : paper.colors.secondary;
+  const color = disabled
+    ? paper.colors.muted
+    : selected
+      ? paper.colors.brandInk
+      : paper.colors.secondary;
 
   return (
     <Pressable
@@ -733,7 +1047,12 @@ export function YanjiIconButton({
           borderRadius: YanjiRadius.full,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: tone === 'filled' ? paper.colors.subtle : 'transparent',
+          backgroundColor:
+            selected
+              ? paper.colors.brandSubtle
+              : tone === 'filled'
+                ? paper.colors.subtle
+                : 'transparent',
           opacity: pressed ? 0.6 : 1,
         },
         style,
@@ -1140,7 +1459,7 @@ export function YanjiBreathButton({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: YanjiTouch.comfortable,
+          minHeight: YanjiTouch.comfortable + 6,
           opacity: disabled ? 1 : pressed ? 0.92 : 1,
           ...(disabled ? null : theme.shadow.sheet(theme.isDark)),
         })}
@@ -1158,7 +1477,7 @@ export function YanjiBreathButton({
           style={{
             color: disabled ? paper.colors.muted : paper.colors.onBrand,
             fontSize: 16,
-            fontWeight: '600',
+            fontWeight: '700',
             fontVariant: ['tabular-nums'],
           }}
         >
@@ -1291,31 +1610,35 @@ export function YanjiChip({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected }}
       style={({ pressed }) => [
         {
           paddingVertical: YanjiSpacing.sm,
-          paddingHorizontal: 14,
+          paddingHorizontal: 16,
           minHeight: YanjiTouch.comfortable,
           justifyContent: 'center',
           borderRadius: paper.radius.pill,
-          marginRight: YanjiSpacing.sm,
-          marginBottom: YanjiSpacing.sm,
           // Selected chips stay soft-tinted rather than filled: a wall of solid
           // accent pills reads as "many primary actions", and a screen has only
           // one (its start / save button).
-          backgroundColor: selected ? paper.colors.subtle : paper.colors.surface,
+          backgroundColor: selected ? paper.colors.brandSubtle : paper.colors.surface,
           borderWidth: paper.layout.hairlineWidth,
           borderColor: selected ? paper.colors.brand : paper.colors.hairline,
-          opacity: pressed ? 0.7 : 1,
+          opacity: pressed ? 0.72 : 1,
         },
         style,
       ]}
     >
       <Text
+        numberOfLines={2}
         style={[
           paper.typography.bodyPrimary,
-          { color: selected ? paper.colors.brandInk : paper.colors.secondary },
+          {
+            color: selected ? paper.colors.brandInk : paper.colors.ink,
+            fontWeight: selected ? '700' : '500',
+            flexShrink: 1,
+          },
         ]}
       >
         {label}

@@ -18,7 +18,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import {
+  YanjiBadge,
+  YanjiCard,
+  YanjiChip,
   YanjiEditorialHeader,
+  YanjiHairline,
   YanjiIcon,
   YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl,
@@ -28,6 +32,7 @@ import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { YanjiSpacing } from '../theme/tokens';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 
 const DURATION_PRESETS = [25, 45, 60, 90] as const;
@@ -206,7 +211,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: paper.layout.pageGutter,
-            paddingTop: 18,
+            paddingTop: YanjiSpacing.lg,
             paddingBottom: contentPadding,
           }}
         >
@@ -214,44 +219,190 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             eyebrow="PAPER & CHRONO · 寸阴"
             title="专注"
             subtitle="把时间留给眼前这一件事。"
+            trailing={selectedSubject ? <YanjiBadge label={selectedSubject.name} /> : undefined}
           />
 
-          <YanjiPaperSectionHeading title="选择科目" />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
-            {subjects.map(subject => {
-              const selected = selectedSubjectId === subject.id;
-              return (
-                <Pressable
-                  key={subject.id}
-                  onPress={() => {
-                    setSelectedSubjectId(subject.id);
-                    setTaskBinding(previous => previous?.subjectId === subject.id ? previous : null);
-                    setActionError(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={subject.name}
-                  accessibilityState={{ selected }}
-                  style={({ pressed }) => ({
-                    minHeight: paper.layout.rowMinHeight,
-                    justifyContent: 'center',
-                    maxWidth: '100%',
-                    paddingHorizontal: 17,
-                    borderRadius: paper.radius.pill,
-                    backgroundColor: selected ? paper.colors.subtle : paper.colors.surface,
-                    borderWidth: 1,
-                    borderColor: selected ? paper.colors.brand : paper.colors.hairline,
-                    opacity: pressed ? 0.72 : 1,
-                  })}
-                >
-                  <Text numberOfLines={2} style={[
-                    paper.typography.bodyPrimary,
-                    { color: selected ? paper.colors.brandInk : paper.colors.ink, flexShrink: 1 },
-                  ]}>
-                    {subject.name}
+          {taskBinding ? (
+            <View
+              style={{
+                marginTop: YanjiSpacing.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: paper.colors.brandSubtle,
+                borderRadius: paper.radius.surface,
+                borderWidth: paper.layout.hairlineWidth,
+                borderColor: paper.colors.brand,
+                paddingLeft: YanjiSpacing.md,
+                paddingRight: YanjiSpacing.xs,
+                paddingVertical: YanjiSpacing.xs,
+              }}
+            >
+              <YanjiIcon name="tasks" size={17} color={paper.colors.brandInk} />
+              <Text
+                numberOfLines={2}
+                style={[
+                  paper.typography.bodyPrimary,
+                  { color: paper.colors.ink, flex: 1, marginHorizontal: YanjiSpacing.sm },
+                ]}
+              >
+                关联任务 · {taskBinding.title}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="取消关联任务"
+                hitSlop={8}
+                onPress={() => setTaskBinding(null)}
+                style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <YanjiIcon name="close" size={18} color={paper.colors.secondary} />
+              </Pressable>
+            </View>
+          ) : null}
+
+          <YanjiCard style={{ marginTop: YanjiSpacing.lg }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: YanjiSpacing.sm,
+              }}
+            >
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                计时方式
+              </Text>
+              <YanjiPaperSegmentedControl
+                value={timerMode}
+                options={TIMER_MODES}
+                onChange={setTimerMode}
+                accessibilityLabel="计时模式"
+              />
+            </View>
+
+            <YanjiHairline style={{ marginVertical: YanjiSpacing.md }} />
+
+            <View style={{ alignItems: 'center' }}>
+              {timerMode === 'COUNTDOWN' ? (
+                <>
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                    计划专注时长
                   </Text>
-                </Pressable>
-              );
-            })}
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: YanjiSpacing.xs }}>
+                    <Text
+                      testID="focus-duration-value"
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.55}
+                      numberOfLines={1}
+                      style={[
+                        paper.typography.displayDial,
+                        {
+                          color: paper.colors.ink,
+                          fontSize: Math.min(paper.typography.displayDial.fontSize, Math.max(52, width * 0.23)),
+                          textAlign: 'center',
+                        },
+                      ]}
+                    >
+                      {durationMinutes}
+                    </Text>
+                    <Text style={[paper.typography.bodyPrimary, { marginLeft: 7, color: paper.colors.secondary }]}>
+                      分钟
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      flexWrap: 'wrap',
+                      gap: YanjiSpacing.sm,
+                      marginTop: YanjiSpacing.sm,
+                    }}
+                  >
+                    {DURATION_PRESETS.map(minutes => {
+                      const active = minutes === durationMinutes;
+                      return (
+                        <Pressable
+                          key={minutes}
+                          accessibilityRole="button"
+                          accessibilityLabel={`预设 ${minutes} 分钟`}
+                          accessibilityState={{ selected: active }}
+                          onPress={() => setDurationMinutes(minutes)}
+                          style={({ pressed }) => ({
+                            minWidth: 60,
+                            minHeight: 44,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            paddingHorizontal: YanjiSpacing.md,
+                            borderRadius: paper.radius.pill,
+                            backgroundColor: active ? paper.colors.brand : paper.colors.subtle,
+                            opacity: pressed ? 0.72 : 1,
+                          })}
+                        >
+                          <Text
+                            style={[
+                              paper.typography.captionMeta,
+                              {
+                                fontWeight: '700',
+                                color: active ? paper.colors.onBrand : paper.colors.secondary,
+                              },
+                            ]}
+                          >
+                            {minutes}m
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <View style={{ paddingVertical: YanjiSpacing.lg, alignItems: 'center' }}>
+                  <Text style={[paper.typography.metricHero, { color: paper.colors.ink }]}>00:00</Text>
+                  <Text style={[paper.typography.titleEditorial, { color: paper.colors.ink, textAlign: 'center', marginTop: YanjiSpacing.xs }]}>
+                    正计时
+                  </Text>
+                  <Text
+                    style={[
+                      paper.typography.bodyPrimary,
+                      { color: paper.colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.xs },
+                    ]}
+                  >
+                    自由计时，不设时间上限；可暂停后随时结算。
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {timerMode === 'COUNTDOWN' ? (
+              <View style={{ marginTop: YanjiSpacing.md }}>
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, textAlign: 'center' }]}>
+                  寸阴尺 · 左右滑动选择
+                </Text>
+                <FocusVernierDial
+                  valueMinutes={durationMinutes}
+                  onChangeMinutes={setDurationMinutes}
+                  minMinutes={MIN_MINUTES}
+                  maxMinutes={MAX_MINUTES}
+                  stepMinutes={5}
+                  accessibilityLabel="调整倒计时长度"
+                />
+              </View>
+            ) : null}
+          </YanjiCard>
+
+          <YanjiPaperSectionHeading title="选择科目" />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
+            {subjects.map(subject => (
+              <YanjiChip
+                key={subject.id}
+                label={subject.name}
+                selected={selectedSubjectId === subject.id}
+                onPress={() => {
+                  setSelectedSubjectId(subject.id);
+                  setTaskBinding(previous => previous?.subjectId === subject.id ? previous : null);
+                  setActionError(null);
+                }}
+              />
+            ))}
           </View>
           {subjects.length === 0 ? (
             <View style={{ minHeight: paper.layout.rowMinHeight, alignItems: 'flex-start', justifyContent: 'center' }}>
@@ -272,119 +423,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             </View>
           ) : null}
 
-          <YanjiPaperSectionHeading title="计时方式" />
-          <YanjiPaperSegmentedControl
-            value={timerMode}
-            options={TIMER_MODES}
-            onChange={setTimerMode}
-            accessibilityLabel="计时模式"
-          />
-
-          <View style={{
-            marginTop: paper.layout.sectionGap + 12,
-            alignItems: 'center',
-            paddingBottom: 16,
-            borderBottomWidth: paper.layout.hairlineWidth,
-            borderColor: paper.colors.hairline,
-          }}>
-            {timerMode === 'COUNTDOWN' ? (
-              <>
-                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                  计划专注时长
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 7 }}>
-                  <Text
-                    testID="focus-duration-value"
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.55}
-                    numberOfLines={1}
-                    style={[paper.typography.displayDial, {
-                      color: paper.colors.ink,
-                      fontSize: Math.min(paper.typography.displayDial.fontSize, Math.max(52, width * 0.23)),
-                      textAlign: 'center',
-                    }]}
-                  >
-                    {durationMinutes}
-                  </Text>
-                  <Text style={[paper.typography.bodyPrimary, { marginLeft: 7, color: paper.colors.secondary }]}>分钟</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-                  {DURATION_PRESETS.map(minutes => (
-                    <Pressable
-                      key={minutes}
-                      accessibilityRole="button"
-                      accessibilityLabel={`预设 ${minutes} 分钟`}
-                      accessibilityState={{ selected: minutes === durationMinutes }}
-                      onPress={() => setDurationMinutes(minutes)}
-                      style={({ pressed }) => ({
-                        minWidth: 59, minHeight: 44, alignItems: 'center', justifyContent: 'center',
-                        paddingHorizontal: 11, borderRadius: paper.radius.pill,
-                        backgroundColor: minutes === durationMinutes ? paper.colors.brand : paper.colors.subtle,
-                        opacity: pressed ? 0.72 : 1,
-                      })}
-                    >
-                      <Text style={[paper.typography.captionMeta, {
-                        fontWeight: '700',
-                        color: minutes === durationMinutes ? paper.colors.onBrand : paper.colors.secondary,
-                      }]}>
-                        {minutes}m
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={[paper.typography.titleEditorial, { color: paper.colors.ink, textAlign: 'center' }]}>正计时</Text>
-                <Text style={[paper.typography.bodyPrimary, {
-                  color: paper.colors.secondary, textAlign: 'center', marginTop: 7,
-                }]}>
-                  自由计时，不设时间上限；可暂停后随时结算。
-                </Text>
-              </>
-            )}
-          </View>
-
-          {timerMode === 'COUNTDOWN' ? (
-            <View style={{ marginTop: 12 }}>
-              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, textAlign: 'center' }]}>寸阴尺 · 左右滑动选择</Text>
-              <FocusVernierDial
-                valueMinutes={durationMinutes}
-                onChangeMinutes={setDurationMinutes}
-                minMinutes={MIN_MINUTES}
-                maxMinutes={MAX_MINUTES}
-                stepMinutes={5}
-                accessibilityLabel="调整倒计时长度"
-              />
-            </View>
-          ) : null}
-
-          {taskBinding ? (
-            <View style={{
-              marginTop: paper.layout.sectionGap,
-              flexDirection: 'row', alignItems: 'center',
-              borderTopWidth: 1, borderBottomWidth: 1,
-              borderColor: paper.colors.hairline, paddingVertical: 9,
-            }}>
-              <YanjiIcon name="tasks" size={17} color={paper.colors.brandInk} />
-              <Text numberOfLines={2} style={[paper.typography.bodyPrimary, {
-                color: paper.colors.secondary, flex: 1, marginHorizontal: 9,
-              }]}>
-                关联任务 · {taskBinding.title}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="取消关联任务"
-                hitSlop={8}
-                onPress={() => setTaskBinding(null)}
-                style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <YanjiIcon name="close" size={18} color={paper.colors.secondary} />
-              </Pressable>
-            </View>
-          ) : null}
-
-          <View style={{ marginTop: paper.layout.sectionGap + 6 }}>
+          <View style={{ marginTop: paper.layout.sectionGap }}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={busy ? '正在启动专注' : '开始专注'}
@@ -392,25 +431,40 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
               onPress={handleStart}
               style={({ pressed }) => ({
                 minHeight: 58,
-                flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-                gap: 9,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: YanjiSpacing.sm,
                 borderRadius: paper.radius.pill,
                 backgroundColor: busy || !selectedSubject ? paper.colors.subtle : paper.colors.brand,
                 opacity: pressed ? 0.85 : 1,
+                ...(busy || !selectedSubject ? null : theme.shadow.sheet(theme.isDark)),
               })}
             >
-              <YanjiIcon name="play" size={20} color={busy || !selectedSubject ? paper.colors.secondary : paper.colors.onBrand} />
-              <Text style={{ fontSize: 17, fontWeight: '700',
-                color: busy || !selectedSubject ? paper.colors.secondary : paper.colors.onBrand,
-              }}>
+              <YanjiIcon
+                name="play"
+                size={20}
+                color={busy || !selectedSubject ? paper.colors.secondary : paper.colors.onBrand}
+              />
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: '700',
+                  color: busy || !selectedSubject ? paper.colors.secondary : paper.colors.onBrand,
+                }}
+              >
                 {busy ? '启动中…' : '开始专注'}
               </Text>
             </Pressable>
           </View>
           {actionError ? (
-            <Text accessibilityRole="alert" style={[paper.typography.bodyPrimary, {
-              color: paper.colors.danger, textAlign: 'center', marginTop: 12,
-            }]}>
+            <Text
+              accessibilityRole="alert"
+              style={[
+                paper.typography.bodyPrimary,
+                { color: paper.colors.danger, textAlign: 'center', marginTop: YanjiSpacing.md },
+              ]}
+            >
               {actionError}
             </Text>
           ) : null}
@@ -428,10 +482,13 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const immersed = isPaused ? paper.immersive.paused : paper.immersive.running;
 
   return (
-    <View testID={isPaused ? 'focus-paused' : 'focus-running'} style={{
-      flex: 1,
-      backgroundColor: immersed.canvas,
-    }}>
+    <View
+      testID={isPaused ? 'focus-paused' : 'focus-running'}
+      style={{
+        flex: 1,
+        backgroundColor: immersed.canvas,
+      }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
@@ -443,26 +500,56 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           paddingBottom: Math.max(safe.bottom, 16) + 26,
         }}
       >
-        <View style={{ alignItems: 'center', gap: 8 }}>
+        <View style={{ alignItems: 'center', gap: YanjiSpacing.sm }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="返回今天，专注继续在后台运行"
             onPress={() => selectTab('today')}
-            style={{ minHeight: 48, alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center' }}
+            style={{
+              minHeight: 48,
+              alignSelf: 'flex-start',
+              flexDirection: 'row',
+              gap: 6,
+              alignItems: 'center',
+              paddingHorizontal: YanjiSpacing.md,
+              borderRadius: paper.radius.pill,
+              backgroundColor: immersed.subtle,
+            }}
           >
             <YanjiIcon name="back" size={17} color={immersed.secondary} />
             <Text style={[paper.typography.captionMeta, { color: immersed.secondary }]}>返回今天</Text>
           </Pressable>
-          <Text style={[paper.typography.captionMeta, {
-            color: immersed.secondary, letterSpacing: 1.5, textAlign: 'center',
-          }]}>
-            {isPaused ? 'TIME AT REST · 暂歇' : 'TIME IN FOCUS · 此刻'}
-          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: YanjiSpacing.sm,
+            }}
+          >
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: paper.radius.pill,
+                backgroundColor: immersed.accent,
+              }}
+            />
+            <Text
+              style={[
+                paper.typography.captionMeta,
+                { color: immersed.secondary, letterSpacing: 1.5, textAlign: 'center' },
+              ]}
+            >
+              {isPaused ? 'TIME AT REST · 暂歇' : 'TIME IN FOCUS · 此刻'}
+            </Text>
+          </View>
           <Text
             numberOfLines={2}
-            style={[paper.typography.titleEditorial, {
-              color: immersed.ink, textAlign: 'center', maxWidth: '90%',
-            }]}
+            style={[
+              paper.typography.titleEditorial,
+              { color: immersed.ink, textAlign: 'center', maxWidth: '90%' },
+            ]}
           >
             {session.subjectName}
           </Text>
@@ -475,27 +562,49 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
         <View style={{ alignSelf: 'stretch', gap: 13 }}>
           {isPaused ? (
             <>
-              <ImmersiveAction label={busy ? '处理中…' : '继续专注'} icon="play" variant="filled"
-                disabled={busy} onPress={() => { void handleTimerAction('resume'); }} />
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <ImmersiveAction
+                label={busy ? '处理中…' : '继续专注'}
+                icon="play"
+                variant="filled"
+                disabled={busy}
+                onPress={() => { void handleTimerAction('resume'); }}
+              />
+              <View style={{ flexDirection: 'row', gap: YanjiSpacing.md }}>
                 <View style={{ flex: 1 }}>
-                  <ImmersiveAction label="提前结束" icon="check" disabled={busy}
-                    onPress={() => { void handleTimerAction('complete'); }} />
+                  <ImmersiveAction
+                    label="提前结束"
+                    icon="check"
+                    disabled={busy}
+                    onPress={() => { void handleTimerAction('complete'); }}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <ImmersiveAction label="放弃本轮" icon="delete" disabled={busy}
-                    onPress={confirmDiscard} />
+                  <ImmersiveAction
+                    label="放弃本轮"
+                    icon="delete"
+                    disabled={busy}
+                    onPress={confirmDiscard}
+                  />
                 </View>
               </View>
             </>
           ) : (
-            <ImmersiveAction label={busy ? '处理中…' : '暂停专注'} icon="pause" variant="filled"
-              disabled={busy} onPress={() => { void handleTimerAction('pause'); }} />
+            <ImmersiveAction
+              label={busy ? '处理中…' : '暂停专注'}
+              icon="pause"
+              variant="filled"
+              disabled={busy}
+              onPress={() => { void handleTimerAction('pause'); }}
+            />
           )}
           {actionError ? (
-            <Text accessibilityRole="alert" style={[paper.typography.bodyPrimary, {
-              color: paper.immersive.running.accent, textAlign: 'center',
-            }]}>
+            <Text
+              accessibilityRole="alert"
+              style={[
+                paper.typography.bodyPrimary,
+                { color: paper.immersive.running.accent, textAlign: 'center' },
+              ]}
+            >
               {actionError}
             </Text>
           ) : null}
@@ -536,19 +645,28 @@ function FocusTimerReadout({
         adjustsFontSizeToFit
         minimumFontScale={0.43}
         numberOfLines={1}
-        style={[theme.paper.typography.displayTimer, {
-          color: immersed.ink,
-          maxWidth: Math.max(180, width - 2 * theme.paper.layout.pageGutter),
-          fontSize: Math.min(theme.paper.typography.displayTimer.fontSize, Math.max(56, width * 0.235)),
-          textAlign: 'center',
-        }]}
+        style={[
+          theme.paper.typography.displayTimer,
+          {
+            color: immersed.ink,
+            maxWidth: Math.max(180, width - 2 * theme.paper.layout.pageGutter),
+            fontSize: Math.min(theme.paper.typography.displayTimer.fontSize, Math.max(56, width * 0.235)),
+            textAlign: 'center',
+          },
+        ]}
       >
         {formatClock(seconds)}
       </Text>
-      <Text style={[theme.paper.typography.bodyPrimary, {
-        color: immersed.secondary,
-        marginTop: 10, textAlign: 'center',
-      }]}>
+      <Text
+        style={[
+          theme.paper.typography.bodyPrimary,
+          {
+            color: immersed.secondary,
+            marginTop: 10,
+            textAlign: 'center',
+          },
+        ]}
+      >
         {paused
           ? '已暂停 · 随时继续'
           : session.isCountdown
@@ -561,16 +679,28 @@ function FocusTimerReadout({
           accessibilityLabel="倒计时进度"
           accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
           style={{
-            width: '100%', maxWidth: 300, height: 2, marginTop: 32,
-            backgroundColor: immersed.subtle, overflow: 'hidden', borderRadius: theme.paper.radius.tick,
+            width: '100%',
+            maxWidth: 300,
+            height: 4,
+            marginTop: 32,
+            backgroundColor: immersed.subtle,
+            overflow: 'hidden',
+            borderRadius: theme.paper.radius.pill,
           }}
         >
-          <View style={{ height: 2, width: `${progress * 100}%`, backgroundColor: immersed.accent }} />
+          <View style={{ height: 4, width: `${progress * 100}%`, backgroundColor: immersed.accent }} />
         </View>
       ) : (
-        <View style={{
-          width: 54, height: 2, marginTop: 32, backgroundColor: immersed.accent, opacity: 0.85,
-        }} />
+        <View
+          style={{
+            width: 54,
+            height: 3,
+            marginTop: 32,
+            borderRadius: theme.paper.radius.pill,
+            backgroundColor: immersed.accent,
+            opacity: 0.85,
+          }}
+        />
       )}
     </View>
   );
@@ -642,7 +772,7 @@ function RecordMomentLink({
         flexDirection: 'row',
         gap: 7,
         opacity: pressed ? 0.68 : 1,
-        marginTop: 4,
+        marginTop: YanjiSpacing.xs,
       })}
     >
       <YanjiIcon name="compose" size={17} color={color} />

@@ -139,7 +139,7 @@ export const YanjiMotion = {
 // second set of numbers scattered across screens.
 //
 // Contrast policy (measured, WCAG 2.1 relative luminance):
-//   `ink`      > 11:1 on every canvas/surface/subtle step of its own mode.
+//   `ink`      > 11:1 on every canvas/surface/subtle/elevated step of its mode.
 //   `secondary` >= 4.5:1 on every step — this is the readable body/meta tier.
 //   `muted`     < 4.5:1 by design: decorative rules, tick marks, disabled
 //               controls and struck-through archive rows only. It must never
@@ -147,22 +147,41 @@ export const YanjiMotion = {
 //   `brandInk` is the readable brand text tier on the warm parchment canvas
 //               (plain `brand` is only 4.24:1 there — good enough for a CTA
 //               fill, not for text). Use `brand` + `onBrand` for fills.
+//   `amber`     the paused/waiting accent, readable as text on every step.
+//
+// The *Subtle tints are measured too, and for the same reason. A capsule
+// (badge, chip, selected row, week cell) paints its own label at `captionMeta`
+// — 12sp — on top of its tint, so the tint's alpha is capped by the 4.5:1 that
+// label needs once the tint is composited over whatever surface the capsule
+// lands on. Raising the alpha for a stronger wash is what breaks dark-mode
+// badges and selected chips, so those numbers are constraints, not taste.
 // ---------------------------------------------------------------------------
 
 export const YanjiPaperColors = {
   light: {
     canvas: '#F6F4EF',
+    elevated: '#FAF8F4',
     surface: '#FFFFFF',
     subtle: '#EDEAE2',
     ink: '#1C1E21',
-    secondary: '#5C5F66',
+    secondary: '#565960',
     muted: '#94969C',
     hairline: 'rgba(28,30,33,0.08)',
     brand: '#C84B31',
-    /** Readable brand text on parchment. Measured 5.43:1 on canvas. */
+    /** Readable brand text on parchment. Measured 5.43:1 on canvas, 5.96:1 on surface. */
     brandInk: '#B23A22',
+    /**
+     * Selection tints. The alpha is measured, not aesthetic: it is the highest
+     * value that still keeps the capsule's own label (`brandInk` / `amber` at
+     * `captionMeta`, 12sp) above 4.5:1 when composited over every surface the
+     * capsule can land on — canvas, elevated, surface and subtle. Raising it
+     * fails dark-mode badges and selected chips, so it stays here.
+     */
+    brandSubtle: 'rgba(200,75,49,0.07)',
     onBrand: '#FFFFFF',
-    amber: '#9A6100',
+    /** Paused / waiting accent. Measured >= 5.4:1 on every surface and on its own tint. */
+    amber: '#875400',
+    amberSubtle: 'rgba(135,84,0,0.07)',
     /** Modal / sheet scrim, derived from `ink` so the veil shares the paper's warmth. */
     scrim: 'rgba(28,30,33,0.32)',
     /** Destructive actions. Measured 5.69:1 on `surface`, 5.18:1 on `canvas`. */
@@ -170,6 +189,7 @@ export const YanjiPaperColors = {
   },
   dark: {
     canvas: '#111315',
+    elevated: '#16191D',
     surface: '#1A1D21',
     subtle: '#23272D',
     ink: '#EAE6DF',
@@ -179,8 +199,11 @@ export const YanjiPaperColors = {
     brand: '#E06D53',
     /** Dark `brand` already clears 4.5:1 on canvas, so the ink tier is itself. */
     brandInk: '#E06D53',
+    /** See the light-mode note: alpha is capped by the 4.5:1 label contrast. */
+    brandSubtle: 'rgba(224,109,83,0.10)',
     onBrand: '#111315',
     amber: '#DDA059',
+    amberSubtle: 'rgba(221,160,89,0.10)',
     /** Heavier veil than light mode, matching the dark surface stack. */
     scrim: 'rgba(0,0,0,0.56)',
     /** Destructive actions. Measured 6.11:1 on `surface`, 6.73:1 on `canvas`. */
@@ -235,6 +258,12 @@ export const YanjiPaperTypography = {
   metricHero: {
     fontSize: 44,
     lineHeight: 52,
+    fontWeight: '700' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  metricSub: {
+    fontSize: 28,
+    lineHeight: 36,
     fontWeight: '700' as const,
     fontVariant: ['tabular-nums'] as const,
   },
