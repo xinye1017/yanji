@@ -57,32 +57,65 @@ $runnerArgs = @('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', $testCla
     '-e', 'allowPersonalDevice', 'true')
 if ($Screenshots) { $runnerArgs += @('-e', 'screenshots', 'true') }
 $runnerArgs += 'com.example.yanji.test/androidx.test.runner.AndroidJUnitRunner'
+# Only the screenshot names this harness owns; a stale failure.png from an
+# earlier run must never be mistaken for the current one.
+$ownedScreenshots = @('today', 'focus', 'review', 'failure')
+foreach ($name in $ownedScreenshots) {
+    Invoke-Adb shell run-as com.example.yanji rm -f "cache/layout-regression/$name.png" | Out-Null
+}
 $result = Invoke-Adb @runnerArgs
 $result | Set-Content (Join-Path $run 'instrumentation.log')
 $result | Where-Object { $_ -match 'INSTRUMENTATION_STATUS: (test=|stack=)|Tests run:|OK \(|FAILURES|Time:' }
 Invoke-Adb logcat -d -s YanjiLayoutTest:I '*:S' | Set-Content (Join-Path $run 'coordinates.log')
-if ($Screenshots) {
-    foreach ($tab in @('today', 'focus', 'review')) {
-        # Binary stream copying avoids PowerShell text encoding corrupting PNGs.
-        $startInfo = [Diagnostics.ProcessStartInfo]::new($adb)
-        $startInfo.UseShellExecute = $false
-        $startInfo.RedirectStandardOutput = $true
-        foreach ($argument in @('-s', $DeviceSerial, 'exec-out', 'run-as', 'com.example.yanji',
-            'cat', "cache/layout-regression/$tab.png")) { $startInfo.ArgumentList.Add($argument) }
-        $process = [Diagnostics.Process]::Start($startInfo)
-        $file = [IO.File]::Create((Join-Path $run "$tab.png"))
-        try { $process.StandardOutput.BaseStream.CopyTo($file) } finally { $file.Dispose() }
-        $process.WaitForExit()
-        if ($process.ExitCode) { throw "Screenshot export failed: $tab" }
-        $pngBytes = [IO.File]::ReadAllBytes((Join-Path $run "$tab.png"))
-        if ($pngBytes.Length -lt 8 -or [BitConverter]::ToString($pngBytes, 0, 8) -ne '89-50-4E-47-0D-0A-1A-0A') {
-            throw "Screenshot is not a valid PNG: $tab"
-        }
+$testsPassed = ($result -join "`n") -match 'OK \(\d+ tests?\)'
+function Export-DeviceScreenshot([string]$name) {
+    # Binary stream copying avoids PowerShell text encoding corrupting PNGs.
+    $startInfo = [Diagnostics.ProcessStartInfo]::new($adb)
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    foreach ($argument in @('-s', $DeviceSerial, 'exec-out', 'run-as', 'com.example.yanji',
+        'cat', "cache/layout-regression/$name.png")) { $startInfo.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($startInfo)
+    $file = [IO.File]::Create((Join-Path $run "$name.png"))
+    try { $process.StandardOutput.BaseStream.CopyTo($file) } finally { $file.Dispose() }
+    $process.WaitForExit()
+    if ($process.ExitCode) { throw "Screenshot export failed: $name" }
+    $pngBytes = [IO.File]::ReadAllBytes((Join-Path $run "$name.png"))
+    if ($pngBytes.Length -lt 8 -or [BitConverter]::ToString($pngBytes, 0, 8) -ne '89-50-4E-47-0D-0A-1A-0A') {
+        throw "Screenshot is not a valid PNG: $name"
     }
 }
-Invoke-Adb shell am start -n com.example.yanji/.MainActivity
-Invoke-Adb shell run-as com.example.yanji rm -f cache/layout-regression/today.png `
-    cache/layout-regression/focus.png cache/layout-regression/review.png
-Invoke-Adb uninstall com.example.yanji.test
-if (($result -join "`n") -notmatch 'OK \(\d+ tests?\)') { throw "Layout regression failed. Reports: $run" }
+# A missing failure.png must never hide the original failure: it is written only
+# by await/awaitRoom timeouts (TabLayoutInstrumentedTest.captureFailure), so a
+# plain assertion failure or a crashed runner legitimately leaves no image.
+# Diagnostics are therefore best-effort and presence-checked.
+function Export-FailureEvidence {
+    try {
+        & $adb -s $DeviceSerial shell run-as com.example.yanji test -f "cache/layout-regression/failure.png" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "No failure.png on device: the failing test never captured one. The instrumentation log is the evidence."
+            return
+        }
+        Export-DeviceScreenshot 'failure'
+    } catch {
+        Write-Warning "Failure diagnostics unavailable: $_"
+    }
+}
+if ($Screenshots -and $testsPassed) {
+    foreach ($tab in @('today', 'focus', 'review')) { Export-DeviceScreenshot $tab }
+}
+$failure = if ($testsPassed) { $null } else { "Layout regression failed. Reports: $run" }
+try {
+    # A failed run is exactly when the diagnostics matter most.
+    if (-not $testsPassed) { Export-FailureEvidence }
+} finally {
+    # Cleanup must survive a diagnostic failure: relaunch the app, drop this
+    # run's screenshots, and uninstall the test package either way.
+    Invoke-Adb shell am start -n com.example.yanji/.MainActivity
+    foreach ($name in $ownedScreenshots) {
+        Invoke-Adb shell run-as com.example.yanji rm -f "cache/layout-regression/$name.png" | Out-Null
+    }
+    Invoke-Adb uninstall com.example.yanji.test
+}
+if ($failure) { throw $failure }
 Write-Host "Layout regression passed. Reports: $run"
