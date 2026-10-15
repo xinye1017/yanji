@@ -13,33 +13,7 @@ export function registerM4Tests() {
     bridge = new MockYanjiBridge();
   });
 
-  describe('Tier 1: Feature 12 — Today Screen Overview & Adaptive Single CTA', () => {
-    it('verifies adaptive single CTA resolves to appropriate action based on state', async () => {
-      // Helper function matching TodayScreen adaptive CTA resolution logic
-      function resolveSingleCTA(activeSession, todayTasks) {
-        if (activeSession) {
-          return { label: '继续专注', action: 'GOTO_ACTIVE_SESSION', variant: 'ACTIVE' };
-        }
-        const hasUncompletedTasks = todayTasks.some(t => !t.completed);
-        if (hasUncompletedTasks) {
-          return { label: '继续学习', action: 'START_FIRST_TASK', variant: 'PRIMARY' };
-        }
-        return { label: '开始专注', action: 'QUICK_START_FREE', variant: 'DEFAULT' };
-      }
-
-      // Case A: Fresh day, no tasks, no session -> "开始专注"
-      const ctaFresh = resolveSingleCTA(null, []);
-      assertEqual(ctaFresh.label, '开始专注');
-
-      // Case B: Has uncompleted task -> "继续学习"
-      const ctaWithTask = resolveSingleCTA(null, [{ id: '1', completed: false }]);
-      assertEqual(ctaWithTask.label, '继续学习');
-
-      // Case C: Session is running -> "继续专注"
-      const ctaActive = resolveSingleCTA({ sessionId: 's1' }, [{ id: '1', completed: false }]);
-      assertEqual(ctaActive.label, '继续专注');
-    });
-
+  describe('Tier 1: Feature 12 — Today Screen Saved Overview', () => {
     it('verifies today study duration displays correctly formatted hours and minutes', async () => {
       const today = '2026-10-08';
       await bridge.startFocus('sub-math', '数学', 'STOPWATCH');

@@ -20,8 +20,10 @@ import {
   ChartColumn,
   ChartNoAxesCombined,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ListChecks,
   Minus,
   Pause,
@@ -55,6 +57,8 @@ export type YanjiIconName =
   | 'remove'
   | 'back'
   | 'forward'
+  | 'chevronUp'
+  | 'chevronDown'
   | 'play'
   | 'pause'
   | 'delete'
@@ -79,6 +83,8 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   remove: Minus,
   back: ChevronLeft,
   forward: ChevronRight,
+  chevronUp: ChevronUp,
+  chevronDown: ChevronDown,
   play: Play,
   pause: Pause,
   delete: Trash,

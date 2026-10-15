@@ -31,6 +31,7 @@ export const BridgeSchemas = {
       typeof obj.date === 'string' &&
       typeof obj.subjectId === 'string' &&
       typeof obj.subjectName === 'string' &&
+      typeof obj.subjectColor === 'string' &&
       typeof obj.title === 'string' &&
       typeof obj.plannedMinutes === 'number' &&
       typeof obj.actualMinutes === 'number' &&
