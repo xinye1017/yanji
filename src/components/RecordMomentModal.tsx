@@ -10,7 +10,7 @@
  *   active focus session id.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -51,13 +51,13 @@ export function RecordMomentModal({
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const captureDraft = useRef('');
 
-  // Re-seed the sheet every time it opens: prefilled for editing, blank for a
-  // new capture. Without this, an edited note's text would leak into the next
-  // "记录此刻", and a stale draft would show when reopening an editor.
+  // Editing starts from the saved note; new captures keep a separate unsaved
+  // draft across closing the sheet and switching mounted tabs.
   useEffect(() => {
     if (!visible) return;
-    setText(editingNote?.content ?? '');
+    setText(editingNote?.content ?? captureDraft.current);
     setError(null);
   }, [visible, editingNote]);
 
@@ -84,6 +84,7 @@ export function RecordMomentModal({
         }
         await YanjiDataNative.saveQuickNote(content, date, sessionId);
       }
+      if (!editingNote) captureDraft.current = '';
       setText('');
       onSaved?.();
       onClose();
@@ -157,7 +158,10 @@ export function RecordMomentModal({
               call site. The 96–200 dp well height stays sheet-owned. */}
           <YanjiTextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={next => {
+              setText(next);
+              if (!editingNote) captureDraft.current = next;
+            }}
             placeholder="现在的想法、卡点或收获…"
             multiline
             accessibilityLabel="记录内容"
