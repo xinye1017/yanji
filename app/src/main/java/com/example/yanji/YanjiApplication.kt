@@ -2,8 +2,6 @@ package com.example.yanji
 
 import android.app.Application
 import com.example.yanji.data.YanjiRepository
-import com.example.yanji.di.AppContainer
-import com.example.yanji.di.DefaultAppContainer
 import com.example.yanji.bridge.YanjiPackage
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
@@ -24,9 +22,6 @@ import com.bluroverly.SajjadBlurOverlayPackage
  * 研迹 Application —— React Native 新架构（Bridgeless）宿主。
  */
 class YanjiApplication : Application(), com.facebook.react.ReactApplication {
-    lateinit var container: AppContainer
-        private set
-
     override val reactNativeHost: ReactNativeHost by lazy {
         object : DefaultReactNativeHost(this@YanjiApplication) {
             override fun getPackages(): List<ReactPackage> = listOf(
@@ -66,6 +61,5 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
         SoLoader.init(this, YanjiMergedSoMapping())
         DefaultNewArchitectureEntryPoint.load()
         YanjiRepository.init(this)
-        container = DefaultAppContainer(this)
     }
 }
