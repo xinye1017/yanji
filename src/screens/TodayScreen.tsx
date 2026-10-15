@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, DailySession, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader, YanjiHairline,
-  YanjiIconButton, YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
-  YanjiPaperSheetHeading, YanjiPrimaryButton, YanjiSubjectProportionRow,
-  YanjiTaskLedgerRow,
+  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayPartRhythmGrid,
+  YanjiEditorialHeader, YanjiEmptyJournalWell, YanjiEmptyLedgerRow,
+  YanjiHairline, YanjiIcon, YanjiIconButton, YanjiPaperSectionHeading,
+  YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
+  YanjiStatCell, YanjiSubjectProportionRow, YanjiTaskLedgerRow,
 } from '../components/YanjiUI';
 import type { YanjiSpectrumSegment } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -133,6 +134,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const completed = tasks.filter(task => task.completed);
   const latestNotes = useMemo(() => [...notes].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
+  const targetLabel = useMemo(
+    () => [settings?.targetSchool?.trim(), settings?.targetMajor?.trim()].filter(Boolean).join(' · '),
+    [settings?.targetSchool, settings?.targetMajor]
+  );
   const subjects = useMemo(() => {
     const map = new Map<string, YanjiSpectrumSegment>();
     for (const session of sessions) {
@@ -144,6 +149,20 @@ export function TodayScreen({ visible, foregroundRevision }: {
     }
     return [...map.values()].sort((a, b) => b.seconds - a.seconds || a.id.localeCompare(b.id));
   }, [sessions, colors.secondary]);
+  // Planned subject breakdown derived purely from today's authentic tasks.
+  // Shown only while nothing is saved, so the rhythm section stays informative
+  // without inventing a single minute of focus.
+  const plannedSubjects = useMemo(() => {
+    const map = new Map<string, { id: string; label: string; minutes: number }>();
+    for (const task of tasks) {
+      if (task.plannedMinutes <= 0) continue;
+      const previous = map.get(task.subjectId);
+      if (previous) previous.minutes += task.plannedMinutes;
+      else map.set(task.subjectId, { id: task.subjectId, label: task.subjectName, minutes: task.plannedMinutes });
+    }
+    return [...map.values()].sort((a, b) => b.minutes - a.minutes || a.id.localeCompare(b.id));
+  }, [tasks]);
+  const totalPlannedMinutes = plannedSubjects.reduce((sum, item) => sum + item.minutes, 0);
   const chartTotal = subjects.reduce((sum, subject) => sum + subject.seconds, 0);
   const selectSegment = (next: NonNullable<Selection>) =>
     setSelection(current => current?.key === next.key ? null : next);
@@ -186,6 +205,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
     finally { setSavingGoal(false); }
   };
   const newNote = () => { setEditingNote(null); setRecordOpen(true); };
+  const nowHour = now.getHours();
+  const nowMinute = now.getMinutes();
+  const currentTimeText = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
@@ -194,13 +216,23 @@ export function TodayScreen({ visible, foregroundRevision }: {
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
         <YanjiEditorialHeader eyebrow={displayDate(date)} title={greeting(now.getHours())}
           trailing={<YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} tone="filled" />} />
-        {countdown?.examDate ? (
-          <Pressable onPress={openSettings} accessibilityRole="button"
-            accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
-            style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', marginTop: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
-            <YanjiBadge icon="target" tone={countdown.daysRemaining >= 0 ? 'brand' : 'neutral'}
-              label={`${countdown.daysRemaining > 0 ? `距初试还有 ${countdown.daysRemaining} 天` : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'} · ${countdown.examDate}`} />
-          </Pressable>
+        {(countdown?.examDate || targetLabel) ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: layout.gridGap, marginTop: YanjiSpacing.xs }}>
+            {countdown?.examDate ? (
+              <Pressable onPress={openSettings} accessibilityRole="button"
+                accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
+                style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+                <YanjiBadge icon="target" tone={countdown.daysRemaining >= 0 ? 'brand' : 'neutral'}
+                  label={`${countdown.daysRemaining > 0 ? `距初试还有 ${countdown.daysRemaining} 天` : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'} · ${countdown.examDate}`} />
+              </Pressable>
+            ) : null}
+            {targetLabel ? (
+              <Pressable onPress={openSettings} accessibilityRole="button" accessibilityLabel={`目标院校与专业 ${targetLabel}`}
+                style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+                <YanjiBadge icon="sprout" tone="neutral" label={targetLabel} />
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
 
         <YanjiCard style={{ marginTop: YanjiSpacing.lg }}>
@@ -214,11 +246,17 @@ export function TodayScreen({ visible, foregroundRevision }: {
             </Pressable>
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
-            {snapshot ? <>
-              <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> h</Text></Text>
-              <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> m</Text></Text>
-            </> : <Text style={[typography.metricHero, { color: colors.ink }]}>—</Text>}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: layout.gridGap }}>
+              {snapshot ? <>
+                <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> h</Text></Text>
+                <Text style={[typography.metricHero, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}<Text style={[typography.bodyPrimary, { color: colors.secondary }]}> m</Text></Text>
+              </> : <Text style={[typography.metricHero, { color: colors.ink }]}>—</Text>}
+            </View>
+            <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, paddingBottom: YanjiSpacing.xs }}>
+              <YanjiStatCell label="今日待办" value={snapshot ? `${pending.length} 项` : '—'} />
+              <YanjiStatCell label="今日随笔" value={snapshot ? `${notes.length} 篇` : '—'} />
+            </View>
           </View>
 
           <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
@@ -262,6 +300,52 @@ export function TodayScreen({ visible, foregroundRevision }: {
               ) : null}
               <YanjiPrimaryButton label={pending.length ? '开始首项待办' : '开始一轮专注'} icon="play"
                 onPress={() => pending.length ? startTask(pending[0]) : selectTab('focus')} />
+              {pending.length === 0 ? (
+                <View style={{ flexDirection: 'row', gap: layout.gridGap, marginTop: YanjiSpacing.sm }}>
+                  <Pressable
+                    onPress={openTaskEditor}
+                    accessibilityRole="button"
+                    accessibilityLabel="立一项今日计划"
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: layout.rowMinHeight - 4,
+                      borderRadius: radius.pill,
+                      backgroundColor: colors.subtle,
+                      borderWidth: layout.hairlineWidth,
+                      borderColor: colors.hairline,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: YanjiSpacing.xs,
+                      opacity: pressed ? 0.68 : 1,
+                    })}
+                  >
+                    <YanjiIcon name="tasks" size={14} color={colors.brandInk} />
+                    <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '700' }]}>立一项计划</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={newNote}
+                    accessibilityRole="button"
+                    accessibilityLabel="记一句此刻想法"
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: layout.rowMinHeight - 4,
+                      borderRadius: radius.pill,
+                      backgroundColor: colors.subtle,
+                      borderWidth: layout.hairlineWidth,
+                      borderColor: colors.hairline,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: YanjiSpacing.xs,
+                      opacity: pressed ? 0.68 : 1,
+                    })}
+                  >
+                    <YanjiIcon name="compose" size={14} color={colors.brandInk} />
+                    <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '700' }]}>记一句此刻</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           )}
         </YanjiCard>
@@ -274,9 +358,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </Pressable>} />
         <YanjiHairline />
         <Text style={[typography.captionMeta, { color: colors.secondary, marginVertical: YanjiSpacing.sm }]}>待办 {pending.length} · 已完成 {completed.length}</Text>
-        {!tasks.length ? <Text style={[typography.bodyJournal, { color: colors.secondary, paddingVertical: YanjiSpacing.md }]}>
-          {snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
-        </Text> : null}
+        {!tasks.length ? (
+          <YanjiEmptyLedgerRow
+            prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
+            hint="设定所属学科与预计分钟，开始专注时可一键带入"
+            onPress={openTaskEditor}
+          />
+        ) : null}
         {[pending, completed].map((group, index) => group.length ? <View key={index}>
           {index === 1 ? <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.lg, marginBottom: YanjiSpacing.xs }]}>已完成</Text> : null}
           {group.map(task => (
@@ -310,7 +398,30 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 onPress={() => selectSegment({ key: `subject:${subject.id}`, subjectId: subject.id, subjectName: subject.label, seconds: subject.seconds })}
               />
             ))}
-            {!subjects.length ? <Text style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.md }]}>{snapshot ? '还没有已保存的学科投入。' : '正在读取学科记录…'}</Text> : null}
+            {!subjects.length ? (
+              <View>
+                <Text style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.xs }]}>
+                  {snapshot ? '还没有已保存的学科投入。' : '正在读取学科记录…'}
+                </Text>
+                <YanjiDayPartRhythmGrid parts={DAY_PARTS} nowHour={nowHour} nowMinute={nowMinute} />
+                {plannedSubjects.length > 0 ? (
+                  <View style={{ marginTop: YanjiSpacing.md }}>
+                    <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.xs }]}>
+                      今日计划学科预排 · 共预计 {duration(totalPlannedMinutes * 60)}
+                    </Text>
+                    {plannedSubjects.map(item => (
+                      <YanjiSubjectProportionRow
+                        key={item.id}
+                        label={item.label}
+                        color={colors.brand}
+                        metaText={`计划 ${item.minutes} 分钟 · ${totalPlannedMinutes ? Math.round((item.minutes / totalPlannedMinutes) * 100) : 0}%`}
+                        ratio={totalPlannedMinutes > 0 ? item.minutes / totalPlannedMinutes : 0}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : (
           <View style={{ marginTop: YanjiSpacing.md }}>
@@ -321,16 +432,41 @@ export function TodayScreen({ visible, foregroundRevision }: {
               endDate.setHours(part.to);
               const start = startDate.getTime();
               const end = endDate.getTime();
+              const isCurrentPart = nowHour >= part.from && nowHour < part.to;
+              const nowCursorPct = isCurrentPart
+                ? Math.max(0, Math.min(100, (((nowHour - part.from) * 60 + nowMinute) / ((part.to - part.from) * 60)) * 100))
+                : null;
               const segments = sessions.filter(s => sessionPrecise(s) && s.endTime > start && s.startTime < end);
               return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: YanjiSpacing.xs }}>
-                  <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: YanjiSpacing.xs }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs + 2 }}>
+                    {isCurrentPart ? <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.brand }} /> : null}
+                    <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: isCurrentPart ? '700' : '500' }]}>
+                      {part.name}{isCurrentPart ? ' · 当前时段' : ''}
+                    </Text>
+                  </View>
                   <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
                 </View>
-                <View accessible accessibilityLabel={`${part.name}，${segments.length} 段可确认的连续专注`} style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.pill, overflow: 'hidden' }}>
+                <View accessible accessibilityLabel={`${part.name}，${segments.length} 段可确认的连续专注`}
+                  style={{ height: layout.spectrumHeight + 2, backgroundColor: colors.subtle, borderRadius: radius.pill,
+                    borderWidth: layout.hairlineWidth, borderColor: isCurrentPart ? colors.brand : colors.hairline, overflow: 'hidden' }}>
                   {segments.map(s => <View key={s.id} style={{ position: 'absolute', top: 0, bottom: 0,
                     left: `${Math.max(0, s.startTime - start) / (end - start) * 100}%`,
                     width: `${(Math.min(end, s.endTime) - Math.max(start, s.startTime)) / (end - start) * 100}%`, backgroundColor: s.subjectColor || colors.secondary }} />)}
+                  {nowCursorPct !== null ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        left: `${nowCursorPct}%`,
+                        top: 0,
+                        bottom: 0,
+                        width: 2,
+                        marginLeft: -1,
+                        backgroundColor: colors.brand,
+                      }}
+                    />
+                  ) : null}
                 </View>
               </View>;
             })}
@@ -362,9 +498,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`} size={layout.rowMinHeight} />
               </View>
             </View>
-          </View>) : <Pressable onPress={newNote} accessibilityRole="button" style={{ minHeight: layout.rowMinHeight, justifyContent: 'center' }}>
-            <Text style={[typography.bodyJournal, { color: colors.secondary }]}>{snapshot ? '留一句想法，让今天有自己的注脚。' : '正在读取今日随笔…'}</Text>
-          </Pressable>}
+          </View>) : (
+            <YanjiEmptyJournalWell
+              prompt={snapshot ? '留一句想法，让今天有自己的注脚。' : '正在读取今日随笔…'}
+              timeLabel={currentTimeText}
+              onPress={newNote}
+            />
+          )}
         </YanjiCard>
         {notes.length > 2 ? <Pressable onPress={() => selectTab('review')} accessibilityRole="button" style={{ minHeight: layout.rowMinHeight, justifyContent: 'center', marginTop: YanjiSpacing.xs }}>
           <Text style={[typography.captionMeta, { color: colors.brandInk }]}>前往回顾查看全部 {notes.length} 篇记录 ›</Text>
