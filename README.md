@@ -3,7 +3,7 @@
 <!-- project-facts: compileSdk=36 minSdk=24 targetSdk=36 versionCode=2 versionName=1.0.0 roomSchema=22 roomLibrary=2.8.4 -->
 
 <p align="center">
-  <img src="app/src/main/res/drawable/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />
+  <img src="app/src/main/res/drawable-nodpi/juanjuan.png" width="96" height="96" alt="研迹 Juanjuan" />
 </p>
 
 <p align="center">
@@ -12,10 +12,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin Version" />
-  <img src="https://img.shields.io/badge/Jetpack_Compose-Material_3-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
+  <img src="https://img.shields.io/badge/React_Native-Android-61DAFB?logo=react&logoColor=black" alt="React Native UI" />
   <img src="https://img.shields.io/badge/Room-v22_(2.8.4)-3DDC84?logo=sqlite&logoColor=white" alt="Room v22" />
   <img src="https://img.shields.io/badge/Android-minSdk_24_|_targetSdk_36-3DDC84?logo=android&logoColor=white" alt="Android SDK" />
-  <img src="https://img.shields.io/badge/Architecture-UDF_+_Pure_Kotlin_DI-FF6F00" alt="Architecture" />
+  <img src="https://img.shields.io/badge/Architecture-React_Native_+_Kotlin_Bridge-FF6F00" alt="Architecture" />
   <img src="https://img.shields.io/badge/Restore-Room_Transaction-brightgreen" alt="Transactional Restore" />
   <img src="https://img.shields.io/badge/License-Personal_Learning-blue" alt="License" />
 </p>
@@ -28,7 +28,7 @@
 - [核心功能特性](#-核心功能特性)
 - [工程架构与系统设计](#-工程架构与系统设计)
   - [架构概览与数据流向](#架构概览与数据流向)
-  - [纯 Kotlin 依赖注入 (Pure Kotlin DI)](#纯-kotlin-依赖注入-pure-kotlin-di)
+  - [React Native 与 Kotlin 原生桥接](#react-native-与-kotlin-原生桥接)
   - [高韧性计时引擎与进程死亡恢复](#高韧性计时引擎与进程死亡恢复)
   - [零信任安全存储体系](#零信任安全存储体系)
   - [大数据量统计计算引擎下推](#大数据量统计计算引擎下推)
@@ -89,48 +89,30 @@
 
 ### 架构概览与数据流向
 
-系统采用轻量分层与 Unidirectional Data Flow (UDF)，不额外引入 DI 框架或只做转发的层：
+UI 由 React Native 与 TypeScript 实现，Kotlin 宿主提供计时、数据和主题原生能力：
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        UI Layer (Jetpack Compose)                      │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │ FocusScreen │ ExamScreen │ StatsScreen │ NoteScreen │ Profile  │   │
-│   └────────────────────────────────────────────────────────────────┘   │
-│          ▲                                                 │           │
-│    Immutable UiState                                 Intent / Action   │
-│          │                                                 ▼           │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │               ViewModels (via yanjiViewModel Factory)          │   │
-│   └────────────────────────────────────────────────────────────────┘   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ consumes
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                    Domain & Repository Layer (Pure Kotlin DI)          │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │                AppContainer (DefaultAppContainer)              │   │
-│   │   ├── YanjiRepository (TimerStore / NoteStore / AI 分析)        │   │
-│   │   ├── StudyStatisticsRepository (Room StatsDao Pushdown)       │   │
-│   │   └── ActiveSessionCoordinator (Active State Concurrency Guard)│   │
-│   └────────────────────────────────────────────────────────────────┘   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ interacts
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                         Infrastructure & Data Layer                    │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Room Database (v14)  │  SecretStore (Keystore) │ FilePersistence  │   │
-│   │  (yanji_study.db)     │  (Fail-Closed Security) │ (noBackupDir)    │   │
-│   └────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ React Native UI: App.tsx, screens, shared components, navigation │
+│ ThemeProvider resolves the app preference and system theme      │
+└───────────────────────────────┬────────────────────────────────┘
+                                │ typed calls and subscriptions
+┌───────────────────────────────▼────────────────────────────────┐
+│ src/bridge/index.ts  ⇄  YanjiPackage                            │
+│ Kotlin modules: timer, data, theme                              │
+└───────────────────────────────┬────────────────────────────────┘
+                                │
+┌───────────────────────────────▼────────────────────────────────┐
+│ Kotlin services and repositories                                │
+│ Room database (v22), timer state, Android Keystore credentials  │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-### 纯 Kotlin 依赖注入 (Pure Kotlin DI)
+### React Native 与 Kotlin 原生桥接
 
-本项目不使用 Hilt / Dagger，采用轻量级、零反射的纯 Kotlin 依赖注入体系（Room 仍通过 KSP 生成数据库代码）：
+`App.tsx` 组合主题、安全区和导航 Provider，并挂载常驻的主页面。页面通过 `src/bridge/index.ts` 调用原生能力；Android 的 `YanjiPackage` 注册计时、数据和主题模块，模块再访问 Kotlin 服务、仓储与 Room。`YanjiApplication` 初始化 `YanjiRepository`，Activity 不再持有全局依赖容器或重复初始化仓储。
 
-* **全局拓扑容器**：`AppContainer` 作为单一依赖源，生命周期与 `YanjiApplication` 严格对齐。
-* **无缝 Compose 绑定**：通过 `LocalAppContainer` 与自定义扩展函数 `yanjiViewModel` 声明式提供 ViewModel 实例，调用链透明可追溯。
-* **轻量测试**：DI 本身不需要代码生成，测试可直接替换容器提供的依赖。
+订阅式数据由原生桥接模块推送给 RN；界面消费桥接层提供的当前状态，并通过同一入口执行写入与计时操作。
 
 ### 高韧性计时引擎与进程死亡恢复
 
@@ -152,7 +134,7 @@
        │
        │  (4) completeSession()
        ▼
-[Room Database (v14)] ──── 写入成功 ────▶ 清除 Active 快照
+[Room Database (v22)] ──── 写入成功 ────▶ 清除 Active 快照
        │
        └────────────────── 写入失败 ────▶ 保留 Active 快照 (严防学习成果丢失)
 ```
@@ -177,38 +159,28 @@
 
 ## 🎨 统一设计系统 (Design System)
 
-所有界面均建立在经过严格解耦与视觉规范化的通用组件基元上（位于 `ui/components/` 目录）：
-
-* **`YanjiPageHeader`**：全页面一致的沉浸式主标题、副标与右侧功能操作区。
-* **`YanjiDetailTopBar`**：二级页面与沉浸式表单标准回退与标题栏。
-* **`YanjiCard`**：统一定义高品质圆角、表面投影与毛玻璃底色容器（无边框：深浅色均靠表面明度递进表达层级）。
-* **`YanjiButtons`**：包含主操作按钮 `YanjiPrimaryButton` 与次级幽灵按钮 `YanjiSecondaryButton`。
-* **`YanjiTextField`**：统一轮廓、字符计数与焦点反馈的输入组件。
+React Native 设计系统由 `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx` 与共享组件共同实现。Token 集中提供深浅主题颜色、圆角、间距、排版、触控、动效和阴影角色；`src/components/YanjiUI.tsx` 提供页面使用的基础组件，`src/theme/liquidGlass.ts` 与 `src/navigation/BottomTabBar.tsx` 管理导航栏材质和布局。
 
 ---
 
 ## 📂 项目目录结构 (Code Tour)
 
 ```
-com.example.yanji
-├── di/                                # 依赖注入核心层 (AppContainer, LocalAppContainer)
-├── data/                              # 数据模型与仓储实现
-│   ├── ai/                            # AI 通信协议与类型化 AiFailure
-│   ├── db/                            # Room 数据库与旧版聊天记录保留结构
-│   ├── security/                      # SecretStore 零信任安全存储与 Keystore 加密
-│   ├── timer/                         # 计时引擎 (Coordinator, MonotonicClock, FilePersistence)
-│   └── StudyStatisticsRepository.kt   # 统计聚合下推仓储
-├── liveactivity/                      # 灵动展示与常驻通知（标准 Android 16 Live Update；ColorOS 走系统降级）
-├── service/                           # 核心系统服务 (FocusTimerService)
-├── theme/                             # 界面主题规范 (Color, Radius, Typography)
-├── ui/                                # 视图展现层 (Jetpack Compose，主入口单文件 < 300 行)
-│   ├── components/                    # 研迹设计系统基础组件库
-│   ├── exam/                          # 模拟考试模块
-│   ├── focus/                         # 专注心流模块
-│   ├── stats/                         # 统计与学情分析模块
-│   ├── note/                          # 随笔 / 日记模块
-│   └── profile/                       # 个人资料、目标与备份模块
-└── YanjiApplication.kt                # 应用程序入口，持有 AppContainer
+src/
+├── bridge/                            # React Native 到 Kotlin 的类型化桥接
+├── components/                        # RN 页面共享组件
+├── navigation/                        # 主导航、页面状态和底栏
+├── screens/                           # 今日、专注、复盘与设置页面
+├── state/                             # RN 侧状态订阅与快照消费
+└── theme/                             # 语义 Token、主题 Provider、导航材质
+
+app/src/main/java/com/example/yanji/
+├── bridge/                            # YanjiPackage 与计时、数据、主题模块
+├── data/                              # Room、仓储、AI、备份与计时状态
+├── liveactivity/                      # Android 实时活动与通知能力
+├── service/                           # FocusTimerService
+├── YanjiApplication.kt                # 初始化仓储并创建 React Native 宿主
+└── MainActivity.kt                    # React Native 主 Activity
 ```
 
 ---
@@ -218,19 +190,17 @@ com.example.yanji
 项目通过 GitHub Actions 执行以下自动化验证；仓库管理员仍需在分支保护中把 `Required production baseline` 设为 required check：
 
 ### 1. JVM 单元测试与迁移基准
-* `YanjiMigrationTest`：全覆盖验证 Room 1→15 渐进迁移链（v1 起点按历史 DDL 手写，终点用真实导出 schema 校验），验证日记确定性排重、一天多篇与字段无损升级。
+* `YanjiMigrationTest`：从手写 v1 数据库验证完整迁移链，并用当前导出 schema 校验终态结构与历史数据保留。
 * `ActiveSessionPersistenceTest`：针对进程崩溃恢复、时钟倒流保护、原子写入及会话互斥进行极端场景测试。
 * `StatsPerformanceTest`：注入 25,000 条真实记录进行基准压测，保障复杂聚合在 10ms 内完成。
 * `SecretStoreTest`：验证 Fail-Closed 机制、AES-GCM 加密强度与一次性迁移逻辑。
 * `StudyDiagnosticsTest`：验证等长周期比较、模考独立数据源与草稿排除。
-* `NavigationRecreationTest`：验证 `rememberSaveable` 下子路由状态的保存与恢复。
 
-### 2. Android 仪器测试与视觉矩阵 (`androidTest`)
-* `FocusScreenVisualMatrixTest`：在四种主流视口规格（360x800, 390x844, 412x915 及 390x844-1.3x 大字号无障碍）下自动化断言无截断、无重叠。
-* `NoteEditorScreenInstrumentedTest`：日记编辑器全流程交互与落库断言。
+### 2. Android 仪器测试 (`androidTest`)
+当前仪器测试覆盖应用数据初始化、备份恢复、RN 导航布局、实时活动能力和 RN 原生桥接快照。
 
 ### 3. CI 与发布矩阵
-* Push / PR：JVM 单测、Lint、Debug、未签名 Release、API 34 完整仪器测试。
+* Push / PR：RN 依赖安装、TypeScript 检查、RN 测试与 Android bundle；JVM 单测、Lint、Debug、未签名 Release 和完整仪器测试。
 * 每周：最低支持 API 24 与 target API 36 回归。
 * `v<versionName>` Tag：复用完整质量门，并在 API 24/34/36 全绿后才进入生产签名与 GitHub Release；产物同时附带 SHA-256 与构建追溯信息。
 
@@ -239,6 +209,7 @@ com.example.yanji
 ## 🛠️ 构建与运行指南
 
 ### 环境要求
+* **Node.js / npm**：使用 CI 中 `actions/setup-node` 固定的同一 Node 版本（`.github/workflows/android-quality.yml` 是该要求的唯一权威来源，避免在文档里复制易漂移的版本号），并通过锁文件安装依赖。仓库内的 `.ts` 源文件由 Node 内置类型剥离加载，每次导入都会打印 `MODULE_TYPELESS_PACKAGE_JSON` 警告；这是预期噪音（`package.json` 有意不声明 `"type": "module"`），不影响任何退出码
 * **JDK**：OpenJDK 17 或更高版本
 * **Android Studio**：Ladybug (2024.2.1) 或更高版本
 * **Gradle Wrapper**：9.1.0（内嵌配置）
@@ -251,16 +222,22 @@ com.example.yanji
 git clone https://github.com/xinye1017/yanji.git
 cd yanji
 
-# 2. 运行全量 JVM 单元测试与迁移测试
+# 2. 安装 RN 依赖并验证前端
+npm ci
+npm run typecheck
+npm test
+npm run bundle:android
+
+# 3. 运行全量 JVM 单元测试与迁移测试
 ./gradlew.bat testDebugUnitTest
 
-# 3. 运行静态代码分析 (Android Lint)
+# 4. 运行静态代码分析 (Android Lint)
 ./gradlew.bat lintDebug
 
-# 4. 构建 Debug 调试版本 APK
+# 5. 构建 Debug 调试版本 APK
 ./gradlew.bat assembleDebug
 
-# 5. 构建 Release 生产优化版本 APK (包含 R8 压缩与混淆验证)
+# 6. 构建 Release 生产优化版本 APK (包含 R8 压缩与混淆验证)
 ./gradlew.bat assembleRelease
 ```
 

@@ -2,10 +2,10 @@
 
 ## Architecture
 - **Native Android / Kotlin Business Core**:
-  - Room Database v20 (`YanjiDatabase.kt`, 19 migrations preserved, zero fallbackToDestructiveMigration).
+  - Room Database (`YanjiDatabase.kt` owns the schema version and the hand-written migration chain; zero `fallbackToDestructiveMigration`).
   - Monotonic Timing Engine (`FocusTimerService`, `ActiveSessionCoordinator`, `TimerMachine`, `SystemMonotonicClock` via `SystemClock.elapsedRealtime`).
   - Forefront Notification with system Chronometer.
-  - Preserved 47 JVM unit test classes in `app/src/test/`.
+  - JVM unit tests under `app/src/test/` (run with `:app:testDebugUnitTest`).
 - **Native Bridge Layer (`com.example.yanji.bridge`)**:
   - `YanjiTimerModule`: Exposes session control (`startFocus`, `pauseTimer`, `resumeTimer`, `completeTimer`, `discardTimer`, `getActiveSession`) and timer tick/state events.
   - `YanjiDataModule`: Exposes Room data queries and mutations for tasks (`StudyTaskEntity`), notes (`NoteEntryEntity`), subjects, and settings without bypassing repository or business coordinators.
@@ -16,6 +16,7 @@
   - Design Tokens: Midnight Blue dark mode (no `#000000`), soft blue-gray light mode, card zero-border, `YanjiRadius` scale.
   - Information Architecture: Strict 3-tab navigation (`Today`, `Focus`, `Review`), Settings accessed from Today top-right.
   - Shared Component: Cross-page `RecordMomentModal` saving instantly to Room without interrupting focus timer.
+- **Toolchain prerequisites**: the supported Node runtime is the version pinned by `actions/setup-node` in `.github/workflows/android-quality.yml` — that pin, not a number copied here, is the source of truth for `npm test`, `npm run typecheck` and the repository guards. The Android SDK is discovered through `ANDROID_HOME` / `ANDROID_SDK_ROOT` or `local.properties`. `.ts` sources are loaded through Node's built-in type stripping, which prints a `MODULE_TYPELESS_PACKAGE_JSON` warning for every imported file; that warning is expected — `package.json` deliberately carries no `"type": "module"` — and never changes an exit status.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
@@ -28,7 +29,7 @@
 | 6 | Native Data Module (`YanjiDataModule`) | Bridge Room tasks, notes, subjects, and study stats to JS | M2 | Survey |
 | 7 | Native Theme Module (`YanjiThemeModule`) | Bridge system uiMode and app theme preference to JS | M2 | Survey |
 | 8 | TypeScript Bridge Interface Contracts | Strongly typed TypeScript APIs and event listeners | M2 | Survey |
-| 9 | Design Tokens (Midnight Blue, Radius, Zero-border) | NativeWind theme extension with exact color, radius, and zero-border rules | M3 | Survey |
+| 9 | Design Tokens (Midnight Blue, Radius, Zero-border) | Design tokens with exact color, radius, and zero-border rules | M3 | Survey |
 | 10 | Three-tab Navigation Shell | Strict 3-tab dock: Today, Focus, Review | M3 | Survey |
 | 11 | Settings Screen & Navigation Flow | Clean preferences screen accessed from Today top-right icon | M3 | Survey |
 | 12 | Today Screen Overview & Adaptive Single CTA | Date, exam countdown, today study stats, and single adaptive action button | M4 | Survey |
@@ -45,9 +46,9 @@
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | RN Add-to-App Infra & Build System | package.json, TypeScript, NativeWind, Gradle integration, ReactApplication, ReactActivity, themes.xml, asset bundling | none | ✅ COMPLETE |
+| 1 | RN Add-to-App Infra & Build System | package.json, TypeScript, Gradle integration, ReactApplication, ReactActivity, themes.xml, asset bundling | none | ✅ COMPLETE |
 | 2 | Native Bridge Layer & Contracts | YanjiTimerModule, YanjiDataModule, YanjiThemeModule, YanjiPackage, TypeScript bridge definitions | M1 | ✅ COMPLETE |
-| 3 | Design System & Navigation Shell | Tailwind/NativeWind config, theme tokens, 3-tab bottom bar, Settings screen | M1, M2 | ✅ COMPLETE |
+| 3 | Design System & Navigation Shell | Theme tokens, 3-tab bottom bar, Settings screen | M1, M2 | ✅ COMPLETE |
 | 4 | Today, Focus & Record Moment Views | TodayScreen (overview, CTA, tasks), FocusScreen (timer, modes), RecordMomentModal (cross-page, non-pausing) | M2, M3 | ✅ COMPLETE |
 | 5 | Review View & Historical Timeline | ReviewScreen (merged daily timeline, session note editing / deletion, note favourites, trend window switch, subject breakdown with per-day drill-down, AI expansion slot) | M2, M3 | ✅ COMPLETE |
 | Final | E2E Test Suite & Adversarial Hardening | Pass 100% of E2E test suite (Tiers 1-4) + Tier 5 adversarial coverage hardening | M4, M5, TEST_READY | PLANNED |
@@ -69,21 +70,20 @@
   - `onTimerStateChanged(event: { state: string, session: ActiveSessionState | null })`
 
 ### `YanjiDataModule` (Native ↔ JS)
-- `getTodayStats(date: string): Promise<TodayStats>`
-- `getTodayTasks(date: string): Promise<StudyTask[]>`
+- `getDailySnapshot(date: string): Promise<DailySnapshot>` — one Room read transaction containing sessions, all tasks (with actual minutes), notes and daily totals.
 - `createTask(date: string, subjectId: string, subjectName: string, title: string, plannedMinutes: number): Promise<StudyTask>`
+- `updateTask(taskId: string, title: string, plannedMinutes: number): Promise<boolean>`
 - `toggleTask(taskId: string, completed: boolean): Promise<boolean>`
 - `deleteTask(taskId: string): Promise<boolean>`
 - `saveQuickNote(content: string, date: string, sessionId?: string | null): Promise<NoteEntry>`
 - `getNotes(page: number, limit: number): Promise<NoteEntry[]>`
-- `getNotesForDate(date: string): Promise<NoteEntry[]>`
 - `toggleFavoriteNote(noteId: string): Promise<boolean>`
 - `deleteNote(noteId: string): Promise<boolean>`
+- `updateNote(noteId: string, content: string): Promise<boolean>`
 - `getSubjects(): Promise<Subject[]>`
 - `getReviewOverview(scope: ReviewScope, periodsBack: number, anchorDate?: string | null): Promise<ReviewOverview>`
 - `updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>`
 - `deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>`
-- `getDailyTimeline(date: string): Promise<DailyTimeline>`
 - `getUserSettings(): Promise<UserSettings>`
 - `updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>`
 - `getExamCountdown(): Promise<{ examDate: string, daysRemaining: number }>`
@@ -114,14 +114,14 @@
   - `onThemeChanged(event: { mode: string, isDark: boolean })`
 
 ## Code Layout
-- `package.json`, `tsconfig.json`, `tailwind.config.js`, `babel.config.js`, `metro.config.js`: Project Root
+- `package.json`, `tsconfig.json`, `babel.config.js`, `metro.config.js`: Project Root
 - `app/src/main/java/com/example/yanji/bridge/`: Native Modules (`YanjiTimerModule.kt`, `YanjiDataModule.kt`, `YanjiThemeModule.kt`, `YanjiPackage.kt`)
 - `app/src/main/java/com/example/yanji/YanjiApplication.kt`: ReactApplication host
 - `app/src/main/java/com/example/yanji/MainActivity.kt`: ReactActivity host
 - `app/src/main/assets/index.android.bundle`: Compiled standalone offline JS bundle
 - `src/`: React Native TypeScript source root
   - `src/bridge/`: Strongly typed Native Module bindings & mock stubs for web/testing
-  - `src/theme/`: NativeWind theme tokens, colors, radius, typography
+  - `src/theme/`: Design tokens — colors, radius, spacing, typography, motion, layout (frozen navigation/glass domain plus the paper domain body surfaces render with)
   - `src/navigation/`: Navigation Shell & 3-tab Bottom Bar
   - `src/screens/`: TodayScreen, FocusScreen, ReviewScreen, SettingsScreen
   - `src/components/`: RecordMomentModal, YanjiCard, YanjiButton, StatBar, TaskItem

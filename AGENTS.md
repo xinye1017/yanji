@@ -30,6 +30,8 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 
 **原生构建并发**：Gradle worker 数由 `gradle.properties` 限制；各 Android 模块的 CMake/Ninja 编译任务池由根 `build.gradle.kts` 统一限制。不得为了提速覆盖这些限制，避免多 ABI 构建同时启动数十个 `clang++` 导致内存耗尽。
 
+**每日数据与订阅边界**：Today / Review 通过 `getDailySnapshot(date)` 共用一次 Room 事务读取，契约以 `src/bridge/index.ts` 与 `DailySnapshotReader.kt` 为准；任务实际用时按任务关联累计，不能按专注日期截断跨日贡献。数据失效事件仅来自 Room 表变更，RN 刷新协调器合并事件并限制隐藏页/后台查询。计时的低频会话快照与每秒 tick 分开订阅，tick 只更新可见计时组件，不能回到页面根状态驱动整页重渲染。
+
 ### 工程原则
 
 - **不要为了保持向后兼容而妥协**。对于已经过时的实现路径，直接删除，而不是额外添加兼容层、回退方案（fallback）或迁移逻辑（migration）。
