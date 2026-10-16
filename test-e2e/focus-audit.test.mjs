@@ -186,8 +186,10 @@ function immersiveHarness({ session = {}, tasks = [] } = {}) {
       captionMeta: {}, titleEditorial: {}, bodyPrimary: {}, displayTimer: {},
     },
     immersive: {
-      running: { canvas: '#15181c', ink: '#fff', secondary: '#aaa', accent: '#e06d53' },
-      paused: { canvas: '#1c1917', ink: '#fff', secondary: '#aaa', accent: '#dda059' },
+      running: { canvas: '#15181c', ink: '#fff', secondary: '#aaa', accent: '#e06d53',
+        tideColor: '#2d7a5e', tideOpacity: 0.14 },
+      paused: { canvas: '#1c1917', ink: '#fff', secondary: '#aaa', accent: '#dda059',
+        tideColor: '#dda059', tideOpacity: 0.14 },
     },
   };
   const mocks = {
@@ -268,6 +270,34 @@ test('the immersion subtitle names the bound task and stays quiet when unbound',
   });
   assert.equal(findAll(stale.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
   assert.equal(findAll(stale.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
+});
+
+test('the horizon tide carries its alpha in stopOpacity, never in the colour', () => {
+  // `react-native-svg` reads a gradient stop's alpha from `stopOpacity` alone —
+  // it masks any alpha embedded in `stopColor` back out and defaults a missing
+  // `stopOpacity` to fully opaque. An rgba() stop colour therefore painted the
+  // tide as a hard-edged solid slab instead of a 14% wash. This guards the
+  // shape that actually renders.
+  const { root } = immersiveHarness();
+  const stops = findAll(root, n => n.type === 'Stop');
+  assert.equal(stops.length, 2, 'the tide gradient needs its two stops');
+
+  const [start, end] = stops;
+  assert.equal(start.props.stopOpacity, 0, 'the top of the wash is fully transparent');
+  assert.ok(
+    typeof end.props.stopOpacity === 'number' && end.props.stopOpacity > 0 && end.props.stopOpacity < 1,
+    `the bottom stop must carry a fractional alpha, saw ${end.props.stopOpacity}`,
+  );
+  for (const stop of stops) {
+    assert.ok(
+      !/^rgba\(/i.test(String(stop.props.stopColor)),
+      `stop colour must not smuggle alpha: ${stop.props.stopColor}`,
+    );
+  }
+
+  // The gradient axis must span the box, not collapse to a single user unit.
+  const gradient = findAll(root, n => n.type === 'LinearGradient')[0];
+  assert.equal(gradient.props.y2, '100%');
 });
 
 test('paused discard opens native confirmation; cancellation never calls discardTimer', async () => {

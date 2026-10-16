@@ -237,8 +237,17 @@ export const YanjiPaperImmersive = {
     subtle: 'rgba(255,255,255,0.08)',
     pillBg: 'rgba(255,255,255,0.05)',
     pillBorder: 'rgba(255,255,255,0.08)',
-    tideStart: 'rgba(45,122,94,0)',
-    tideEnd: 'rgba(45,122,94,0.14)',
+    /**
+     * Horizon tide — the wash that rises from the bottom edge.
+     *
+     * Colour and peak opacity are separate roles because `react-native-svg`
+     * reads a gradient stop's alpha from `stopOpacity` alone: `extractGradient`
+     * masks any alpha embedded in `stopColor` back out, and a missing
+     * `stopOpacity` resolves to fully opaque. An `rgba(...)` string here would
+     * therefore paint a solid slab instead of a wash.
+     */
+    tideColor: '#2D7A5E',
+    tideOpacity: 0.14,
     secondaryActionBg: 'rgba(255,255,255,0.06)',
     secondaryActionBorder: 'rgba(255,255,255,0.10)',
     secondaryActionText: '#D5D8DF',
@@ -257,8 +266,9 @@ export const YanjiPaperImmersive = {
     subtle: 'rgba(255,255,255,0.08)',
     pillBg: 'rgba(255,255,255,0.05)',
     pillBorder: 'rgba(255,255,255,0.08)',
-    tideStart: 'rgba(221,160,89,0)',
-    tideEnd: 'rgba(221,160,89,0.14)',
+    /** See the running-state note: alpha must travel via `tideOpacity`. */
+    tideColor: '#DDA059',
+    tideOpacity: 0.14,
     secondaryActionBg: 'rgba(255,255,255,0.06)',
     secondaryActionBorder: 'rgba(255,255,255,0.10)',
     secondaryActionText: '#D5D8DF',

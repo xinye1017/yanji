@@ -770,13 +770,19 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   return (
     <View testID={isPaused ? 'focus-paused' : 'focus-running'} style={{ flex: 1, backgroundColor: immersed.canvas }}>
       {/* Horizon tide: a wash that rises from the bottom edge and colours the
-          whole field with the session's accent. */}
+          whole field with the session's accent.
+
+          The stop alpha rides on `stopOpacity`, never on an `rgba()` colour:
+          `react-native-svg` masks the alpha back out of `stopColor` and reads
+          opacity from `stopOpacity` alone, defaulting it to fully opaque. With
+          an rgba() colour both stops paint solid, so the wash rendered as a
+          hard-edged slab (see the `tideOpacity` note in tokens.ts). */}
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '32%' }}>
         <Svg width="100%" height="100%">
           <Defs>
-            <LinearGradient id="focus-horizon-tide" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={immersed.tideStart} />
-              <Stop offset="100%" stopColor={immersed.tideEnd} />
+            <LinearGradient id="focus-horizon-tide" x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor={immersed.tideColor} stopOpacity={0} />
+              <Stop offset="100%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity} />
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#focus-horizon-tide)" />
