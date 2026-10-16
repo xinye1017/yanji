@@ -2,6 +2,7 @@ package com.example.yanji.bridge
 
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.StudyTask
+import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.UserSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,6 +36,17 @@ class BridgeMappersTest {
         assertEquals(90, fields.actualMinutes)
         assertEquals(90, fields.plannedMinutes)
         assertFalse(fields.completed)
+    }
+
+    @Test
+    fun taskFields_carriesCatalogColorWithoutAnyFocusRecords() {
+        val subject = SubjectCatalog.all.first()
+        val task = StudyTask(id = "t-color", date = "2026-10-16", subjectId = subject.id,
+            subjectName = subject.name, title = "x", plannedMinutes = 90)
+
+        val fields = BridgeMappers.taskFields(task, null)
+        assertEquals(subject.colorHex, fields.subjectColor)
+        assertEquals(0, fields.actualMinutes)
     }
 
     @Test

@@ -18,6 +18,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -161,14 +162,18 @@ export function YanjiPaperSheetHeading({
 
 export interface YanjiEditorialHeaderProps {
   eyebrow?: string;
+  eyebrowBadge?: React.ReactNode;
   title: string;
+  titleStyle?: TextStyle;
   subtitle?: string;
   trailing?: React.ReactNode;
 }
 
 export function YanjiEditorialHeader({
   eyebrow,
+  eyebrowBadge,
   title,
+  titleStyle,
   subtitle,
   trailing,
 }: YanjiEditorialHeaderProps): React.JSX.Element {
@@ -184,36 +189,27 @@ export function YanjiEditorialHeader({
       }}
     >
       <View style={{ flex: 1 }}>
-        {eyebrow ? (
+        {eyebrow || eyebrowBadge ? (
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              gap: YanjiSpacing.xs + 2,
-              marginBottom: YanjiSpacing.xs,
+              flexWrap: 'wrap',
+              gap: YanjiSpacing.sm,
+              marginBottom: YanjiSpacing.sm,
             }}
           >
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: paper.radius.pill,
-                backgroundColor: paper.colors.brand,
-              }}
-            />
-            <Text
-              style={[
-                paper.typography.captionMeta,
-                { color: paper.colors.brandInk, letterSpacing: 0.6 },
-              ]}
-            >
-              {eyebrow}
-            </Text>
+            {eyebrow ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                {eyebrow}
+              </Text>
+            ) : null}
+            {eyebrowBadge}
           </View>
         ) : null}
         <Text
           accessibilityRole="header"
-          style={[paper.typography.titleEditorial, { color: paper.colors.ink }]}
+          style={[paper.typography.titleEditorial, titleStyle, { color: paper.colors.ink }]}
         >
           {title}
         </Text>
@@ -239,9 +235,11 @@ export function YanjiEditorialHeader({
 
 export function YanjiPaperSectionHeading({
   title,
+  countText,
   right,
 }: {
   title: string;
+  countText?: string;
   right?: React.ReactNode;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -258,23 +256,18 @@ export function YanjiPaperSectionHeading({
         marginTop: paper.layout.sectionGap,
       }}
     >
-      {/* Marked as a heading so TalkBack users can jump between sections instead
-          of reading the page as one unbroken stream of rows. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-        <View
-          style={{
-            width: 3,
-            height: 14,
-            borderRadius: paper.radius.tick,
-            backgroundColor: paper.colors.brand,
-          }}
-        />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.sm }}>
         <Text
           accessibilityRole="header"
           style={[paper.typography.titleSection, { color: paper.colors.ink }]}
         >
           {title}
         </Text>
+        {countText ? (
+          <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+            {countText}
+          </Text>
+        ) : null}
       </View>
       {right}
     </View>
@@ -410,10 +403,8 @@ function PaperSegment({
 // ---------------------------------------------------------------------------
 // YanjiChronoSpectrum — 今日光阴光谱尺
 //
-// Segments are sized by their own measured sum, so the bar never claims a total
-// the records do not add up to. The goal tick is drawn only when a real goal
-// exists; past 100% it is pinned to the end of the track and the excess is
-// announced instead of drawn.
+// With a goal, the unfilled track represents the remaining time. Without one,
+// the measured segments fill the width as a subject distribution (also Review).
 // ---------------------------------------------------------------------------
 
 export interface YanjiSpectrumSegment {
@@ -430,15 +421,10 @@ export interface YanjiChronoSpectrumProps {
   accessibilityLabel?: string;
 }
 
-// Quarter-hour ruler ticks. Drawn under the segments so the track keeps its
-// horological texture before the first session is saved: an empty day then
-// reads as a precision scale rather than an unstyled grey bar.
-const SPECTRUM_RULER_TICKS = [12.5, 25, 37.5, 50, 62.5, 75, 87.5] as const;
-
 function formatSpectrumDuration(totalSeconds: number): string {
-  const safe = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.round((safe % 3600) / 60);
+  const safeMinutes = Math.max(0, Math.floor(totalSeconds / 60));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
@@ -456,9 +442,14 @@ export function YanjiChronoSpectrum({
   const overGoal = hasGoal && ratio > 1;
   const markerPercent = Math.max(0, Math.min(100, ratio * 100));
 
-  // Segments are laid out with `flexGrow`, so the bar is proportional to the
-  // real sum of the records without ever needing that sum as a denominator.
   const filled = segments.filter(segment => segment.seconds > 0);
+  const measuredSum = filled.reduce((sum, segment) => sum + segment.seconds, 0);
+  const scale = Math.max(measuredSum, goalSeconds ?? 0);
+  const filledPercent = scale > 0 ? measuredSum / scale * 100 : 0;
+  const [filledWidth, setFilledWidth] = useState(0);
+  // Short progress must retain colored area even when several subjects share it.
+  const segmentGap = filled.length > 1
+    ? Math.min(paper.layout.spectrumGap, filledWidth / (filled.length * 2)) : 0;
   const defaultLabel = [
     `今日专注 ${formatSpectrumDuration(totalSeconds)}`,
     hasGoal
@@ -477,73 +468,108 @@ export function YanjiChronoSpectrum({
     <View
       accessibilityRole="progressbar"
       accessibilityLabel={accessibilityLabel ?? defaultLabel}
-      accessibilityValue={{ min: 0, max: 100, now: Math.round(markerPercent) }}
+      accessibilityValue={hasGoal ? { min: 0, max: 100, now: Math.round(markerPercent) } : undefined}
       style={{
-        height: paper.layout.spectrumHeight + 2,
-        borderRadius: paper.radius.pill,
+        height: paper.layout.spectrumHeight,
+        borderRadius: paper.radius.tag,
         backgroundColor: paper.colors.subtle,
-        borderWidth: paper.layout.hairlineWidth,
-        borderColor: paper.colors.hairline,
         overflow: 'hidden',
-        flexDirection: 'row',
       }}
     >
-      {SPECTRUM_RULER_TICKS.map(percent => {
-        // Quarter ticks reach the full height; the eighths stay short so the
-        // scale stays readable at a glance.
-        const isQuarter = percent % 25 === 0;
-        return (
+      <View onLayout={event => setFilledWidth(event.nativeEvent.layout.width)}
+        style={{ width: `${filledPercent}%`, height: '100%', flexDirection: 'row', gap: segmentGap, backgroundColor: paper.colors.canvas, overflow: 'hidden' }}>
+        {filled.map(segment => (
           <View
-            key={percent}
-            pointerEvents="none"
+            key={segment.id}
             style={{
-              position: 'absolute',
-              left: `${percent}%`,
-              bottom: 0,
-              height: isQuarter ? paper.layout.spectrumHeight : Math.round(paper.layout.spectrumHeight * 0.55),
-              width: paper.layout.hairlineWidth,
-              backgroundColor: paper.colors.hairline,
+              flexGrow: segment.seconds,
+              flexBasis: 0,
+              backgroundColor: segment.color,
             }}
           />
-        );
-      })}
-      {filled.map((segment, index) => (
-        <View
-          key={segment.id}
-          style={{
-            flexGrow: segment.seconds,
-            flexBasis: 0,
-            backgroundColor: segment.color,
-            marginRight: index < filled.length - 1 ? 1 : 0,
-          }}
-        />
-      ))}
-      {hasGoal ? (
-        // 2dp goal tick, centred on its own width so it never hangs off the
-        // end of the track when the goal is met exactly.
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: `${markerPercent}%`,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            marginLeft: -1,
-            backgroundColor: paper.colors.brand,
-          }}
-        />
-      ) : null}
+        ))}
+      </View>
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
-// YanjiEmptyLedgerRow — the ledger's first, still-blank row
-//
-// Only the invitation remains: the dashed tick box, the hint line and the
-// action capsule were all furniture that described the control instead of
-// being the control. The row stays pressable so tapping it opens the editor.
+// YanjiMiniRhythmSparkline — saved continuous focus, 06:00–24:00
+// ---------------------------------------------------------------------------
+
+export interface YanjiMiniRhythmBucket {
+  hour: number;
+  seconds: number;
+  color?: string;
+}
+
+export function YanjiMiniRhythmSparkline({
+  buckets,
+  currentHour,
+}: {
+  buckets: readonly YanjiMiniRhythmBucket[];
+  currentHour: number;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, layout, radius } = paper;
+  const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
+  return (
+    <View
+      importantForAccessibility="no-hide-descendants"
+      style={{ flexDirection: 'row', alignItems: 'flex-end', gap: layout.rhythmBarGap, height: layout.rhythmBarHeight }}
+    >
+      {buckets.map(bucket => (
+        <View
+          key={bucket.hour}
+          style={{
+            width: layout.rhythmBarWidth,
+            height: bucket.seconds > 0
+              ? Math.max(layout.rhythmEmptyHeight, bucket.seconds / maximum * layout.rhythmBarHeight)
+              : layout.rhythmEmptyHeight,
+            borderRadius: radius.tick,
+            backgroundColor: bucket.seconds > 0 ? bucket.color ?? colors.secondary
+              : bucket.hour === currentHour ? colors.secondary : colors.subtle,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiTextAction — compact label inside a full-size touch target
+// ---------------------------------------------------------------------------
+
+export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false }: {
+  label: string;
+  accessibilityLabel?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => ({
+        minHeight: paper.layout.rowMinHeight,
+        minWidth: paper.layout.rowMinHeight,
+        justifyContent: 'center',
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <Text style={[paper.typography.captionMeta, { color: paper.colors.brandInk, fontWeight: '700' }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiEmptyLedgerRow — a pressable invitation on the paper
 // ---------------------------------------------------------------------------
 
 export function YanjiEmptyLedgerRow({
@@ -554,81 +580,24 @@ export function YanjiEmptyLedgerRow({
   onPress: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
+  const { colors, typography, layout } = paper;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={prompt}
-      style={({ pressed }) => ({
-        minHeight: layout.rowMinHeight,
-        justifyContent: 'center',
-        paddingVertical: YanjiSpacing.md,
-        paddingHorizontal: YanjiSpacing.md,
-        borderRadius: radius.surface,
-        backgroundColor: colors.elevated,
-        borderWidth: layout.hairlineWidth,
-        borderColor: colors.hairline,
-        opacity: pressed ? 0.72 : 1,
-      })}
-    >
-      <Text style={[typography.bodyJournal, { color: colors.ink }]}>{prompt}</Text>
-    </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// YanjiEmptyJournalWell — lined note card when today has no journal entries
-//
-// Mirrors the saved-entry layout (brand rule, hairline, meta line) so the
-// journal section keeps its shape before the first word is written.
-// ---------------------------------------------------------------------------
-
-export function YanjiEmptyJournalWell({
-  prompt,
-  timeLabel,
-  onPress,
-}: {
-  prompt: string;
-  timeLabel: string;
-  onPress: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={prompt}
-      style={({ pressed }) => ({
-        minHeight: layout.rowMinHeight + 24,
-        justifyContent: 'center',
-        opacity: pressed ? 0.72 : 1,
-      })}
-    >
-      <View style={{ borderLeftWidth: 2, borderLeftColor: colors.brand, paddingLeft: YanjiSpacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={[typography.captionMeta, { color: colors.brandInk }]}>{timeLabel} · 随时落笔</Text>
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: radius.pill,
-              backgroundColor: colors.subtle,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <YanjiIcon name="compose" size={15} color={colors.brandInk} />
-          </View>
-        </View>
-        <Text style={[typography.bodyJournal, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>{prompt}</Text>
-        <YanjiHairline style={{ marginTop: YanjiSpacing.sm }} />
-        <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-          无需标题与格式，自动关联今日时间线
-        </Text>
-      </View>
-    </Pressable>
+    <View>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={prompt}
+        style={({ pressed }) => ({
+          minHeight: layout.rowMinHeight,
+          justifyContent: 'center',
+          paddingVertical: YanjiSpacing.sm,
+          opacity: pressed ? 0.72 : 1,
+        })}
+      >
+        <Text style={[typography.bodyJournal, { color: colors.secondary }]}>{prompt}</Text>
+      </Pressable>
+      <YanjiHairline />
+    </View>
   );
 }
 
@@ -931,12 +900,14 @@ export function YanjiSubjectProportionRow({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiTaskLedgerRow — unboxed study task row with checkbox, metadata & play
+// YanjiTaskLedgerRow — subject checkbox, task ledger & separate focus capsule
 // ---------------------------------------------------------------------------
 
 export function YanjiTaskLedgerRow({
   title,
+  subjectName,
   meta,
+  accentColor,
   completed,
   busy = false,
   disabled = false,
@@ -945,7 +916,9 @@ export function YanjiTaskLedgerRow({
   onStartFocus,
 }: {
   title: string;
+  subjectName: string;
   meta: string;
+  accentColor: string;
   completed: boolean;
   busy?: boolean;
   disabled?: boolean;
@@ -957,14 +930,7 @@ export function YanjiTaskLedgerRow({
   const { colors, typography, layout, radius } = paper;
   return (
     <View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: layout.gridGap,
-          paddingVertical: YanjiSpacing.sm,
-        }}
-      >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap, paddingVertical: YanjiSpacing.sm }}>
         <Pressable
           onPress={onToggle}
           disabled={disabled}
@@ -974,24 +940,22 @@ export function YanjiTaskLedgerRow({
           style={({ pressed }) => ({
             width: layout.rowMinHeight,
             minHeight: layout.rowMinHeight,
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'center',
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderWidth: completed ? 0 : 1.5,
-              borderColor: colors.secondary,
-              backgroundColor: completed ? colors.brand : 'transparent',
-              borderRadius: radius.tag,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            {completed ? <YanjiIcon name="check" size={14} color={colors.onBrand} /> : null}
+          <View style={{
+            width: layout.taskCheckboxSize,
+            height: layout.taskCheckboxSize,
+            borderWidth: completed ? 0 : layout.taskCheckboxStroke,
+            borderColor: accentColor,
+            backgroundColor: completed ? colors.ink : 'transparent',
+            borderRadius: radius.tag,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            {completed ? <YanjiIcon name="check" size={layout.taskCheckIconSize} color={colors.surface} /> : null}
           </View>
         </Pressable>
         <Pressable
@@ -1005,33 +969,55 @@ export function YanjiTaskLedgerRow({
             opacity: pressed ? 0.65 : 1,
           })}
         >
-          <Text
-            style={[
-              typography.bodyPrimary,
-              {
-                color: completed ? colors.secondary : colors.ink,
-                textDecorationLine: completed ? 'line-through' : 'none',
-              },
-            ]}
-          >
-            {title}
-          </Text>
-          <Text
-            style={[
-              typography.captionMeta,
-              { color: colors.secondary, marginTop: YanjiSpacing.xs },
-            ]}
-          >
-            {meta}
-          </Text>
+          <Text style={[typography.bodyPrimary, {
+            color: completed ? colors.secondary : colors.ink,
+            fontWeight: completed ? '500' : '700',
+            textDecorationLine: completed ? 'line-through' : 'none',
+          }]}>{title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: YanjiSpacing.sm, marginTop: YanjiSpacing.xs }}>
+            <View style={{
+              flexShrink: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: YanjiSpacing.xs,
+              backgroundColor: colors.subtle,
+              borderRadius: radius.tag,
+              paddingHorizontal: YanjiSpacing.xs,
+              paddingVertical: layout.taskTagPadding,
+            }}>
+              <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: radius.tick, backgroundColor: accentColor }} />
+              <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{subjectName}</Text>
+            </View>
+            <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
+          </View>
         </Pressable>
-        <YanjiIconButton
-          icon="play"
-          onPress={onStartFocus}
-          accessibilityLabel={`为${title}设置专注`}
-          size={layout.rowMinHeight}
-          tone={completed ? 'plain' : 'filled'}
-        />
+        {!completed ? (
+          <Pressable
+            onPress={onStartFocus}
+            accessibilityRole="button"
+            accessibilityLabel={`为${title}设置专注`}
+            style={({ pressed }) => ({
+              minHeight: layout.rowMinHeight,
+              minWidth: layout.rowMinHeight,
+              justifyContent: 'center',
+              opacity: pressed ? 0.68 : 1,
+            })}
+          >
+            <View style={{
+              minHeight: layout.compactActionHeight,
+              paddingHorizontal: YanjiSpacing.md,
+              borderRadius: radius.pill,
+              backgroundColor: colors.subtle,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: YanjiSpacing.xs,
+            }}>
+              <YanjiIcon name="play" size={typography.captionMeta.fontSize} color={colors.ink} />
+              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '700' }]}>专注</Text>
+            </View>
+          </Pressable>
+        ) : null}
       </View>
       <YanjiHairline />
     </View>

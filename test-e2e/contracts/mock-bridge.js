@@ -212,6 +212,7 @@ export class MockYanjiBridge {
       date,
       subjectId,
       subjectName,
+      subjectColor: this._subjectColor(subjectId),
       title: title.trim(),
       plannedMinutes: Math.max(1, plannedMinutes),
       actualMinutes: 0,
@@ -541,7 +542,8 @@ export class MockYanjiBridge {
       examCount: sessions.filter(s => s.isExam).length,
       sessions,
       tasks: this.tasks.filter(t => t.date === date).map(t => ({
-        ...t, actualMinutes: Math.floor((actualSeconds.get(t.id) ?? 0) / 60),
+        ...t, subjectColor: this._subjectColor(t.subjectId),
+        actualMinutes: Math.floor((actualSeconds.get(t.id) ?? 0) / 60),
       })),
       notes: this.notes.filter(n => n.date === date).map(n => ({ ...n })),
     };

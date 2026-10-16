@@ -37,6 +37,7 @@ export interface StudyTask {
   date: string;
   subjectId: string;
   subjectName: string;
+  subjectColor: string;
   title: string;
   plannedMinutes: number;
   actualMinutes: number;

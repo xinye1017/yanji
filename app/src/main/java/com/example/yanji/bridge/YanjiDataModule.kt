@@ -567,6 +567,7 @@ class YanjiDataModule(
             putString("date", fields.date)
             putString("subjectId", fields.subjectId)
             putString("subjectName", fields.subjectName)
+            putString("subjectColor", fields.subjectColor)
             putString("title", fields.title)
             putInt("plannedMinutes", fields.plannedMinutes)
             // 真实累计分钟数（秒 / 60），不再是恒为 0 的占位值。
