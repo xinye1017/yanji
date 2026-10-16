@@ -196,7 +196,7 @@ export function YanjiEditorialHeader({
               alignItems: 'center',
               flexWrap: 'wrap',
               gap: YanjiSpacing.sm,
-              marginBottom: YanjiSpacing.sm,
+              marginBottom: 4,
             }}
           >
             {eyebrow ? (
@@ -767,26 +767,26 @@ export function YanjiBadge({
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: bg,
-          borderWidth: paper.layout.hairlineWidth,
-          borderColor: paper.colors.hairline,
-          paddingVertical: 4,
-          paddingHorizontal: 10,
-          borderRadius: paper.radius.pill,
+          paddingVertical: 3,
+          paddingHorizontal: 8,
+          borderRadius: 6,
           alignSelf: 'flex-start',
         },
         style,
       ]}
     >
       {icon ? (
-        <View style={{ marginRight: 5 }}>
-          <YanjiIcon name={icon} size={12} color={fg} />
+        <View style={{ marginRight: 4 }}>
+          <YanjiIcon name={icon} size={11} color={fg} />
         </View>
       ) : null}
       <Text
-        style={[
-          paper.typography.captionMeta,
-          { color: fg },
-        ]}
+        style={{
+          fontSize: 11,
+          lineHeight: 14,
+          fontWeight: '600',
+          color: fg,
+        }}
       >
         {label}
       </Text>

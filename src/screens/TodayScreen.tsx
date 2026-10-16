@@ -189,7 +189,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
           eyebrowBadge={countdown && countdownLabel ? (
             <Pressable onPress={openSettings} accessibilityRole="button"
               accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
-              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
               <YanjiBadge tone={countdown.daysRemaining >= 0 ? 'brand' : 'neutral'} label={countdownLabel} />
             </Pressable>
           ) : undefined}
@@ -197,7 +198,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           titleStyle={typography.titleGreeting}
           trailing={<YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} />}
         />
-        <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
+        <YanjiHairline style={{ marginTop: 8 }} />
 
         <View style={{ paddingVertical: YanjiSpacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
