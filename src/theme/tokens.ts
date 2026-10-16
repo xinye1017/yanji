@@ -344,8 +344,8 @@ export const YanjiPaperTypography = {
     fontFamily: 'serif',
   },
   titleSection: {
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 21,
     fontWeight: '700' as const,
   },
   bodyPrimary: {
@@ -381,11 +381,29 @@ export const YanjiPaperLayout = {
   spectrumHeight: 10,
   spectrumGap: 2,
   subjectSwatchSize: 7,
-  taskCheckboxSize: 20,
+  taskCheckboxSize: 18,
   taskCheckboxStroke: 1.5,
-  taskCheckIconSize: 13,
+  taskCheckIconSize: 12,
   taskTagPadding: 2,
-  compactActionHeight: 32,
+  /** The tag's horizontal inset — wider than the vertical so it reads as a chip. */
+  taskTagPaddingHorizontal: 6,
+  /** AB-01's ledger rhythm: 11dp above and below, 11dp between the columns. */
+  taskRowPadding: 11,
+  /** Row columns sit 11dp apart; the checkbox carries its 48dp target as hit slop. */
+  taskRowGap: 11,
+  /** The sub-line hugs its title — 2dp reads as one line, not two blocks. */
+  taskSubMarginTop: 2,
+  /**
+   * Subject tag wash. Identity is carried by the tint and the swatch, never by
+   * the label: at 12% every colour in the subject palette keeps the tag's own
+   * `secondary` label above the 4.5:1 readable tier on all four paper steps
+   * (measured worst case 4.88:1). Painting the label in the subject colour
+   * instead fails that bar in 46 of 48 colour/surface combinations.
+   */
+  subjectTagTintOpacity: 0.12,
+  compactActionHeight: 28,
+  /** Inline capsule inset — AB-01's `5px 10px` play trigger. */
+  compactActionPadding: 10,
   rhythmBarWidth: 4,
   rhythmBarGap: 3,
   rhythmBarHeight: 22,

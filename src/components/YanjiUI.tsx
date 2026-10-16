@@ -249,14 +249,14 @@ export function YanjiPaperSectionHeading({
       style={{
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'baseline',
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
         marginBottom: YanjiSpacing.sm,
         marginTop: paper.layout.sectionGap,
       }}
     >
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.sm }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
         <Text
           accessibilityRole="header"
           style={[paper.typography.titleSection, { color: paper.colors.ink }]}
@@ -264,7 +264,10 @@ export function YanjiPaperSectionHeading({
           {title}
         </Text>
         {countText ? (
-          <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+          // AB-01 sets this count at 12sp in the muted tier. It is real progress
+          // data, and `muted` is reserved for decoration, so it keeps the
+          // readable `secondary` tier at AB-01's size instead.
+          <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
             {countText}
           </Text>
         ) : null}
@@ -901,7 +904,19 @@ export function YanjiSubjectProportionRow({
 
 // ---------------------------------------------------------------------------
 // YanjiTaskLedgerRow — subject checkbox, task ledger & separate focus capsule
+//
+// AB-01's editorial row: the checkbox, title, tag and focus capsule all sit on
+// one baseline grid separated by 11dp, and the rule below closes the row rather
+// than boxing it. `isLast` drops that rule so the ledger ends on the paper
+// instead of on a stray line.
 // ---------------------------------------------------------------------------
+
+/** Blend a subject colour into a translucent wash without leaving the paper stack. */
+function subjectTagTint(accentColor: string, opacity: number): string {
+  const hex = accentColor.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return 'transparent';
+  return `#${hex}${Math.round(opacity * 255).toString(16).padStart(2, '0').toUpperCase()}`;
+}
 
 export function YanjiTaskLedgerRow({
   title,
@@ -909,6 +924,7 @@ export function YanjiTaskLedgerRow({
   meta,
   accentColor,
   completed,
+  isLast = false,
   busy = false,
   disabled = false,
   onToggle,
@@ -920,6 +936,8 @@ export function YanjiTaskLedgerRow({
   meta: string;
   accentColor: string;
   completed: boolean;
+  /** The final row of a ledger drops its rule, so the list ends without a stray line. */
+  isLast?: boolean;
   busy?: boolean;
   disabled?: boolean;
   onToggle: () => void;
@@ -930,17 +948,20 @@ export function YanjiTaskLedgerRow({
   const { colors, typography, layout, radius } = paper;
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap, paddingVertical: YanjiSpacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.taskRowGap, paddingVertical: layout.taskRowPadding }}>
         <Pressable
           onPress={onToggle}
           disabled={disabled}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: completed, disabled, busy }}
           accessibilityLabel={`${completed ? '恢复待办' : '完成任务'}：${title}`}
+          hitSlop={8}
           style={({ pressed }) => ({
-            width: layout.rowMinHeight,
+            // AB-01's box is 18dp, but the touch target stays the full 48dp row
+            // height; `hitSlop` widens it horizontally so the 11dp gap to the
+            // title is not spent on padding.
+            width: layout.taskCheckboxSize,
             minHeight: layout.rowMinHeight,
-            alignItems: 'flex-start',
             justifyContent: 'center',
             opacity: pressed ? 0.6 : 1,
           })}
@@ -949,13 +970,13 @@ export function YanjiTaskLedgerRow({
             width: layout.taskCheckboxSize,
             height: layout.taskCheckboxSize,
             borderWidth: completed ? 0 : layout.taskCheckboxStroke,
-            borderColor: accentColor,
+            borderColor: completed ? colors.ink : accentColor,
             backgroundColor: completed ? colors.ink : 'transparent',
             borderRadius: radius.tag,
             justifyContent: 'center',
             alignItems: 'center',
           }}>
-            {completed ? <YanjiIcon name="check" size={layout.taskCheckIconSize} color={colors.surface} /> : null}
+            {completed ? <YanjiIcon name="check" size={layout.taskCheckIconSize} color={colors.canvas} /> : null}
           </View>
         </Pressable>
         <Pressable
@@ -969,26 +990,33 @@ export function YanjiTaskLedgerRow({
             opacity: pressed ? 0.65 : 1,
           })}
         >
-          <Text style={[typography.bodyPrimary, {
-            color: completed ? colors.secondary : colors.ink,
-            fontWeight: completed ? '500' : '700',
-            textDecorationLine: completed ? 'line-through' : 'none',
-          }]}>{title}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: YanjiSpacing.sm, marginTop: YanjiSpacing.xs }}>
+          <Text
+            numberOfLines={1}
+            style={[typography.bodyPrimary, {
+              // AB-01 greys a finished title into the muted tier, but this
+              // project's contrast policy bars `muted` from carrying a task
+              // title at all — struck-through included. `secondary` is the
+              // lowest tier a title may sit in, so the strike carries the
+              // "done" signal instead.
+              color: completed ? colors.secondary : colors.ink,
+              textDecorationLine: completed ? 'line-through' : 'none',
+            }]}
+          >{title}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
             <View style={{
               flexShrink: 1,
               flexDirection: 'row',
               alignItems: 'center',
               gap: YanjiSpacing.xs,
-              backgroundColor: colors.subtle,
+              backgroundColor: subjectTagTint(accentColor, layout.subjectTagTintOpacity),
               borderRadius: radius.tag,
-              paddingHorizontal: YanjiSpacing.xs,
+              paddingHorizontal: layout.taskTagPaddingHorizontal,
               paddingVertical: layout.taskTagPadding,
             }}>
               <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: radius.tick, backgroundColor: accentColor }} />
-              <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{subjectName}</Text>
+              <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{subjectName}</Text>
             </View>
-            <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
+            <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
           </View>
         </Pressable>
         {!completed ? (
@@ -996,16 +1024,16 @@ export function YanjiTaskLedgerRow({
             onPress={onStartFocus}
             accessibilityRole="button"
             accessibilityLabel={`为${title}设置专注`}
+            hitSlop={8}
             style={({ pressed }) => ({
               minHeight: layout.rowMinHeight,
-              minWidth: layout.rowMinHeight,
               justifyContent: 'center',
               opacity: pressed ? 0.68 : 1,
             })}
           >
             <View style={{
               minHeight: layout.compactActionHeight,
-              paddingHorizontal: YanjiSpacing.md,
+              paddingHorizontal: layout.compactActionPadding,
               borderRadius: radius.pill,
               backgroundColor: colors.subtle,
               flexDirection: 'row',
@@ -1013,13 +1041,13 @@ export function YanjiTaskLedgerRow({
               justifyContent: 'center',
               gap: YanjiSpacing.xs,
             }}>
-              <YanjiIcon name="play" size={typography.captionMeta.fontSize} color={colors.ink} />
-              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '700' }]}>专注</Text>
+              <YanjiIcon name="play" size={typography.captionMeta.fontSize - 1} color={colors.ink} />
+              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600' }]}>专注</Text>
             </View>
           </Pressable>
         ) : null}
       </View>
-      <YanjiHairline />
+      {isLast ? null : <YanjiHairline />}
     </View>
   );
 }

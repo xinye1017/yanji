@@ -282,9 +282,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
         {!tasks?.length ? <YanjiEmptyLedgerRow
           prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
           onPress={openTaskEditor} /> : null}
-        {[...pending, ...completed].map(task => (
+        {[...pending, ...completed].map((task, index, rows) => (
           <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
             meta={taskMeta(task)} accentColor={task.subjectColor} completed={task.completed}
+            isLast={index === rows.length - 1}
             busy={busyTask === task.id} disabled={busyTask !== null}
             onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)} onStartFocus={() => startTask(task)} />
         ))}
