@@ -389,6 +389,8 @@ export const YanjiPaperLayout = {
   pageGutter: 22,
   sectionGap: 24,
   rowMinHeight: 48,
+  /** Visible compact segment; the radio keeps a full row-height touch target. */
+  compactSegmentHeight: 28,
   hairlineWidth: 1,
   spectrumHeight: 10,
   spectrumGap: 2,

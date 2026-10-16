@@ -343,7 +343,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: 'space-between',
             paddingHorizontal: paper.layout.pageGutter,
             paddingTop: YanjiSpacing.sm,
             paddingBottom: contentPadding,
@@ -376,6 +375,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
               options={TIMER_MODES}
               onChange={setTimerMode}
               accessibilityLabel="计时模式"
+              compact
             />
 
             <View style={{ minWidth: 84, minHeight: YanjiTouch.min }} />
@@ -547,7 +547,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             ) : null}
           </View>
 
-          <View style={{ alignItems: 'center', marginVertical: YanjiSpacing.sm }}>
+          <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', marginVertical: YanjiSpacing.sm }}>
             {timerMode === 'COUNTDOWN' ? (
               <>
                 <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>

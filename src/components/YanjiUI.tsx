@@ -302,6 +302,10 @@ export function YanjiPaperSegmentedControl<T extends string>({
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const reduceMotion = useReducedMotion();
+  // Inset the compact paint inside full-height radios so the touch area stays 48dp.
+  const segmentInset = compact
+    ? (paper.layout.rowMinHeight - paper.layout.compactSegmentHeight) / 2
+    : 0;
 
   return (
     <View
@@ -311,19 +315,37 @@ export function YanjiPaperSegmentedControl<T extends string>({
         flexDirection: 'row',
         alignItems: 'stretch',
         alignSelf: 'flex-start',
-        backgroundColor: paper.colors.subtle,
+        backgroundColor: compact ? 'transparent' : paper.colors.subtle,
         borderRadius: paper.radius.pill,
-        borderWidth: paper.layout.hairlineWidth,
+        borderWidth: compact ? 0 : paper.layout.hairlineWidth,
         borderColor: paper.colors.hairline,
-        padding: YanjiSpacing.xs,
+        paddingVertical: compact ? 0 : YanjiSpacing.xs,
+        paddingHorizontal: YanjiSpacing.xs + (compact ? paper.layout.hairlineWidth : 0),
       }}
     >
+      {compact ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: segmentInset - YanjiSpacing.xs - paper.layout.hairlineWidth,
+            bottom: segmentInset - YanjiSpacing.xs - paper.layout.hairlineWidth,
+            backgroundColor: paper.colors.subtle,
+            borderRadius: paper.radius.pill,
+            borderWidth: paper.layout.hairlineWidth,
+            borderColor: paper.colors.hairline,
+          }}
+        />
+      ) : null}
       {options.map(option => (
         <PaperSegment
           key={option.value}
           label={option.label}
           selected={option.value === value}
           compact={compact}
+          segmentInset={segmentInset}
           reduceMotion={reduceMotion}
           onPress={() => onChange(option.value)}
         />
@@ -335,13 +357,15 @@ export function YanjiPaperSegmentedControl<T extends string>({
 function PaperSegment({
   label,
   selected,
-  compact = false,
+  compact,
+  segmentInset,
   reduceMotion,
   onPress,
 }: {
   label: string;
   selected: boolean;
-  compact?: boolean;
+  compact: boolean;
+  segmentInset: number;
   reduceMotion: boolean;
   onPress: () => void;
 }): React.JSX.Element {
@@ -366,10 +390,10 @@ function PaperSegment({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       style={({ pressed }) => ({
-        minHeight: compact ? 28 : paper.layout.rowMinHeight - YanjiSpacing.xs,
-        minWidth: compact ? 0 : paper.layout.rowMinHeight,
+        minHeight: compact ? paper.layout.rowMinHeight : paper.layout.rowMinHeight - YanjiSpacing.xs,
+        minWidth: paper.layout.rowMinHeight,
         paddingHorizontal: compact ? YanjiSpacing.md : YanjiSpacing.lg,
-        paddingVertical: compact ? 4 : 0,
+        paddingVertical: segmentInset,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: paper.radius.pill,
@@ -384,8 +408,8 @@ function PaperSegment({
             position: 'absolute',
             left: 0,
             right: 0,
-            top: 0,
-            bottom: 0,
+            top: segmentInset,
+            bottom: segmentInset,
             backgroundColor: paper.colors.surface,
             borderRadius: paper.radius.pill,
             borderWidth: paper.layout.hairlineWidth,
@@ -400,7 +424,6 @@ function PaperSegment({
           {
             color: selected ? paper.colors.ink : paper.colors.secondary,
             fontWeight: selected ? '700' : '500',
-            fontSize: compact ? 12 : undefined,
           },
         ]}
       >
