@@ -244,7 +244,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   accessibilityRole="button" accessibilityState={{ selected: selection?.subjectId === item.id }}
                   accessibilityLabel={`${item.label}，今日专注 ${duration(item.seconds)}`}
                   style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
-                  <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: radius.tick, backgroundColor: item.color }} />
+                  <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: item.color }} />
                   <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.subjectId === item.id ? '700' : '500' }]}>
                     {item.label} {compactDuration(item.seconds)}
                   </Text>
