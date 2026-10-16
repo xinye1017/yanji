@@ -206,14 +206,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       {view === 'timeline' ? (
         <>
           <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
-          <DayNavigator
-            date={date}
-            isToday={isToday}
-            relativeLabel={relativeLabel}
-            onPrevious={() => setDate(prev => shiftIsoDate(prev, -1))}
-            onNext={() => setDate(prev => stepForwardWithinToday(prev, todayIso()))}
-            onToday={() => setDate(todayIso())}
-          />
           <DaySummary snapshot={snapshot} goalSeconds={goalSeconds} />
           <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
 
@@ -308,7 +300,14 @@ function WeekFilmstrip({ cells, onSelect }: {
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  return <View style={{ flexDirection: 'row', gap: YanjiSpacing.xs, marginTop: YanjiSpacing.lg }}>
+  return <View style={{
+    flexDirection: 'row',
+    gap: YanjiSpacing.xs,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderBottomWidth: layout.hairlineWidth,
+    borderColor: colors.hairline,
+  }}>
     {cells.map(cell => <Pressable key={cell.date} disabled={cell.isFuture} onPress={() => onSelect(cell.date)}
       accessibilityRole="button"
       accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
@@ -319,7 +318,7 @@ function WeekFilmstrip({ cells, onSelect }: {
         backgroundColor: cell.isSelected ? colors.ink : 'transparent',
         opacity: cell.isFuture ? 0.45 : pressed ? 0.65 : 1,
       })}>
-      <Text style={[typography.captionMeta, { color: cell.isSelected ? colors.canvas : colors.muted }]}>{cell.weekdayLabel}</Text>
+      <Text style={[typography.captionMeta, { color: cell.isSelected ? colors.canvas : colors.secondary }]}>{cell.weekdayLabel}</Text>
       <Text style={[typography.bodyPrimary, {
         color: cell.isSelected ? colors.canvas : cell.isFuture ? colors.secondary : colors.ink,
         fontWeight: '700', marginTop: YanjiSpacing.xs,
@@ -357,31 +356,6 @@ function TimelineState({ loading, entryCount, planCount }: {
   return <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: paper.layout.sectionGap }]}>{message}</Text>;
 }
 
-function DayNavigator({ date, isToday, relativeLabel, onPrevious, onNext, onToday }: {
-  date: string; isToday: boolean; relativeLabel: string | null;
-  onPrevious: () => void; onNext: () => void; onToday: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
-  const parsed = new Date(`${date}T12:00:00`);
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap, marginTop: YanjiSpacing.md }}>
-    <YanjiIconButton icon="back" accessibilityLabel="前一天" onPress={onPrevious} size={layout.rowMinHeight} />
-    <View style={{ flex: 1, alignItems: 'center' }}>
-      <Text testID="review-date" style={[typography.titleSection, { color: colors.ink }]}>
-        {parsed.getFullYear()}年{parsed.getMonth() + 1}月{parsed.getDate()}日
-      </Text>
-      <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-        {relativeLabel ? `${relativeLabel} · ` : ''}星期{'日一二三四五六'[parsed.getDay()]}
-      </Text>
-    </View>
-    <YanjiIconButton icon="forward" accessibilityLabel="后一天" disabled={isToday} onPress={onNext} size={layout.rowMinHeight} />
-    {!isToday ? <Pressable onPress={onToday} accessibilityRole="button" accessibilityLabel="回到今天"
-      style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-      <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>回到今天 ›</Text>
-    </Pressable> : null}
-  </View>;
-}
-
 // ---------------------------------------------------------------------------
 // The day's summary strip — three facts, no card
 // ---------------------------------------------------------------------------
@@ -406,8 +380,12 @@ function DaySummary({ snapshot, goalSeconds }: {
       meta: snapshot && snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考` : undefined,
     },
   ];
-  return <View style={{ flexDirection: 'row', paddingVertical: YanjiSpacing.md, marginTop: YanjiSpacing.md,
-    borderTopWidth: layout.hairlineWidth, borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
+  return <View style={{
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: layout.hairlineWidth,
+    borderColor: colors.hairline,
+  }}>
     {cells.map((cell, index) => <View key={cell.label} style={{
       flex: 1, alignItems: 'center', paddingHorizontal: YanjiSpacing.xs,
       borderLeftWidth: index > 0 ? layout.hairlineWidth : 0, borderColor: colors.hairline,
@@ -417,7 +395,7 @@ function DaySummary({ snapshot, goalSeconds }: {
         color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'],
         marginTop: YanjiSpacing.xs, textAlign: 'center',
       }]}>{cell.value}</Text>
-      {cell.meta ? <Text style={[typography.captionMeta, { color: colors.muted, marginTop: 2, textAlign: 'center' }]}>{cell.meta}</Text> : null}
+      {cell.meta ? <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2, textAlign: 'center' }]}>{cell.meta}</Text> : null}
     </View>)}
   </View>;
 }
