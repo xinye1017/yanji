@@ -426,111 +426,134 @@ function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDele
   const nodeColor = entry.kind === 'session'
     ? entry.session.subjectColor || colors.secondary
     : colors.brand;
-  // Every element on the entry's first line centres on one shared band, so the
-  // clock, the node, the title and the duration cannot drift apart. The band is
-  // the title's own line height — the tallest of them — and the smaller caption
-  // text is inset by half the difference.
-  const headLine = typography.bodyPrimary.lineHeight;
-  const captionInset = (headLine - typography.captionMeta.lineHeight) / 2;
-  return <View style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
-    <Text style={[typography.captionMeta, {
-      width: layout.timelineTimeColumn, color: colors.secondary, textAlign: 'right',
-      lineHeight: headLine, paddingTop: captionInset,
-    }]}>{formatClockFromEpoch(entry.at)}</Text>
-    <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
-      <View style={{ height: headLine, justifyContent: 'center' }}>
-        <View style={{
-          width: layout.timelineNodeSize, height: layout.timelineNodeSize,
-          borderRadius: layout.timelineNodeSize / 2,
-          backgroundColor: nodeColor,
-        }} />
+
+  // Shared baseline height for the first line across time column, axis node, and entry title.
+  // This guarantees time, node, title, and +duration are perfectly collinear.
+  const firstLineHeight = 28;
+
+  return (
+    <View style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
+      <View style={{ width: layout.timelineTimeColumn, height: firstLineHeight, justifyContent: 'center', paddingRight: 4 }}>
+        <Text style={[typography.captionMeta, {
+          color: colors.secondary, textAlign: 'right',
+        }]}>
+          {formatClockFromEpoch(entry.at)}
+        </Text>
       </View>
-      {!isLast ? <View style={{ flex: 1, width: layout.hairlineWidth, backgroundColor: colors.hairline, marginVertical: YanjiSpacing.xs }} /> : null}
+      <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
+        <View style={{ height: firstLineHeight, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{
+            width: layout.timelineNodeSize, height: layout.timelineNodeSize,
+            borderRadius: layout.timelineNodeSize / 2,
+            backgroundColor: nodeColor,
+          }} />
+        </View>
+        {!isLast ? <View style={{ flex: 1, width: layout.hairlineWidth, backgroundColor: colors.hairline, marginVertical: YanjiSpacing.xs }} /> : null}
+      </View>
+      <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.lg, minHeight: 56 }}>
+        {entry.kind === 'session'
+          ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
+            firstLineHeight={firstLineHeight}
+            onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />
+          : <NoteEntry entry={entry} busy={busyNote} firstLineHeight={firstLineHeight}
+            onToggleFavorite={() => onToggleFavorite(entry.noteId)} onEdit={() => onEditNote(entry)} />}
+      </View>
     </View>
-    <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.lg, minHeight: 56 }}>
-      {entry.kind === 'session'
-        ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
-          onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />
-        : <NoteEntry entry={entry} busy={busyNote}
-          onToggleFavorite={() => onToggleFavorite(entry.noteId)} onEdit={() => onEditNote(entry)} />}
-    </View>
-  </View>;
+  );
 }
 
-function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
-  session: DailySession; boundTitle: string | null; onEdit: () => void; onDelete: () => void;
+function SessionEntry({ session, boundTitle, firstLineHeight, onEdit, onDelete }: {
+  session: DailySession; boundTitle: string | null; firstLineHeight: number; onEdit: () => void; onDelete: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  const label = `${session.subjectName} · ${session.isExam ? '模考' : '专注'}`;
-  // The whole entry opens the note editor — title, chip and the note text all
-  // lead to the same place, because tapping the entry is the gesture, not
-  // tapping one particular line of it. The delete control sits inside this
-  // Pressable and claims its own press, so it never opens the editor first.
-  const headLine = typography.bodyPrimary.lineHeight;
-  const captionInset = (headLine - typography.captionMeta.lineHeight) / 2;
+  const titleText = boundTitle
+    ? `${session.subjectName} · ${boundTitle}`
+    : `${session.subjectName} · ${session.isExam ? '模考' : '专注'}`;
+
   return (
-    <Pressable onPress={onEdit} accessibilityRole="button"
-      accessibilityLabel={`${label}，${formatDuration(session.durationSeconds)}，${session.isExam ? '模考不支持编辑随笔' : '编辑随笔'}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap }}>
-        <View style={{ flex: 1, minHeight: headLine, justifyContent: 'center' }}>
-          <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700' }]}>{label}</Text>
-        </View>
+    <Pressable
+      onPress={onEdit}
+      accessibilityRole="button"
+      accessibilityLabel={`${titleText}，${formatDuration(session.durationSeconds)}`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+    >
+      <View style={{ height: firstLineHeight, flexDirection: 'row', alignItems: 'center', gap: layout.gridGap }}>
+        <Text
+          numberOfLines={1}
+          style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700', flex: 1 }]}
+        >
+          {titleText}
+        </Text>
         <Text style={[typography.captionMeta, {
           color: session.subjectColor || colors.secondary, fontWeight: '700',
-          lineHeight: headLine, paddingTop: captionInset,
         }]}>
           +{formatDuration(session.durationSeconds)}
         </Text>
-        <YanjiIconButton icon="delete" onPress={onDelete} size={layout.rowMinHeight}
-          style={{ marginRight: -layout.timelineEdgeBleed }}
-          accessibilityLabel={`删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，${formatDuration(session.durationSeconds)}`} />
+        <YanjiIconButton
+          icon="delete"
+          onPress={onDelete}
+          size={24}
+          iconSize={15}
+          style={{ marginRight: -4 }}
+          accessibilityLabel={`删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，${formatDuration(session.durationSeconds)}`}
+        />
       </View>
       <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
         {formatDuration(session.durationSeconds)}
         {session.pauseCount > 0 ? ` · 暂停 ${session.pauseCount} 次` : ''}
-        {/* No "编辑随笔 ›" here: the entry itself is the trigger, so naming the
-            gesture in the subtitle only repeats what tapping already does. The
-            empty case still says so, because there the entry shows no note. */}
-        {session.isExam ? ' · 模考随笔暂不支持编辑' : session.note ? '' : ' · 添一段专注随笔'}
       </Text>
-      {boundTitle ? <View style={{
-        alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs,
-        backgroundColor: colors.subtle, borderRadius: radius.tag, paddingHorizontal: YanjiSpacing.sm,
-        paddingVertical: layout.taskTagPadding, marginTop: YanjiSpacing.sm,
-      }}>
-        <YanjiIcon name="check" size={typography.captionMeta.fontSize} color={colors.secondary} />
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>达成关联任务：{boundTitle}</Text>
-      </View> : null}
+      {boundTitle ? (
+        <View style={{
+          alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs,
+          backgroundColor: colors.subtle, borderRadius: radius.tag, paddingHorizontal: YanjiSpacing.sm,
+          paddingVertical: layout.taskTagPadding, marginTop: 4,
+        }}>
+          <YanjiIcon name="check" size={typography.captionMeta.fontSize} color={colors.secondary} />
+          <Text style={[typography.captionMeta, { color: colors.secondary }]}>已达成关联任务：{boundTitle}</Text>
+        </View>
+      ) : null}
       {session.note ? <Text style={[typography.bodyJournal, { color: colors.ink, marginTop: YanjiSpacing.sm }]}>{session.note}</Text> : null}
     </Pressable>
   );
 }
 
-function NoteEntry({ entry, busy, onToggleFavorite, onEdit }: {
-  entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean;
+function NoteEntry({ entry, busy, firstLineHeight, onToggleFavorite, onEdit }: {
+  entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean; firstLineHeight: number;
   onToggleFavorite: () => void; onEdit: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  return <View style={{
-    backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
-    borderLeftWidth: 3, borderLeftColor: colors.brand, borderRadius: radius.tag,
-    paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
-  }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-      <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700', flexShrink: 1 }]}>
-        记录此刻{entry.isFavorite ? ' · 已收藏' : ''}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit} size={layout.rowMinHeight} />
-        <YanjiIconButton icon={entry.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={entry.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
-          onPress={onToggleFavorite} disabled={busy} selected={entry.isFavorite} size={layout.rowMinHeight} />
+  return (
+    <Pressable
+      onPress={onEdit}
+      accessibilityRole="button"
+      accessibilityLabel={`编辑随笔：${entry.content}`}
+      style={({ pressed }) => ({
+        backgroundColor: colors.elevated,
+        borderWidth: layout.hairlineWidth,
+        borderColor: colors.hairline,
+        borderLeftWidth: 3,
+        borderLeftColor: colors.brand,
+        borderRadius: radius.tag,
+        paddingVertical: YanjiSpacing.sm,
+        paddingHorizontal: YanjiSpacing.md,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <View style={{ height: firstLineHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
+        <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700', flexShrink: 1 }]}>
+          记录此刻{entry.isFavorite ? ' · 已收藏' : ''}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit} size={24} iconSize={15} />
+          <YanjiIconButton icon={entry.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={entry.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
+            onPress={onToggleFavorite} disabled={busy} selected={entry.isFavorite} size={24} iconSize={15} />
+        </View>
       </View>
-    </View>
-    <Text style={[typography.bodyJournal, { color: colors.ink }]}>{entry.content}</Text>
-  </View>;
+      <Text style={[typography.bodyJournal, { color: colors.ink, marginTop: 4 }]}>{entry.content}</Text>
+    </Pressable>
+  );
 }
 
 // ---------------------------------------------------------------------------

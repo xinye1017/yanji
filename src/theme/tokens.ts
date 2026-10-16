@@ -451,7 +451,7 @@ export const YanjiPaperLayout = {
    * the delete glyph past the gutter; the timeline reads as a full-bleed spine
    * rather than a column of text indented inside it.
    */
-  timelineEdgeBleed: 8,
+  timelineEdgeBleed: 12,
   /** A dated cell in the review filmstrip — day number above its subject dot. */
   filmstripCellMinHeight: 58,
   sheetTopRadius: 26,
