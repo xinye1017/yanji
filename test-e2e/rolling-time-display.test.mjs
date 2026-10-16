@@ -44,9 +44,22 @@ function rollingDisplayHarness({ valueMinutes = 45, fontScale = 1, isDark = fals
       for (const element of node) elements(element, predicate, out);
     } else if (node && typeof node === 'object' && 'type' in node) {
       if (predicate(node)) out.push(node);
-      elements(node.props?.children, predicate, out);
+      // Function components are invoked so the walk reaches the markup they
+      // render — otherwise every `Text` inside a `DigitSlot` stays invisible to
+      // a caller that only looks at `props.children`.
+      if (typeof node.type === 'function') {
+        elements(node.type(node.props), predicate, out);
+      } else {
+        elements(node.props?.children, predicate, out);
+      }
     }
     return out;
+  }
+
+  /** The style array a `Text` was given, flattened to the merged object. */
+  function mergedStyle(node) {
+    const style = node.props?.style;
+    return Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : (style ?? {});
   }
 
   function render(val = valueMinutes) {
@@ -56,7 +69,7 @@ function rollingDisplayHarness({ valueMinutes = 45, fontScale = 1, isDark = fals
     return { tree, texts, slots, textValues: texts.map(t => t.props?.children) };
   }
 
-  return { render };
+  return { render, mergedStyle };
 }
 
 test('RollingTimeDisplay renders correct digits and fixed suffix', () => {
@@ -88,6 +101,48 @@ test('RollingTimeDisplay renders correct digits and fixed suffix', () => {
   assert.equal(ui180.slots[0].props.digit, '1');
   assert.equal(ui180.slots[1].props.digit, '8');
   assert.equal(ui180.slots[2].props.digit, '0');
+});
+
+test('the dial scales once and sizes its slot to match', () => {
+  // The digits are painted with an explicit `fontSize`/`lineHeight`, so the
+  // platform's own font scaling has to be off or the two multiply and the
+  // fixed-height, `overflow: hidden` slot clips the glyph. This pins both
+  // halves: every `Text` opts out of native scaling, and the slot grows with
+  // the scale the component applies itself.
+  const heights = new Map();
+  for (const fontScale of [1, 1.5, 3]) {
+    const harness = rollingDisplayHarness({ fontScale });
+    const { texts, slots } = harness.render();
+
+    for (const node of texts) {
+      assert.equal(node.props.allowFontScaling, false,
+        `every dial Text opts out of native scaling at fontScale ${fontScale}`);
+    }
+
+    // The root box, the slots and the rendered text all agree on one height.
+    const rootHeight = harness.render().tree.props.style[0].height;
+    for (const slot of slots) {
+      assert.equal(slot.props.height, rootHeight,
+        'each digit slot is exactly as tall as the display');
+    }
+    assert.ok(texts.length > 0, 'the dial renders its digits');
+    for (const text of texts) {
+      assert.equal(harness.mergedStyle(text).lineHeight, rootHeight,
+        'every text line box matches the slot it is clipped to');
+    }
+
+    heights.set(fontScale, rootHeight);
+  }
+
+  // Scaling is applied by the component: the slot does grow with the system
+  // scale rather than staying fixed.
+  assert.ok(heights.get(1.5) > heights.get(1),
+    'a larger system font scale produces a taller display');
+
+  // ...but it is clamped, so the oversized dial cannot push the page apart.
+  const clamped = rollingDisplayHarness({ fontScale: 3 }).render().tree.props.style[0].height;
+  const atCeiling = rollingDisplayHarness({ fontScale: 1.15 }).render().tree.props.style[0].height;
+  assert.equal(clamped, atCeiling, 'the display stops growing at its scale ceiling');
 });
 
 test('FocusVernierDial updates dynamically on drag scroll across tick boundaries', () => {

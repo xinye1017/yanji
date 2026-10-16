@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
 import Animated, {
   useAnimatedStyle,
@@ -75,6 +75,8 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
     };
   });
 
+  const contentHeight = height - 2 * paper.layout.hairlineWidth;
+
   return (
     <View
       testID="bottom-tab-bar"
@@ -88,9 +90,10 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         bottom,
         height,
         borderRadius: height / 2,
-        backgroundColor: theme.isDark ? 'rgba(28, 30, 35, 0.88)' : 'rgba(246, 244, 239, 0.85)',
+        backgroundColor: material.backdrop,
         borderWidth: paper.layout.hairlineWidth,
-        borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)',
+        borderColor: material.border,
+        justifyContent: 'center',
         ...theme.shadow.floating(theme.isDark),
       }, { opacity: visible ? 1 : 0 }]}
     >
@@ -106,14 +109,14 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         saturation={YanjiLiquidGlass.saturation}
         interactive={!reduceMotion}
         fadeDuration={0}
-        style={{ borderRadius: height / 2, overflow: 'hidden' }}
+        style={[{ ...StyleSheet.absoluteFill, borderRadius: height / 2, overflow: 'hidden' }]}
       >
         <View
           onLayout={onRowLayout}
           style={{
             flexDirection: 'row',
             width: '100%',
-            height,
+            height: contentHeight,
             borderRadius: YanjiRadius.full,
             padding: CAPSULE_PADDING,
             overflow: 'hidden',

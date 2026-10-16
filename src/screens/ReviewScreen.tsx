@@ -420,7 +420,8 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
   const { paper } = useYanjiTheme();
   const { typography, layout } = paper;
   return <View style={{ marginTop: YanjiSpacing.lg }}>
-    {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry} isLast={index === entries.length - 1}
+    {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
+      isFirst={index === 0} isLast={index === entries.length - 1}
       dayTasks={dayTasks} busyNote={busyNote}
       onEditSession={onEditSession} onDeleteSession={onDeleteSession}
       onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved} onEditNote={onEditNote} />)}
@@ -430,8 +431,9 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
   </View>;
 }
 
-function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
+function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
   entry: TimelineEntry;
+  isFirst: boolean;
   isLast: boolean;
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
@@ -449,21 +451,22 @@ function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDele
       ? (entry.isResolved ? colors.positive : colors.brand)
       : colors.brand;
 
-  // Every element of the first line — clock, node, title, `+时长` and the delete
-  // control — centres inside this one band, so none of them can drift apart.
-  // The clock and the node are wrapped in it rather than being stretched by the
-  // row, which is what previously anchored them to the row's top edge while the
-  // title centred in it.
   const headBand = layout.timelineHeadBand;
-  // A note renders inside a card that carries its own top padding, so its title
-  // line sits lower than a session's. The spine follows the card's padding
-  // rather than a number of its own, which keeps the clock and the node on the
-  // note's title line instead of 8dp above it.
-  const spineInset = entry.kind === 'note' ? YanjiSpacing.sm : 0;
+  const isSession = entry.kind === 'session';
+  // A session centers its title, time, and node inside `timelineHeadBand` (28dp).
+  // A note is an elevated card whose top edge begins at y = 0.
+  // To align the node with the top of the card's orange accent stripe,
+  // the node center sits at `timelineNodeSize / 2 + 2` (~6dp), and the clock aligns with it.
+  const dotCenterY = isSession ? headBand / 2 : (layout.timelineNodeSize / 2 + 2);
 
   return (
     <View style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
-      <View style={{ width: layout.timelineTimeColumn, height: headBand, marginTop: spineInset, justifyContent: 'center' }}>
+      <View style={{
+        width: layout.timelineTimeColumn,
+        height: isSession ? headBand : 16,
+        justifyContent: 'center',
+        marginTop: isSession ? 0 : Math.max(0, dotCenterY - 8),
+      }}>
         <Text style={[typography.captionMeta, {
           color: colors.secondary, textAlign: 'right',
         }]}>
@@ -471,14 +474,43 @@ function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDele
         </Text>
       </View>
       <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
-        <View style={{ height: headBand, marginTop: spineInset, justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{
-            width: layout.timelineNodeSize, height: layout.timelineNodeSize,
+        {/* Continuous timeline spine: top segment connects from item top to dot */}
+        {!isFirst ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              height: dotCenterY,
+              width: layout.hairlineWidth,
+              backgroundColor: colors.hairline,
+            }}
+          />
+        ) : null}
+
+        {/* Timeline node */}
+        <View
+          style={{
+            position: 'absolute',
+            top: dotCenterY - layout.timelineNodeSize / 2,
+            width: layout.timelineNodeSize,
+            height: layout.timelineNodeSize,
             borderRadius: layout.timelineNodeSize / 2,
             backgroundColor: nodeColor,
-          }} />
-        </View>
-        {!isLast ? <View style={{ flex: 1, width: layout.hairlineWidth, backgroundColor: colors.hairline, marginVertical: YanjiSpacing.xs }} /> : null}
+          }}
+        />
+
+        {/* Continuous timeline spine: bottom segment connects from dot to item bottom */}
+        {!isLast ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: dotCenterY,
+              bottom: 0,
+              width: layout.hairlineWidth,
+              backgroundColor: colors.hairline,
+            }}
+          />
+        ) : null}
       </View>
       <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.lg, minHeight: 56 }}>
         {entry.kind === 'session'
@@ -518,7 +550,8 @@ function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
           +{formatDuration(session.durationSeconds)}
         </Text>
         {/* Sized to the band so the control cannot grow the line it aligns to;
-            its 8dp hit slop is what carries the target to `YanjiTouch.min`.
+            its 8dp hit slop is what carries the target to `YanjiTouch.min` —
+            see `timelineHeadBand` for why slop may reach past the band.
             The button centres its glyph in a square box, so the negative margin
             cancels that inset before bleeding: what lands on the bleed edge is
             the glyph the eye sees, not the invisible tap box around it. */}

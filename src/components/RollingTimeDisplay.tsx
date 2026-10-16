@@ -24,6 +24,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 
+/**
+ * The dial's own font-scale window. It is the page's one oversized element, so
+ * it follows the user's scale only within these bounds rather than without
+ * limit; `RollingTimeDisplay` applies the clamp itself and renders every digit
+ * with `allowFontScaling={false}` so the platform cannot apply a second one.
+ */
+const MAX_DISPLAY_SCALE = 1.15;
+const MIN_DISPLAY_SCALE = 0.85;
+
 export interface DigitSlotProps {
   digit: string;
   direction: 1 | -1;
@@ -120,13 +129,13 @@ export function DigitSlot({
     >
       {outgoingDigit !== null ? (
         <Animated.View style={[{ position: 'absolute' }, outgoingStyle]}>
-          <Text style={[textStyle, { color, textAlign: 'center' }]}>
+          <Text allowFontScaling={false} style={[textStyle, { color, textAlign: 'center' }]}>
             {outgoingDigit}
           </Text>
         </Animated.View>
       ) : null}
       <Animated.View style={incomingStyle}>
-        <Text style={[textStyle, { color, textAlign: 'center' }]}>
+        <Text allowFontScaling={false} style={[textStyle, { color, textAlign: 'center' }]}>
           {currentDigit}
         </Text>
       </Animated.View>
@@ -169,8 +178,17 @@ export function RollingTimeDisplay({
   const tens = String(Math.floor((safeMinutes % 100) / 10));
   const units = String(safeMinutes % 10);
 
-  // Clamp font scaling to keep the large display within viewport boundaries
-  const effectiveScale = Math.min(1.15, Math.max(0.85, fontScale));
+  // This component scales the dial itself, so the nested `Text` must not scale
+  // it a second time: with the platform's own scaling left on, the slot below is
+  // capped at `MAX_DISPLAY_SCALE` while the glyphs render at the full system
+  // scale, and the fixed-height `overflow: 'hidden'` slot clips them.
+  // `maxFontSizeMultiplier` is not the fix — Android applies it to `fontSize`
+  // but not to `lineHeight` (TextAttributeProps.kt scales the two through
+  // different calls), so the line box would keep growing past the ceiling. The
+  // display is clamped deliberately: it is the page's one oversized element, and
+  // past this scale its glyphs push the subject row off a short viewport. Every
+  // `Text` under this component therefore renders at the scale measured here.
+  const effectiveScale = Math.min(MAX_DISPLAY_SCALE, Math.max(MIN_DISPLAY_SCALE, fontScale));
   const fontSize = Math.round(paper.typography.displayDial.fontSize * effectiveScale);
   const slotHeight = Math.ceil(paper.typography.displayDial.lineHeight * effectiveScale);
 
@@ -227,7 +245,7 @@ export function RollingTimeDisplay({
         color={inkColor}
         reducedMotion={reducedMotion}
       />
-      <Text style={[textStyle, { textAlign: 'center' }]}>:00</Text>
+      <Text allowFontScaling={false} style={[textStyle, { textAlign: 'center' }]}>:00</Text>
     </View>
   );
 }

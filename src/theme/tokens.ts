@@ -461,6 +461,16 @@ export const YanjiPaperLayout = {
    * line past the alignment it exists to hold. `YanjiIconButton` carries 8dp of
    * hit slop on each side, which is what lifts a 28dp control to the 44dp
    * `YanjiTouch.min` floor without widening the visible glyph.
+   *
+   * That slop deliberately reaches past the band, which the public `hitSlop`
+   * docs read as impossible ("the touch area never extends past the parent view
+   * bounds"). Fabric is what makes it work: `YogaLayoutableShadowNode::
+   * getContentBounds` unions each child's frame with its `hitSlop` before the
+   * parent's `overflowInset` is computed, and `TouchTargetHelper` tests a point
+   * against `hitSlopRect` before the view's own bounds — so a touch above or
+   * below the band still routes to the control. The effective floor is
+   * `timelineHeadBand + 2 * hitSlop`; shrinking the slop to stay inside the band
+   * is what would actually drop these controls below `YanjiTouch.min`.
    */
   timelineHeadBand: 28,
   /**
