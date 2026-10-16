@@ -6,10 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader, YanjiHairline,
+  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiIcon, YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
-  YanjiStackedBarChart, YanjiStatCell, YanjiSubjectProportionRow,
+  YanjiStackedBarChart, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { SessionNoteModal } from '../components/SessionNoteModal';
@@ -169,38 +169,23 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       contentContainerStyle={{
         paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
       }}>
-      {/* AB-06 & AB-07 Unified Header */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: 6,
-        paddingBottom: 10,
-      }}>
-        <View>
-          <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-            {view === 'trend'
-              ? '数据洞察 · 真实记录沉淀'
-              : `${selectedDate.getFullYear()} 年 ${selectedDate.getMonth() + 1} 月 · 第 ${weekNumberOfYear(selectedDate)} 周`}
-          </Text>
-          <Text style={[{
-            fontFamily: typography.titleEditorial.fontFamily,
-            fontSize: 20,
-            fontWeight: '700',
-            color: colors.ink,
-            marginTop: 2,
-          }]}>
-            备考手账
-          </Text>
-        </View>
-        <YanjiPaperSegmentedControl
-          value={view}
-          options={VIEWS}
-          onChange={setView}
-          accessibilityLabel="回顾视图"
-          compact
-        />
-      </View>
+      {/* AB-06 & AB-07 share one header: the eyebrow names the window, the
+          switcher rides along as the trailing slot. */}
+      <YanjiEditorialHeader
+        eyebrow={view === 'trend'
+          ? '数据洞察 · 真实记录沉淀'
+          : `${selectedDate.getFullYear()} 年 ${selectedDate.getMonth() + 1} 月 · 第 ${weekNumberOfYear(selectedDate)} 周`}
+        title="备考手账"
+        trailing={
+          <YanjiPaperSegmentedControl
+            value={view}
+            options={VIEWS}
+            onChange={setView}
+            accessibilityLabel="回顾视图"
+            compact
+          />
+        }
+      />
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.brandInk, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
       {view === 'timeline' ? (
