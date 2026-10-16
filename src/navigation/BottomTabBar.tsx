@@ -66,9 +66,14 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
     offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
   }, [index, offset, reduceMotion, theme.motion.spring.snappy]);
 
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: offset.value * slotWidth }],
-  }));
+  const pillStyle = useAnimatedStyle(() => {
+    'worklet';
+    // Clamp the spring value so overshoot never pushes the pill beyond slot 0 (left) or slot (TABS.length - 1) (right).
+    const clampedOffset = Math.max(0, Math.min(TABS.length - 1, offset.value));
+    return {
+      transform: [{ translateX: clampedOffset * slotWidth }],
+    };
+  });
 
   return (
     <View
@@ -83,6 +88,9 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         bottom,
         height,
         borderRadius: height / 2,
+        backgroundColor: theme.isDark ? 'rgba(28, 30, 35, 0.88)' : 'rgba(246, 244, 239, 0.85)',
+        borderWidth: paper.layout.hairlineWidth,
+        borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)',
         ...theme.shadow.floating(theme.isDark),
       }, { opacity: visible ? 1 : 0 }]}
     >
@@ -108,6 +116,7 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
             height,
             borderRadius: YanjiRadius.full,
             padding: CAPSULE_PADDING,
+            overflow: 'hidden',
           }}
         >
           {/* Sliding selection pill — behind the labels, one slot wide. */}

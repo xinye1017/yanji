@@ -26,10 +26,10 @@ export const YanjiLiquidGlass = {
     selection: 'rgba(200,75,49,0.14)',
   },
   dark: {
-    /** paper dark `canvas` #111315 */
-    tint: 'rgba(17,19,21,0.76)',
+    /** paper dark slate surface for contrast against deep canvas */
+    tint: 'rgba(28,30,35,0.85)',
     /** paper dark `brand` #E06D53 */
-    selection: 'rgba(224,109,83,0.20)',
+    selection: 'rgba(224,109,83,0.24)',
   },
 } as const;
 
