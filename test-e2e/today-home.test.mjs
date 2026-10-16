@@ -155,6 +155,25 @@ test('task controls keep completion, editing, and focus separate; completed rows
   assert.equal(nodes(completed, node => node.props.accessibilityRole === 'checkbox')[0].props.accessibilityState.checked, true);
 });
 
+test('task subject labels use readable theme text rather than the decorative subject colour', () => {
+  const original = theme.paper.colors;
+  try {
+    for (const colors of Object.values(tokens.YanjiPaperColors)) {
+      theme.paper.colors = colors;
+      for (const accentColor of ['#16A34A', '#356AE6', '#DC2626']) {
+        const row = shared.YanjiTaskLedgerRow({
+          title: '积分练习', subjectName: '数学一', meta: '已投入 0m', accentColor,
+          completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
+        });
+        const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
+        assert.equal(label.props.style.color, colors.secondary, 'subject colour belongs to the dot and tint, not small text');
+      }
+    }
+  } finally {
+    theme.paper.colors = original;
+  }
+});
+
 function screenHarness(snapshot) {
   const states = [];
   const calls = [];

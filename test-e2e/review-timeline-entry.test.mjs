@@ -2,16 +2,15 @@
  * Tier 1 — the review timeline's entry is one tappable surface.
  *
  * Why this test exists: the requirement is "点击时间线上的任务，即可直接进入编辑页".
- * A screenshot cannot prove it (a tap that opens the sheet looks identical to a
- * tap that did nothing, in a still image), and the device was in the owner's
- * hands during this round, so the behaviour is pinned here instead — against the
- * real `ReviewScreen`, not a reimplementation of it.
+ * A still screenshot does not establish which tap target opens the sheet, so
+ * this drives the real `ReviewScreen` through its handlers and checks the
+ * resulting editor state.
  *
  * What it pins:
  *  1. the session title, the bound-plan chip and the note body all sit inside
  *     one Pressable that opens the note editor, so tapping any of them works;
- *  2. the delete control is inside that same Pressable but claims its own press,
- *     so it deletes rather than opening the editor;
+ *  2. the nested delete handler opens its confirmation, keeps the editor closed
+ *     and does not delete a native record before confirmation;
  *  3. the subtitle no longer advertises "编辑随笔" (the entry itself is the
  *     trigger), while an entry with no note still says so.
  *
@@ -115,7 +114,7 @@ const UI_NAMES = [
 function screenHarness(daySnapshot) {
   const ui = Object.fromEntries(UI_NAMES.map(name => [name, name]));
   const calls = [];
-  let states = [];
+  const states = [];
   let index = 0;
   const { ReviewScreen } = loadTypeScript('src/screens/ReviewScreen.tsx', {
     react: {
@@ -134,7 +133,12 @@ function screenHarness(daySnapshot) {
     },
     'react-native-reanimated': { useReducedMotion: () => true },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
-    '../bridge': { YanjiDataNative: { toggleFavoriteNote: async () => true, deleteSessionRecord: async () => true } },
+    '../bridge': {
+      YanjiDataNative: {
+        toggleFavoriteNote: async () => true,
+        deleteSessionRecord: async (...args) => { calls.push(args); return true; },
+      },
+    },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
@@ -181,11 +185,15 @@ test('tapping the title, the bound-plan chip and the note body all open the note
     else if (node && typeof node === 'object' && 'type' in node) { inside.push(node); collect(node.props.children); }
   })(entry.props.children);
 
-  const title = inside.find(node => text(node.props?.children).includes('数据结构 · 专注'));
-  const chip = inside.find(node => text(node.props?.children).includes('达成关联任务：王道操作系统第四章'));
-  const note = inside.find(node => text(node.props?.children).includes('手画了一遍指针断链过程'));
-  for (const [name, node] of [['title', title], ['bound-plan chip', chip], ['note body', note]]) {
+  for (const [name, content] of [
+    ['title', '数据结构 · 专注'],
+    ['bound-plan chip', '达成关联任务：王道操作系统第四章'],
+    ['note body', '手画了一遍指针断链过程'],
+  ]) {
+    const node = inside.find(child => child.type === 'Text' && text(child) === content);
     assert.ok(node, `the ${name} renders inside the entry's Pressable`);
+    assert.equal(nodes(entry, child => child.type === 'Pressable' && renders(child, content)).length, 1,
+      `the ${name} uses the entry's handler without a nested press target`);
   }
 
   // The trigger opens the editor for *this* session, not merely some sheet.
@@ -195,7 +203,7 @@ test('tapping the title, the bound-plan chip and the note body all open the note
   assert.equal(reopened.props.sessionId, 'focus-a', 'it opens the session that was tapped');
 });
 
-test('the delete control deletes instead of opening the editor', () => {
+test('the delete control requests confirmation without opening the editor or deleting early', async () => {
   const harness = screenHarness(snapshot({ sessions: [session()] }));
   const tree = harness.render();
 
@@ -205,11 +213,17 @@ test('the delete control deletes instead of opening the editor', () => {
     && node.props.icon === 'delete')[0];
   assert.ok(remove, 'the entry carries its own delete control');
 
+  const confirmation = root => nodes(root, node => node.type === 'Modal')[0];
+  assert.equal(confirmation(tree).props.visible, false);
   remove.props.onPress();
+  await Promise.resolve();
 
-  // The delete confirmation is a different Modal; the note editor must stay shut,
-  // or a mis-tap on the bin would silently open the editor first.
-  assert.equal(harness.noteModal(harness.render()).props.visible, false);
+  // This covers the delete handler's state changes; native responder arbitration
+  // between the nested button and entry still needs a device interaction check.
+  const after = harness.render();
+  assert.equal(harness.noteModal(after).props.visible, false);
+  assert.equal(confirmation(after).props.visible, true, 'the delete handler actually opens its confirmation');
+  assert.deepEqual(harness.calls, [], 'opening the confirmation must not delete a native record');
 });
 
 test('the subtitle drops 编辑随笔 but still speaks up when there is no note', () => {
