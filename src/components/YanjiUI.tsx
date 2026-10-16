@@ -1047,16 +1047,14 @@ export function YanjiTaskLedgerRow({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
             <View style={{
               flexShrink: 1,
-              flexDirection: 'row',
               alignItems: 'center',
-              gap: YanjiSpacing.xs,
+              justifyContent: 'center',
               backgroundColor: subjectTagTint(accentColor, layout.subjectTagTintOpacity),
-              borderRadius: radius.tag,
-              paddingHorizontal: layout.taskTagPaddingHorizontal,
-              paddingVertical: layout.taskTagPadding,
+              borderRadius: 4,
+              paddingHorizontal: 6,
+              paddingVertical: 1,
             }}>
-              <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: radius.tick, backgroundColor: accentColor }} />
-              <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{subjectName}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 10, lineHeight: 14, fontWeight: '600', color: accentColor, flexShrink: 1 }}>{subjectName}</Text>
             </View>
             <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
           </View>
