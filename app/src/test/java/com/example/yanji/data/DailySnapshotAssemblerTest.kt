@@ -95,6 +95,31 @@ class DailySnapshotAssemblerTest {
         assertEquals(listOf("today-focus"), snapshot.sessions.map { it.id })
     }
 
+    /**
+     * 时间轴上的「达成关联任务」胶囊只认 `taskId`。
+     *
+     * 不靠标题或学科反推匹配 —— 两条同名计划、同一门课的两段专注都会让反推张冠李戴。
+     * 模考不挂计划，因此恒为 null。
+     */
+    @Test
+    fun sessionsCarryTheirBoundPlanIdAndLeaveUnboundOnesNull() {
+        val snapshot = DailySnapshotAssembler.assemble(
+            date = date,
+            focusEntities = listOf(
+                focus("bound", dayStart + 100_000, 10, taskId = "task-os-ch4"),
+                focus("unbound", dayStart + 200_000, 20)
+            ),
+            examEntities = listOf(exam("exam", dayStart + 300_000, 30)),
+            taskRows = emptyList(),
+            noteEntities = emptyList()
+        )
+
+        assertEquals(
+            mapOf("bound" to "task-os-ch4", "unbound" to null, "exam" to null),
+            snapshot.sessions.associate { it.id to it.taskId }
+        )
+    }
+
     private fun focus(
         id: String,
         startTime: Long,

@@ -539,7 +539,7 @@ function PeriodSelectorBar({
   canStepForward: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography } = paper;
+  const { colors, typography, radius } = paper;
   const rangeLabel = scopeDateRangeLabel(scope, anchorDate);
 
   return (
@@ -562,8 +562,8 @@ function PeriodSelectorBar({
               accessibilityLabel={`切换范围至${opt.label}`}
               style={{
                 paddingVertical: 4,
-                paddingHorizontal: 12,
-                borderRadius: 99,
+                paddingHorizontal: YanjiSpacing.md,
+                borderRadius: radius.pill,
                 backgroundColor: selected ? colors.ink : colors.subtle,
               }}
             >
@@ -639,7 +639,7 @@ function TrendSummary({
   spectrum: readonly { id: string; label: string; seconds: number; color: string }[];
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
+  const { colors, typography, layout, radius } = paper;
   const days = overview?.days ?? [];
   const chartLabel = scope === 'TODAY'
     ? `当日可确认连续区间的小时分布，${preciseSessionCount} 段记录。${peakHour ? `${peakHour.hour}时最多，${formatDuration(peakHour.minutes * 60)}` : '暂无可绘制区间'}`
@@ -648,29 +648,38 @@ function TrendSummary({
   const metricParts = formatDurationMetric(overview?.totalSeconds ?? 0);
   const scopeName = scope === 'TODAY' ? '当日' : scope === 'CALENDAR_WEEK' ? '本周' : '本月';
 
+  // The badge reads a period against the one before it: up is the `positive`
+  // role, down is `brandInk` — the same readable brand tier every other
+  // headline figure uses, so "down" is not mistaken for the destructive
+  // `danger` red reserved for deleting a record.
   const isNegative = deltaPercent !== null && deltaPercent < 0;
-  const deltaBadgeBg = !previousOverview ? colors.subtle : isNegative ? 'rgba(200, 75, 49, 0.12)' : 'rgba(45, 122, 94, 0.12)';
-  const deltaBadgeColor = !previousOverview ? colors.muted : isNegative ? colors.brandInk : '#2D7A5E';
+  const deltaBadgeBg = !previousOverview
+    ? colors.subtle
+    : isNegative ? colors.brandSubtle : colors.positiveSubtle;
+  const deltaBadgeColor = !previousOverview
+    ? colors.secondary
+    : isNegative ? colors.brandInk : colors.positive;
   const deltaBadgeText = !previousOverview
     ? '正在读取…'
     : deltaPercent !== null
       ? `${deltaPercent >= 0 ? '↑ +' : '↓ '}${(Math.abs(deltaPercent) * 100).toFixed(1)}% ${deltaLabel.replace('较上一周期 ', '环比')}`
       : deltaLabel;
 
+  // One sentence, read straight off the figures above it. No forecast, no
+  // coaching, nothing the data cannot support.
+  const insightLine = !overview || overview.totalSeconds <= 0
+    ? null
+    : peak
+      ? `最长投入日为 ${peak.dayLabel}（${formatDuration(peak.totalMinutes * 60)}）${distribution[0] ? `，${distribution[0].subjectName}占比最高（${formatPercent(distribution[0].share)}）` : ''}。`
+      : '已沉淀真实专注数据，继续保持专注节奏。';
+
   return (
     <>
       {/* 1. KPI Summary & Chart Card (AB-07 Card) */}
-      <View style={{
-        backgroundColor: colors.elevated,
-        borderWidth: layout.hairlineWidth,
-        borderColor: colors.hairline,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-      }}>
+      <YanjiCard style={{ paddingHorizontal: YanjiSpacing.lg, paddingVertical: 14 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View>
-            <Text style={[typography.captionMeta, { color: colors.muted }]}>{scopeName}累计专注时长</Text>
+            <Text style={[typography.captionMeta, { color: colors.secondary }]}>{scopeName}累计专注时长</Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
               {overview ? (
                 metricParts.hours > 0 ? (
@@ -693,16 +702,16 @@ function TrendSummary({
                   </>
                 )
               ) : (
-                <Text style={{ fontSize: 32, fontWeight: '700', color: colors.muted }}>—</Text>
+                <Text style={{ fontSize: 32, fontWeight: '700', color: colors.secondary }}>—</Text>
               )}
             </View>
           </View>
 
           <View style={{ alignItems: 'flex-end' }}>
             <View style={{
-              paddingHorizontal: 8,
+              paddingHorizontal: YanjiSpacing.sm,
               paddingVertical: 3,
-              borderRadius: 6,
+              borderRadius: radius.tag,
               backgroundColor: deltaBadgeBg,
             }}>
               <Text style={{
@@ -716,7 +725,7 @@ function TrendSummary({
             </View>
             <Text style={{
               fontSize: 11,
-              color: colors.muted,
+              color: colors.secondary,
               marginTop: 6,
               fontVariant: ['tabular-nums'],
             }}>
@@ -805,21 +814,13 @@ function TrendSummary({
                 ))}
           </View>
         </View>
-      </View>
+      </YanjiCard>
 
       {/* 2. Subject Distribution Breakdown (AB-07) */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        marginTop: 16,
-        marginBottom: 8,
-      }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>学科投入比重</Text>
-        <Text style={[typography.captionMeta, { color: colors.muted, fontVariant: ['tabular-nums'] }]}>
-          {overview ? `共 ${countWorkedDays(days)} 天有投入` : '—'}
-        </Text>
-      </View>
+      <YanjiPaperSectionHeading
+        title="学科投入比重"
+        countText={overview ? `共 ${countWorkedDays(days)} 天有投入` : '—'}
+      />
 
       <YanjiChronoSpectrum
         segments={spectrum}
@@ -832,35 +833,15 @@ function TrendSummary({
         }
       />
 
-      <View style={{ marginTop: 12, gap: 9 }}>
+      <View style={{ marginTop: YanjiSpacing.md }}>
         {distribution.map(slice => (
-          <View
+          <YanjiSubjectProportionRow
             key={slice.subjectId}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 2,
-                  backgroundColor: slice.subjectColor || colors.secondary,
-                  marginRight: 6,
-                }}
-              />
-              <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>
-                {slice.subjectName}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
-                {formatDuration(slice.minutes * 60)}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.muted, fontVariant: ['tabular-nums'] }}>
-                {formatPercent(slice.share)}
-              </Text>
-            </View>
-          </View>
+            label={slice.subjectName}
+            color={slice.subjectColor || colors.secondary}
+            metaText={`${formatDuration(slice.minutes * 60)} · ${formatPercent(slice.share)}`}
+            ratio={slice.share}
+          />
         ))}
       </View>
       {!distribution.length ? (
@@ -869,36 +850,19 @@ function TrendSummary({
         </Text>
       ) : null}
 
-      {/* 3. AI Study Diagnostic Entry Card (AB-07) */}
-      <View style={{
-        marginTop: 16,
-        marginBottom: 12,
-        paddingVertical: 11,
-        paddingHorizontal: 14,
-        borderRadius: 12,
-        backgroundColor: 'rgba(59, 110, 140, 0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(59, 110, 140, 0.18)',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B6E8C' }}>
-            ✦ 研迹{scope === 'CALENDAR_MONTH' ? '月度' : scope === 'TODAY' ? '今日' : '周度'}节律简报
-          </Text>
-          <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 2 }}>
-            {overview && overview.totalSeconds > 0
-              ? peak
-                ? `最长投入日为 ${peak.dayLabel}（${formatDuration(peak.totalMinutes * 60)}）${distribution[0] ? `，${distribution[0].subjectName}占比最高 (${formatPercent(distribution[0].share)})` : ''}`
-                : '已沉淀真实专注数据，继续保持专注节奏。'
-              : '暂无足量统计数据，完成更多专注后将自动生成节律洞察。'}
-          </Text>
-        </View>
-        <Text style={{ fontSize: 11, fontWeight: '600', color: '#3B6E8C' }}>
-          详情 ›
+      {/*
+        AB-07's closing block is an AI 节律简报 entry card. There is no such
+        report in the product — no AI screen, no bridge method, nothing to open —
+        so the card would ship a claim ("自动生成节律洞察") and a "详情 ›" that
+        goes nowhere. What the board's card actually says is one true sentence
+        drawn from the numbers already on this screen, so it is rendered as that
+        sentence and nothing more.
+      */}
+      {insightLine ? (
+        <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: YanjiSpacing.lg }]}>
+          {insightLine}
         </Text>
-      </View>
+      ) : null}
     </>
   );
 }

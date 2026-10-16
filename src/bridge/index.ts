@@ -134,6 +134,13 @@ export interface DailySession {
   note: string;
   pauseCount: number;
   mode: string;
+  /**
+   * 关联的「今日计划」id，未挂计划时为 null（绝不是空串）。
+   *
+   * 时间轴上用它把一段专注标注成「达成关联任务」——不靠标题或学科反推匹配。
+   * 模考恒为 null：模考不挂计划。
+   */
+  taskId: string | null;
 }
 
 /** One Room transaction, shared by Today and Review. */

@@ -52,7 +52,9 @@ data class DailySessionItem(
     val maxScore: Double? = null,
     val note: String = "",
     val pauseCount: Int = 0,
-    val mode: String = "正向计时"
+    val mode: String = "正向计时",
+    /** 关联的「今日计划」id；不属于任何计划时为 null。模考恒为 null（模考不挂计划）。 */
+    val taskId: String? = null
 )
 
 data class DailyStudySummary(
@@ -893,7 +895,8 @@ private fun toDailyFocusSessionItem(
     isExam = false,
     note = session.note,
     pauseCount = session.pauseCount,
-    mode = session.mode
+    mode = session.mode,
+    taskId = session.taskId
 )
 
 private fun toDailyExamSessionItem(

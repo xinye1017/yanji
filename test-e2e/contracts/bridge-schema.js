@@ -89,6 +89,26 @@ export const BridgeSchemas = {
     return true;
   },
 
+  isValidDailySession(obj) {
+    if (!obj || typeof obj !== 'object') return false;
+    return (
+      typeof obj.id === 'string' &&
+      typeof obj.subjectId === 'string' &&
+      typeof obj.subjectName === 'string' &&
+      typeof obj.subjectColor === 'string' &&
+      Number.isFinite(obj.startTime) &&
+      Number.isFinite(obj.endTime) &&
+      Number.isFinite(obj.durationSeconds) && obj.durationSeconds >= 0 &&
+      typeof obj.isExam === 'boolean' &&
+      typeof obj.note === 'string' &&
+      Number.isInteger(obj.pauseCount) &&
+      typeof obj.mode === 'string' &&
+      // Same trap as NoteEntry.sessionId: null means "not bound to a plan".
+      // Empty string is NOT a valid representation of unbound.
+      (obj.taskId === null || (typeof obj.taskId === 'string' && obj.taskId.length > 0))
+    );
+  },
+
   isValidDailySnapshot(obj) {
     if (!obj || typeof obj !== 'object') return false;
     return (
@@ -97,8 +117,7 @@ export const BridgeSchemas = {
       Number.isFinite(obj.totalDurationSeconds) && obj.totalDurationSeconds >= 0 &&
       Number.isInteger(obj.focusCount) && obj.focusCount >= 0 &&
       Number.isInteger(obj.examCount) && obj.examCount >= 0 &&
-      Array.isArray(obj.sessions) && obj.sessions.every(s =>
-        typeof s.id === 'string' && Number.isFinite(s.durationSeconds) && s.durationSeconds >= 0) &&
+      Array.isArray(obj.sessions) && obj.sessions.every(s => this.isValidDailySession(s)) &&
       Array.isArray(obj.tasks) && obj.tasks.every(task => this.isValidStudyTask(task)) &&
       Array.isArray(obj.notes) && obj.notes.every(note => this.isValidNoteEntry(note)) &&
       !('completedTasks' in obj) && !('totalFocusSeconds' in obj)

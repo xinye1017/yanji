@@ -534,5 +534,100 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.computeAxisLabelsLayout(monthDays, 0).length, 0);
     });
   });
+
+  describe('Tier 1: Review view logic — the date filmstrip', () => {
+    it('frames the calendar week containing the selected day, Monday first', () => {
+      // 2026-10-14 is a Wednesday; its week is Mon 12 → Sun 18.
+      const dates = logic.weekDatesOf('2026-10-14');
+      assertDeepEqual(dates, [
+        '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15',
+        '2026-10-16', '2026-10-17', '2026-10-18',
+      ]);
+      assertEqual(logic.weekDatesOf('2026-10-12')[0], '2026-10-12', 'A Monday starts its own week');
+      // A Sunday belongs to the week that began six days earlier, not the next one.
+      assertEqual(logic.weekDatesOf('2026-10-18')[0], '2026-10-12');
+      assertEqual(logic.weekDatesOf('2026-11-01')[0], '2026-10-26', 'The frame rolls across a month boundary');
+    });
+
+    it('marks the selected, today and future cells without inventing a dot', () => {
+      const dots = new Map([['2026-10-13', '#16A34A']]);
+      const cells = logic.buildFilmstrip('2026-10-14', '2026-10-14', dots);
+      assertEqual(cells.length, 7);
+      assertEqual(cells[2].date, '2026-10-14');
+      assertEqual(cells[2].isSelected, true);
+      assertEqual(cells[2].isToday, true);
+      assertEqual(cells[2].dayOfMonth, '14', 'The cell shows the day of month, not the ISO string');
+      assertEqual(cells[2].dotColor, null, 'A day with no study time gets no dot at all');
+      assertEqual(cells[1].dotColor, '#16A34A', 'The studied day keeps its subject colour');
+      assertEqual(cells[3].isFuture, true, 'Days after today are not selectable');
+      assertEqual(cells[6].isFuture, true);
+      assertEqual(cells[0].weekdayLabel, '一', 'Columns are labelled by weekday initial');
+      assertEqual(cells[6].weekdayLabel, '日');
+    });
+
+    it('picks each day\'s dominant subject and ignores zero-minute slices', () => {
+      const days = [
+        { date: '2026-10-12', durationSeconds: 3600 },
+        { date: '2026-10-13', durationSeconds: 1800 },
+        { date: '2026-10-14', durationSeconds: 0 },
+      ];
+      const distribution = [
+        { subjectId: 'math', subjectColor: '#356AE6', dailyMinutes: { '2026-10-12': 30, '2026-10-13': 10 } },
+        { subjectId: 'english', subjectColor: '#16A34A', dailyMinutes: { '2026-10-12': 30, '2026-10-13': 20 } },
+      ];
+      const colors = logic.dominantSubjectColors(days, distribution);
+      // A tie resolves by subject id ('english' < 'math'), so two renders cannot
+      // swap the dot colour depending on the order the slices arrived in.
+      assertEqual(colors.get('2026-10-12'), '#16A34A', 'A tie breaks deterministically toward the lower id');
+      assertEqual(colors.get('2026-10-13'), '#16A34A', 'The larger slice wins outright');
+      assertEqual(colors.has('2026-10-14'), false, 'A zero day has no dominant subject');
+    });
+  });
+
+  describe('Tier 1: Review view logic — the day summary and bound plans', () => {
+    it('reports the longest single span, and zero when nothing was recorded', () => {
+      assertEqual(logic.longestSessionSeconds([]), 0);
+      assertEqual(logic.longestSessionSeconds([{ durationSeconds: 600 }]), 600);
+      assertEqual(
+        logic.longestSessionSeconds([{ durationSeconds: 600 }, { durationSeconds: 5400 }, { durationSeconds: 300 }]),
+        5400
+      );
+    });
+
+    it('names a session\'s bound plan by id alone, never by title or subject', () => {
+      const tasks = [
+        { id: 't-1', title: '王道操作系统第四章' },
+        { id: 't-2', title: '王道操作系统第四章' },
+      ];
+      assertEqual(logic.boundTaskTitle('t-2', tasks), '王道操作系统第四章');
+      // Two same-named plans are exactly why a title/subject match would mislabel.
+      assertEqual(logic.boundTaskTitle('t-missing', tasks), null, 'A deleted plan leaves no chip');
+      assertEqual(logic.boundTaskTitle(null, tasks), null, 'An unbound session leaves no chip');
+    });
+  });
+
+  describe('Tier 1: Review view logic — period-over-period comparison', () => {
+    it('reports a signed percent only when there is a baseline to divide by', () => {
+      assertEqual(logic.periodDeltaPercent(7200, 3600), 1);
+      assertEqual(logic.periodDeltaPercent(1800, 3600), -0.5);
+      assertEqual(logic.periodDeltaPercent(3600, 3600), 0);
+      // No baseline: an absolute delta is the honest number, so the percent is absent.
+      assertEqual(logic.periodDeltaPercent(3600, 0), null);
+      assertEqual(logic.periodDeltaPercent(3600, null), null);
+    });
+
+    it('counts goal-reaching days over elapsed days only', () => {
+      const days = [
+        { durationSeconds: 7200, isFuture: false },
+        { durationSeconds: 3600, isFuture: false },
+        { durationSeconds: 10800, isFuture: true },
+      ];
+      assertDeepEqual(logic.goalReachedDays(days, 3600), { reached: 2, elapsed: 2 });
+      assertDeepEqual(logic.goalReachedDays(days, 7200), { reached: 1, elapsed: 2 });
+      // No goal configured: the caller omits the line rather than claiming 0/2.
+      assertEqual(logic.goalReachedDays(days, null), null);
+      assertEqual(logic.goalReachedDays(days, 0), null);
+    });
+  });
 }
 

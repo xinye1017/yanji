@@ -191,6 +191,17 @@ export const YanjiPaperColors = {
     scrim: 'rgba(28,30,33,0.32)',
     /** Destructive actions. Measured 5.69:1 on `surface`, 5.18:1 on `canvas`. */
     danger: '#BE3232',
+    /**
+     * A period that improved on the one before it. Measured worst case 5.49:1
+     * across the four paper steps, and 5.00:1 on its own tint below — the same
+     * readable-text bar `amber` and `brandInk` hold.
+     *
+     * The board's 竹青 `#2D7A5E` is the *subject* colour for 408 and stays one;
+     * as badge text it measures 4.31:1 on `subtle` and would fail here.
+     */
+    positive: '#27684F',
+    /** See the tint note above: alpha is capped by the badge label's 4.5:1. */
+    positiveSubtle: 'rgba(39,104,79,0.07)',
   },
   dark: {
     canvas: '#111315',
@@ -216,6 +227,14 @@ export const YanjiPaperColors = {
     scrim: 'rgba(0,0,0,0.56)',
     /** Destructive actions. Measured 6.11:1 on `surface`, 6.73:1 on `canvas`. */
     danger: '#F87171',
+    /**
+     * See the light-mode note. Dark needs its own value rather than a reuse of
+     * light's: `#27684F` would be unreadable here, and the board's 竹青
+     * `#2D7A5E` measures 4.39:1 on `subtle`. Measured worst case 5.65:1 on the
+     * four steps, 4.80:1 on its own tint.
+     */
+    positive: '#4FB08A',
+    positiveSubtle: 'rgba(79,176,138,0.10)',
   },
 } as const;
 
@@ -422,7 +441,12 @@ export const YanjiPaperLayout = {
   rhythmBarGap: 3,
   rhythmBarHeight: 22,
   rhythmEmptyHeight: 2,
-  timelineTimeColumn: 52,
+  timelineTimeColumn: 46,
+  /** The spine between the clock column and the entry — node plus its rule. */
+  timelineAxisColumn: 16,
+  timelineNodeSize: 8,
+  /** A dated cell in the review filmstrip — day number above its subject dot. */
+  filmstripCellMinHeight: 58,
   sheetTopRadius: 26,
   gridGap: 8,
 } as const;

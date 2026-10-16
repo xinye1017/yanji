@@ -532,6 +532,8 @@ class YanjiDataModule(
                             putString("note", item.note)
                             putInt("pauseCount", item.pauseCount)
                             putString("mode", item.mode)
+                            // 未挂计划时必须是 null（与 note.sessionId 同一写法）。
+                            if (item.taskId == null) putNull("taskId") else putString("taskId", item.taskId)
                         })
                     }
                 }
