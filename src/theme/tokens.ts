@@ -163,10 +163,15 @@ export const YanjiPaperColors = {
     elevated: '#FAF8F4',
     surface: '#FFFFFF',
     subtle: '#EDEAE2',
+    /** Full-bleed wash behind the 寸阴尺 strip — a hair of ink, not a surface. */
+    vernierWash: 'rgba(28,30,33,0.03)',
     ink: '#1C1E21',
     secondary: '#565960',
     muted: '#94969C',
     hairline: 'rgba(28,30,33,0.08)',
+    /** Vernier ticks. Decorative by definition, so they sit below the 4.5:1 text bar. */
+    tickMinor: 'rgba(28,30,33,0.20)',
+    tickMajor: 'rgba(28,30,33,0.45)',
     brand: '#C84B31',
     /** Readable brand text on parchment. Measured 5.43:1 on canvas, 5.96:1 on surface. */
     brandInk: '#B23A22',
@@ -192,10 +197,13 @@ export const YanjiPaperColors = {
     elevated: '#16191D',
     surface: '#1A1D21',
     subtle: '#23272D',
+    vernierWash: 'rgba(234,230,223,0.03)',
     ink: '#EAE6DF',
     secondary: '#9BA0A8',
     muted: '#636870',
     hairline: 'rgba(234,230,223,0.08)',
+    tickMinor: 'rgba(234,230,223,0.22)',
+    tickMajor: 'rgba(234,230,223,0.50)',
     brand: '#E06D53',
     /** Dark `brand` already clears 4.5:1 on canvas, so the ink tier is itself. */
     brandInk: '#E06D53',
@@ -220,18 +228,43 @@ export const YanjiPaperImmersive = {
   running: {
     canvas: '#15181C',
     ink: '#F6F4EF',
-    secondary: '#9BA0A8',
-    muted: '#5C616B',
-    accent: '#E06D53',
+    secondary: '#C4C7CE',
+    subtitle: '#8A8F99',
+    muted: '#6E737D',
+    /** Footage line. Decorative reassurance, so it sits under the 4.5:1 text bar. */
+    footnote: '#52565E',
+    accent: '#3A9B78',
     subtle: 'rgba(255,255,255,0.08)',
+    pillBg: 'rgba(255,255,255,0.05)',
+    pillBorder: 'rgba(255,255,255,0.08)',
+    tideStart: 'rgba(45,122,94,0)',
+    tideEnd: 'rgba(45,122,94,0.14)',
+    secondaryActionBg: 'rgba(255,255,255,0.06)',
+    secondaryActionBorder: 'rgba(255,255,255,0.10)',
+    secondaryActionText: '#D5D8DF',
+    primaryActionBg: 'rgba(246,244,239,0.12)',
+    primaryActionBorder: 'rgba(246,244,239,0.22)',
+    primaryActionText: '#F6F4EF',
   },
   paused: {
-    canvas: '#1C1917',
+    canvas: '#15181C',
     ink: '#F6F4EF',
-    secondary: '#9BA0A8',
-    muted: '#5C616B',
+    secondary: '#C4C7CE',
+    subtitle: '#8A8F99',
+    muted: '#6E737D',
+    footnote: '#52565E',
     accent: '#DDA059',
     subtle: 'rgba(255,255,255,0.08)',
+    pillBg: 'rgba(255,255,255,0.05)',
+    pillBorder: 'rgba(255,255,255,0.08)',
+    tideStart: 'rgba(221,160,89,0)',
+    tideEnd: 'rgba(221,160,89,0.14)',
+    secondaryActionBg: 'rgba(255,255,255,0.06)',
+    secondaryActionBorder: 'rgba(255,255,255,0.10)',
+    secondaryActionText: '#D5D8DF',
+    primaryActionBg: 'rgba(221,160,89,0.18)',
+    primaryActionBorder: 'rgba(221,160,89,0.34)',
+    primaryActionText: '#F6F4EF',
   },
 } as const;
 
@@ -244,15 +277,17 @@ export const YanjiPaperImmersive = {
  */
 export const YanjiPaperTypography = {
   displayTimer: {
-    fontSize: 92,
-    lineHeight: 100,
-    fontWeight: '300' as const,
+    fontSize: 96,
+    lineHeight: 102,
+    fontWeight: '600' as const,
+    fontFamily: 'sans-serif-medium',
     fontVariant: ['tabular-nums'] as const,
   },
   displayDial: {
     fontSize: 84,
-    lineHeight: 92,
+    lineHeight: 90,
     fontWeight: '700' as const,
+    fontFamily: 'sans-serif-medium',
     fontVariant: ['tabular-nums'] as const,
   },
   metricHero: {
@@ -308,7 +343,17 @@ export const YanjiPaperLayout = {
   gridGap: 8,
 } as const;
 
-export const YanjiPaperRadius = { tick: 1, tag: 5, surface: 14, sheet: 26, pill: 9999 } as const;
+export const YanjiPaperRadius = {
+  tick: 1,
+  tag: 5,
+  /** Subject-matrix cells — tighter than a card so the grid reads as one block. */
+  compactCard: 12,
+  surface: 14,
+  /** The one full-width page action (开始专注). */
+  cta: 18,
+  sheet: 26,
+  pill: 9999,
+} as const;
 
 export const YanjiPaperMotion = {
   pressMs: 120,
