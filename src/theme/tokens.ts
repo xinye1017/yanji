@@ -445,6 +445,13 @@ export const YanjiPaperLayout = {
   /** The spine between the clock column and the entry — node plus its rule. */
   timelineAxisColumn: 16,
   timelineNodeSize: 8,
+  /**
+   * How far the timeline's clock column and trailing delete control may sit
+   * from the page gutter. Negative pulls the clock toward the screen edge and
+   * the delete glyph past the gutter; the timeline reads as a full-bleed spine
+   * rather than a column of text indented inside it.
+   */
+  timelineEdgeBleed: 8,
   /** A dated cell in the review filmstrip — day number above its subject dot. */
   filmstripCellMinHeight: 58,
   sheetTopRadius: 26,
