@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'r
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
-import type { DailySession, ReviewOverview, ReviewScope, StudyTask } from '../bridge';
+import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader, YanjiHairline,
   YanjiIcon, YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
@@ -18,15 +18,17 @@ import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
   dataRefreshCoordinator, refreshDailySnapshot, useDailySnapshot,
-  useReviewDataVisibility, useReviewOverview,
+  useReviewDataVisibility, useReviewOverview, useSettingsSnapshot,
 } from '../state/dataRefresh';
 import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
-  buildHourBuckets, buildTimelineEntries, buildTrendColumns, computeAxisLabelsLayout,
-  countElapsedDays, countWorkedDays, dayHasRecords, formatClockFromEpoch,
-  formatDailyAverageDuration, formatDuration, formatPercent, peakHourBucket,
-  peakTrendDay, periodDelta, previousWindowArgs, relativeDayLabel,
-  stepForwardWithinToday, todayIso, shiftIsoDate, type TimelineEntry,
+  boundTaskTitle, buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
+  computeAxisLabelsLayout, countElapsedDays, countWorkedDays, dominantSubjectColors,
+  formatClockFromEpoch, formatDailyAverageDuration, formatDuration, formatDurationMetric,
+  formatPercent, goalReachedDays, longestSessionSeconds, peakHourBucket, peakTrendDay,
+  periodDelta, periodDeltaPercent, previousWindowArgs, relativeDayLabel, scopeDateRangeLabel,
+  shiftIsoDate, stepForwardWithinToday, todayIso, weekNumberOfYear,
+  type FilmstripDay, type TimelineEntry,
 } from './reviewViewLogic';
 
 type ReviewView = 'timeline' | 'trend';
@@ -36,7 +38,7 @@ const SCOPES: readonly { value: ReviewScope; label: string }[] = [
   { value: 'CALENDAR_MONTH', label: '本月' },
 ];
 const HOUR_TICKS = [0, 6, 12, 18];
-const TREND_CHART_HEIGHT = 96;
+const TREND_CHART_HEIGHT = 108;
 
 export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const { paper } = useYanjiTheme();
@@ -50,15 +52,32 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [scope, setScope] = useState<ReviewScope>('TODAY');
   const daily = useDailySnapshot('review', date, visible);
   const snapshot = daily?.date === date ? daily : null;
+  const settingsSnapshot = useSettingsSnapshot('review', visible);
+  const goalHours = settingsSnapshot?.settings.dailyGoalHours ?? 0;
+  const goalSeconds = goalHours > 0 ? goalHours * 3600 : null;
   const overviewRequest = useMemo(() => ({ scope, periodsBack: 0, anchorDate: date }), [date, scope]);
   const previousRequest = useMemo(() => previousWindowArgs(scope, date), [date, scope]);
-  const reviewRequests = useMemo(() => [overviewRequest, previousRequest], [overviewRequest, previousRequest]);
+  /**
+   * The filmstrip reads the selected day's own calendar week, which is a
+   * different window from the trend scope. It is only needed for its subject
+   * dots, so it stays a separate bounded request rather than widening `scope`.
+   */
+  const weekRequest = useMemo(
+    () => ({ scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: date }),
+    [date]
+  );
+  const reviewRequests = useMemo(
+    () => [overviewRequest, previousRequest, weekRequest],
+    [overviewRequest, previousRequest, weekRequest]
+  );
   const trendVisible = visible && view === 'trend';
   const overview = useReviewOverview(overviewRequest, trendVisible);
   const previousOverview = useReviewOverview(previousRequest, trendVisible);
-  useReviewDataVisibility('review', reviewRequests, trendVisible);
-  const dayTasks = snapshot?.tasks ?? [];
+  // The strip is part of the timeline view, so its week window is read there.
+  const weekOverview = useReviewOverview(weekRequest, visible && view === 'timeline');
+  useReviewDataVisibility('review', reviewRequests, visible);
   const sessions = snapshot?.sessions ?? [];
+  const dayTasks = snapshot?.tasks ?? [];
   const [chartWidth, setChartWidth] = useState(0);
   const [noteTarget, setNoteTarget] = useState<{
     sessionId: string; isExam: boolean; title: string; note: string;
@@ -73,18 +92,18 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
-  const hasRecords = dayHasRecords(entries, dayTasks);
-  const completedTasks = dayTasks.filter(task => task.completed);
-  const pendingTasks = dayTasks.filter(task => !task.completed);
   const today = todayIso();
   const isToday = date === today;
   const relativeLabel = relativeDayLabel(date, today);
   const selectedDate = new Date(`${date}T12:00:00`);
-  const weekDates = useMemo(() => {
-    const day = new Date(`${date}T12:00:00`).getDay();
-    const monday = shiftIsoDate(date, -((day + 6) % 7));
-    return Array.from({ length: 7 }, (_, index) => shiftIsoDate(monday, index));
-  }, [date]);
+  const filmstrip = useMemo(
+    () => buildFilmstrip(
+      date,
+      today,
+      dominantSubjectColors(weekOverview?.days ?? [], weekOverview?.subjectDistribution ?? [])
+    ),
+    [date, today, weekOverview]
+  );
 
   const toggleFavorite = async (noteId: string) => {
     if (busyNote) return;
@@ -111,16 +130,18 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     try {
       await Promise.all([
         refreshDailySnapshot(date),
-        ...(trendVisible ? reviewRequests.map(request => dataRefreshCoordinator.refreshReviewOverview(request)) : []),
+        ...reviewRequests.map(request => dataRefreshCoordinator.refreshReviewOverview(request)),
       ]);
     } catch { setActionError('读取失败，请重新读取。'); }
     finally { setRefreshing(false); }
-  }, [date, trendVisible, reviewRequests]);
+  }, [date, reviewRequests]);
 
   const days = overview?.days ?? [];
   const columns = useMemo(() => buildTrendColumns(days, overview?.subjectDistribution ?? []), [days, overview]);
   const peak = peakTrendDay(columns);
   const delta = periodDelta(overview?.totalSeconds ?? 0, previousOverview?.totalSeconds ?? null);
+  const deltaPercent = periodDeltaPercent(overview?.totalSeconds ?? 0, previousOverview?.totalSeconds ?? null);
+  const goalDays = goalReachedDays(days, goalSeconds);
   const preciseSessions = useMemo(() => {
     const dayStart = new Date(`${date}T00:00:00`).getTime();
     const dayEnd = new Date(`${shiftIsoDate(date, 1)}T00:00:00`).getTime();
@@ -143,136 +164,115 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     seconds: slice.minutes * 60, color: slice.subjectColor || colors.secondary }));
 
   return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
-    <ScrollView testID="scroll-review" style={{ flex: 1 }} contentContainerStyle={{
-      paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
-    }}>
-      <YanjiEditorialHeader eyebrow="研迹 · 成长手账" title="回顾" subtitle="翻一页，看看时间留下的痕迹。" />
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap, marginTop: YanjiSpacing.lg }}>
-        <YanjiIconButton icon="back" accessibilityLabel="前一天" onPress={() => setDate(prev => shiftIsoDate(prev, -1))} size={layout.rowMinHeight} tone="filled" />
-        <View style={{ flex: 1, minWidth: 130, alignItems: 'center' }}>
-          <Text testID="review-date" style={[typography.titleSection, { color: colors.ink }]}>{selectedDate.getFullYear()}年{selectedDate.getMonth() + 1}月{selectedDate.getDate()}日</Text>
-          <Text style={[typography.captionMeta, { color: colors.secondary }]}>{relativeLabel ? `${relativeLabel} · ` : ''}星期{'日一二三四五六'[selectedDate.getDay()]}</Text>
+    <ScrollView testID="scroll-review" style={{ flex: 1 }}
+      showsVerticalScrollIndicator={false} overScrollMode="never"
+      contentContainerStyle={{
+        paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
+      }}>
+      {/* AB-06 & AB-07 Unified Header */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 6,
+        paddingBottom: 10,
+      }}>
+        <View>
+          <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+            {view === 'trend'
+              ? '数据洞察 · 真实记录沉淀'
+              : `${selectedDate.getFullYear()} 年 ${selectedDate.getMonth() + 1} 月 · 第 ${weekNumberOfYear(selectedDate)} 周`}
+          </Text>
+          <Text style={[{
+            fontFamily: typography.titleEditorial.fontFamily,
+            fontSize: 20,
+            fontWeight: '700',
+            color: colors.ink,
+            marginTop: 2,
+          }]}>
+            备考手账
+          </Text>
         </View>
-        <YanjiIconButton icon="forward" accessibilityLabel="后一天" disabled={isToday} onPress={() => setDate(prev => stepForwardWithinToday(prev, todayIso()))} size={layout.rowMinHeight} tone="filled" />
+        <YanjiPaperSegmentedControl
+          value={view}
+          options={VIEWS}
+          onChange={setView}
+          accessibilityLabel="回顾视图"
+          compact
+        />
       </View>
-
-      {!isToday ? <Pressable onPress={() => setDate(todayIso())} accessibilityRole="button" accessibilityLabel="回到今天"
-        style={({ pressed }) => ({ minHeight: layout.rowMinHeight, alignSelf: 'center', justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-        <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>回到今天 ›</Text>
-      </Pressable> : null}
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: YanjiSpacing.md }} contentContainerStyle={{ gap: layout.gridGap }}>
-        {weekDates.map((weekDate, index) => {
-          const selected = weekDate === date;
-          const future = weekDate > today;
-          const isCurrentToday = weekDate === today;
-          return <Pressable key={weekDate} disabled={future} onPress={() => setDate(weekDate)} accessibilityRole="button"
-            accessibilityLabel={`${weekDate} 星期${'一二三四五六日'[index]}`}
-            accessibilityState={{ selected, disabled: future }}
-            style={({ pressed }) => ({ minWidth: layout.rowMinHeight, minHeight: layout.rowMinHeight + 8, paddingVertical: YanjiSpacing.xs, paddingHorizontal: YanjiSpacing.sm,
-              alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
-              borderWidth: selected ? layout.hairlineWidth : 0, borderColor: selected ? colors.brand : 'transparent',
-              backgroundColor: selected ? colors.brandSubtle : colors.elevated, opacity: future ? 0.45 : pressed ? 0.65 : 1 })}>
-            <Text style={[typography.captionMeta, { color: selected ? colors.brandInk : colors.secondary }]}>周{'一二三四五六日'[index]}</Text>
-            <Text style={[typography.titleSection, { color: future ? colors.secondary : selected ? colors.brandInk : colors.ink, marginTop: 2 }]}>{Number(weekDate.slice(8))}</Text>
-            {isCurrentToday ? <View style={{ width: 4, height: 4, borderRadius: radius.pill, backgroundColor: colors.brand, marginTop: 2 }} /> : null}
-          </Pressable>;
-        })}
-      </ScrollView>
-
-      <YanjiPaperSegmentedControl value={view} options={VIEWS} onChange={setView} accessibilityLabel="回顾视图" />
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.brandInk, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
-      {view === 'timeline' ? <>
-        <YanjiPaperSectionHeading title="这一天" />
-        <YanjiCard>
-          <Text style={[typography.captionMeta, { color: colors.secondary }]}>当日累计专注</Text>
-          <Text style={[typography.metricHero, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>{snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—'}</Text>
-          <YanjiHairline style={{ marginVertical: YanjiSpacing.md }} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.lg }}>
-            <YanjiStatCell label="专注 / 模考" value={snapshot ? `${snapshot.focusCount} 段 / ${snapshot.examCount} 场` : '—'} />
-            <YanjiStatCell label="完成计划" value={snapshot ? `${completedTasks.length} / ${dayTasks.length}` : '—'} />
-            <YanjiStatCell label="随笔" value={snapshot ? `${snapshot.notes.length} 篇` : '—'} />
-          </View>
-        </YanjiCard>
+      {view === 'timeline' ? (
+        <>
+          <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
+          <DayNavigator
+            date={date}
+            isToday={isToday}
+            relativeLabel={relativeLabel}
+            onPrevious={() => setDate(prev => shiftIsoDate(prev, -1))}
+            onNext={() => setDate(prev => stepForwardWithinToday(prev, todayIso()))}
+            onToday={() => setDate(todayIso())}
+          />
+          <DaySummary snapshot={snapshot} goalSeconds={goalSeconds} />
+          <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
 
-        {!snapshot ? <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: layout.sectionGap }]}>正在读取这一天的记录…</Text>
-          : !hasRecords ? <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: layout.sectionGap }]}>这一天还没有记录。专注片段和随笔会留在这里。</Text> : null}
+          <Timeline
+            entries={entries}
+            dayTasks={dayTasks}
+            busyNote={busyNote !== null}
+            onEditSession={session => setNoteTarget({
+              sessionId: session.id, isExam: session.isExam, title: session.subjectName, note: session.note,
+            })}
+            onDeleteSession={session => {
+              setDeleteError(null);
+              setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
+            }}
+            onToggleFavorite={noteId => void toggleFavorite(noteId)}
+            onEditNote={note => setEditingNote({ id: note.noteId, content: note.content })}
+          />
+        </>
+      ) : (
+        <>
+          <PeriodSelectorBar
+            scope={scope}
+            anchorDate={date}
+            onScopeChange={setScope}
+            onPrevious={() => {
+              if (scope === 'TODAY') setDate(prev => shiftIsoDate(prev, -1));
+              else if (scope === 'CALENDAR_WEEK') setDate(prev => shiftIsoDate(prev, -7));
+              else setDate(prev => shiftIsoDate(prev, -30));
+            }}
+            onNext={() => {
+              if (scope === 'TODAY') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 1), todayIso()));
+              else if (scope === 'CALENDAR_WEEK') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 7), todayIso()));
+              else setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 30), todayIso()));
+            }}
+            canStepForward={date < todayIso()}
+          />
 
-        {entries.map(entry => <View key={entry.key}>
-          {entry.kind === 'session' ? <SessionRow session={entry.session}
-            onEdit={() => setNoteTarget({ sessionId: entry.session.id, isExam: entry.session.isExam, title: entry.session.title, note: entry.session.note })}
-            onDelete={() => { setDeleteError(null); setPendingDelete({ sessionId: entry.session.id, isExam: entry.session.isExam, subjectName: entry.session.subjectName }); }} />
-            : <NoteRow note={entry} busy={busyNote !== null}
-              onToggleFavorite={() => void toggleFavorite(entry.noteId)} onEdit={() => setEditingNote({ id: entry.noteId, content: entry.content })} />}
-          <YanjiHairline />
-        </View>)}
-
-        {completedTasks.length ? <>
-          <YanjiPaperSectionHeading title="已完成的计划" />
-          <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.xs }]}>按计划归属日收录，不标记未提供的完成时刻。</Text>
-          {completedTasks.map(task => <TaskRow key={task.id} task={task} />)}
-        </> : null}
-        {pendingTasks.length ? <>
-          <YanjiPaperSectionHeading title="这一天的待办" />
-          {pendingTasks.map(task => <TaskRow key={task.id} task={task} />)}
-        </> : null}
-      </> : <>
-        <YanjiPaperSectionHeading title="学习趋势" />
-        <YanjiPaperSegmentedControl value={scope} options={SCOPES} onChange={setScope} accessibilityLabel="趋势范围" />
-        <YanjiCard style={{ marginTop: YanjiSpacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>{overview?.label ?? '正在读取统计…'}</Text>
-            <YanjiBadge tone="neutral" label={!previousOverview ? '正在读取上一周期…' : delta.label} />
-          </View>
-          <Text style={[typography.metricHero, { color: colors.ink, marginVertical: YanjiSpacing.xs }]}>{overview ? formatDuration(overview.totalSeconds) : '—'}</Text>
-          {scope !== 'TODAY' ? <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}</Text> : null}
-
-          <View onLayout={event => setChartWidth(event.nativeEvent.layout.width)} accessible accessibilityRole="image"
-            accessibilityLabel={scope === 'TODAY' ? `当日可确认连续区间的小时分布，${preciseSessions.length} 段记录。${peakHour ? `${peakHour.hour}时最多，${formatDuration(peakHour.minutes * 60)}` : '暂无可绘制区间'}` : trendAccessibilityLabel(overview)}
-            style={{ marginTop: YanjiSpacing.lg }}>
-            {chartWidth > 0 && overview ? scope === 'TODAY' ? <YanjiLineChart values={hourBuckets.map(bucket => bucket.minutes)} width={chartWidth} height={TREND_CHART_HEIGHT}
-              peakIndex={peakHour?.hour} /> : scope === 'CALENDAR_MONTH' ? <YanjiLineChart values={columns.map(column => column.totalMinutes)} width={chartWidth} height={TREND_CHART_HEIGHT}
-                averageValue={overview.dailyAverageSeconds / 60} peakIndex={peak ? columns.indexOf(peak) : undefined} />
-                : <YanjiStackedBarChart columns={columns} width={chartWidth} height={TREND_CHART_HEIGHT} averageMinutes={overview.dailyAverageSeconds / 60} /> : null}
-            <View style={{ height: typography.captionMeta.lineHeight * Math.max(1, fontScale), marginTop: YanjiSpacing.sm }}>
-              {scope === 'TODAY' ? HOUR_TICKS.map(hour => <Text key={hour} style={[typography.captionMeta, {
-                position: 'absolute', left: Math.max(0, Math.min(chartWidth - 38 * fontScale, (hourCenters[hour] ?? 0) - 19 * fontScale)),
-                width: 38 * fontScale, textAlign: 'center', color: colors.secondary,
-              }]}>{hour}时</Text>) : axisLabelItems.map(item => <Text key={item.date} style={[typography.captionMeta, {
-                position: 'absolute', left: item.left, width: item.width, textAlign: 'center', color: colors.secondary,
-              }]}>{item.dayLabel}</Text>)}
-            </View>
-          </View>
-
-          <YanjiHairline style={{ marginVertical: YanjiSpacing.md }} />
-          {scope === 'TODAY' ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>小时分布仅绘可确认的连续区间；暂停或起止不一致的记录不绘入曲线，仍计入总量。{peakHour ? `连续区间最多 ${peakHour.hour}时 · ${formatDuration(peakHour.minutes * 60)}` : ''}</Text>
-            : <>
-              <Text style={[typography.captionMeta, { color: colors.secondary }]}>{peak ? `最长的一天 ${peak.dayLabel} · ${formatDuration(peak.totalMinutes * 60)}` : overview ? '这段时间还没有已保存的专注。' : '统计尚未读取。'} · 虚线为日均；图表按原生学科分钟统计展示。</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.lg, marginTop: YanjiSpacing.md }}>
-                <YanjiStatCell label="有学习时长" value={overview ? `${countWorkedDays(days)} / ${countElapsedDays(days)} 天` : '—'} />
-                <YanjiStatCell label="模考" value={overview ? `${overview.examCount} 场` : '—'} />
-              </View>
-            </>}
-        </YanjiCard>
-
-        <YanjiPaperSectionHeading title="学科投入" right={<Text style={[typography.captionMeta, { color: colors.secondary }]}>{overview?.label}</Text>} />
-        <YanjiChronoSpectrum segments={spectrum} totalSeconds={overview?.totalSeconds ?? 0} goalSeconds={null}
-          accessibilityLabel={overview ? `${overview.label}学科投入，${distribution.map(s => `${s.subjectName} ${formatDuration(s.minutes * 60)}`).join('，') || '暂无记录'}` : '正在读取学科分布'} />
-        <View style={{ marginTop: YanjiSpacing.sm }}>
-          {distribution.map(slice => (
-            <YanjiSubjectProportionRow
-              key={slice.subjectId}
-              label={slice.subjectName}
-              color={slice.subjectColor || colors.secondary}
-              metaText={`${formatDuration(slice.minutes * 60)} · ${formatPercent(slice.share)}`}
-              ratio={slice.share}
-            />
-          ))}
-        </View>
-        {!distribution.length ? <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: YanjiSpacing.md }]}>{overview ? '空白轨道，等待下一段真实的投入。' : '正在读取学科统计…'}</Text> : null}
-      </>}
+          <TrendSummary
+            overview={overview}
+            previousOverview={previousOverview}
+            scope={scope}
+            deltaLabel={delta.label}
+            deltaPercent={deltaPercent}
+            goalDays={goalDays}
+            chartWidth={chartWidth}
+            onChartLayout={setChartWidth}
+            columns={columns}
+            peak={peak}
+            hourBuckets={hourBuckets}
+            peakHour={peakHour}
+            hourCenters={hourCenters}
+            axisLabelItems={axisLabelItems}
+            preciseSessionCount={preciseSessions.length}
+            fontScale={fontScale}
+            distribution={distribution}
+            spectrum={spectrum}
+          />
+        </>
+      )}
 
       <Pressable onPress={() => void handleRefresh()} disabled={refreshing} accessibilityRole="button" accessibilityLabel="重新读取回顾数据"
         style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', marginTop: YanjiSpacing.lg, opacity: pressed ? 0.65 : 1 })}>
@@ -299,67 +299,636 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   </View>;
 }
 
+// ---------------------------------------------------------------------------
+// The date filmstrip — a fixed week frame, one cell per day
+// ---------------------------------------------------------------------------
+
+function WeekFilmstrip({ cells, onSelect }: {
+  cells: readonly FilmstripDay[]; onSelect: (date: string) => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  return <View style={{ flexDirection: 'row', gap: YanjiSpacing.xs, marginTop: YanjiSpacing.lg }}>
+    {cells.map(cell => <Pressable key={cell.date} disabled={cell.isFuture} onPress={() => onSelect(cell.date)}
+      accessibilityRole="button"
+      accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
+      accessibilityState={{ selected: cell.isSelected, disabled: cell.isFuture }}
+      style={({ pressed }) => ({
+        flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
+        alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
+        backgroundColor: cell.isSelected ? colors.ink : 'transparent',
+        opacity: cell.isFuture ? 0.45 : pressed ? 0.65 : 1,
+      })}>
+      <Text style={[typography.captionMeta, { color: cell.isSelected ? colors.canvas : colors.muted }]}>{cell.weekdayLabel}</Text>
+      <Text style={[typography.bodyPrimary, {
+        color: cell.isSelected ? colors.canvas : cell.isFuture ? colors.secondary : colors.ink,
+        fontWeight: '700', marginTop: YanjiSpacing.xs,
+      }]}>{cell.dayOfMonth}</Text>
+      {/* The dot only exists where study time does — a zero day must not
+          borrow the visual weight of a recorded one. */}
+      {cell.dotColor ? <View style={{
+        width: 5, height: 5, borderRadius: radius.pill, marginTop: YanjiSpacing.xs, backgroundColor: cell.dotColor,
+      }} /> : <View style={{ height: 5, marginTop: YanjiSpacing.xs }} />}
+    </Pressable>)}
+  </View>;
+}
+
+/**
+ * The timeline's empty / loading line.
+ *
+ * A day whose only content is a plan is not an empty day — the plan is real and
+ * the summary strip already counts it — so the copy says what is missing (a
+ * recorded session or note) rather than claiming nothing happened.
+ */
+function TimelineState({ loading, entryCount, planCount }: {
+  loading: boolean; entryCount: number; planCount: number;
+}): React.JSX.Element | null {
+  const { paper } = useYanjiTheme();
+  const { colors, typography } = paper;
+  if (loading) {
+    return <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: paper.layout.sectionGap }]}>
+      正在读取这一天的记录…
+    </Text>;
+  }
+  if (entryCount > 0) return null;
+  const message = planCount > 0
+    ? '这一天只留下了计划，还没有专注片段或随笔。'
+    : '这一天还没有记录。专注片段和随笔会留在这里。';
+  return <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: paper.layout.sectionGap }]}>{message}</Text>;
+}
+
+function DayNavigator({ date, isToday, relativeLabel, onPrevious, onNext, onToday }: {
+  date: string; isToday: boolean; relativeLabel: string | null;
+  onPrevious: () => void; onNext: () => void; onToday: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  const parsed = new Date(`${date}T12:00:00`);
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap, marginTop: YanjiSpacing.md }}>
+    <YanjiIconButton icon="back" accessibilityLabel="前一天" onPress={onPrevious} size={layout.rowMinHeight} />
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Text testID="review-date" style={[typography.titleSection, { color: colors.ink }]}>
+        {parsed.getFullYear()}年{parsed.getMonth() + 1}月{parsed.getDate()}日
+      </Text>
+      <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+        {relativeLabel ? `${relativeLabel} · ` : ''}星期{'日一二三四五六'[parsed.getDay()]}
+      </Text>
+    </View>
+    <YanjiIconButton icon="forward" accessibilityLabel="后一天" disabled={isToday} onPress={onNext} size={layout.rowMinHeight} />
+    {!isToday ? <Pressable onPress={onToday} accessibilityRole="button" accessibilityLabel="回到今天"
+      style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+      <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>回到今天 ›</Text>
+    </Pressable> : null}
+  </View>;
+}
+
+// ---------------------------------------------------------------------------
+// The day's summary strip — three facts, no card
+// ---------------------------------------------------------------------------
+
+function DaySummary({ snapshot, goalSeconds }: {
+  snapshot: DailySnapshot | null;
+  goalSeconds: number | null;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  const completed = snapshot?.tasks.filter(task => task.completed).length ?? 0;
+  const cells: readonly { label: string; value: string; meta?: string }[] = [
+    {
+      label: '当日专注',
+      value: snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—',
+      meta: goalSeconds && snapshot ? `目标 ${formatDuration(goalSeconds)}` : undefined,
+    },
+    { label: '完成任务', value: snapshot ? `${completed} / ${snapshot.tasks.length}` : '—', meta: '项' },
+    {
+      label: '最长单次',
+      value: snapshot ? formatDuration(longestSessionSeconds(snapshot.sessions ?? [])) : '—',
+      meta: snapshot && snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考` : undefined,
+    },
+  ];
+  return <View style={{ flexDirection: 'row', paddingVertical: YanjiSpacing.md, marginTop: YanjiSpacing.md,
+    borderTopWidth: layout.hairlineWidth, borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
+    {cells.map((cell, index) => <View key={cell.label} style={{
+      flex: 1, alignItems: 'center', paddingHorizontal: YanjiSpacing.xs,
+      borderLeftWidth: index > 0 ? layout.hairlineWidth : 0, borderColor: colors.hairline,
+    }}>
+      <Text style={[typography.captionMeta, { color: colors.secondary }]}>{cell.label}</Text>
+      <Text style={[typography.bodyPrimary, {
+        color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'],
+        marginTop: YanjiSpacing.xs, textAlign: 'center',
+      }]}>{cell.value}</Text>
+      {cell.meta ? <Text style={[typography.captionMeta, { color: colors.muted, marginTop: 2, textAlign: 'center' }]}>{cell.meta}</Text> : null}
+    </View>)}
+  </View>;
+}
+
+// ---------------------------------------------------------------------------
+// The timeline — one spine, clock on the left, event on the right
+// ---------------------------------------------------------------------------
+
+function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onEditNote }: {
+  entries: readonly TimelineEntry[];
+  dayTasks: readonly { id: string; title: string }[];
+  busyNote: boolean;
+  onEditSession: (session: DailySession) => void;
+  onDeleteSession: (session: DailySession) => void;
+  onToggleFavorite: (noteId: string) => void;
+  onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  return <View style={{ marginTop: YanjiSpacing.lg }}>
+    {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry} isLast={index === entries.length - 1}
+      dayTasks={dayTasks} busyNote={busyNote}
+      onEditSession={onEditSession} onDeleteSession={onDeleteSession}
+      onToggleFavorite={onToggleFavorite} onEditNote={onEditNote} />)}
+    {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
+      按真实发生时刻排列；完成计划不标记未提供的完成时刻。
+    </Text> : null}
+  </View>;
+}
+
+function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onEditNote }: {
+  entry: TimelineEntry;
+  isLast: boolean;
+  dayTasks: readonly { id: string; title: string }[];
+  busyNote: boolean;
+  onEditSession: (session: DailySession) => void;
+  onDeleteSession: (session: DailySession) => void;
+  onToggleFavorite: (noteId: string) => void;
+  onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  const nodeColor = entry.kind === 'session'
+    ? entry.session.subjectColor || colors.secondary
+    : colors.brand;
+  return <View style={{ flexDirection: 'row' }}>
+    <Text style={[typography.captionMeta, {
+      width: layout.timelineTimeColumn, color: colors.secondary, textAlign: 'right', paddingTop: 2,
+    }]}>{formatClockFromEpoch(entry.at)}</Text>
+    <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
+      <View style={{ width: layout.timelineNodeSize, height: layout.timelineNodeSize, borderRadius: layout.timelineNodeSize / 2,
+        backgroundColor: nodeColor, marginTop: YanjiSpacing.xs }} />
+      {!isLast ? <View style={{ flex: 1, width: layout.hairlineWidth, backgroundColor: colors.hairline, marginVertical: YanjiSpacing.xs }} /> : null}
+    </View>
+    <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.lg, minHeight: 56 }}>
+      {entry.kind === 'session'
+        ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
+          onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />
+        : <NoteEntry entry={entry} busy={busyNote}
+          onToggleFavorite={() => onToggleFavorite(entry.noteId)} onEdit={() => onEditNote(entry)} />}
+    </View>
+  </View>;
+}
+
+function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
+  session: DailySession; boundTitle: string | null; onEdit: () => void; onDelete: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  const label = `${session.subjectName} · ${session.isExam ? '模考' : '专注'}`;
+  return <>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: layout.gridGap }}>
+      <Pressable onPress={onEdit} accessibilityRole="button"
+        accessibilityLabel={`${label}，${formatDuration(session.durationSeconds)}，${session.isExam ? '模考不支持编辑随笔' : '编辑随笔'}`}
+        style={({ pressed }) => ({ flex: 1, minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+        <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700' }]}>{label}</Text>
+        <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
+          {formatDuration(session.durationSeconds)}{session.pauseCount > 0 ? ` · 暂停 ${session.pauseCount} 次` : ''} · {session.isExam ? '模考随笔暂不支持编辑' : session.note ? '编辑随笔 ›' : '添一段专注随笔 ›'}
+        </Text>
+      </Pressable>
+      <Text style={[typography.captionMeta, { color: session.subjectColor || colors.secondary, fontWeight: '700', paddingTop: YanjiSpacing.sm }]}>
+        +{formatDuration(session.durationSeconds)}
+      </Text>
+      <YanjiIconButton icon="delete" onPress={onDelete} size={layout.rowMinHeight}
+        accessibilityLabel={`删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，${formatDuration(session.durationSeconds)}`} />
+    </View>
+    {boundTitle ? <View style={{
+      alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs,
+      backgroundColor: colors.subtle, borderRadius: radius.tag, paddingHorizontal: YanjiSpacing.sm,
+      paddingVertical: layout.taskTagPadding, marginBottom: YanjiSpacing.sm,
+    }}>
+      <YanjiIcon name="check" size={typography.captionMeta.fontSize} color={colors.secondary} />
+      <Text style={[typography.captionMeta, { color: colors.secondary }]}>达成关联任务：{boundTitle}</Text>
+    </View> : null}
+    {session.note ? <Text style={[typography.bodyJournal, { color: colors.ink, marginBottom: YanjiSpacing.sm }]}>{session.note}</Text> : null}
+  </>;
+}
+
+function NoteEntry({ entry, busy, onToggleFavorite, onEdit }: {
+  entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean;
+  onToggleFavorite: () => void; onEdit: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  return <View style={{
+    backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
+    borderLeftWidth: 3, borderLeftColor: colors.brand, borderRadius: radius.tag,
+    paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
+  }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
+      <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700', flexShrink: 1 }]}>
+        记录此刻{entry.isFavorite ? ' · 已收藏' : ''}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit} size={layout.rowMinHeight} />
+        <YanjiIconButton icon={entry.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={entry.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
+          onPress={onToggleFavorite} disabled={busy} selected={entry.isFavorite} size={layout.rowMinHeight} />
+      </View>
+    </View>
+    <Text style={[typography.bodyJournal, { color: colors.ink }]}>{entry.content}</Text>
+  </View>;
+}
+
+// ---------------------------------------------------------------------------
+// The period selector bar — pill scopes on the left, date range on the right
+// ---------------------------------------------------------------------------
+
+function PeriodSelectorBar({
+  scope,
+  anchorDate,
+  onScopeChange,
+  onPrevious,
+  onNext,
+  canStepForward,
+}: {
+  scope: ReviewScope;
+  anchorDate: string;
+  onScopeChange: (scope: ReviewScope) => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  canStepForward: boolean;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography } = paper;
+  const rangeLabel = scopeDateRangeLabel(scope, anchorDate);
+
+  return (
+    <View style={{
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 4,
+      marginBottom: 12,
+    }}>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {SCOPES.map(opt => {
+          const selected = opt.value === scope;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => onScopeChange(opt.value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`切换范围至${opt.label}`}
+              style={{
+                paddingVertical: 4,
+                paddingHorizontal: 12,
+                borderRadius: 99,
+                backgroundColor: selected ? colors.ink : colors.subtle,
+              }}
+            >
+              <Text style={{
+                fontSize: 12,
+                fontWeight: selected ? '600' : '400',
+                color: selected ? colors.canvas : colors.secondary,
+              }}>
+                {opt.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Pressable
+          onPress={onPrevious}
+          accessibilityRole="button"
+          accessibilityLabel="上一周期"
+          hitSlop={8}
+        >
+          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>‹</Text>
+        </Pressable>
+        <Text style={[typography.captionMeta, {
+          color: colors.secondary,
+          fontVariant: ['tabular-nums'],
+          fontSize: 11,
+          paddingHorizontal: 4,
+        }]}>
+          {rangeLabel}
+        </Text>
+        <Pressable
+          onPress={onNext}
+          disabled={!canStepForward}
+          accessibilityRole="button"
+          accessibilityLabel="下一周期"
+          hitSlop={8}
+          style={{ opacity: canStepForward ? 1 : 0.3 }}
+        >
+          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>›</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The trend view — one KPI sheet, then the distribution (AB-07)
+// ---------------------------------------------------------------------------
+
+function TrendSummary({
+  overview, previousOverview, scope, deltaLabel, deltaPercent, goalDays,
+  chartWidth, onChartLayout, columns, peak, hourBuckets, peakHour, hourCenters, axisLabelItems,
+  preciseSessionCount, fontScale, distribution, spectrum,
+}: {
+  overview: ReviewOverview | null;
+  previousOverview: ReviewOverview | null;
+  scope: ReviewScope;
+  deltaLabel: string;
+  deltaPercent: number | null;
+  goalDays: { reached: number; elapsed: number } | null;
+  chartWidth: number;
+  onChartLayout: (width: number) => void;
+  columns: ReturnType<typeof buildTrendColumns>;
+  peak: ReturnType<typeof peakTrendDay>;
+  hourBuckets: ReturnType<typeof buildHourBuckets>;
+  peakHour: ReturnType<typeof peakHourBucket>;
+  hourCenters: readonly number[];
+  axisLabelItems: ReturnType<typeof computeAxisLabelsLayout>;
+  preciseSessionCount: number;
+  fontScale: number;
+  distribution: readonly ReviewSubjectSlice[];
+  spectrum: readonly { id: string; label: string; seconds: number; color: string }[];
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  const days = overview?.days ?? [];
+  const chartLabel = scope === 'TODAY'
+    ? `当日可确认连续区间的小时分布，${preciseSessionCount} 段记录。${peakHour ? `${peakHour.hour}时最多，${formatDuration(peakHour.minutes * 60)}` : '暂无可绘制区间'}`
+    : trendAccessibilityLabel(overview);
+
+  const metricParts = formatDurationMetric(overview?.totalSeconds ?? 0);
+  const scopeName = scope === 'TODAY' ? '当日' : scope === 'CALENDAR_WEEK' ? '本周' : '本月';
+
+  const isNegative = deltaPercent !== null && deltaPercent < 0;
+  const deltaBadgeBg = !previousOverview ? colors.subtle : isNegative ? 'rgba(200, 75, 49, 0.12)' : 'rgba(45, 122, 94, 0.12)';
+  const deltaBadgeColor = !previousOverview ? colors.muted : isNegative ? colors.brandInk : '#2D7A5E';
+  const deltaBadgeText = !previousOverview
+    ? '正在读取…'
+    : deltaPercent !== null
+      ? `${deltaPercent >= 0 ? '↑ +' : '↓ '}${(Math.abs(deltaPercent) * 100).toFixed(1)}% ${deltaLabel.replace('较上一周期 ', '环比')}`
+      : deltaLabel;
+
+  return (
+    <>
+      {/* 1. KPI Summary & Chart Card (AB-07 Card) */}
+      <View style={{
+        backgroundColor: colors.elevated,
+        borderWidth: layout.hairlineWidth,
+        borderColor: colors.hairline,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View>
+            <Text style={[typography.captionMeta, { color: colors.muted }]}>{scopeName}累计专注时长</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
+              {overview ? (
+                metricParts.hours > 0 ? (
+                  <>
+                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                      {metricParts.hours}
+                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary, marginRight: 6 }}>h</Text>
+                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                      {metricParts.minutes}
+                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary }}>m</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                      {metricParts.minutes}
+                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary }}>m</Text>
+                  </>
+                )
+              ) : (
+                <Text style={{ fontSize: 32, fontWeight: '700', color: colors.muted }}>—</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <View style={{
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+              backgroundColor: deltaBadgeBg,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: deltaBadgeColor,
+                fontVariant: ['tabular-nums'],
+              }}>
+                {deltaBadgeText}
+              </Text>
+            </View>
+            <Text style={{
+              fontSize: 11,
+              color: colors.muted,
+              marginTop: 6,
+              fontVariant: ['tabular-nums'],
+            }}>
+              {scope !== 'TODAY' && overview
+                ? `${formatDailyAverageDuration(overview.dailyAverageSeconds)}${goalDays ? ` · 达标 ${goalDays.reached}/${goalDays.elapsed} 天` : ''}`
+                : `日均 ${overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}`}
+            </Text>
+          </View>
+        </View>
+
+        {/* 7-Day Stacked Bar Chart / Line Chart */}
+        <View
+          onLayout={event => onChartLayout(event.nativeEvent.layout.width)}
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={chartLabel}
+          style={{
+            borderTopWidth: 1,
+            borderStyle: 'dashed',
+            borderColor: colors.hairline,
+            marginTop: 10,
+            paddingTop: 18,
+          }}
+        >
+          {chartWidth > 0 && overview ? (
+            scope === 'TODAY' ? (
+              <YanjiLineChart
+                values={hourBuckets.map(bucket => bucket.minutes)}
+                width={chartWidth}
+                height={TREND_CHART_HEIGHT}
+                peakIndex={peakHour?.hour}
+              />
+            ) : scope === 'CALENDAR_MONTH' ? (
+              <YanjiLineChart
+                values={columns.map(column => column.totalMinutes)}
+                width={chartWidth}
+                height={TREND_CHART_HEIGHT}
+                averageValue={overview.dailyAverageSeconds / 60}
+                peakIndex={peak ? columns.indexOf(peak) : undefined}
+              />
+            ) : (
+              <YanjiStackedBarChart
+                columns={columns}
+                width={chartWidth}
+                height={TREND_CHART_HEIGHT}
+                averageMinutes={overview.dailyAverageSeconds / 60}
+              />
+            )
+          ) : null}
+          <View style={{ height: typography.captionMeta.lineHeight * Math.max(1, fontScale), marginTop: YanjiSpacing.sm }}>
+            {scope === 'TODAY'
+              ? HOUR_TICKS.map(hour => (
+                  <Text
+                    key={hour}
+                    style={[
+                      typography.captionMeta,
+                      {
+                        position: 'absolute',
+                        left: Math.max(0, Math.min(chartWidth - 38 * fontScale, (hourCenters[hour] ?? 0) - 19 * fontScale)),
+                        width: 38 * fontScale,
+                        textAlign: 'center',
+                        color: colors.secondary,
+                      },
+                    ]}
+                  >
+                    {hour}时
+                  </Text>
+                ))
+              : axisLabelItems.map(item => (
+                  <Text
+                    key={item.date}
+                    style={[
+                      typography.captionMeta,
+                      {
+                        position: 'absolute',
+                        left: item.left,
+                        width: item.width,
+                        textAlign: 'center',
+                        color: item.isToday ? colors.brandInk : colors.secondary,
+                        fontWeight: item.isToday ? '700' : '400',
+                      },
+                    ]}
+                  >
+                    {item.dayLabel}
+                  </Text>
+                ))}
+          </View>
+        </View>
+      </View>
+
+      {/* 2. Subject Distribution Breakdown (AB-07) */}
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        marginTop: 16,
+        marginBottom: 8,
+      }}>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>学科投入比重</Text>
+        <Text style={[typography.captionMeta, { color: colors.muted, fontVariant: ['tabular-nums'] }]}>
+          {overview ? `共 ${countWorkedDays(days)} 天有投入` : '—'}
+        </Text>
+      </View>
+
+      <YanjiChronoSpectrum
+        segments={spectrum}
+        totalSeconds={overview?.totalSeconds ?? 0}
+        goalSeconds={null}
+        accessibilityLabel={
+          overview
+            ? `${overview.label}学科投入，${distribution.map(s => `${s.subjectName} ${formatDuration(s.minutes * 60)}`).join('，') || '暂无记录'}`
+            : '正在读取学科分布'
+        }
+      />
+
+      <View style={{ marginTop: 12, gap: 9 }}>
+        {distribution.map(slice => (
+          <View
+            key={slice.subjectId}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 2,
+                  backgroundColor: slice.subjectColor || colors.secondary,
+                  marginRight: 6,
+                }}
+              />
+              <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>
+                {slice.subjectName}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                {formatDuration(slice.minutes * 60)}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.muted, fontVariant: ['tabular-nums'] }}>
+                {formatPercent(slice.share)}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+      {!distribution.length ? (
+        <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: YanjiSpacing.md }]}>
+          {overview ? '空白轨道，等待下一段真实的投入。' : '正在读取学科统计…'}
+        </Text>
+      ) : null}
+
+      {/* 3. AI Study Diagnostic Entry Card (AB-07) */}
+      <View style={{
+        marginTop: 16,
+        marginBottom: 12,
+        paddingVertical: 11,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        backgroundColor: 'rgba(59, 110, 140, 0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(59, 110, 140, 0.18)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B6E8C' }}>
+            ✦ 研迹{scope === 'CALENDAR_MONTH' ? '月度' : scope === 'TODAY' ? '今日' : '周度'}节律简报
+          </Text>
+          <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 2 }}>
+            {overview && overview.totalSeconds > 0
+              ? peak
+                ? `最长投入日为 ${peak.dayLabel}（${formatDuration(peak.totalMinutes * 60)}）${distribution[0] ? `，${distribution[0].subjectName}占比最高 (${formatPercent(distribution[0].share)})` : ''}`
+                : '已沉淀真实专注数据，继续保持专注节奏。'
+              : '暂无足量统计数据，完成更多专注后将自动生成节律洞察。'}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: '#3B6E8C' }}>
+          详情 ›
+        </Text>
+      </View>
+    </>
+  );
+}
+
 function trendAccessibilityLabel(overview: ReviewOverview | null): string {
   if (!overview) return '学习趋势正在读取';
   const worked = overview.days.filter(day => !day.isFuture && day.durationSeconds > 0);
   if (!worked.length) return `${overview.label}内没有专注记录`;
   const best = worked.reduce((a, b) => b.durationSeconds > a.durationSeconds ? b : a);
   return `${overview.label}已过 ${countElapsedDays(overview.days)} 天，${worked.length} 天有学习时长，累计 ${formatDuration(overview.totalSeconds)}。最长一天 ${best.date}，${formatDuration(best.durationSeconds)}`;
-}
-
-function SessionRow({ session, onEdit, onDelete }: { session: DailySession; onEdit: () => void; onDelete: () => void }): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
-  const { fontScale } = useWindowDimensions();
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: YanjiSpacing.md, gap: layout.gridGap }}>
-    <Text style={[typography.captionMeta, { width: layout.timelineTimeColumn * Math.max(1, fontScale), color: colors.secondary, paddingTop: YanjiSpacing.xs }]}>{formatClockFromEpoch(session.startTime)}</Text>
-    <View style={{ flex: 1, borderLeftWidth: layout.hairlineWidth, borderColor: colors.hairline, paddingLeft: YanjiSpacing.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: layout.gridGap }}>
-        <Pressable onPress={onEdit} accessibilityRole="button"
-          accessibilityLabel={`${session.subjectName}${session.isExam ? ' 模考' : ' 专注'}，${formatDuration(session.durationSeconds)}，${session.isExam ? '模考不支持编辑随笔' : '编辑随笔'}`}
-          style={({ pressed }) => ({ flex: 1, minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.gridGap }}>
-            <View style={{ width: 8, height: 8, borderRadius: paper.radius.pill, backgroundColor: session.subjectColor || colors.secondary }} />
-            <Text style={[typography.bodyPrimary, { color: colors.ink, flex: 1, fontWeight: '700' }]}>{session.subjectName}{session.isExam ? ' · 模考' : ' · 专注'}</Text>
-          </View>
-          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>{formatDuration(session.durationSeconds)}{session.pauseCount > 0 ? ` · 暂停 ${session.pauseCount} 次` : ''} · {session.isExam ? '模考随笔暂不支持编辑' : session.note ? '编辑随笔 ›' : '添一段专注随笔 ›'}</Text>
-          {session.note ? <Text style={[typography.bodyJournal, { color: colors.ink, marginTop: YanjiSpacing.sm }]}>{session.note}</Text> : null}
-        </Pressable>
-        <YanjiIconButton icon="delete" onPress={onDelete} size={layout.rowMinHeight}
-          accessibilityLabel={`删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，${formatDuration(session.durationSeconds)}`} />
-      </View>
-    </View>
-  </View>;
-}
-
-function TaskRow({ task }: { task: StudyTask }): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: paper.layout.gridGap, paddingVertical: YanjiSpacing.md, borderBottomWidth: paper.layout.hairlineWidth, borderColor: paper.colors.hairline }}>
-    <View style={{ width: paper.layout.timelineTimeColumn, paddingTop: YanjiSpacing.xs }}><YanjiIcon name={task.completed ? 'check' : 'calendar'} size={18} color={task.completed ? paper.colors.brandInk : paper.colors.secondary} /></View>
-    <View style={{ flex: 1 }}>
-      <Text style={[paper.typography.bodyPrimary, { color: paper.colors.ink }]}>{task.title}</Text>
-      <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.xs }]}>{task.subjectName} · {task.completed ? '已完成 · 无完成时刻' : '待办'} · 预计 {task.plannedMinutes} 分钟 · 累计投入 {task.actualMinutes} 分钟</Text>
-    </View>
-  </View>;
-}
-
-function NoteRow({ note, busy, onToggleFavorite, onEdit }: {
-  note: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean; onToggleFavorite: () => void; onEdit: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { fontScale } = useWindowDimensions();
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: paper.layout.gridGap, paddingVertical: YanjiSpacing.md }}>
-    <Text style={[paper.typography.captionMeta, { width: paper.layout.timelineTimeColumn * Math.max(1, fontScale), color: paper.colors.secondary, paddingTop: YanjiSpacing.xs }]}>{formatClockFromEpoch(note.timestamp)}</Text>
-    <View style={{ flex: 1, borderLeftWidth: 2, borderLeftColor: paper.colors.brand, paddingLeft: YanjiSpacing.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={[paper.typography.captionMeta, { color: paper.colors.brandInk }]}>记录此刻{note.isFavorite ? ' · 已收藏' : ''}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit} size={paper.layout.rowMinHeight} />
-          <YanjiIconButton icon={note.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={note.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
-            onPress={onToggleFavorite} disabled={busy} selected={note.isFavorite} size={paper.layout.rowMinHeight} />
-        </View>
-      </View>
-      <Text style={[paper.typography.bodyJournal, { color: paper.colors.ink }]}>{note.content}</Text>
-    </View>
-  </View>;
 }

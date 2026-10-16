@@ -145,6 +145,123 @@ export function dayHasRecords(entries: TimelineEntry[], dayTasks: StudyTask[]): 
   return entries.length > 0 || dayTasks.length > 0;
 }
 
+/** The longest single continuous span in a day — the summary strip's third cell. */
+export function longestSessionSeconds(
+  sessions: ReadonlyArray<{ durationSeconds: number }>
+): number {
+  return sessions.reduce((longest, session) => Math.max(longest, session.durationSeconds), 0);
+}
+
+/**
+ * A completed plan's own title, for the「达成关联任务」chip on a timeline row.
+ *
+ * `taskId` is the only key: matching a session to a plan by title or subject
+ * would mislabel one of two same-named plans. A session whose plan was deleted
+ * (or that was never bound) resolves to null and the chip is simply not drawn.
+ */
+export function boundTaskTitle(
+  taskId: string | null,
+  dayTasks: ReadonlyArray<{ id: string; title: string }>
+): string | null {
+  if (!taskId) return null;
+  return dayTasks.find(task => task.id === taskId)?.title ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// The week filmstrip
+// ---------------------------------------------------------------------------
+
+export interface FilmstripDay {
+  date: string;
+  /** 周一 … 周日 — the column's fixed header. */
+  weekdayLabel: string;
+  dayOfMonth: string;
+  isSelected: boolean;
+  isToday: boolean;
+  isFuture: boolean;
+  /**
+   * The day's dominant subject colour, or null when the day holds no study
+   * time. A dot is a claim that something happened, so a zero day gets none —
+   * never a grey placeholder dot that reads as "a little work".
+   */
+  dotColor: string | null;
+}
+
+/** 周一 … 周日 in `Date.getDay()` order (0 = Sunday). */
+const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'] as const;
+
+/** The single-character column header above each cell — AB-06's「一 二 三 …」. */
+const WEEKDAY_INITIALS = ['日', '一', '二', '三', '四', '五', '六'] as const;
+
+export function weekdayLabelOf(iso: string): string {
+  return WEEKDAY_LABELS[new Date(`${iso}T12:00:00`).getDay()];
+}
+
+export function weekdayInitialOf(iso: string): string {
+  return WEEKDAY_INITIALS[new Date(`${iso}T12:00:00`).getDay()];
+}
+
+/**
+ * The calendar week (周一 → 周日) that contains `iso`.
+ *
+ * A calendar week, not a trailing seven days: the strip is a fixed frame the
+ * eye can learn, and stepping the selected day across a Sunday→Monday boundary
+ * rolls the whole frame rather than sliding one cell at a time.
+ */
+export function weekDatesOf(iso: string): string[] {
+  const monday = shiftIsoDate(iso, -((new Date(`${iso}T12:00:00`).getDay() + 6) % 7));
+  return Array.from({ length: 7 }, (_, index) => shiftIsoDate(monday, index));
+}
+
+/**
+ * The filmstrip's seven cells.
+ *
+ * `dotColorsByDate` carries one colour per date (the day's dominant subject).
+ * It comes from the week overview the trend view already reads, so the dots
+ * never need a query of their own.
+ */
+export function buildFilmstrip(
+  anchorDate: string,
+  today: string,
+  dotColorsByDate: ReadonlyMap<string, string>
+): FilmstripDay[] {
+  return weekDatesOf(anchorDate).map(date => ({
+    date,
+    weekdayLabel: weekdayInitialOf(date),
+    dayOfMonth: String(Number(date.slice(8))),
+    isSelected: date === anchorDate,
+    isToday: date === today,
+    isFuture: date > today,
+    dotColor: dotColorsByDate.get(date) ?? null,
+  }));
+}
+
+/**
+ * Each date's dominant subject colour, for the filmstrip dots.
+ *
+ * The dominant subject is the one with the most minutes that day. Ties resolve
+ * by subject id so a re-render cannot swap the dot's colour.
+ */
+export function dominantSubjectColors(
+  days: ReadonlyArray<{ date: string; durationSeconds: number }>,
+  distribution: ReadonlyArray<{ subjectId: string; subjectColor: string; dailyMinutes: Record<string, number> }>
+): Map<string, string> {
+  const colors = new Map<string, string>();
+  for (const day of days) {
+    if (day.durationSeconds <= 0) continue;
+    let best: { subjectId: string; color: string; minutes: number } | null = null;
+    for (const slice of distribution) {
+      const minutes = slice.dailyMinutes[day.date] ?? 0;
+      if (minutes <= 0) continue;
+      if (!best || minutes > best.minutes || (minutes === best.minutes && slice.subjectId < best.subjectId)) {
+        best = { subjectId: slice.subjectId, color: slice.subjectColor, minutes };
+      }
+    }
+    if (best) colors.set(day.date, best.color);
+  }
+  return colors;
+}
+
 /** Days that actually hold study time — future cells never count. */
 export function countWorkedDays(
   days: ReadonlyArray<{ durationSeconds: number; isFuture: boolean }>
@@ -267,6 +384,39 @@ export function previousWindowArgs(
 ): { scope: ReviewScope; periodsBack: number; anchorDate: string } {
   if (scope === 'TODAY') return { scope, periodsBack: 0, anchorDate: shiftIsoDate(anchorDate, -1) };
   return { scope, periodsBack: 1, anchorDate };
+}
+
+/**
+ * The percent change against the previous period, or null when there is no
+ * baseline to divide by.
+ *
+ * `periodDelta` reports the absolute difference, which is the honest number
+ * when the previous window was empty or nearly so —「+2 小时」from a 5-minute
+ * base is a 2400% jump that says nothing about the studying. This is the
+ * companion figure for windows that do have a base worth comparing against.
+ */
+export function periodDeltaPercent(currentSeconds: number, previousSeconds: number | null): number | null {
+  if (previousSeconds === null || previousSeconds <= 0) return null;
+  return (currentSeconds - previousSeconds) / previousSeconds;
+}
+
+/**
+ * 「达标 N / M 天」— days that reached the daily goal, over elapsed days.
+ *
+ * The goal is the app-level daily target. A window with no goal set (or a
+ * goal of zero) reports null so the caller can omit the line rather than
+ * claim「达标 0 / 6 天」against a target the user never chose.
+ */
+export function goalReachedDays(
+  days: ReadonlyArray<{ durationSeconds: number; isFuture: boolean }>,
+  goalSeconds: number | null
+): { reached: number; elapsed: number } | null {
+  if (goalSeconds === null || goalSeconds <= 0) return null;
+  const elapsed = days.filter(day => !day.isFuture);
+  return {
+    reached: elapsed.filter(day => day.durationSeconds >= goalSeconds).length,
+    elapsed: elapsed.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,5 +634,57 @@ export function computeAxisLabelsLayout<
     left: Math.round(p.left * 10) / 10,
     width: labelWidth,
   }));
+}
+
+export interface DurationMetricParts {
+  hours: number;
+  minutes: number;
+  formattedHours: string;
+  formattedMinutes: string;
+}
+
+export function formatDurationMetric(totalSeconds: number): DurationMetricParts {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutesTotal = Math.round(safeSeconds / 60);
+  const hours = Math.floor(minutesTotal / 60);
+  const minutes = minutesTotal % 60;
+  return {
+    hours,
+    minutes,
+    formattedHours: `${hours}`.padStart(2, '0'),
+    formattedMinutes: `${minutes}`.padStart(2, '0'),
+  };
+}
+
+export function weekNumberOfYear(date: Date): number {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / (7 * 86_400_000));
+}
+
+export function scopeDateRangeLabel(scope: ReviewScope, anchorDate: string): string {
+  const parsed = new Date(`${anchorDate}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  if (scope === 'TODAY') {
+    return `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+  }
+  if (scope === 'CALENDAR_WEEK') {
+    const dates = weekDatesOf(anchorDate);
+    if (dates.length < 7) return '';
+    const start = new Date(`${dates[0]}T12:00:00`);
+    const end = new Date(`${dates[6]}T12:00:00`);
+    return `${start.getMonth() + 1}月${start.getDate()}日 – ${end.getMonth() + 1}月${end.getDate()}日`;
+  }
+  // CALENDAR_MONTH
+  const year = parsed.getFullYear();
+  const month = parsed.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return `${month + 1}月01日 – ${month + 1}月${lastDay}日`;
 }
 

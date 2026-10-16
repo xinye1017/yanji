@@ -291,11 +291,13 @@ export function YanjiPaperSegmentedControl<T extends string>({
   options,
   onChange,
   accessibilityLabel,
+  compact = false,
 }: {
   value: T;
   options: readonly YanjiPaperSegmentedOption<T>[];
   onChange: (value: T) => void;
   accessibilityLabel: string;
+  compact?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -321,6 +323,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
           key={option.value}
           label={option.label}
           selected={option.value === value}
+          compact={compact}
           reduceMotion={reduceMotion}
           onPress={() => onChange(option.value)}
         />
@@ -332,11 +335,13 @@ export function YanjiPaperSegmentedControl<T extends string>({
 function PaperSegment({
   label,
   selected,
+  compact = false,
   reduceMotion,
   onPress,
 }: {
   label: string;
   selected: boolean;
+  compact?: boolean;
   reduceMotion: boolean;
   onPress: () => void;
 }): React.JSX.Element {
@@ -361,9 +366,10 @@ function PaperSegment({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       style={({ pressed }) => ({
-        minHeight: paper.layout.rowMinHeight - YanjiSpacing.xs,
-        minWidth: paper.layout.rowMinHeight,
-        paddingHorizontal: YanjiSpacing.lg,
+        minHeight: compact ? 28 : paper.layout.rowMinHeight - YanjiSpacing.xs,
+        minWidth: compact ? 0 : paper.layout.rowMinHeight,
+        paddingHorizontal: compact ? YanjiSpacing.md : YanjiSpacing.lg,
+        paddingVertical: compact ? 4 : 0,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: paper.radius.pill,
@@ -390,10 +396,11 @@ function PaperSegment({
       />
       <Text
         style={[
-          paper.typography.bodyPrimary,
+          compact ? paper.typography.captionMeta : paper.typography.bodyPrimary,
           {
             color: selected ? paper.colors.ink : paper.colors.secondary,
             fontWeight: selected ? '700' : '500',
+            fontSize: compact ? 12 : undefined,
           },
         ]}
       >
@@ -1321,7 +1328,9 @@ export function YanjiStackedBarChart({
           <Text
             style={{
               marginTop: 8,
-              color: paper.colors.muted,
+              // `secondary`, not `muted`: this is a sentence the user reads, and
+              // the muted tier is by design below the 4.5:1 readable bar.
+              color: paper.colors.secondary,
               ...paper.typography.captionMeta,
               textAlign: 'center',
             }}
@@ -1462,7 +1471,8 @@ export function YanjiLineChart({
           <Text
             style={{
               marginTop: 8,
-              color: paper.colors.muted,
+              // See the bar chart's note: readable copy uses `secondary`.
+              color: paper.colors.secondary,
               ...paper.typography.captionMeta,
               textAlign: 'center',
             }}
