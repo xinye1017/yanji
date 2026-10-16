@@ -617,7 +617,9 @@ export function YanjiCard({
   style?: ViewStyle;
   /**
    * `default`  a sheet lying flat on the desk with a hairline rule
-   * `hero`     the sheet the eye should land on first (diffuse cast shadow)
+   * `hero`     the sheet the eye should land on first — borderless, read by its
+   *            cast shadow alone, and vertically tighter because it holds a
+   *            line or two rather than a block of content
    * `sunken`   a well pressed into a sheet — empty states and recessed content
    * `plain`    unboxed typography for daily plans and journal entries
    */
@@ -626,20 +628,26 @@ export function YanjiCard({
   const theme = useYanjiTheme();
   const paper = theme.paper;
 
+  const hero = variant === 'hero';
   const plain = variant === 'plain';
   const backgroundColor = plain
     ? 'transparent'
     : variant === 'sunken'
       ? paper.colors.subtle
-      : variant === 'hero'
+      : hero
         ? paper.colors.surface
         : paper.colors.elevated;
 
-  const padding = plain
+  const inset = plain
     ? 0
     : variant === 'sunken'
       ? YanjiSpacing.lg
       : YanjiSpacing.lg + YanjiSpacing.xs;
+  // A lifted sheet carries no rule — its shadow already separates it from the
+  // desk, and the two together read as a bordered box. It also spends less
+  // paper above and below: a slip holding one line of prose should not reserve
+  // a paragraph's worth of blank space.
+  const paddingVertical = hero ? YanjiSpacing.md : inset;
 
   return (
     <View
@@ -647,13 +655,14 @@ export function YanjiCard({
         {
           backgroundColor,
           borderRadius: paper.radius.surface,
-          borderWidth: plain ? 0 : paper.layout.hairlineWidth,
+          borderWidth: plain || hero ? 0 : paper.layout.hairlineWidth,
           borderColor: paper.colors.hairline,
-          padding,
+          paddingVertical,
+          paddingHorizontal: inset,
         },
         // Only a lifted sheet casts a shadow — otherwise every block on screen
         // would look equally important.
-        variant === 'hero' ? theme.shadow.sheet(theme.isDark) : null,
+        hero ? theme.shadow.sheet(theme.isDark) : null,
         style,
       ]}
     >

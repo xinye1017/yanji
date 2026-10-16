@@ -346,7 +346,19 @@ export const YanjiPaperTypography = {
   titleSection: {
     fontSize: 14,
     lineHeight: 21,
-    fontWeight: '700' as const,
+    /**
+     * Section headings sit at the heaviest cut the system face offers, so a
+     * group title outranks the 500-weight body copy beneath it by weight as
+     * well as by size.
+     *
+     * 900 is a real cut here, not a synonym for bold: the device ships a
+     * variable Han face with a 100–900 `wght` axis, and on API 28+ React
+     * Native resolves a family-less weight through `Typeface.create(base,
+     * weight, italic)`, which keeps the exact value. (The 700-and-above
+     * collapse to BOLD lives in `TypefaceStyle.nearestStyle`, which only runs
+     * on the *named-family* path — so this must stay family-less to hold 900.)
+     */
+    fontWeight: '900' as const,
   },
   bodyPrimary: {
     fontSize: 14,
