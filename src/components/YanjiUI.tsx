@@ -252,8 +252,8 @@ export function YanjiPaperSectionHeading({
         alignItems: 'baseline',
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
-        marginBottom: YanjiSpacing.sm,
-        marginTop: paper.layout.sectionGap,
+        marginBottom: 4,
+        marginTop: 16,
       }}
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
@@ -987,7 +987,7 @@ export function YanjiTaskLedgerRow({
   const { colors, typography, layout, radius } = paper;
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.taskRowGap, paddingVertical: layout.taskRowPadding }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.taskRowGap, paddingVertical: 2 }}>
         <Pressable
           onPress={onToggle}
           disabled={disabled}
@@ -1031,7 +1031,10 @@ export function YanjiTaskLedgerRow({
         >
           <Text
             numberOfLines={1}
-            style={[typography.bodyPrimary, {
+            style={{
+              fontSize: 16,
+              lineHeight: 22,
+              fontWeight: '600',
               // AB-01 greys a finished title into the muted tier, but this
               // project's contrast policy bars `muted` from carrying a task
               // title at all — struck-through included. `secondary` is the
@@ -1039,7 +1042,7 @@ export function YanjiTaskLedgerRow({
               // "done" signal instead.
               color: completed ? colors.secondary : colors.ink,
               textDecorationLine: completed ? 'line-through' : 'none',
-            }]}
+            }}
           >{title}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
             <View style={{
