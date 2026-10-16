@@ -2,9 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTypeScript } from './framework/load-typescript.js';
 
+const tokens = loadTypeScript('src/theme/tokens.ts');
+
 // Invoke the real production components through React hook/native adapters.
 // No copied ruler algorithm and no user timer/session is touched.
-function dialHarness({ value = 37, width = 358, fontScale = 1, step = 5 } = {}) {
+function dialHarness({
+  value = 37, step = 5, fontScale = 1, isDark = false, disabled = false,
+  reducedMotion = false, accessibilityLabel,
+} = {}) {
   const states = [];
   const refs = [];
   const scrollCalls = [];
@@ -30,24 +35,18 @@ function dialHarness({ value = 37, width = 358, fontScale = 1, step = 5 } = {}) 
     useCallback: fn => fn,
   };
   const paper = {
-    colors: {
-      brand: '#c84b31', brandInk: '#b23a22', secondary: '#555', ink: '#111',
-      subtle: '#eee', hairline: 'rgba(0,0,0,0.08)',
-    },
-    radius: { pill: 9999, tick: 1, surface: 14 },
-    layout: { hairlineWidth: 1 },
-    typography: {
-      captionMeta: { fontSize: 12, lineHeight: 17, fontWeight: '500' },
-      bodyPrimary: { fontSize: 14, lineHeight: 23, fontWeight: '500' },
-    },
+    colors: tokens.YanjiPaperColors[isDark ? 'dark' : 'light'],
+    radius: tokens.YanjiPaperRadius,
+    layout: tokens.YanjiPaperLayout,
+    typography: tokens.YanjiPaperTypography,
   };
   const component = loadTypeScript('src/components/FocusVernierDial.tsx', {
     react,
     'react-native': {
-      View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView',
-      useWindowDimensions: () => ({ width, height: 720, fontScale }),
+      View: 'View', Text: 'Text', ScrollView: 'ScrollView',
+      useWindowDimensions: () => ({ width: 358, height: 720, fontScale }),
     },
-    'react-native-reanimated': { useReducedMotion: () => false },
+    'react-native-reanimated': { useReducedMotion: () => reducedMotion },
     '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
   }).FocusVernierDial;
 
@@ -68,7 +67,7 @@ function dialHarness({ value = 37, width = 358, fontScale = 1, step = 5 } = {}) 
     effects = [];
     const tree = component({
       valueMinutes: value, onChangeMinutes: next => changed.push(next),
-      minMinutes: 5, maxMinutes: 180, stepMinutes: step,
+      minMinutes: 5, maxMinutes: 180, stepMinutes: step, disabled, accessibilityLabel,
     });
     if (!refs[0].current) {
       refs[0].current = { scrollTo: options => scrollCalls.push(options) };
@@ -80,99 +79,202 @@ function dialHarness({ value = 37, width = 358, fontScale = 1, step = 5 } = {}) 
     return { tree, ruler, adjustable, ticks, nodes: predicate => elements(tree, predicate) };
   }
 
-  return { render, changed, scrollCalls, width };
+  return { render, changed, scrollCalls, paper };
 }
 
-test('vernier centres first, last and fractional values using its own padded scroll domain', () => {
-  for (const width of [320, 358, 430]) {
-    for (const value of [5, 37, 180]) {
-      const h = dialHarness({ width, value });
-      let ui = h.render();
+const scrollEvent = (x, velocity = 0) => ({
+  nativeEvent: { contentOffset: { x }, velocity: { x: velocity } },
+});
+
+test('vernier centres endpoints and non-grid presets without mount, layout or controlled-value writes', () => {
+  for (const fontScale of [1, 3]) {
+    const h = dialHarness({ fontScale });
+    let ui = h.render();
+    assert.deepEqual(h.scrollCalls, [], 'wait for the measured viewport before scrolling');
+    assert.deepEqual(h.changed, [], 'mount must preserve a non-grid task preset');
+
+    for (const width of [320, 358, 430]) {
       ui.adjustable.props.onLayout({ nativeEvent: { layout: { width } } });
-      ui = h.render();
+      for (const value of [5, 37, 180]) {
+        const before = h.scrollCalls.length;
+        ui = h.render(value);
+        const cellWidth = ui.ticks[0].props.style.width;
+        const inset = ui.ruler.props.contentContainerStyle.paddingHorizontal;
+        const offset = h.scrollCalls.at(-1);
+        assert.ok(h.scrollCalls.length > before, 'controlled values must drive a programmatic offset');
+        assert.ok(cellWidth > 0);
+        assert.equal(ui.ruler.props.snapToInterval, cellWidth, 'scroll snapping uses the rendered spacing');
+        assert.ok(ui.ticks.every(cell => cell.props.style.width === cellWidth));
+        assert.equal(inset, (width - cellWidth) / 2, 'both endpoints need symmetric padding');
 
-      const expectedOffset = (value - 5) / 5 * 26;
-      assert.ok(h.scrollCalls.length > 0, 'controlled value must drive a programmatic offset');
-      assert.ok(Math.abs(h.scrollCalls.at(-1).x - expectedOffset) < 1e-8);
-      assert.equal(h.scrollCalls.at(-1).animated, false);
-      assert.equal(h.changed.length, 0, 'layout/hydration must not write a rounded value');
+        const lowIndex = ui.ticks.findLastIndex(cell => Number(cell.key) <= value);
+        const highIndex = ui.ticks.findIndex(cell => Number(cell.key) >= value);
+        assert.ok(lowIndex >= 0 && highIndex >= lowIndex, 'real marks bracket the selected value');
+        const low = Number(ui.ticks[lowIndex].key);
+        const high = Number(ui.ticks[highIndex].key);
+        const fraction = high === low ? 0 : (value - low) / (high - low);
+        const selectedCentre = inset + (lowIndex + fraction) * cellWidth + cellWidth / 2;
+        assert.ok(Math.abs(selectedCentre - offset.x - width / 2) < 1e-8,
+          `${value} minutes must sit at the pointer, including between real marks`);
+        assert.equal(offset.animated, false);
 
-      const inset = ui.ruler.props.contentContainerStyle.paddingHorizontal;
-      const cellWidth = ui.ticks[0].props.style.width;
-      assert.equal(cellWidth, 26);
-      assert.equal(inset, (width - cellWidth) / 2, 'symmetric inset includes trailing padding');
-      const projectedCentre = inset + expectedOffset + cellWidth / 2 - h.scrollCalls.at(-1).x;
-      assert.ok(Math.abs(projectedCentre - width / 2) < 1e-8,
-        'selected or fractional value sits on centre pointer within floating-point precision');
+        const maxOffset = inset * 2 + ui.ticks.length * cellWidth - width;
+        assert.ok(offset.x >= 0 && offset.x <= maxOffset, 'no overscroll is needed to centre the endpoints');
+        if (value === 5) assert.equal(offset.x, 0);
+        if (value === 180) assert.equal(offset.x, maxOffset);
+        if (value === 37) assert.ok(highIndex > lowIndex, '37 stays between 35 and 40');
 
-      const highlighted = ui.ticks.filter(cell => cell.props.children[0].props.style.width === 2);
-      assert.equal(highlighted.length, value === 37 ? 0 : 1, 'non-grid 37 must not highlight neighbouring 35');
-      if (value === 5) assert.equal(highlighted[0], ui.ticks[0]);
-      if (value === 180) assert.equal(highlighted[0], ui.ticks.at(-1));
-      assert.deepEqual({
-        min: ui.adjustable.props.accessibilityValue.min,
-        max: ui.adjustable.props.accessibilityValue.max,
-        now: ui.adjustable.props.accessibilityValue.now,
-        text: ui.adjustable.props.accessibilityValue.text,
-      }, { min: 5, max: 180, now: value, text: `${value} 分钟` });
+        const needle = ui.nodes(n => n.props?.pointerEvents === 'none')[0];
+        assert.ok(needle, 'selection has one fixed visual pointer');
+        assert.equal(needle.props.style.alignSelf, 'center');
+        const a11y = ui.adjustable.props.accessibilityValue;
+        assert.deepEqual({ min: a11y.min, max: a11y.max, now: a11y.now, text: a11y.text },
+          { min: 5, max: 180, now: value, text: `${value} 分钟` });
+
+        ui.ruler.props.onScrollEndDrag(scrollEvent(offset.x));
+        ui.ruler.props.onMomentumScrollEnd(scrollEvent(offset.x));
+        assert.deepEqual(h.changed, [], 'layout, preset changes and programmatic scroll events never write a duration');
+      }
     }
   }
 });
 
-test('vernier drag and adjustable actions emit only intentional legal snapped values', () => {
-  const h = dialHarness({ value: 37, width: 358 });
-  let ui = h.render();
-  ui.adjustable.props.onLayout({ nativeEvent: { layout: { width: 358 } } });
-  ui = h.render();
-  assert.equal(h.changed.length, 0);
+test('vernier commits only intentional legal steps through slow drags, momentum and TalkBack', () => {
+  for (const fontScale of [1, 3]) {
+    const h = dialHarness({ fontScale });
+    let ui = h.render();
+    ui.adjustable.props.onLayout({ nativeEvent: { layout: { width: 358 } } });
+    ui = h.render();
+    const spacing = ui.ruler.props.snapToInterval;
+    assert.deepEqual(h.changed, []);
 
+    ui.ruler.props.onScrollBeginDrag();
+    const callsBeforeDrag = h.scrollCalls.length;
+    ui.adjustable.props.onLayout({ nativeEvent: { layout: { width: 430 } } });
+    ui = h.render();
+    assert.equal(h.scrollCalls.length, callsBeforeDrag, 'layout must not interrupt an active drag');
+    ui.ruler.props.onScrollEndDrag(scrollEvent(6.7 * spacing, 0.5));
+    assert.deepEqual(h.changed, [], 'a fling waits for momentum to settle');
+    ui.ruler.props.onMomentumScrollEnd(scrollEvent(7.2 * spacing));
+    assert.deepEqual(h.changed, [40], 'a deliberate fling snaps to the nearest mark');
+    ui.ruler.props.onMomentumScrollEnd(scrollEvent(8 * spacing));
+    assert.deepEqual(h.changed, [40], 'duplicate settle events do not write twice');
+
+    ui = h.render(40);
+    ui.ruler.props.onScrollBeginDrag();
+    ui.ruler.props.onScrollEndDrag(scrollEvent(5.8 * spacing));
+    assert.deepEqual(h.changed, [40, 35], 'a slow release commits without a momentum event');
+    ui.ruler.props.onMomentumScrollEnd(scrollEvent(5.8 * spacing));
+    assert.deepEqual(h.changed, [40, 35]);
+
+    ui = h.render(35);
+    ui.ruler.props.onScrollBeginDrag();
+    ui.ruler.props.onScrollEndDrag(scrollEvent(6 * spacing));
+    assert.deepEqual(h.changed, [40, 35], 'reselecting the controlled value is a no-op');
+
+    for (const [x, expected] of [[-2 * spacing, 5], [100 * spacing, 180]]) {
+      ui.ruler.props.onScrollBeginDrag();
+      ui.ruler.props.onScrollEndDrag(scrollEvent(x));
+      assert.equal(h.changed.at(-1), expected, 'overscroll clamps to a real endpoint');
+      ui = h.render(expected);
+    }
+
+    for (const [value, action, expected] of [
+      [37, 'increment', 40], [37, 'decrement', 35],
+      [40, 'increment', 45], [40, 'decrement', 35],
+      [5, 'increment', 10], [180, 'decrement', 175],
+    ]) {
+      ui = h.render(value);
+      const before = h.changed.length;
+      ui.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName: action } });
+      assert.deepEqual(h.changed.slice(before), [expected], `${action} from ${value} reaches ${expected}`);
+      assert.equal(h.scrollCalls.at(-1).x, ui.ticks.findIndex(cell => Number(cell.key) === expected) * spacing);
+      ui = h.render(expected);
+      assert.equal(ui.adjustable.props.accessibilityValue.now, expected);
+    }
+    for (const [value, action] of [[5, 'decrement'], [180, 'increment'], [37, 'activate']]) {
+      ui = h.render(value);
+      const before = h.changed.length;
+      ui.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName: action } });
+      assert.equal(h.changed.length, before, 'bounds and unrelated actions never emit a value');
+    }
+    assert.ok(h.changed.every(value => value % 5 === 0 && value >= 5 && value <= 180));
+  }
+
+  const disabled = dialHarness({ disabled: true });
+  const ui = disabled.render();
+  assert.equal(ui.ruler.props.scrollEnabled, false);
+  assert.equal(ui.adjustable.props.accessibilityState.disabled, true);
   ui.ruler.props.onScrollBeginDrag();
-  ui.ruler.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 7 * 26 } } });
-  assert.equal(h.changed.at(-1), 40, 'intentional drag snaps to 40');
-  assert.equal(h.changed.every(value => value % 5 === 0 && value >= 5 && value <= 180), true);
+  ui.ruler.props.onScrollEndDrag(scrollEvent(0));
+  for (const actionName of ['increment', 'decrement']) {
+    ui.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName } });
+  }
+  assert.deepEqual(disabled.changed, [], 'disabled controls cannot change the duration');
 
-  h.changed.length = 0;
-  ui.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } });
-  assert.deepEqual(h.changed, [40], 'from 37, accessibility increment reaches next mark 40');
-  h.changed.length = 0;
-  ui.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } });
-  assert.deepEqual(h.changed, [35], 'from 37, accessibility decrement reaches previous mark 35');
-
-  const plus = ui.nodes(n => n.props?.accessibilityLabel === '增加5分钟')[0];
-  const minus = ui.nodes(n => n.props?.accessibilityLabel === '减少5分钟')[0];
-  assert.ok(plus && minus);
-  assert.ok(plus.props.style({ pressed: false }).minWidth >= 48);
-  assert.ok(minus.props.style({ pressed: false }).minHeight >= 48);
+  const reduced = dialHarness({ reducedMotion: true });
+  const reducedUi = reduced.render();
+  reducedUi.adjustable.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } });
+  assert.deepEqual(reduced.changed, [40]);
+  assert.equal(reduced.scrollCalls.at(-1).animated, false);
 });
 
-test('major ruler labels have enough real container height at fontScale 2 and 3', () => {
-  for (const fontScale of [1, 1.5, 2, 3]) {
-    const h = dialHarness({ fontScale });
-    const ui = h.render();
-    const major = ui.ticks.find(cell => Array.isArray(cell.props.children) && cell.props.children[1]);
-    assert.ok(major, 'there must be at least one labelled major tick');
-    const label = major.props.children[1];
-    const top = label.props.style[1].top;
-    const height = major.props.style.height;
-    assert.ok(top + 17 * fontScale + 8 <= height, `fontScale=${fontScale}: major label fits in cell`);
-    assert.ok(ui.ruler.props.contentContainerStyle.minHeight >= height);
-    assert.ok(ui.adjustable.props.style.minHeight >= height);
+test('major ticks carry readable subtitle labels in an enlarged, single accessible ruler', () => {
+  for (const isDark of [false, true]) {
+    for (const fontScale of [1, 1.5, 2, 3]) {
+      const h = dialHarness({ isDark, fontScale, accessibilityLabel: '调整倒计时长度' });
+      let ui = h.render();
+      ui.adjustable.props.onLayout({ nativeEvent: { layout: { width: 358 } } });
+      ui = h.render();
+      const labels = ui.nodes(n => n.type === 'Text');
+      assert.deepEqual(labels.map(n => n.props.children),
+        [15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180],
+        'only 15-minute major marks have numbers, with no redundant swipe hint');
+      assert.equal(ui.nodes(n => n.props?.accessibilityRole === 'adjustable').length, 1);
+      assert.equal(ui.nodes(n => n.props?.accessibilityRole === 'button').length, 0);
+      assert.equal(ui.adjustable.props.accessible, true);
+      assert.equal(ui.adjustable.props.accessibilityLabel, '调整倒计时长度');
+      assert.equal(ui.adjustable.props.accessibilityValue.text, '37 分钟');
+      assert.deepEqual(Array.from(ui.adjustable.props.accessibilityActions, action => [action.name, action.label]),
+        [['increment', '增加5分钟'], ['decrement', '减少5分钟']]);
+      assert.equal(ui.ruler.props.accessible, false);
+      assert.equal(ui.ruler.props.importantForAccessibility, 'no-hide-descendants', 'visual numbers do not become extra TalkBack stops');
+      assert.equal(ui.ruler.props.accessibilityElementsHidden, true);
+      assert.ok(ui.adjustable.props.style.height >= 96, 'the scroll target fills the enlarged strip');
+      assert.equal(ui.ruler.props.contentContainerStyle.height, ui.adjustable.props.style.height);
+
+      for (const cell of ui.ticks) {
+        const mark = cell.props.children[0];
+        const label = cell.props.children[1];
+        const major = Number(cell.key) % 15 === 0;
+        assert.equal(Boolean(label), major, 'minor marks remain unlabelled');
+        assert.equal(mark.props.style.backgroundColor, major ? h.paper.colors.tickMajor : h.paper.colors.tickMinor);
+        if (!label) continue;
+        const [type, placement] = label.props.style;
+        assert.equal(type.fontSize, h.paper.typography.captionMeta.fontSize);
+        assert.equal(type.lineHeight, h.paper.typography.captionMeta.lineHeight);
+        assert.equal(placement.color, h.paper.colors.secondary, 'numbers use the readable colour tier in both themes');
+        assert.equal(label.props.allowFontScaling, undefined, 'labels follow the system font size');
+        assert.ok(placement.top + type.lineHeight * fontScale + tokens.YanjiSpacing.lg <= cell.props.style.height,
+          `fontScale=${fontScale}: label and bottom padding fit in the actual cell`);
+        assert.ok(placement.width >= type.fontSize * fontScale * 3, 'a three-digit mark has room at large font sizes');
+        assert.ok(placement.width <= cell.props.style.width * 3, 'neighbouring major labels do not overlap');
+        assert.ok(cell.props.style.height - mark.props.style.bottom < placement.top, 'labels sit below the tick baseline');
+        assert.equal(label.props.children, Number(cell.key));
+      }
+    }
   }
 });
 
 /**
- * The immersive FocusScreen, driven through its real production source with the
- * native/time adapters mocked.
- *
- * `daily` is the same snapshot the screen already reads for today's per-subject
- * totals — the task-title assertions below therefore prove the subtitle
- * resolves against the one existing read rather than a second query.
+ * The real FocusScreen with native/time adapters mocked. Pass session: null for
+ * the ready state. Both states read task titles from the shared daily snapshot.
  */
-function immersiveHarness({ session = {}, tasks = [] } = {}) {
+function focusScreenHarness({ session = {}, tasks = [] } = {}) {
   const alerts = [];
   const calls = [];
   const noop = () => {};
-  const active = {
+  const active = session === null ? null : {
     sessionId: 'test-owned', subjectId: 'math', subjectName: '数学',
     mode: 'COUNTDOWN', taskId: null, startTime: 0,
     elapsedSeconds: 10, remainingSeconds: 100, phase: 'FOCUS',
@@ -180,17 +282,11 @@ function immersiveHarness({ session = {}, tasks = [] } = {}) {
     ...session,
   };
   const paper = {
-    colors: { canvas: '#fff' }, radius: { pill: 9999, tick: 1 },
-    layout: { pageGutter: 22, rowMinHeight: 48, sectionGap: 24 },
-    typography: {
-      captionMeta: {}, titleEditorial: {}, bodyPrimary: {}, displayTimer: {},
-    },
-    immersive: {
-      running: { canvas: '#15181c', ink: '#fff', secondary: '#aaa', accent: '#e06d53',
-        tideColor: '#2d7a5e', tideOpacity: 0.14 },
-      paused: { canvas: '#1c1917', ink: '#fff', secondary: '#aaa', accent: '#dda059',
-        tideColor: '#dda059', tideOpacity: 0.14 },
-    },
+    colors: tokens.YanjiPaperColors.light,
+    radius: tokens.YanjiPaperRadius,
+    layout: tokens.YanjiPaperLayout,
+    typography: tokens.YanjiPaperTypography,
+    immersive: tokens.YanjiPaperImmersive,
   };
   const mocks = {
     react: {
@@ -199,7 +295,7 @@ function immersiveHarness({ session = {}, tasks = [] } = {}) {
     },
     'react-native': {
       Alert: { alert: (...args) => alerts.push(args) }, View: 'View',
-      ScrollView: 'ScrollView', Pressable: 'Pressable', Text: 'Text', Modal: 'Modal',
+      ScrollView: 'ScrollView', Pressable: 'Pressable', Text: 'Text',
       useWindowDimensions: () => ({ width: 358, height: 800, fontScale: 1 }),
     },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 24 }) },
@@ -217,11 +313,9 @@ function immersiveHarness({ session = {}, tasks = [] } = {}) {
       },
     },
     '../components/YanjiUI': {
-      YanjiEditorialHeader: noop, YanjiIcon: noop,
-      YanjiPaperSectionHeading: noop, YanjiPaperSegmentedControl: noop,
-      useYanjiKeyboardInset: () => 0,
+      YanjiIcon: noop, YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
     },
-    '../components/FocusVernierDial': { FocusVernierDial: noop },
+    '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RecordMomentModal': { RecordMomentModal: noop },
     '../navigation/NavigationShell': {
       useNavigationState: () => ({ focusPreset: null }),
@@ -249,8 +343,30 @@ function findAll(node, predicate, matches = []) {
   return matches;
 }
 
+test('the ready screen offers the countdown ruler without preset or custom-duration buttons', () => {
+  const { root, calls } = focusScreenHarness({ session: null });
+  assert.equal(root.props.testID, 'focus-ready');
+  const dials = findAll(root, n => n.type === 'FocusVernierDial');
+  assert.equal(dials.length, 1);
+  const dial = dials[0];
+  assert.deepEqual({
+    value: dial.props.valueMinutes, min: dial.props.minMinutes,
+    max: dial.props.maxMinutes, step: dial.props.stepMinutes,
+  }, { value: 45, min: 5, max: 180, step: 5 });
+  assert.equal(dial.props.accessibilityLabel, '调整倒计时长度');
+  const strip = findAll(root, n => n.props?.children === dial)[0];
+  assert.ok(strip, 'the enlarged ruler is the strip’s only child');
+  assert.equal(strip.props.style.marginHorizontal, -tokens.YanjiPaperLayout.pageGutter);
+  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button').length, 2,
+    'the empty ready state needs only record and start buttons');
+  assert.equal(findAll(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
+  assert.equal(findAll(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
+  assert.equal(findAll(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
+  assert.deepEqual(calls, [], 'rendering the ready state does not touch a native timer');
+});
+
 test('the immersion subtitle names the bound task and stays quiet when unbound', () => {
-  const bound = immersiveHarness({
+  const bound = focusScreenHarness({
     session: { taskId: 'task-1' },
     tasks: [{ id: 'task-1', title: '王道操作系统 · 页面置换算法' }],
   });
@@ -258,13 +374,13 @@ test('the immersion subtitle names the bound task and stays quiet when unbound',
   assert.equal(named.length, 1, 'a bound session must name the task it is running for');
 
   // A session started without a task keeps the standing copy …
-  const unbound = immersiveHarness({ session: { taskId: null } });
+  const unbound = focusScreenHarness({ session: { taskId: null } });
   assert.equal(findAll(unbound.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
   assert.equal(findAll(unbound.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
 
   // … and so does one whose task is not in today's snapshot (it outlived its
   // day). A stale or invented title would be worse than the quiet line.
-  const stale = immersiveHarness({
+  const stale = focusScreenHarness({
     session: { taskId: 'task-yesterday' },
     tasks: [{ id: 'task-1', title: '王道操作系统 · 页面置换算法' }],
   });
@@ -278,7 +394,7 @@ test('the horizon tide carries its alpha in stopOpacity, never in the colour', (
   // `stopOpacity` to fully opaque. An rgba() stop colour therefore painted the
   // tide as a hard-edged solid slab instead of a 14% wash. This guards the
   // shape that actually renders.
-  const { root } = immersiveHarness();
+  const { root } = focusScreenHarness();
   const stops = findAll(root, n => n.type === 'Stop');
   assert.equal(stops.length, 2, 'the tide gradient needs its two stops');
 
@@ -301,7 +417,7 @@ test('the horizon tide carries its alpha in stopOpacity, never in the colour', (
 });
 
 test('paused discard opens native confirmation; cancellation never calls discardTimer', async () => {
-  const { root, alerts, calls } = immersiveHarness();
+  const { root, alerts, calls } = focusScreenHarness();
   const discard = findAll(root, n => n.props?.label === '放弃本轮')[0];
   const resume = findAll(root, n => n.props?.label === '继续专注')[0];
   const complete = findAll(root, n => n.props?.label === '提前结束')[0];

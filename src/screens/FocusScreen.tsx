@@ -8,7 +8,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -20,15 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
-import {
-  YanjiHairline,
-  YanjiIcon,
-  YanjiPaperSegmentedControl,
-  YanjiPaperSheetHeading,
-  YanjiPrimaryButton,
-  YanjiTextInput,
-  useYanjiKeyboardInset,
-} from '../components/YanjiUI';
+import { YanjiIcon, YanjiPaperSegmentedControl } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
@@ -38,7 +29,6 @@ import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { useDailySnapshot } from '../state/dataRefresh';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 
-const DURATION_PRESETS = [25, 45, 60, 90] as const;
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 180;
 const DEFAULT_MINUTES = 45;
@@ -120,15 +110,11 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
-  const [customDurationOpen, setCustomDurationOpen] = useState(false);
-  const [customDurationText, setCustomDurationText] = useState('');
-  const [customDurationError, setCustomDurationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { focusPreset } = useNavigationState();
   const { clearFocusPreset } = useNavigationActions();
-  const keyboardInset = useYanjiKeyboardInset();
 
   const loadSubjects = useCallback(() => {
     setSubjectLoadState('loading');
@@ -321,19 +307,8 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     );
   }, [busy, handleTimerAction]);
 
-  const handleConfirmCustomDuration = useCallback(() => {
-    const parsed = Number.parseInt(customDurationText.trim(), 10);
-    if (!Number.isFinite(parsed) || parsed < MIN_MINUTES || parsed > MAX_MINUTES) {
-      setCustomDurationError(`请输入 ${MIN_MINUTES}–${MAX_MINUTES} 之间的整数`);
-      return;
-    }
-    setDurationMinutes(parsed);
-    setCustomDurationOpen(false);
-  }, [customDurationText]);
-
   if (!session) {
     const cardWidth = Math.floor((width - paper.layout.pageGutter * 2 - paper.layout.gridGap) / 2);
-    const isCustomDuration = !(DURATION_PRESETS as readonly number[]).includes(durationMinutes);
 
     return (
       <View testID="focus-ready" style={{ flex: 1, backgroundColor: paper.colors.canvas }}>
@@ -573,7 +548,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     alignSelf: 'stretch',
                     marginHorizontal: -paper.layout.pageGutter,
                     marginTop: YanjiSpacing.md,
-                    paddingVertical: YanjiSpacing.lg,
                     backgroundColor: paper.colors.vernierWash,
                     borderTopWidth: paper.layout.hairlineWidth,
                     borderBottomWidth: paper.layout.hairlineWidth,
@@ -588,37 +562,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     stepMinutes={5}
                     accessibilityLabel="调整倒计时长度"
                   />
-
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'center',
-                      flexWrap: 'wrap',
-                      gap: YanjiSpacing.sm,
-                      marginTop: YanjiSpacing.md,
-                      paddingHorizontal: paper.layout.pageGutter,
-                    }}
-                  >
-                    {DURATION_PRESETS.map(minutes => (
-                      <DurationPill
-                        key={minutes}
-                        label={`${minutes}m`}
-                        selected={minutes === durationMinutes}
-                        accessibilityLabel={`预设 ${minutes} 分钟`}
-                        onPress={() => setDurationMinutes(minutes)}
-                      />
-                    ))}
-                    <DurationPill
-                      label={isCustomDuration ? `${durationMinutes}m` : '自定义'}
-                      selected={isCustomDuration}
-                      accessibilityLabel="自定义专注时长"
-                      onPress={() => {
-                        setCustomDurationText(String(durationMinutes));
-                        setCustomDurationError(null);
-                        setCustomDurationOpen(true);
-                      }}
-                    />
-                  </View>
                 </View>
               </>
             ) : (
@@ -696,66 +639,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             ) : null}
           </View>
         </ScrollView>
-
-        <Modal
-          visible={customDurationOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setCustomDurationOpen(false)}
-        >
-          <View
-            style={{
-              flex: 1,
-              justifyContent: 'flex-end',
-              backgroundColor: paper.colors.scrim,
-              paddingBottom: keyboardInset,
-            }}
-          >
-            <Pressable style={{ flex: 1 }} onPress={() => setCustomDurationOpen(false)} accessibilityLabel="关闭" />
-            <View
-              style={[
-                {
-                  backgroundColor: paper.colors.surface,
-                  borderTopLeftRadius: paper.radius.sheet,
-                  borderTopRightRadius: paper.radius.sheet,
-                  paddingHorizontal: paper.layout.pageGutter,
-                  paddingTop: YanjiSpacing.lg,
-                  paddingBottom: YanjiSpacing.lg + safe.bottom,
-                },
-                theme.shadow.floating(theme.isDark),
-              ]}
-            >
-              <YanjiPaperSheetHeading
-                title="自定义专注时长"
-                subtitle={`可输入 ${MIN_MINUTES}–${MAX_MINUTES} 分钟之间的整数`}
-                onClose={() => setCustomDurationOpen(false)}
-              />
-              <View style={{ marginTop: YanjiSpacing.md }}>
-                <YanjiTextInput
-                  value={customDurationText}
-                  onChangeText={next => {
-                    setCustomDurationText(next);
-                    setCustomDurationError(null);
-                  }}
-                  placeholder="例如：50"
-                  accessibilityLabel="输入自定义分钟数"
-                />
-              </View>
-              {customDurationError ? (
-                <Text
-                  accessibilityRole="alert"
-                  style={[paper.typography.captionMeta, { color: paper.colors.danger, marginTop: YanjiSpacing.sm }]}
-                >
-                  {customDurationError}
-                </Text>
-              ) : null}
-              <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
-              <View style={{ marginTop: YanjiSpacing.lg }}>
-                <YanjiPrimaryButton icon="check" label="确认时长" onPress={handleConfirmCustomDuration} />
-              </View>
-            </View>
-          </View>
-        </Modal>
 
         <RecordMomentModal visible={recordOpen} date={date} onClose={() => setRecordOpen(false)} />
       </View>
@@ -1080,50 +963,6 @@ function ImmersiveAction({
             ? [theme.paper.typography.captionMeta, { color: content }]
             : [theme.paper.typography.bodyPrimary, { color: content, fontWeight: isPrimary ? '700' : '500' }]
         }
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/** A duration preset inside the vernier strip; the selected one inverts to ink. */
-function DurationPill({
-  label,
-  selected,
-  accessibilityLabel,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  accessibilityLabel: string;
-  onPress: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minWidth: 56,
-        minHeight: YanjiTouch.min,
-        paddingHorizontal: YanjiSpacing.md,
-        borderRadius: paper.radius.pill,
-        backgroundColor: selected ? paper.colors.ink : paper.colors.surface,
-        borderWidth: paper.layout.hairlineWidth,
-        borderColor: selected ? paper.colors.ink : paper.colors.hairline,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: pressed ? 0.72 : 1,
-      })}
-    >
-      <Text
-        style={[
-          paper.typography.captionMeta,
-          { color: selected ? paper.colors.canvas : paper.colors.secondary, fontWeight: selected ? '700' : '500' },
-        ]}
       >
         {label}
       </Text>
