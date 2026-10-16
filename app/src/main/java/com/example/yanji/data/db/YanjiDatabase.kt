@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -671,6 +671,25 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v22 → v23：
+         * 1. `journal_entries` 新增 `category` (TEXT NOT NULL DEFAULT 'INSPIRATION')、
+         *    `isResolved` (INTEGER NOT NULL DEFAULT 0)、`resolvedAt` (INTEGER, 可空)。
+         * 2. `user_settings` 新增 `decisionProvider` (TEXT NOT NULL DEFAULT 'openrouter')、
+         *    `decisionModel` (TEXT NOT NULL DEFAULT 'respan/span-01-lite:free')、
+         *    `decisionEndpoint` (TEXT NOT NULL DEFAULT 'https://openrouter.ai/api/alpha/decisions')。
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE journal_entries ADD COLUMN category TEXT NOT NULL DEFAULT 'INSPIRATION'")
+                connection.exec("ALTER TABLE journal_entries ADD COLUMN isResolved INTEGER NOT NULL DEFAULT 0")
+                connection.exec("ALTER TABLE journal_entries ADD COLUMN resolvedAt INTEGER")
+                connection.exec("ALTER TABLE user_settings ADD COLUMN decisionProvider TEXT NOT NULL DEFAULT 'openrouter'")
+                connection.exec("ALTER TABLE user_settings ADD COLUMN decisionModel TEXT NOT NULL DEFAULT 'respan/span-01-lite:free'")
+                connection.exec("ALTER TABLE user_settings ADD COLUMN decisionEndpoint TEXT NOT NULL DEFAULT 'https://openrouter.ai/api/alpha/decisions'")
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -698,7 +717,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_18_19,
             MIGRATION_19_20,
             MIGRATION_20_21,
-            MIGRATION_21_22
+            MIGRATION_21_22,
+            MIGRATION_22_23
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

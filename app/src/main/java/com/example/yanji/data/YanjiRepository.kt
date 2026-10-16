@@ -548,7 +548,36 @@ class YanjiRepository private constructor() {
     suspend fun updateNoteContentAndAwait(id: String, content: String) =
         noteStore.updateContentAndAwait(id, content)
 
+    /** 更新疑点解决状态（可等待），返回 false 表示 id 不存在。 */
+    suspend fun setNoteResolvedAndAwait(id: String, isResolved: Boolean) =
+        noteStore.setResolvedAndAwait(id, isResolved)
+
     fun deleteNote(id: String) = noteStore.delete(id)
+
+    /** 决策模型 API Key 读写（通过 SecretStore 加密存储在 Keystore） */
+    fun saveDecisionApiKey(key: String): Boolean {
+        val store = secretStore ?: return false
+        return when (store.saveDecisionApiKey(key)) {
+            SecretWriteResult.Saved,
+            SecretWriteResult.Cleared -> true
+            is SecretWriteResult.Failure -> false
+        }
+    }
+
+    fun getDecisionApiKey(): String =
+        secretStore?.readDecisionApiKey().orEmpty()
+
+    fun clearDecisionApiKey(): Boolean {
+        val store = secretStore ?: return false
+        return when (store.clearDecisionApiKey()) {
+            SecretWriteResult.Saved,
+            SecretWriteResult.Cleared -> true
+            is SecretWriteResult.Failure -> false
+        }
+    }
+
+    fun hasDecisionApiKey(): Boolean =
+        getDecisionApiKey().isNotBlank()
 
     /**
      * 保存用户设置。

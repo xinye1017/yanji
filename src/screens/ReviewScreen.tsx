@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiIcon, YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiSubjectProportionRow,
@@ -122,6 +122,15 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     } catch { setActionError('收藏未保存，请再次点击收藏重试。'); }
     finally { setBusyNote(null); }
   };
+  const toggleResolved = async (noteId: string) => {
+    if (busyNote) return;
+    setBusyNote(noteId);
+    setActionError(null);
+    try {
+      if (!await YanjiDataNative.toggleNoteResolved(noteId)) throw new Error('refused');
+    } catch { setActionError('疑点状态未保存，请重试。'); }
+    finally { setBusyNote(null); }
+  };
   const removeSession = async () => {
     if (!pendingDelete || deleting) return;
     setDeleting(true);
@@ -214,6 +223,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
               setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
             }}
             onToggleFavorite={noteId => void toggleFavorite(noteId)}
+            onToggleResolved={noteId => void toggleResolved(noteId)}
             onEditNote={note => setEditingNote({ id: note.noteId, content: note.content })}
           />
         </>
@@ -397,13 +407,14 @@ function DaySummary({ snapshot, goalSeconds }: {
 // The timeline — one spine, clock on the left, event on the right
 // ---------------------------------------------------------------------------
 
-function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onEditNote }: {
+function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
   entries: readonly TimelineEntry[];
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
   onEditSession: (session: DailySession) => void;
   onDeleteSession: (session: DailySession) => void;
   onToggleFavorite: (noteId: string) => void;
+  onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
@@ -412,14 +423,14 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
     {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry} isLast={index === entries.length - 1}
       dayTasks={dayTasks} busyNote={busyNote}
       onEditSession={onEditSession} onDeleteSession={onDeleteSession}
-      onToggleFavorite={onToggleFavorite} onEditNote={onEditNote} />)}
+      onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved} onEditNote={onEditNote} />)}
     {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
       按真实发生时刻排列；完成计划不标记未提供的完成时刻。
     </Text> : null}
   </View>;
 }
 
-function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onEditNote }: {
+function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
   entry: TimelineEntry;
   isLast: boolean;
   dayTasks: readonly { id: string; title: string }[];
@@ -427,13 +438,16 @@ function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDele
   onEditSession: (session: DailySession) => void;
   onDeleteSession: (session: DailySession) => void;
   onToggleFavorite: (noteId: string) => void;
+  onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
   const nodeColor = entry.kind === 'session'
     ? entry.session.subjectColor || colors.secondary
-    : colors.brand;
+    : entry.category === 'DOUBT'
+      ? (entry.isResolved ? colors.positive : colors.brand)
+      : colors.brand;
 
   // Every element of the first line — clock, node, title, `+时长` and the delete
   // control — centres inside this one band, so none of them can drift apart.
@@ -471,7 +485,9 @@ function TimelineItem({ entry, isLast, dayTasks, busyNote, onEditSession, onDele
           ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
             onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />
           : <NoteEntry entry={entry} busy={busyNote}
-            onToggleFavorite={() => onToggleFavorite(entry.noteId)} onEdit={() => onEditNote(entry)} />}
+            onToggleFavorite={() => onToggleFavorite(entry.noteId)}
+            onToggleResolved={() => onToggleResolved?.(entry.noteId)}
+            onEdit={() => onEditNote(entry)} />}
       </View>
     </View>
   );
@@ -536,27 +552,56 @@ function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
   );
 }
 
-function NoteEntry({ entry, busy, onToggleFavorite, onEdit }: {
+function NoteEntry({ entry, busy, onToggleFavorite, onToggleResolved, onEdit }: {
   entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean;
-  onToggleFavorite: () => void; onEdit: () => void;
+  onToggleFavorite: () => void;
+  onToggleResolved?: () => void;
+  onEdit: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  // Like a session entry, the whole card is the trigger; the two controls sit
+  const isDoubt = entry.category === 'DOUBT';
+  const isResolved = !!entry.isResolved;
+
+  // Like a session entry, the whole card is the trigger; the controls sit
   // inside it and claim their own presses.
   return (
     <Pressable onPress={onEdit} accessibilityRole="button"
       accessibilityLabel={`编辑随笔：${entry.content}`}
       style={({ pressed }) => ({
         backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
-        borderLeftWidth: 3, borderLeftColor: colors.brand, borderRadius: radius.tag,
+        borderLeftWidth: 3,
+        borderLeftColor: isDoubt ? (isResolved ? colors.positive : colors.brand) : colors.brand,
+        borderRadius: radius.tag,
         paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
         opacity: pressed ? 0.7 : 1,
       })}>
       <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-        <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700', flexShrink: 1 }]}>
-          记录此刻{entry.isFavorite ? ' · 已收藏' : ''}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flex: 1 }}>
+          <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>
+            记录此刻
+          </Text>
+          {isDoubt ? (
+            <Pressable
+              onPress={onToggleResolved}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={isResolved ? '疑点已解决，点击标记为待解决' : '疑点待解决，点击标记为已解决'}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <YanjiBadge
+                tone={isResolved ? 'positive' : 'brand'}
+                label={isResolved ? '已解决' : '待解决'}
+              />
+            </Pressable>
+          ) : (
+            <YanjiBadge tone="neutral" label="灵感" />
+          )}
+          {entry.isFavorite ? (
+            <Text style={[typography.captionMeta, { color: colors.secondary }]}>· 已收藏</Text>
+          ) : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit}
             size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
@@ -565,7 +610,13 @@ function NoteEntry({ entry, busy, onToggleFavorite, onEdit }: {
             size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
         </View>
       </View>
-      <Text style={[typography.bodyJournal, { color: colors.ink }]}>{entry.content}</Text>
+      <Text style={[
+        typography.bodyJournal,
+        {
+          color: isDoubt && isResolved ? colors.secondary : colors.ink,
+          textDecorationLine: isDoubt && isResolved ? 'line-through' : 'none',
+        },
+      ]}>{entry.content}</Text>
     </Pressable>
   );
 }

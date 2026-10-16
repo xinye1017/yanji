@@ -58,7 +58,7 @@ function task(id, createdAt, completed = true) {
   };
 }
 
-function note(id, timestamp) {
+function note(id, timestamp, category = 'INSPIRATION') {
   return {
     id,
     date: '2026-10-08',
@@ -66,6 +66,9 @@ function note(id, timestamp) {
     content: '倒装语序还是没搞懂',
     isFavorite: false,
     sessionId: null,
+    category,
+    isResolved: false,
+    resolvedAt: null,
   };
 }
 

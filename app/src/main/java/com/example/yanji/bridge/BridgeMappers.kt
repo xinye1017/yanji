@@ -190,7 +190,10 @@ object BridgeMappers {
         val timestamp: Double,
         val content: String,
         val isFavorite: Boolean,
-        val sessionId: String?
+        val sessionId: String?,
+        val category: String,
+        val isResolved: Boolean,
+        val resolvedAt: Double?
     )
 
     fun noteFields(note: NoteEntry): NoteFields = NoteFields(
@@ -199,7 +202,10 @@ object BridgeMappers {
         timestamp = note.createdAt.toDouble(),
         content = note.content,
         isFavorite = note.isFavorite,
-        sessionId = note.sessionId?.takeIf { it.isNotBlank() }
+        sessionId = note.sessionId?.takeIf { it.isNotBlank() },
+        category = note.category,
+        isResolved = note.isResolved,
+        resolvedAt = note.resolvedAt?.toDouble()
     )
 
     // ------------------------------------------------------------------ 设置
@@ -215,14 +221,20 @@ object BridgeMappers {
         val examDate: String,
         val targetSchool: String,
         val targetMajor: String,
-        val themePreference: String
+        val themePreference: String,
+        val decisionProvider: String,
+        val decisionModel: String,
+        val decisionEndpoint: String
     )
 
     fun settingsFields(settings: UserSettings): SettingsFields = SettingsFields(
         examDate = settings.targetExamDate,
         targetSchool = settings.targetSchool,
         targetMajor = settings.targetMajor,
-        themePreference = YanjiThemeMode.fromStorage(settings.themeMode).name
+        themePreference = YanjiThemeMode.fromStorage(settings.themeMode).name,
+        decisionProvider = settings.decisionProvider,
+        decisionModel = settings.decisionModel,
+        decisionEndpoint = settings.decisionEndpoint
     )
 
     // ------------------------------------------------------------------ 复盘概览

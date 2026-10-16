@@ -101,6 +101,21 @@ internal class NoteStore(
         return dao.updateContent(id, content, System.currentTimeMillis()) > 0
     }
 
+    /**
+     * 更新疑点解决状态的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
+     */
+    suspend fun setResolvedAndAwait(id: String, isResolved: Boolean): Boolean {
+        val dao = dbProvider()?.noteEntryDao() ?: return false
+        val now = System.currentTimeMillis()
+        val count = dao.setResolved(
+            id = id,
+            isResolved = if (isResolved) 1 else 0,
+            resolvedAt = if (isResolved) now else null,
+            updatedAt = now
+        )
+        return count > 0
+    }
+
     fun delete(id: String) {
         scope.launch {
             val db = dbProvider() ?: return@launch

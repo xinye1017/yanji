@@ -77,6 +77,8 @@ function modalHarness({ save, activeSession = null } = {}) {
         calls.updateNote.push(args);
         return Promise.resolve(true);
       },
+      getUserSettings: () => Promise.resolve({}),
+      getDecisionApiKey: () => Promise.resolve(''),
     },
     YanjiTimerNative: {
       getActiveSession: () => {
@@ -207,7 +209,7 @@ test('a successful new save clears the draft and writes the selected target date
   const typed = modal.typeInto(opened, '  目标日期必须来自可见的 prop  ');
   await typed.save.props.onPress();
 
-  assert.deepEqual(modal.calls.saveQuickNote, [['目标日期必须来自可见的 prop', '2026-10-09', 'session-7']]);
+  assert.deepEqual(modal.calls.saveQuickNote, [['目标日期必须来自可见的 prop', '2026-10-09', 'session-7', 'INSPIRATION']]);
   assert.equal(modal.calls.activeSessionReads, 1, 'the active session is resolved once for the binding');
   assert.equal(modal.refs[0].current, '', 'a successful new save clears the retained draft');
 

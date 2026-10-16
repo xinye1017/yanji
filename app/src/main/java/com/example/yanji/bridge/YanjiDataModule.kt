@@ -145,7 +145,7 @@ class YanjiDataModule(
      * JS 侧紧接着读取一定能看到这一条。
      */
     @ReactMethod
-    fun saveQuickNote(content: String, date: String, sessionId: String?, promise: Promise) {
+    fun saveQuickNote(content: String, date: String, sessionId: String?, category: String?, promise: Promise) {
         val cleanContent = content.trim()
         if (cleanContent.isEmpty()) {
             promise.reject("E_EMPTY_NOTE", "Note content cannot be empty")
@@ -153,13 +153,17 @@ class YanjiDataModule(
         }
         scope.launch {
             val now = System.currentTimeMillis()
+            val validCategory = if (category?.equals("DOUBT", ignoreCase = true) == true) "DOUBT" else "INSPIRATION"
             val entry = NoteEntry(
                 id = UUID.randomUUID().toString(),
                 date = date,
                 content = cleanContent,
                 createdAt = now,
                 updatedAt = now,
-                sessionId = sessionId?.takeIf { it.isNotBlank() }
+                sessionId = sessionId?.takeIf { it.isNotBlank() },
+                category = validCategory,
+                isResolved = false,
+                resolvedAt = null
             )
             repository.addOrUpdateNoteAndAwait(entry)
             promise.resolve(noteMap(BridgeMappers.noteFields(entry)))
@@ -188,6 +192,19 @@ class YanjiDataModule(
             }
             repository.setNoteFavorite(noteId, !note.isFavorite)
             promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun toggleNoteResolved(noteId: String, promise: Promise) {
+        scope.launch {
+            val note = repository.noteEntries.value.find { it.id == noteId }
+            if (note == null) {
+                promise.resolve(false)
+                return@launch
+            }
+            val success = repository.setNoteResolvedAndAwait(noteId, !note.isResolved)
+            promise.resolve(success)
         }
     }
 
@@ -455,10 +472,28 @@ class YanjiDataModule(
             targetExamDate = if (settings.hasKey("examDate")) settings.getString("examDate") ?: current.targetExamDate else current.targetExamDate,
             dailyGoalHours = if (settings.hasKey("dailyGoalHours")) settings.getDouble("dailyGoalHours").toFloat() else current.dailyGoalHours,
             validStudyThresholdMinutes = if (settings.hasKey("validStudyThresholdMinutes")) settings.getInt("validStudyThresholdMinutes") else current.validStudyThresholdMinutes,
-            themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode
+            themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode,
+            decisionProvider = if (settings.hasKey("decisionProvider")) settings.getString("decisionProvider") ?: current.decisionProvider else current.decisionProvider,
+            decisionModel = if (settings.hasKey("decisionModel")) settings.getString("decisionModel") ?: current.decisionModel else current.decisionModel,
+            decisionEndpoint = if (settings.hasKey("decisionEndpoint")) settings.getString("decisionEndpoint") ?: current.decisionEndpoint else current.decisionEndpoint
         )
         val result = repository.updateSettings(next)
         promise.resolve(result is com.example.yanji.data.SettingsUpdateResult.Saved)
+    }
+
+    @ReactMethod
+    fun saveDecisionApiKey(apiKey: String, promise: Promise) {
+        promise.resolve(repository.saveDecisionApiKey(apiKey))
+    }
+
+    @ReactMethod
+    fun getDecisionApiKey(promise: Promise) {
+        promise.resolve(repository.getDecisionApiKey())
+    }
+
+    @ReactMethod
+    fun clearDecisionApiKey(promise: Promise) {
+        promise.resolve(repository.clearDecisionApiKey())
     }
 
     /** 考研倒计时。考试日期早于今天时夹紧为 0，不返回负值。 */
@@ -640,6 +675,9 @@ class YanjiDataModule(
             // 未绑定时必须是 null —— 契约 `isValidNoteEntry` 对每条 NoteEntry 载荷生效。
             // 显式 putNull（与 emitStateChanged 的写法一致），绝不退化成空串。
             if (fields.sessionId == null) putNull("sessionId") else putString("sessionId", fields.sessionId)
+            putString("category", fields.category)
+            putBoolean("isResolved", fields.isResolved)
+            if (fields.resolvedAt == null) putNull("resolvedAt") else putDouble("resolvedAt", fields.resolvedAt)
         }
 
     private fun settingsMap(settings: UserSettings): WritableMap {
@@ -650,6 +688,10 @@ class YanjiDataModule(
             putString("targetMajor", fields.targetMajor)
             putDouble("dailyGoalHours", settings.dailyGoalHours.toDouble())
             putString("themePreference", fields.themePreference)
+            putString("decisionProvider", fields.decisionProvider)
+            putString("decisionModel", fields.decisionModel)
+            putString("decisionEndpoint", fields.decisionEndpoint)
+            putBoolean("hasDecisionApiKey", repository.hasDecisionApiKey())
         }
     }
 

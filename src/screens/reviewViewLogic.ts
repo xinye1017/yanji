@@ -15,6 +15,7 @@
 import type {
   DailySession,
   DailySnapshot,
+  NoteCategory,
   ReviewPeriodDay,
   ReviewScope,
   ReviewSubjectSlice,
@@ -99,6 +100,9 @@ export type TimelineEntry =
       timestamp: number;
       content: string;
       isFavorite: boolean;
+      category?: NoteCategory;
+      isResolved?: boolean;
+      resolvedAt?: number | null;
     };
 
 /**
@@ -130,6 +134,9 @@ export function buildTimelineEntries(snapshot: DailySnapshot | null): TimelineEn
         timestamp: note.timestamp,
         content: note.content,
         isFavorite: note.isFavorite,
+        category: note.category,
+        isResolved: note.isResolved,
+        resolvedAt: note.resolvedAt,
       })
     ),
   ];
