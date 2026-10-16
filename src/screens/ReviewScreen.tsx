@@ -422,6 +422,7 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
   return <View style={{ marginTop: YanjiSpacing.lg }}>
     {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
       isFirst={index === 0} isLast={index === entries.length - 1}
+      nextEntryKind={entries[index + 1]?.kind}
       dayTasks={dayTasks} busyNote={busyNote}
       onEditSession={onEditSession} onDeleteSession={onDeleteSession}
       onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved} onEditNote={onEditNote} />)}
@@ -431,10 +432,11 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
   </View>;
 }
 
-function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
+function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
   entry: TimelineEntry;
   isFirst: boolean;
   isLast: boolean;
+  nextEntryKind?: 'session' | 'note';
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
   onEditSession: (session: DailySession) => void;
@@ -458,6 +460,25 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
   // To align the node with the top of the card's orange accent stripe,
   // the node center sits at `timelineNodeSize / 2 + 2` (~6dp), and the clock aligns with it.
   const dotCenterY = isSession ? headBand / 2 : (layout.timelineNodeSize / 2 + 2);
+  const nodeRadius = layout.timelineNodeSize / 2; // 4dp
+  const dotGap = YanjiSpacing.xs; // 4dp clearance so the guide line never touches the dot
+  const clearance = nodeRadius + dotGap; // 8dp clearance around the dot center
+
+  // Next dot position: used to ensure the guide line stops before the next dot's clearance
+  const nextIsSession = nextEntryKind === 'session';
+  const nextDotCenterY = nextIsSession ? headBand / 2 : (layout.timelineNodeSize / 2 + 2);
+  const nextClearanceOverflow = Math.max(0, clearance - nextDotCenterY);
+
+  // Spacing unification:
+  // Card-to-card gap is `YanjiSpacing.lg` (16dp).
+  // When a card is followed by a session, the session's first row has its title and dot
+  // centered at 14dp (`headBand / 2`). Setting `paddingBottom` to `YanjiSpacing.sm` (8dp)
+  // keeps the visual distance from the card bottom to the session content unified (~16dp).
+  const itemPaddingBottom = isLast
+    ? 0
+    : (entry.kind === 'note' && nextEntryKind === 'session' ? YanjiSpacing.sm : YanjiSpacing.lg);
+
+  const topSegmentHeight = dotCenterY - clearance;
 
   return (
     <View style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
@@ -474,13 +495,13 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
         </Text>
       </View>
       <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
-        {/* Continuous timeline spine: top segment connects from item top to dot */}
-        {!isFirst ? (
+        {/* Guide line top segment: stops above the dot with clearance (never touches the dot) */}
+        {!isFirst && topSegmentHeight > 0 ? (
           <View
             style={{
               position: 'absolute',
               top: 0,
-              height: dotCenterY,
+              height: topSegmentHeight,
               width: layout.hairlineWidth,
               backgroundColor: colors.hairline,
             }}
@@ -491,28 +512,28 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
         <View
           style={{
             position: 'absolute',
-            top: dotCenterY - layout.timelineNodeSize / 2,
+            top: dotCenterY - nodeRadius,
             width: layout.timelineNodeSize,
             height: layout.timelineNodeSize,
-            borderRadius: layout.timelineNodeSize / 2,
+            borderRadius: nodeRadius,
             backgroundColor: nodeColor,
           }}
         />
 
-        {/* Continuous timeline spine: bottom segment connects from dot to item bottom */}
+        {/* Guide line bottom segment: starts below the dot with clearance, stops before next dot */}
         {!isLast ? (
           <View
             style={{
               position: 'absolute',
-              top: dotCenterY,
-              bottom: 0,
+              top: dotCenterY + clearance,
+              bottom: nextClearanceOverflow,
               width: layout.hairlineWidth,
               backgroundColor: colors.hairline,
             }}
           />
         ) : null}
       </View>
-      <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.lg, minHeight: 56 }}>
+      <View style={{ flex: 1, paddingBottom: itemPaddingBottom, minHeight: 56 }}>
         {entry.kind === 'session'
           ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
             onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />

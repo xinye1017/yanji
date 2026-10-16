@@ -80,12 +80,13 @@ test('the dock pill is centered vertically with hairlineWidth compensation', () 
   assert.match(dock, /justifyContent:\s*'center'/);
 });
 
-test('timeline entries connect with a continuous spine and note cards align with the dot', () => {
+test('timeline entries maintain clearance around dots and unify spacing to focus records', () => {
   const review = readFileSync(new URL('../src/screens/ReviewScreen.tsx', import.meta.url), 'utf8');
   assert.match(review, /isFirst=\{index === 0\}/);
   assert.match(review, /isLast=\{index === entries\.length - 1\}/);
-  assert.match(review, /dotCenterY\s*=\s*isSession\s*\?\s*headBand\s*\/\s*2\s*:\s*\(layout\.timelineNodeSize\s*\/\s*2\s*\+\s*2\)/);
-  assert.match(review, /!isFirst\s*\?\s*\(\s*<View[\s\S]*?top:\s*0[\s\S]*?height:\s*dotCenterY/);
-  assert.match(review, /!isLast\s*\?\s*\(\s*<View[\s\S]*?top:\s*dotCenterY[\s\S]*?bottom:\s*0/);
+  assert.match(review, /nextEntryKind=\{entries\[index \+ 1\]\?\.kind\}/);
+  assert.match(review, /clearance\s*=\s*nodeRadius\s*\+\s*dotGap/);
+  assert.match(review, /top:\s*dotCenterY\s*\+\s*clearance/);
+  assert.match(review, /entry\.kind === 'note' && nextEntryKind === 'session'\s*\?\s*YanjiSpacing\.sm\s*:\s*YanjiSpacing\.lg/);
 });
 
