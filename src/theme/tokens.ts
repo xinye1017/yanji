@@ -279,8 +279,21 @@ export const YanjiPaperTypography = {
   displayTimer: {
     fontSize: 96,
     lineHeight: 102,
-    fontWeight: '600' as const,
-    fontFamily: 'sans-serif-medium',
+    /**
+     * The running clock is the immersive field's single focal point, so it is
+     * set ultra-light — the opposite of `displayDial`, which stays heavy for
+     * the ready-state dial.
+     *
+     * The weight rides on the *family*, not `fontWeight`: RN resolves a named
+     * family through `TypefaceStyle.nearestStyle` (ReactFontManager.kt), which
+     * collapses every weight below 700 to NORMAL, and `sans-serif-medium` is
+     * itself the medium cut. Asking for `fontWeight: '300'` on that family
+     * would therefore still render at medium. `sans-serif-light` is the system
+     * family that actually carries the 300 cut, so `fontWeight` is left at the
+     * matching literal for intent and for Android's bold-text adjustment.
+     */
+    fontWeight: '300' as const,
+    fontFamily: 'sans-serif-light',
     fontVariant: ['tabular-nums'] as const,
   },
   displayDial: {

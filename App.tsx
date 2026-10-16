@@ -63,7 +63,7 @@ function AppShell(): React.JSX.Element {
   const theme = useYanjiTheme();
   const insets = useSafeAreaInsets();
   const { activeTab, settingsOpen, taskEditorOpen } = useNavigationState();
-  const { closeSettings, closeTaskEditor } = useNavigationActions();
+  const { closeSettings, closeTaskEditor, selectTab } = useNavigationActions();
   const [foreground, setForeground] = useState(() => AppState.currentState === 'active');
   const [foregroundRevision, setForegroundRevision] = useState(0);
   // Session listeners are low-frequency native state transitions, never second ticks.
@@ -105,7 +105,15 @@ function AppShell(): React.JSX.Element {
     };
   }, []);
 
-  // Android back: dismiss the topmost overlay first, only then leave the app.
+  // Android back: dismiss the topmost overlay first, then step out of the
+  // immersion field, and only then leave the app.
+  //
+  // The immersion field deliberately carries no back affordance of its own
+  // (AB-04 keeps that column to the session pill alone), so the system back
+  // gesture *is* its exit. Returning to Today rather than finishing the
+  // Activity is also the Android convention: back must not quit the app while
+  // an in-app "up" destination still exists. The session is unaffected either
+  // way — it lives in the Kotlin timer and keeps running behind the dock.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (taskEditorOpen) {
@@ -116,10 +124,14 @@ function AppShell(): React.JSX.Element {
         closeSettings();
         return true;
       }
+      if (focusImmersive) {
+        selectTab('today');
+        return true;
+      }
       return false;
     });
     return () => subscription.remove();
-  }, [taskEditorOpen, settingsOpen, closeSettings, closeTaskEditor]);
+  }, [taskEditorOpen, settingsOpen, closeSettings, closeTaskEditor, focusImmersive, selectTab]);
 
   // Keep page content below the status bar using the native safe-area inset.
   // StatusBar controls icon contrast; the tab bar owns the bottom safe area.

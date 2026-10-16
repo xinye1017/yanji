@@ -127,7 +127,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { focusPreset } = useNavigationState();
-  const { clearFocusPreset, selectTab } = useNavigationActions();
+  const { clearFocusPreset } = useNavigationActions();
   const keyboardInset = useYanjiKeyboardInset();
 
   const loadSubjects = useCallback(() => {
@@ -193,6 +193,18 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     () => selectableSubjects.find(subject => subject.id === selectedSubjectId) ?? null,
     [selectableSubjects, selectedSubjectId]
   );
+
+  /**
+   * What the running session is actually about, for the immersion field's one
+   * context line. The session carries only a `taskId`, so the title comes from
+   * the daily snapshot this screen already reads — no second query. A session
+   * that outlived its day (or was started unbound) simply falls back to the
+   * quiet standing copy rather than showing a stale or invented title.
+   */
+  const taskTitle = useMemo(() => {
+    if (!session?.taskId) return null;
+    return daily?.tasks.find(task => task.id === session.taskId)?.title ?? null;
+  }, [daily, session?.taskId]);
 
   const activeGroup = useMemo<SubjectGroup | null>(() => {
     if (!selectedSubject) return subjectGroups[0] ?? null;
@@ -782,50 +794,35 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           paddingBottom: Math.max(safe.bottom, YanjiSpacing.lg) + 28,
         }}
       >
+        {/* AB-04 keeps this field to one centred column: the session's own
+            context pill, then what this session is actually about. There is
+            deliberately no back affordance — the immersion field is exited
+            with the system back gesture, which AppShell routes to Today. */}
         <View style={{ alignItems: 'center', gap: 6 }}>
-          <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="返回今天，专注继续在后台运行"
-              hitSlop={8}
-              onPress={() => selectTab('today')}
-              style={({ pressed }) => ({
-                minWidth: YanjiTouch.min,
-                minHeight: YanjiTouch.min,
-                justifyContent: 'center',
-                opacity: pressed ? 0.65 : 1,
-              })}
-            >
-              <YanjiIcon name="back" size={18} color={immersed.subtitle} />
-            </Pressable>
-
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 7,
-                paddingVertical: 6,
-                paddingHorizontal: 14,
-                borderRadius: paper.radius.pill,
-                backgroundColor: immersed.pillBg,
-                borderWidth: paper.layout.hairlineWidth,
-                borderColor: immersed.pillBorder,
-              }}
-            >
-              <View style={{ width: 7, height: 7, borderRadius: paper.radius.pill, backgroundColor: immersed.accent }} />
-              <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: immersed.secondary }]}>
-                {session.subjectName} · {session.isCountdown ? '倒计时' : '正计时'}
-              </Text>
-            </View>
-
-            <View style={{ minWidth: YanjiTouch.min, minHeight: YanjiTouch.min }} />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 7,
+              paddingVertical: 6,
+              paddingHorizontal: 14,
+              borderRadius: paper.radius.pill,
+              backgroundColor: immersed.pillBg,
+              borderWidth: paper.layout.hairlineWidth,
+              borderColor: immersed.pillBorder,
+            }}
+          >
+            <View style={{ width: 7, height: 7, borderRadius: paper.radius.pill, backgroundColor: immersed.accent }} />
+            <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: immersed.secondary }]}>
+              {session.subjectName} · {session.isCountdown ? '倒计时' : '正计时'}
+            </Text>
           </View>
 
           <Text
             numberOfLines={1}
             style={[paper.typography.captionMeta, { color: immersed.subtitle, textAlign: 'center' }]}
           >
-            {isPaused ? '专注已暂歇 · 随时继续当前进度' : '全神贯注 · 把时间留给眼前这一件事'}
+            {taskTitle ?? (isPaused ? '专注已暂歇 · 随时继续当前进度' : '全神贯注 · 把时间留给眼前这一件事')}
           </Text>
         </View>
 
@@ -836,12 +833,11 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
         <View style={{ alignItems: 'center', gap: 18 }}>
           {isPaused ? (
             <View style={{ alignSelf: 'stretch', gap: YanjiSpacing.md }}>
-              <View style={{ flexDirection: 'row', gap: YanjiSpacing.md }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
                 <ImmersiveAction
                   label="记录此刻"
                   icon="compose"
                   variant="secondary"
-                  style={{ flex: 1 }}
                   onPress={() => setRecordOpen(true)}
                 />
                 <ImmersiveAction
@@ -849,17 +845,15 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   icon="play"
                   variant="primary"
                   disabled={busy}
-                  style={{ flex: 1 }}
                   onPress={() => { void handleTimerAction('resume'); }}
                 />
               </View>
-              <View style={{ flexDirection: 'row', gap: YanjiSpacing.md }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
                 <ImmersiveAction
                   label="提前结束"
                   icon="check"
                   variant="ghost"
                   disabled={busy}
-                  style={{ flex: 1 }}
                   onPress={() => { void handleTimerAction('complete'); }}
                 />
                 <ImmersiveAction
@@ -867,18 +861,16 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   icon="delete"
                   variant="ghost"
                   disabled={busy}
-                  style={{ flex: 1 }}
                   onPress={confirmDiscard}
                 />
               </View>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', gap: YanjiSpacing.md }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
               <ImmersiveAction
                 label="记录此刻"
                 icon="compose"
                 variant="secondary"
-                style={{ flex: 1 }}
                 onPress={() => setRecordOpen(true)}
               />
               <ImmersiveAction
@@ -886,7 +878,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 icon="pause"
                 variant="primary"
                 disabled={busy}
-                style={{ flex: 1 }}
                 onPress={() => { void handleTimerAction('pause'); }}
               />
             </View>
