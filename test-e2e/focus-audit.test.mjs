@@ -160,16 +160,24 @@ test('major ruler labels have enough real container height at fontScale 2 and 3'
   }
 });
 
-test('paused discard opens native confirmation; cancellation never calls discardTimer', async () => {
-  let alerts = [];
-  let discarded = 0;
-  const pauses = [];
+/**
+ * The immersive FocusScreen, driven through its real production source with the
+ * native/time adapters mocked.
+ *
+ * `daily` is the same snapshot the screen already reads for today's per-subject
+ * totals — the task-title assertions below therefore prove the subtitle
+ * resolves against the one existing read rather than a second query.
+ */
+function immersiveHarness({ session = {}, tasks = [] } = {}) {
+  const alerts = [];
+  const calls = [];
   const noop = () => {};
   const active = {
     sessionId: 'test-owned', subjectId: 'math', subjectName: '数学',
     mode: 'COUNTDOWN', taskId: null, startTime: 0,
     elapsedSeconds: 10, remainingSeconds: 100, phase: 'FOCUS',
     isPaused: true, isCountdown: true,
+    ...session,
   };
   const paper = {
     colors: { canvas: '#fff' }, radius: { pill: 9999, tick: 1 },
@@ -189,22 +197,27 @@ test('paused discard opens native confirmation; cancellation never calls discard
     },
     'react-native': {
       Alert: { alert: (...args) => alerts.push(args) }, View: 'View',
-      ScrollView: 'ScrollView', Pressable: 'Pressable', Text: 'Text',
+      ScrollView: 'ScrollView', Pressable: 'Pressable', Text: 'Text', Modal: 'Modal',
       useWindowDimensions: () => ({ width: 358, height: 800, fontScale: 1 }),
     },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 24 }) },
+    'react-native-svg': {
+      default: 'Svg', Svg: 'Svg', Defs: 'Defs', LinearGradient: 'LinearGradient',
+      Rect: 'Rect', Stop: 'Stop',
+    },
     '../bridge': {
       YanjiDataNative: { getSubjects: async () => [] },
       YanjiTimerNative: {
-        discardTimer: async () => { discarded++; },
-        completeTimer: async () => { pauses.push('complete'); },
-        resumeTimer: async () => { pauses.push('resume'); },
-        pauseTimer: async () => { pauses.push('pause'); },
+        discardTimer: async () => { calls.push('discard'); },
+        completeTimer: async () => { calls.push('complete'); },
+        resumeTimer: async () => { calls.push('resume'); },
+        pauseTimer: async () => { calls.push('pause'); },
       },
     },
     '../components/YanjiUI': {
       YanjiEditorialHeader: noop, YanjiIcon: noop,
       YanjiPaperSectionHeading: noop, YanjiPaperSegmentedControl: noop,
+      useYanjiKeyboardInset: () => 0,
     },
     '../components/FocusVernierDial': { FocusVernierDial: noop },
     '../components/RecordMomentModal': { RecordMomentModal: noop },
@@ -214,6 +227,7 @@ test('paused discard opens native confirmation; cancellation never calls discard
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 110 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
+    '../state/dataRefresh': { useDailySnapshot: () => ({ tasks }) },
     '../state/timerStore': {
       useActiveSession: () => active,
       useTimerTick: () => { throw new Error('Root FocusScreen must not subscribe to second ticks'); },
@@ -221,23 +235,51 @@ test('paused discard opens native confirmation; cancellation never calls discard
     },
   };
   const { FocusScreen } = loadTypeScript('src/screens/FocusScreen.tsx', mocks);
-  const root = FocusScreen({ visible: true });
-  function find(node, predicate, matches = []) {
-    if (Array.isArray(node)) for (const element of node) find(element, predicate, matches);
-    else if (node && typeof node === 'object' && 'type' in node) {
-      if (predicate(node)) matches.push(node);
-      find(node.props?.children, predicate, matches);
-    }
-    return matches;
+  return { root: FocusScreen({ visible: true }), alerts, calls };
+}
+
+function findAll(node, predicate, matches = []) {
+  if (Array.isArray(node)) for (const element of node) findAll(element, predicate, matches);
+  else if (node && typeof node === 'object' && 'type' in node) {
+    if (predicate(node)) matches.push(node);
+    findAll(node.props?.children, predicate, matches);
   }
-  const discard = find(root, n => n.props?.label === '放弃本轮')[0];
-  const resume = find(root, n => n.props?.label === '继续专注')[0];
-  const complete = find(root, n => n.props?.label === '提前结束')[0];
+  return matches;
+}
+
+test('the immersion subtitle names the bound task and stays quiet when unbound', () => {
+  const bound = immersiveHarness({
+    session: { taskId: 'task-1' },
+    tasks: [{ id: 'task-1', title: '王道操作系统 · 页面置换算法' }],
+  });
+  const named = findAll(bound.root, n => n.props?.children === '王道操作系统 · 页面置换算法');
+  assert.equal(named.length, 1, 'a bound session must name the task it is running for');
+
+  // A session started without a task keeps the standing copy …
+  const unbound = immersiveHarness({ session: { taskId: null } });
+  assert.equal(findAll(unbound.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
+  assert.equal(findAll(unbound.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
+
+  // … and so does one whose task is not in today's snapshot (it outlived its
+  // day). A stale or invented title would be worse than the quiet line.
+  const stale = immersiveHarness({
+    session: { taskId: 'task-yesterday' },
+    tasks: [{ id: 'task-1', title: '王道操作系统 · 页面置换算法' }],
+  });
+  assert.equal(findAll(stale.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
+  assert.equal(findAll(stale.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
+});
+
+test('paused discard opens native confirmation; cancellation never calls discardTimer', async () => {
+  const { root, alerts, calls } = immersiveHarness();
+  const discard = findAll(root, n => n.props?.label === '放弃本轮')[0];
+  const resume = findAll(root, n => n.props?.label === '继续专注')[0];
+  const complete = findAll(root, n => n.props?.label === '提前结束')[0];
   assert.ok(discard && resume && complete, 'existing paused-state actions stay accessible');
 
   discard.props.onPress();
   assert.equal(alerts.length, 1, 'irreversible action must ask for confirmation');
-  assert.equal(discarded, 0, 'opening dialog does not call native discard');
+  assert.equal(calls.length, 0, 'opening dialog does not call native discard');
   const [title, description, buttons, options] = alerts[0];
   assert.match(title, /放弃/);
   assert.match(description, /无法恢复/);
@@ -245,11 +287,10 @@ test('paused discard opens native confirmation; cancellation never calls discard
   assert.equal(buttons[0].style, 'cancel');
   buttons[0].onPress?.();
   await Promise.resolve();
-  assert.equal(discarded, 0, 'cancel keeps the native session intact');
-  assert.equal(pauses.length, 0);
+  assert.equal(calls.length, 0, 'cancel keeps the native session intact');
 
   assert.equal(buttons[1].style, 'destructive');
   buttons[1].onPress();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(discarded, 1, 'only confirmed action invokes native discard once');
+  assert.deepEqual(calls, ['discard'], 'only the confirmed action invokes native discard, once');
 });
