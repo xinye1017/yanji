@@ -1054,7 +1054,7 @@ export function YanjiTaskLedgerRow({
               paddingHorizontal: 6,
               paddingVertical: 1,
             }}>
-              <Text numberOfLines={1} style={{ fontSize: 10, lineHeight: 14, fontWeight: '600', color: accentColor, flexShrink: 1 }}>{subjectName}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 10, lineHeight: 14, fontWeight: '600', color: colors.secondary, flexShrink: 1 }}>{subjectName}</Text>
             </View>
             <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
           </View>
