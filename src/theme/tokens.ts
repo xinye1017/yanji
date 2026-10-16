@@ -411,6 +411,11 @@ export const YanjiPaperLayout = {
   /** Visible compact segment; the radio keeps a full row-height touch target. */
   compactSegmentHeight: 28,
   hairlineWidth: 1,
+  vernierTickWidth: 14,
+  vernierMinHeight: 96,
+  vernierMinorTickHeight: 10,
+  vernierMajorTickHeight: 20,
+  vernierPointerHeight: 28,
   spectrumHeight: 10,
   spectrumGap: 2,
   subjectSwatchSize: 7,
@@ -454,6 +459,7 @@ export const YanjiPaperLayout = {
 export const YanjiPaperRadius = {
   tick: 1,
   tag: 5,
+  badge: 6,
   /** Subject-matrix cells — tighter than a card so the grid reads as one block. */
   compactCard: 12,
   surface: 14,

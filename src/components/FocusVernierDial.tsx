@@ -9,18 +9,17 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  PixelRatio,
   ScrollView,
   Text,
   View,
+  useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
-
-const TICK_WIDTH = 14;
-const RULER_HEIGHT = 34;
 
 export interface FocusVernierDialProps {
   valueMinutes: number;
@@ -42,7 +41,18 @@ export function FocusVernierDial({
   accessibilityLabel = '选择专注时长',
 }: FocusVernierDialProps): React.JSX.Element {
   const { paper } = useYanjiTheme();
+  const { fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
+  // Android truncates snapToInterval to physical pixels; align cells to the same grid.
+  const tickWidth = PixelRatio.roundToNearestPixel(
+    paper.layout.vernierTickWidth * Math.max(1, fontScale),
+  );
+  const labelHeight = Math.ceil(paper.typography.captionMeta.lineHeight * fontScale);
+  const labelTop = YanjiSpacing.lg + paper.layout.vernierPointerHeight + YanjiSpacing.sm;
+  const rulerHeight = Math.max(
+    paper.layout.vernierMinHeight,
+    labelTop + labelHeight + YanjiSpacing.lg,
+  );
   const list = useRef<React.ElementRef<typeof ScrollView>>(null);
   const userDragging = useRef(false);
   const [width, setWidth] = useState(0);
@@ -56,13 +66,13 @@ export function FocusVernierDial({
 
   // Fractional offsets preserve non-grid task presets (e.g. 37 minutes)
   // exactly between the 35 and 40 marks. ScrollView's symmetric padding
-  // already centres x = index * TICK_WIDTH; adding that padding to the
+  // already centres x = index * tickWidth; adding that padding to the
   // offset would move the mark away from the pointer.
   const offsetFor = useCallback(
     (v: number) =>
       Math.max(0, Math.min(ticks.length - 1, (v - minMinutes) / stepMinutes)) *
-      TICK_WIDTH,
-    [minMinutes, stepMinutes, ticks.length],
+      tickWidth,
+    [minMinutes, stepMinutes, ticks.length, tickWidth],
   );
 
   // A task's original plannedMinutes may not be divisible by five. Merely
@@ -85,9 +95,9 @@ export function FocusVernierDial({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (!userDragging.current) return;
       userDragging.current = false;
-      selectIndex(Math.round(e.nativeEvent.contentOffset.x / TICK_WIDTH));
+      selectIndex(Math.round(e.nativeEvent.contentOffset.x / tickWidth));
     },
-    [selectIndex],
+    [selectIndex, tickWidth],
   );
 
   const adjust = useCallback(
@@ -102,12 +112,12 @@ export function FocusVernierDial({
           : Math.ceil(raw - 0.000001) - 1;
       const target = Math.max(0, Math.min(ticks.length - 1, index));
       selectIndex(target);
-      list.current?.scrollTo({ x: target * TICK_WIDTH, animated: !reducedMotion });
+      list.current?.scrollTo({ x: target * tickWidth, animated: !reducedMotion });
     },
-    [disabled, minMinutes, reducedMotion, selectIndex, stepMinutes, ticks.length, valueMinutes],
+    [disabled, minMinutes, reducedMotion, selectIndex, stepMinutes, ticks.length, tickWidth, valueMinutes],
   );
 
-  const horizontalInset = Math.max(0, (width - TICK_WIDTH) / 2);
+  const horizontalInset = Math.max(0, (width - tickWidth) / 2);
 
   return (
     <View testID="focus-vernier">
@@ -115,6 +125,7 @@ export function FocusVernierDial({
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ disabled }}
         accessibilityValue={{
           min: minMinutes,
           max: maxMinutes,
@@ -130,15 +141,18 @@ export function FocusVernierDial({
           if (event.nativeEvent.actionName === 'decrement') adjust(-1);
         }}
         onLayout={e => setWidth(e.nativeEvent.layout.width)}
-        style={{ height: RULER_HEIGHT, justifyContent: 'flex-end' }}
+        style={{ height: rulerHeight }}
       >
         <ScrollView
           ref={list}
           testID="focus-vernier-ruler"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           horizontal
           scrollEnabled={!disabled}
           showsHorizontalScrollIndicator={false}
-          snapToInterval={TICK_WIDTH}
+          snapToInterval={tickWidth}
           snapToAlignment="start"
           decelerationRate={reducedMotion ? 'normal' : 'fast'}
           onScrollBeginDrag={() => {
@@ -150,34 +164,51 @@ export function FocusVernierDial({
           onMomentumScrollEnd={selectOffset}
           contentContainerStyle={{
             paddingHorizontal: horizontalInset,
-            alignItems: 'flex-end',
-            height: RULER_HEIGHT,
+            height: rulerHeight,
           }}
         >
           {ticks.map(minutes => {
-            // No numeric labels: the giant numeral above the strip is the
-            // readout. Only the tick height carries the 15-minute accent.
             const major = minutes % 15 === 0;
             return (
               <View
                 key={minutes}
                 style={{
-                  width: TICK_WIDTH,
-                  height: RULER_HEIGHT,
+                  width: tickWidth,
+                  height: rulerHeight,
                   alignItems: 'center',
-                  justifyContent: 'flex-end',
                 }}
               >
                 <View
                   style={{
+                    position: 'absolute',
+                    bottom: rulerHeight - labelTop + YanjiSpacing.sm,
                     width: 1.5,
-                    height: major ? 20 : 10,
+                    height: major
+                      ? paper.layout.vernierMajorTickHeight
+                      : paper.layout.vernierMinorTickHeight,
                     borderRadius: paper.radius.tick,
                     backgroundColor: major
                       ? paper.colors.tickMajor
                       : paper.colors.tickMinor,
                   }}
                 />
+                {major ? (
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      paper.typography.captionMeta,
+                      {
+                        position: 'absolute',
+                        top: labelTop,
+                        width: tickWidth * 3,
+                        textAlign: 'center',
+                        color: paper.colors.secondary,
+                      },
+                    ]}
+                  >
+                    {minutes}
+                  </Text>
+                ) : null}
               </View>
             );
           })}
@@ -188,23 +219,14 @@ export function FocusVernierDial({
           style={{
             position: 'absolute',
             alignSelf: 'center',
-            bottom: 0,
+            bottom: rulerHeight - labelTop + YanjiSpacing.sm,
             width: 2.5,
-            height: 28,
+            height: paper.layout.vernierPointerHeight,
             borderRadius: paper.radius.tick,
             backgroundColor: paper.colors.brand,
           }}
         />
       </View>
-
-      <Text
-        style={[
-          paper.typography.captionMeta,
-          { color: paper.colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.sm },
-        ]}
-      >
-        ← 左右滑动刻度尺微调（{minMinutes}–{maxMinutes} 分钟）→
-      </Text>
     </View>
   );
 }

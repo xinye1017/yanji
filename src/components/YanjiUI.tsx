@@ -769,7 +769,7 @@ export function YanjiBadge({
           backgroundColor: bg,
           paddingVertical: 3,
           paddingHorizontal: 8,
-          borderRadius: 6,
+          borderRadius: paper.radius.badge,
           alignSelf: 'flex-start',
         },
         style,
