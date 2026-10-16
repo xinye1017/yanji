@@ -33,33 +33,50 @@ target_include_directories(${CMAKE_PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# NDEBUG 与 REACT_NATIVE_DEBUG / REACT_NATIVE_PRODUCTION 必须与链接的那份
+# libreactnative.so 一致，缺一不可：
+#
+# NDEBUG：folly::kIsDebug 就是 !NDEBUG。带上它，F14Table 的调试用插入扰动代码
+#   （FOLLY_F14_PERTURB_INSERTION_ORDER）不再实例化，也就不会引用
+#   folly::f14::detail::tlsMinstdRand / tlsPendingSafeInserts —— 这两个符号
+#   同样不在 libreactnative.so 的导出表里，链接期必然缺。
+#   它只影响 folly 的 if constexpr 分支，不改类布局。
+#
+# REACT_NATIVE_DEBUG / REACT_NATIVE_PRODUCTION：react/debug/flags.h 按 NDEBUG
+#   反推这两个宏，而它们改变的是**类布局**：
+#     - Sealable 生产版是空类，调试版带 mutable std::atomic<bool> sealed_（8 字节），
+#       而 Props 是 virtual 继承它的；
+#     - RN_DEBUG_STRING_CONVERTIBLE 从 0 变 1，Props / BaseViewProps /
+#       HostPlatformViewProps 等一整套 Props 层级多出一批虚函数
+#       （getDebugProps / getDebugName / …，即 vtable 与 VTT 条目）。
+#   跟链接的那份 .so 不一致时有两种表现：本库比它小 8 字节，运行期
+#   HostPlatformViewProps 构造函数按自己的偏移写成员写到堆外（SIGSEGV）；
+#   或者本库引用它根本没有的调试虚函数，链接期 19 个 undefined symbol。
+#
+# ReactAndroid 的 prefab 按构建变体分开发布：debug 变体链
+# react-android-<ver>-debug（REACT_NATIVE_DEBUG），release 变体链
+# react-android-<ver>-release（REACT_NATIVE_PRODUCTION）。所以这两个宏必须跟着
+# 变体走，不能钉死 —— AGP 为每个变体传对应的 CMAKE_BUILD_TYPE，而 CMake 的
+# RelWithDebInfo 自己就会带 -DNDEBUG（CMAKE_CXX_FLAGS_RELWITHDEBINFO），
+# 这里只需补上同一个变体该有的 REACT_NATIVE_* 宏。
+#
+# 之前这里钉死 -DNDEBUG -DREACT_NATIVE_DEBUG，只对 debug 变体成立：
+# assembleDebug 能过，assembleRelease 链的是 production 版 .so，
+# 于是缺 getDebugProps / Sealable 等 19 个符号而链接失败。
+# 剩下的 F14LinkCheck<Mode>::check() 见 FollyF14LinkCheck.cpp。
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(YANJI_REACT_NATIVE_LAYOUT_FLAG -DREACT_NATIVE_DEBUG)
+else()
+    set(YANJI_REACT_NATIVE_LAYOUT_FLAG -DREACT_NATIVE_PRODUCTION)
+endif()
+
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -std=c++20
     -fexceptions
     -frtti
     ${folly_FLAGS}
-    # -DNDEBUG 与 -DREACT_NATIVE_DEBUG 必须成对出现，缺一不可：
-    #
-    # NDEBUG：folly::kIsDebug 就是 !NDEBUG。带上它，F14Table 的调试用插入扰动代码
-    #   （FOLLY_F14_PERTURB_INSERTION_ORDER）不再实例化，也就不会引用
-    #   folly::f14::detail::tlsMinstdRand / tlsPendingSafeInserts —— 这两个符号
-    #   同样不在 libreactnative.so 的导出表里，链接期必然缺。
-    #   它只影响 folly 的 if constexpr 分支，不改类布局。
-    #
-    # REACT_NATIVE_DEBUG：react/debug/flags.h 会按 NDEBUG 反推
-    #   REACT_NATIVE_DEBUG / REACT_NATIVE_PRODUCTION，而这两个宏改变的是**类布局**：
-    #     - Sealable 生产版是空类，调试版带 mutable std::atomic<bool> sealed_（8 字节），
-    #       而 Props 是 virtual 继承它的；
-    #     - RN_DEBUG_STRING_CONVERTIBLE 从 0 变 1，Props / BaseViewProps /
-    #       HostPlatformViewProps 等一整套 Props 层级多出一批虚函数。
-    #   libreactnative.so 是没带 NDEBUG 编的（REACT_NATIVE_DEBUG），本库只带 NDEBUG
-    #   就会让 Props 比它小 8 字节，运行期表现为 libreactnative.so 里的
-    #   HostPlatformViewProps 构造函数按自己的偏移写成员，写到堆外：SIGSEGV。
-    #   所以显式钉死 REACT_NATIVE_DEBUG，把 NDEBUG 的影响限制在 folly 的
-    #   if constexpr 与 assert 上。
-    #   剩下的 F14LinkCheck<Mode>::check() 见 FollyF14LinkCheck.cpp。
     -DNDEBUG
-    -DREACT_NATIVE_DEBUG
+    ${YANJI_REACT_NATIVE_LAYOUT_FLAG}
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
