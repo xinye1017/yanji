@@ -650,6 +650,16 @@ function TrendSummary({
       ? `${deltaPercent >= 0 ? '↑ +' : '↓ '}${(Math.abs(deltaPercent) * 100).toFixed(1)}% ${deltaLabel.replace('较上一周期 ', '环比')}`
       : deltaLabel;
 
+  /**
+   * Whether the current scope has anything to plot. Every branch feeds a chart
+   * from a different series, so this asks the series the branch actually uses —
+   * an all-zero day still produces 24 hour buckets, and treating that as "data"
+   * is what paints an empty chart well.
+   */
+  const hasPlottedData = scope === 'TODAY'
+    ? hourBuckets.some(bucket => bucket.minutes > 0)
+    : columns.some(column => column.totalMinutes > 0);
+
   // One sentence, read straight off the figures above it. No forecast, no
   // coaching, nothing the data cannot support.
   const insightLine = !overview || overview.totalSeconds <= 0
@@ -742,6 +752,7 @@ function TrendSummary({
                 width={chartWidth}
                 height={TREND_CHART_HEIGHT}
                 peakIndex={peakHour?.hour}
+                emptyLabel={hasPlottedData ? undefined : '这一天还没有可绘制的专注区间。'}
               />
             ) : scope === 'CALENDAR_MONTH' ? (
               <YanjiLineChart
@@ -750,6 +761,7 @@ function TrendSummary({
                 height={TREND_CHART_HEIGHT}
                 averageValue={overview.dailyAverageSeconds / 60}
                 peakIndex={peak ? columns.indexOf(peak) : undefined}
+                emptyLabel={hasPlottedData ? undefined : '这个月还没有可绘制的专注记录。'}
               />
             ) : (
               <YanjiStackedBarChart
@@ -757,10 +769,21 @@ function TrendSummary({
                 width={chartWidth}
                 height={TREND_CHART_HEIGHT}
                 averageMinutes={overview.dailyAverageSeconds / 60}
+                emptyLabel={hasPlottedData ? undefined : '这一周还没有可绘制的专注记录。'}
               />
             )
           ) : null}
-          <View style={{ height: typography.captionMeta.lineHeight * Math.max(1, fontScale), marginTop: YanjiSpacing.sm }}>
+          {/*
+            The axis only earns its space when something is plotted against it —
+            otherwise an all-zero window leaves a blank chart well with hour
+            ticks floating under it, which reads as a broken chart rather than
+            an empty one.
+          */}
+          <View style={{
+            height: typography.captionMeta.lineHeight * Math.max(1, fontScale),
+            marginTop: YanjiSpacing.sm,
+            display: hasPlottedData ? 'flex' : 'none',
+          }}>
             {scope === 'TODAY'
               ? HOUR_TICKS.map(hour => (
                   <Text
