@@ -527,57 +527,162 @@ export function YanjiChronoSpectrum({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiMiniRhythmSparkline — saved continuous focus, 06:00–24:00
+// YanjiDayRhythmChart — saved continuous focus across 06:00–24:00
+//
+// A fixed-width bar with a fixed gap used to render as a row of dots: on a
+// day with no saved focus that row of 18 tiny ticks read as a pagination
+// indicator rather than a timeline. The bars therefore share the full width,
+// stand on a hairline axis, and the axis is labelled at both ends so the strip
+// says "this is today's clock", not "there are more pages".
+//
+// An hour with no focus draws nothing rather than a stub, so an empty day is a
+// clean, labelled axis instead of a second dashed line.
+//
+// The current hour gets a short tick, but only once the strip actually has a
+// bar to relate to. On a fully empty day that tick is a lone mark with no
+// referent — exactly the "unexplained dot" this section was rebuilt to remove —
+// so an empty day draws the axis and nothing else.
+//
+// Purely visual for its bars, but the axis range is the section's scope and a
+// screen reader user needs it: the range used to live in the collapsed row's
+// `accessibilityLabel` and would otherwise survive only as painted text inside
+// a `no-hide-descendants` subtree. The chart therefore publishes one spoken
+// node carrying the range (and an optional summary), and hides only the bars.
 // ---------------------------------------------------------------------------
 
-export interface YanjiMiniRhythmBucket {
+export interface YanjiDayRhythmBucket {
   hour: number;
   seconds: number;
   color?: string;
 }
 
-export function YanjiMiniRhythmSparkline({
+/**
+ * How many hourly slots actually carry saved focus.
+ *
+ * Exported because it is the one fact the strip's appearance is derived from,
+ * and both the spoken summary and the tests should ask the same question of the
+ * data rather than inspect the rendered style objects.
+ */
+export function measuredRhythmHours(buckets: readonly YanjiDayRhythmBucket[]): number {
+  return buckets.filter(bucket => bucket.seconds > 0).length;
+}
+
+/** One rendered slot's geometry, independent of how it is painted. */
+export interface YanjiRhythmSlot {
+  hour: number;
+  /** True when this hour carries saved focus. */
+  measured: boolean;
+  /** True when this slot is the current hour *and* the strip has any data. */
+  isNow: boolean;
+  /** Height in dp; `0` means the slot draws nothing. */
+  height: number;
+}
+
+/**
+ * The strip's slots: which hours are painted, and how tall.
+ *
+ * Separated from the component so the "an empty day draws nothing" rule can be
+ * stated as arithmetic instead of asserting on style objects, and so no
+ * test-only prop has to exist on the rendered tree.
+ */
+export function rhythmSlots(
+  buckets: readonly YanjiDayRhythmBucket[],
+  currentHour: number,
+  chartHeight: number,
+  emptyHeight: number,
+): YanjiRhythmSlot[] {
+  const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
+  const hasData = measuredRhythmHours(buckets) > 0;
+  return buckets.map(bucket => {
+    const measured = bucket.seconds > 0;
+    const isNow = hasData && bucket.hour === currentHour;
+    return {
+      hour: bucket.hour,
+      measured,
+      isNow,
+      height: measured
+        ? Math.max(emptyHeight, bucket.seconds / maximum * chartHeight)
+        : isNow ? emptyHeight : 0,
+    };
+  });
+}
+
+export function YanjiDayRhythmChart({
   buckets,
   currentHour,
+  startLabel,
+  endLabel,
+  accessibilityLabel,
 }: {
-  buckets: readonly YanjiMiniRhythmBucket[];
+  buckets: readonly YanjiDayRhythmBucket[];
   currentHour: number;
+  startLabel: string;
+  endLabel: string;
+  /** Spoken scope for the strip; defaults to the axis range alone. */
+  accessibilityLabel?: string;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, layout, radius } = paper;
-  const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
+  const { colors, typography, layout, radius } = paper;
+  const slots = rhythmSlots(buckets, currentHour, layout.rhythmChartHeight, layout.rhythmEmptyHeight);
   return (
-    <View
-      importantForAccessibility="no-hide-descendants"
-      style={{ flexDirection: 'row', alignItems: 'flex-end', gap: layout.rhythmBarGap, height: layout.rhythmBarHeight }}
-    >
-      {buckets.map(bucket => (
-        <View
-          key={bucket.hour}
-          style={{
-            width: layout.rhythmBarWidth,
-            height: bucket.seconds > 0
-              ? Math.max(layout.rhythmEmptyHeight, bucket.seconds / maximum * layout.rhythmBarHeight)
-              : layout.rhythmEmptyHeight,
-            borderRadius: radius.tick,
-            backgroundColor: bucket.seconds > 0 ? bucket.color ?? colors.secondary
-              : bucket.hour === currentHour ? colors.secondary : colors.subtle,
-          }}
-        />
-      ))}
+    <View>
+      <View
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          gap: layout.rhythmBarGap,
+          height: layout.rhythmChartHeight,
+        }}
+      >
+        {slots.map(slot => (
+          <View
+            key={slot.hour}
+            style={{
+              flex: 1,
+              flexBasis: 0,
+              height: slot.height,
+              borderRadius: radius.tick,
+              backgroundColor: slot.measured
+                ? buckets.find(bucket => bucket.hour === slot.hour)?.color ?? colors.secondary
+                : slot.isNow ? colors.secondary : 'transparent',
+            }}
+          />
+        ))}
+      </View>
+      <YanjiHairline />
+      {/* The painted range is decorative text; the spoken range is the node
+          below, so the two can never disagree about the section's scope. */}
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel ?? `时间范围 ${startLabel} 至 ${endLabel}`}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}
+      >
+        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{startLabel}</Text>
+        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{endLabel}</Text>
+      </View>
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
 // YanjiTextAction — compact label inside a full-size touch target
+//
+// `tone` is how a page keeps one accent. The default `brand` is the in-place
+// action a section is *about* (add the thing this list is missing); `quiet`
+// is a secondary invitation that must stay findable without competing with
+// the page's one filled CTA.
 // ---------------------------------------------------------------------------
 
-export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false }: {
+export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false, tone = 'brand' }: {
   label: string;
   accessibilityLabel?: string;
   onPress: () => void;
   disabled?: boolean;
+  /** `brand` = the section's own in-place action; `quiet` = a secondary invitation. */
+  tone?: 'brand' | 'quiet';
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   return (
@@ -594,7 +699,13 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
         opacity: pressed ? 0.65 : 1,
       })}
     >
-      <Text style={[paper.typography.captionMeta, { color: paper.colors.brandInk, fontWeight: '700' }]}>
+      <Text style={[
+        paper.typography.captionMeta,
+        {
+          color: tone === 'quiet' ? paper.colors.secondary : paper.colors.brandInk,
+          fontWeight: tone === 'quiet' ? '600' : '700',
+        },
+      ]}>
         {label}
       </Text>
     </Pressable>
