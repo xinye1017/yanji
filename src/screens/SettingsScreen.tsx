@@ -117,30 +117,46 @@ export function SettingsScreen(): React.JSX.Element {
   const saveExamDate = async (iso: string) => {
     setSaving(true);
     setSheetError(null);
+    setReadFailed(false);
     try {
       if (!await YanjiDataNative.updateUserSettings({ examDate: iso })) throw new Error('refused');
-      await refreshSettingsSnapshot();
-      setOpenSheet(null);
     } catch {
       setSheetError('考试日期未保存，请稍后再试。');
-    } finally {
       setSaving(false);
+      return;
+    }
+    setSaving(false);
+    setOpenSheet(null);
+    // The write already landed. A failed re-read must not be reported as a
+    // failed save — it only means the row still shows the previous value, which
+    // the banner and 重新读取 are there to fix.
+    try {
+      await refreshSettingsSnapshot();
+    } catch {
+      setReadFailed(true);
     }
   };
 
   const saveDailyGoal = async (minutes: number) => {
     setSaving(true);
     setSheetError(null);
+    setReadFailed(false);
     try {
       if (!await YanjiDataNative.updateUserSettings({ dailyGoalHours: goalHoursFromMinutes(minutes) })) {
         throw new Error('refused');
       }
-      await refreshSettingsSnapshot();
-      setOpenSheet(null);
     } catch {
       setSheetError('每日学习时长未保存，请稍后再试。');
-    } finally {
       setSaving(false);
+      return;
+    }
+    setSaving(false);
+    setOpenSheet(null);
+    // See saveExamDate: the stored value changed either way.
+    try {
+      await refreshSettingsSnapshot();
+    } catch {
+      setReadFailed(true);
     }
   };
 

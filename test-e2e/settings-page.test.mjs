@@ -26,7 +26,21 @@ const theme = {
   motion: tokens.YanjiMotion,
 };
 
-const logic = loadTypeScript('src/state/settingsViewLogic.ts');
+/**
+ * The day every assertion is written against.
+ *
+ * `todayIso()` lives in the logic module, and the countdown text is derived from
+ * it, so the logic module needs the same frozen clock the screen gets. Without
+ * this the suite reads the real wall clock and the expected 「距初试 N 天」
+ * changes at midnight — it would be green on one day and red the next.
+ */
+const FIXED_NOW = '2026-10-17T12:00:00';
+const FrozenDate = class extends Date {
+  constructor(...args) { super(...(args.length ? args : [FIXED_NOW])); }
+  static now() { return new Date(FIXED_NOW).getTime(); }
+};
+
+const logic = loadTypeScript('src/state/settingsViewLogic.ts', {}, { Date: FrozenDate });
 
 /**
  * Every element matching `predicate`, descending through rendered components.
@@ -62,11 +76,19 @@ const byComponent = name => node => typeof node.type === 'function' && node.type
  */
 const plain = value => JSON.parse(JSON.stringify(value));
 
-/** Everything the page's own scroll body renders, excluding the two sheets. */
+/**
+ * Everything the page's own scroll body renders, excluding the two sheets.
+ *
+ * The walker is given the body's children directly and a predicate that matches
+ * every node; returning the materialised list is what lets callers then search
+ * it. (An earlier version passed `() => false`, which made the walker collect
+ * nothing at all — so the "no full-width return button" assertion could never
+ * fail. See the test that now proves this helper can see a button.)
+ */
 function pageBody(tree) {
   const scroll = nodes(tree, node => node.props?.testID === 'scroll-settings')[0];
   assert.ok(scroll, 'the settings page renders its own scroll body');
-  return nodes({ type: 'Body', props: { children: scroll.props.children } }, () => false);
+  return nodes({ type: 'Body', props: { children: scroll.props.children } }, () => true);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,9 +278,7 @@ function settingsHarness({ settings, calls = [] } = {}) {
     '../services/decisionClient': { testDecisionConnection: async () => ({ success: true, message: 'ok' }) },
     '../state/settingsViewLogic': logic,
   }, {
-    Date: class extends Date {
-      constructor(...args) { super(...(args.length ? args : ['2026-10-17T12:00:00'])); }
-    },
+    Date: FrozenDate,
   });
 
   return {
@@ -398,6 +418,53 @@ test('saving the exam date writes the chosen ISO day and nothing else', async ()
     [['updateUserSettings', { examDate: '2026-12-26' }]]);
 });
 
+test('the goal stepper and presets are what actually decide the saved value', async () => {
+  // Every other save test calls `onSave(minutes)` with a number it chose. Those
+  // never exercise the controls that produce the number, so a broken stepper
+  // would still look green. This drives the real buttons.
+  const harness = settingsHarness({ settings: stored({ dailyGoalHours: 3 }) });
+  const sheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+
+  // The value starts at the stored 3h. One "+30 分钟" makes it 3h30m.
+  const plus = () => nodes(sheet(), node => node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '增加 30 分钟')[0];
+  plus().props.onPress();
+  await nodes(sheet(), node => node.type === 'YanjiPrimaryButton')[0].props.onPress();
+
+  const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][1].dailyGoalHours, 3.5, 'the stepper value is what gets stored');
+});
+
+test('a goal preset sets the stepper value instead of saving on its own', async () => {
+  // One source of truth for "what will be saved": the preset is a shortcut into
+  // the stepper, not a second writer.
+  const harness = settingsHarness({ settings: stored({ dailyGoalHours: 1 }) });
+  const sheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+  const preset = () => nodes(sheet(), node => node.props?.accessibilityLabel === '设为 8 小时')[0];
+  preset().props.onPress();
+  assert.deepEqual(harness.calls.filter(call => call[0] === 'updateUserSettings'), [],
+    'picking a preset must not write anything by itself');
+
+  await nodes(sheet(), node => node.type === 'YanjiPrimaryButton')[0].props.onPress();
+  const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
+  assert.equal(writes[0][1].dailyGoalHours, 8, 'the selected preset is what gets stored');
+});
+
+test('the exam-date sheet pages months without changing the selection', () => {
+  const harness = settingsHarness({ settings: stored() });
+  const sheet = () => nodes(harness.render(), byComponent('ExamDateSheet'))[0];
+  const monthTitle = () => nodes(sheet(), node => node.props?.accessibilityRole === 'header')
+    .map(node => String(node.props.children ?? '')).find(title => /年 .* 月/.test(title));
+  assert.equal(monthTitle(), '2026 年 12 月', 'the sheet opens on the stored date');
+
+  nodes(sheet(), node => node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '下一个月')[0].props.onPress();
+  assert.equal(monthTitle(), '2027 年 1 月', 'paging forward crosses the year boundary');
+
+  nodes(sheet(), node => node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '上一个月')[0].props.onPress();
+  nodes(sheet(), node => node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '上一个月')[0].props.onPress();
+  assert.equal(monthTitle(), '2026 年 11 月', 'paging back crosses below the stored month');
+});
+
 test('saving the daily goal converts minutes back into the stored hours column', async () => {
   const harness = settingsHarness({ settings: stored({ dailyGoalHours: 0 }) });
   const sheets = () => nodes(harness.render(), byComponent('DailyGoalSheet'));
@@ -426,6 +493,27 @@ test('a goal of zero means "no goal" and the sheet says so before saving it', as
   const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
   assert.equal(writes.length, 1);
   assert.equal(writes[0][1].dailyGoalHours, 0, 'clearing writes zero, the stored "unset"');
+});
+
+test('the page body walker can actually see a primary button', () => {
+  // Guards the helper the assertion below depends on. The previous version of
+  // `pageBody` collected nothing (predicate `() => false`), so the
+  // no-return-button test passed no matter what the page rendered. A synthetic
+  // tree with a button in it must be found — otherwise the assertion below is
+  // vacuous again.
+  const withButton = {
+    type: 'Body',
+    props: {
+      children: {
+        type: 'View',
+        props: {
+          children: { type: 'YanjiPrimaryButton', props: { label: '返回今天' } },
+        },
+      },
+    },
+  };
+  assert.equal(nodes(withButton, node => node.type === 'YanjiPrimaryButton').length, 1,
+    'the walker must descend into children and match a leaf component');
 });
 
 test('the page no longer ships a full-width return button', () => {
