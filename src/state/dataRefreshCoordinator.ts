@@ -66,12 +66,24 @@ export class DataRefreshCoordinator {
   private readonly pendingEvents = new Set<DataChangedType>();
   private flushScheduled = false;
   private foreground = true;
-  private seeded = false;
 
   constructor(private readonly loaders: DataRefreshLoaders) {}
 
+  /**
+   * 更新前台状态，并在真正回到前台时补一次读取。
+   *
+   * 为什么补偿必须在这里：Activity 退出再进入（进程与 JS 上下文都还活着）时，React 树
+   * 重新挂载，子组件的 effect **先于** `App` 的 effect 执行。于是读取方注册时
+   * `foreground` 还是上一轮遗留的 `false`，那次注册被门控挡掉了；等 `App` 把前台状态
+   * 补成 `true` 时，读取方不会再次注册（日期没变），若不在这里补一次，页面就永远停在
+   * 「正在读取」。
+   *
+   * 只在 `false → true` 的跳变上补偿：冷启动时初值就是 `true`，重复调用不会多发读取。
+   */
   setForeground(isForeground: boolean): void {
+    const wasForeground = this.foreground;
     this.foreground = isForeground;
+    if (isForeground && !wasForeground) this.handleForeground();
   }
 
   /**
@@ -87,17 +99,28 @@ export class DataRefreshCoordinator {
    * 另外只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
    */
   seed(properties: Partial<YanjiLaunchProperties> | null | undefined): void {
-    if (this.seeded || !properties) return;
-    this.seeded = true;
+    if (!properties) return;
 
     const date = properties.date;
     const daily = properties.dailySnapshot;
+    const settings = properties.settings;
+    const examCountdown = properties.examCountdown;
+
+    /**
+     * 只填空槽，并且**每次挂载都允许补**。
+     *
+     * 这里不再用「一生只 seed 一次」的门闩。宿主把同一份 `LaunchPreheat` 载荷交给每个
+     * 新建的根组件，而 Activity 退出再进入（进程仍存活）时 React 树会重新挂载、协调器
+     * 的缓存却已被上一轮的 `prune` 清空。一次性门闩会让这次挂载既拿不到预热数据、
+     * 又不再触发读取，首页就永远停在「正在读取」。
+     *
+     * 判据因此改成**缓存是否真的为空**：已有值说明桥接读回来过，那才是更新的数据，
+     * 绝不用旧载荷覆盖它。
+     */
     if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
       this.dailyValues.set(date, daily);
       this.dailyDirty.delete(date);
     }
-    const settings = properties.settings;
-    const examCountdown = properties.examCountdown;
     if (settings && examCountdown && !this.settingsValue) {
       this.settingsValue = { settings, examCountdown };
       this.settingsDirty = false;
