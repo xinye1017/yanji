@@ -36,12 +36,16 @@ import com.example.yanji.YanjiApplication
 import com.example.yanji.data.timer.ActiveSessionCoordinator
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.db.YanjiDatabase
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.service.FocusTimerService
 import com.facebook.react.views.view.ReactViewGroup
 import com.facebook.react.uimanager.PointerEvents
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import android.os.ParcelFileDescriptor
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -292,17 +296,21 @@ class TabLayoutInstrumentedTest {
         }
         await("Today scrolled to footer") { !(required("scroll-today") as ScrollView).canScrollVertically(1) }
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("draft note editor opened") { root?.hasWindowFocus() == false }
         val draft = "unsaved layout regression draft"
         onView(withContentDescription("记录内容")).inRoot(isDialog()).perform(replaceText(draft), closeSoftKeyboard())
         pressBack() // Exercise the modal's onRequestClose without a moving sheet target.
+        await("draft note editor closed") { root?.hasWindowFocus() == true }
         select("focus")
         onMain { assertTrue("Focus duration was preserved", selectedPreset(90)) }
         select("review")
         onMain { assertEquals(chosenDate, (required("review-date") as TextView).text.toString()) }
         select("today")
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("draft note editor reopened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog()).check(matches(withText(draft)))
         pressBack()
+        await("draft note editor closed again") { root?.hasWindowFocus() == true }
 
         select("focus")
         onMain {
@@ -336,6 +344,7 @@ class TabLayoutInstrumentedTest {
         onView(withContentDescription("暂停专注")).perform(scrollTo(), click())
         await("test session paused again") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
         onView(withContentDescription("放弃本轮")).perform(scrollTo(), click())
+        await("discard confirmation dialog opened") { root?.hasWindowFocus() == false }
         onView(withText("确认放弃")).inRoot(isDialog()).perform(click())
         await("test session discarded without saving a study record") { ActiveSessionCoordinator.active.value == null }
         val countsAfter = runBlocking {
@@ -358,6 +367,7 @@ class TabLayoutInstrumentedTest {
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("note editor opened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText(ownedNoteText), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -367,6 +377,7 @@ class TabLayoutInstrumentedTest {
             findText(ownedNoteText, "today") != null
         }
         onView(withContentDescription("编辑记录：$ownedNoteText")).perform(scrollTo(), click())
+        await("note editor opened for edit") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText("$ownedNoteText edited"), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -400,6 +411,7 @@ class TabLayoutInstrumentedTest {
         // per-run title. No fallback to a pre-existing user row, and no
         // three-pending-task threshold that silently degrades the assertions.
         onView(withContentDescription("添加任务")).perform(scrollTo(), click())
+        await("task editor opened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("任务名称")).inRoot(isDialog())
             .perform(replaceText(ownedTaskTitle), closeSoftKeyboard())
         val category = YanjiRepository.getInstance().subjects.value.first { it.enabled && it.parentId == null }
@@ -431,22 +443,23 @@ class TabLayoutInstrumentedTest {
         Log.i("YanjiLayoutTest", "Task preset survives tab switching without starting or changing a study session")
     }
 
-    /** Creates two owned notes through the UI so Today can scroll even on a tall phone. */
+    /** Seeds two owned notes through the repository so Today can scroll even on a tall phone. */
     private fun seedScrollableToday() {
         select("today")
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         repeat(2) { index ->
             val content = "$ownedNoteText seed $index\nScroll preservation\nHidden page content\nReturned page content"
-            onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
-            onView(withContentDescription("记录内容")).inRoot(isDialog())
-                .perform(replaceText(content), closeSoftKeyboard())
-            onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
-            awaitRoom("seeded note is persisted") {
-                YanjiDatabase.getDatabase(InstrumentationRegistry.getInstrumentation().targetContext)
-                    .noteEntryDao().getAllOnce().any { it.content == content }
+            runBlocking {
+                YanjiRepository.getInstance().addOrUpdateNoteAndAwait(
+                    NoteEntry(
+                        id = UUID.randomUUID().toString(),
+                        date = todayStr,
+                        content = content
+                    )
+                )
             }
             await("seeded note is rendered") { findText(content, "today") != null }
         }
-        await("record editor closed") { root?.hasWindowFocus() == true }
         val today = onMain { required("scroll-today") as ScrollView }
         awaitScrollSettled(today)
         onMain {
