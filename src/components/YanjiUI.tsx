@@ -742,7 +742,7 @@ export function YanjiBadge({
 }: {
   label: string;
   icon?: YanjiIconName;
-  tone?: 'brand' | 'neutral' | 'amber';
+  tone?: 'brand' | 'neutral' | 'amber' | 'positive';
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -750,15 +750,19 @@ export function YanjiBadge({
   const bg =
     tone === 'brand'
       ? paper.colors.brandSubtle
-      : tone === 'amber'
-        ? paper.colors.amberSubtle
-        : paper.colors.subtle;
+      : tone === 'positive'
+        ? paper.colors.positiveSubtle
+        : tone === 'amber'
+          ? paper.colors.amberSubtle
+          : paper.colors.subtle;
   const fg =
     tone === 'brand'
       ? paper.colors.brandInk
-      : tone === 'amber'
-        ? paper.colors.amber
-        : paper.colors.secondary;
+      : tone === 'positive'
+        ? paper.colors.positive
+        : tone === 'amber'
+          ? paper.colors.amber
+          : paper.colors.secondary;
 
   return (
     <View
@@ -1833,6 +1837,8 @@ export function YanjiTextInput({
   onChangeText,
   placeholder,
   multiline = false,
+  secureTextEntry = false,
+  autoCapitalize = 'sentences',
   accessibilityLabel,
   style,
 }: {
@@ -1840,6 +1846,8 @@ export function YanjiTextInput({
   onChangeText: (next: string) => void;
   placeholder: string;
   multiline?: boolean;
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   accessibilityLabel?: string;
   style?: ViewStyle;
 }): React.JSX.Element {
@@ -1855,6 +1863,8 @@ export function YanjiTextInput({
       placeholder={placeholder}
       placeholderTextColor={paper.colors.secondary}
       multiline={multiline}
+      secureTextEntry={secureTextEntry}
+      autoCapitalize={autoCapitalize}
       accessibilityLabel={accessibilityLabel ?? placeholder}
       style={[
         {

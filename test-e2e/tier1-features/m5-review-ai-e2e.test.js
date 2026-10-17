@@ -511,6 +511,9 @@ export function registerM5Tests() {
         content: 'x',
         isFavorite: false,
         sessionId: 'session_1',
+        category: 'INSPIRATION',
+        isResolved: false,
+        resolvedAt: null,
       };
       const unbound = { ...bound, id: 'n2', sessionId: null };
       const empty = { ...bound, id: 'n3', sessionId: '' };

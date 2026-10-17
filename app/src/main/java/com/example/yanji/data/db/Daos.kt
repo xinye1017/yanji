@@ -217,6 +217,13 @@ interface NoteEntryDao {
     @Query("UPDATE journal_entries SET content = :content, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateContent(id: String, content: String, updatedAt: Long): Int
 
+    /**
+     * 更新疑点解决状态。只改 isResolved、resolvedAt 与 updatedAt。
+     * 返回受影响行数：0 表示 id 不存在。
+     */
+    @Query("UPDATE journal_entries SET isResolved = :isResolved, resolvedAt = :resolvedAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setResolved(id: String, isResolved: Int, resolvedAt: Long?, updatedAt: Long): Int
+
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun deleteById(id: String)
 

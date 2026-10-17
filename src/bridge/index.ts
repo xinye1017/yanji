@@ -45,6 +45,8 @@ export interface StudyTask {
   createdAt: number;
 }
 
+export type NoteCategory = 'INSPIRATION' | 'DOUBT';
+
 export interface NoteEntry {
   id: string;
   date: string;
@@ -53,6 +55,12 @@ export interface NoteEntry {
   isFavorite: boolean;
   /** Focus session id, or null when the note is not bound to a session. Never empty string. */
   sessionId: string | null;
+  /** Category determined by Decision Model or default: INSPIRATION / DOUBT */
+  category: NoteCategory;
+  /** Whether a doubt has been resolved (only meaningful for DOUBT) */
+  isResolved: boolean;
+  /** Timestamp when the doubt was resolved, or null */
+  resolvedAt: number | null;
 }
 
 /**
@@ -156,6 +164,21 @@ export interface DailySnapshot {
   notes: NoteEntry[];
 }
 
+/**
+ * 宿主冷启动预热载荷（`MainActivity.getLaunchOptions()` → 根组件 props）。
+ *
+ * 与 [DailySnapshot]、[UserSettings]、[ExamCountdown] 逐字段一致，只是**提前**到了
+ * JS 首帧之前：首页第一帧直接渲染真实数据，不再先显示「正在读取…」再过桥刷新一次。
+ * 预热失败时这些 props 不存在，页面照原路径过桥读取。
+ */
+export interface YanjiLaunchProperties {
+  /** 预热时原生侧认定的「今天」（`yyyy-MM-dd`）；与 dailySnapshot.date 不符时 JS 侧丢弃。 */
+  date: string;
+  dailySnapshot: DailySnapshot;
+  settings: UserSettings;
+  examCountdown: ExamCountdown;
+}
+
 export interface UserSettings {
   examDate: string;
   targetSchool: string;
@@ -163,6 +186,14 @@ export interface UserSettings {
   themePreference: ThemeMode;
   /** Default daily focus target, persisted in Room. Optional for older native hosts. */
   dailyGoalHours?: number;
+  /** Decision Model provider ('openrouter' | 'typesafe') */
+  decisionProvider?: 'openrouter' | 'typesafe';
+  /** Decision Model name */
+  decisionModel?: string;
+  /** Decision API endpoint */
+  decisionEndpoint?: string;
+  /** Whether an API Key is currently stored securely in Android Keystore */
+  hasDecisionApiKey?: boolean;
 }
 
 export interface ExamCountdown {
@@ -249,9 +280,15 @@ interface YanjiDataModuleNative {
   toggleTask(taskId: string, completed: boolean): Promise<boolean>;
   updateTask(taskId: string, title: string, plannedMinutes: number): Promise<boolean>;
   deleteTask(taskId: string): Promise<boolean>;
-  saveQuickNote(content: string, date: string, sessionId: string | null): Promise<NoteEntry>;
+  saveQuickNote(
+    content: string,
+    date: string,
+    sessionId: string | null,
+    category?: string | null
+  ): Promise<NoteEntry>;
   getNotes(page: number, limit: number): Promise<NoteEntry[]>;
   toggleFavoriteNote(noteId: string): Promise<boolean>;
+  toggleNoteResolved(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
   /**
    * 编辑一条「记录此刻」的正文。空内容 reject `E_EMPTY_NOTE`；
@@ -281,6 +318,9 @@ interface YanjiDataModuleNative {
   deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>;
   getUserSettings(): Promise<UserSettings>;
   updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>;
+  saveDecisionApiKey(apiKey: string): Promise<boolean>;
+  getDecisionApiKey(): Promise<string>;
+  clearDecisionApiKey(): Promise<boolean>;
   getExamCountdown(): Promise<ExamCountdown>;
 }
 

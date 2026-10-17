@@ -7,11 +7,9 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.example.yanji.data.DailyStudySnapshot
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
-import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.CancellationException
@@ -145,7 +143,7 @@ class YanjiDataModule(
      * JS 侧紧接着读取一定能看到这一条。
      */
     @ReactMethod
-    fun saveQuickNote(content: String, date: String, sessionId: String?, promise: Promise) {
+    fun saveQuickNote(content: String, date: String, sessionId: String?, category: String?, promise: Promise) {
         val cleanContent = content.trim()
         if (cleanContent.isEmpty()) {
             promise.reject("E_EMPTY_NOTE", "Note content cannot be empty")
@@ -153,13 +151,17 @@ class YanjiDataModule(
         }
         scope.launch {
             val now = System.currentTimeMillis()
+            val validCategory = if (category?.equals("DOUBT", ignoreCase = true) == true) "DOUBT" else "INSPIRATION"
             val entry = NoteEntry(
                 id = UUID.randomUUID().toString(),
                 date = date,
                 content = cleanContent,
                 createdAt = now,
                 updatedAt = now,
-                sessionId = sessionId?.takeIf { it.isNotBlank() }
+                sessionId = sessionId?.takeIf { it.isNotBlank() },
+                category = validCategory,
+                isResolved = false,
+                resolvedAt = null
             )
             repository.addOrUpdateNoteAndAwait(entry)
             promise.resolve(noteMap(BridgeMappers.noteFields(entry)))
@@ -188,6 +190,19 @@ class YanjiDataModule(
             }
             repository.setNoteFavorite(noteId, !note.isFavorite)
             promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun toggleNoteResolved(noteId: String, promise: Promise) {
+        scope.launch {
+            val note = repository.noteEntries.value.find { it.id == noteId }
+            if (note == null) {
+                promise.resolve(false)
+                return@launch
+            }
+            val success = repository.setNoteResolvedAndAwait(noteId, !note.isResolved)
+            promise.resolve(success)
         }
     }
 
@@ -445,7 +460,7 @@ class YanjiDataModule(
     @ReactMethod
     fun getUserSettings(promise: Promise) {
         val settings = repository.settings.value
-        promise.resolve(settingsMap(settings))
+        promise.resolve(settingsMap(repository, settings))
     }
 
     @ReactMethod
@@ -455,38 +470,34 @@ class YanjiDataModule(
             targetExamDate = if (settings.hasKey("examDate")) settings.getString("examDate") ?: current.targetExamDate else current.targetExamDate,
             dailyGoalHours = if (settings.hasKey("dailyGoalHours")) settings.getDouble("dailyGoalHours").toFloat() else current.dailyGoalHours,
             validStudyThresholdMinutes = if (settings.hasKey("validStudyThresholdMinutes")) settings.getInt("validStudyThresholdMinutes") else current.validStudyThresholdMinutes,
-            themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode
+            themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode,
+            decisionProvider = if (settings.hasKey("decisionProvider")) settings.getString("decisionProvider") ?: current.decisionProvider else current.decisionProvider,
+            decisionModel = if (settings.hasKey("decisionModel")) settings.getString("decisionModel") ?: current.decisionModel else current.decisionModel,
+            decisionEndpoint = if (settings.hasKey("decisionEndpoint")) settings.getString("decisionEndpoint") ?: current.decisionEndpoint else current.decisionEndpoint
         )
         val result = repository.updateSettings(next)
         promise.resolve(result is com.example.yanji.data.SettingsUpdateResult.Saved)
     }
 
+    @ReactMethod
+    fun saveDecisionApiKey(apiKey: String, promise: Promise) {
+        promise.resolve(repository.saveDecisionApiKey(apiKey))
+    }
+
+    @ReactMethod
+    fun getDecisionApiKey(promise: Promise) {
+        promise.resolve(repository.getDecisionApiKey())
+    }
+
+    @ReactMethod
+    fun clearDecisionApiKey(promise: Promise) {
+        promise.resolve(repository.clearDecisionApiKey())
+    }
+
     /** 考研倒计时。考试日期早于今天时夹紧为 0，不返回负值。 */
     @ReactMethod
     fun getExamCountdown(promise: Promise) {
-        val settings = repository.settings.value
-        val examDateRaw = settings.targetExamDate
-        if (examDateRaw.isBlank()) {
-            promise.resolve(Arguments.createMap().apply {
-                putString("examDate", "")
-                putInt("daysRemaining", 0)
-            })
-            return
-        }
-        val examDate = YanjiTime.parseIsoDate(examDateRaw)
-        if (examDate == null) {
-            promise.resolve(Arguments.createMap().apply {
-                putString("examDate", examDateRaw)
-                putInt("daysRemaining", 0)
-            })
-            return
-        }
-        val today = YanjiTime.today()
-        val days = java.time.temporal.ChronoUnit.DAYS.between(today, examDate).coerceAtLeast(0)
-        promise.resolve(Arguments.createMap().apply {
-            putString("examDate", examDateRaw)
-            putInt("daysRemaining", days.toInt())
-        })
+        promise.resolve(examCountdownMap(repository.settings.value.targetExamDate))
     }
 
     // ------------------------------------------------------------ 事件
@@ -507,77 +518,6 @@ class YanjiDataModule(
     }
 
     // ------------------------------------------------------------ 映射
-
-    private fun dailySnapshotMap(snapshot: DailyStudySnapshot): WritableMap =
-        Arguments.createMap().apply {
-            putString("date", snapshot.date)
-            putString("formattedDate", snapshot.formattedDate)
-            putDouble("totalDurationSeconds", snapshot.totalDurationSeconds.toDouble())
-            putInt("focusCount", snapshot.focusCount)
-            putInt("examCount", snapshot.examCount)
-            putArray(
-                "sessions",
-                Arguments.createArray().apply {
-                    snapshot.sessions.forEach { item ->
-                        pushMap(Arguments.createMap().apply {
-                            putString("id", item.id)
-                            putString("title", item.title)
-                            putString("subjectId", item.subjectId)
-                            putString("subjectName", item.subjectName)
-                            putString("subjectColor", item.subjectColor)
-                            putDouble("startTime", item.startTime.toDouble())
-                            putDouble("endTime", item.endTime.toDouble())
-                            putDouble("durationSeconds", item.durationSeconds.toDouble())
-                            putBoolean("isExam", item.isExam)
-                            putString("note", item.note)
-                            putInt("pauseCount", item.pauseCount)
-                            putString("mode", item.mode)
-                            // 未挂计划时必须是 null（与 note.sessionId 同一写法）。
-                            if (item.taskId == null) putNull("taskId") else putString("taskId", item.taskId)
-                        })
-                    }
-                }
-            )
-            putArray(
-                "tasks",
-                Arguments.createArray().apply {
-                    snapshot.tasks.forEach { task ->
-                        pushMap(taskMap(task, snapshot.taskActualSeconds[task.id]))
-                    }
-                }
-            )
-            putArray(
-                "notes",
-                Arguments.createArray().apply {
-                    snapshot.notes.forEach { note ->
-                        pushMap(noteMap(BridgeMappers.noteFields(note)))
-                    }
-                }
-            )
-        }
-
-    /**
-     * 只装配 `WritableMap`；契约语义全部在 [BridgeMappers] 里，可在 JVM 单测逐字段断言。
-     */
-    private fun taskMap(
-        task: com.example.yanji.data.StudyTask,
-        actualSeconds: Long? = null
-    ): WritableMap {
-        val fields = BridgeMappers.taskFields(task, actualSeconds)
-        return Arguments.createMap().apply {
-            putString("id", fields.id)
-            putString("date", fields.date)
-            putString("subjectId", fields.subjectId)
-            putString("subjectName", fields.subjectName)
-            putString("subjectColor", fields.subjectColor)
-            putString("title", fields.title)
-            putInt("plannedMinutes", fields.plannedMinutes)
-            // 真实累计分钟数（秒 / 60），不再是恒为 0 的占位值。
-            putInt("actualMinutes", fields.actualMinutes)
-            putBoolean("completed", fields.completed)
-            putDouble("createdAt", fields.createdAt)
-        }
-    }
 
     /**
      * 回顾概览载荷（`ReviewOverview`）。这里只做 `WritableMap` 装配，
@@ -629,29 +569,6 @@ class YanjiDataModule(
                 }
             )
         }
-
-    private fun noteMap(fields: BridgeMappers.NoteFields): WritableMap =
-        Arguments.createMap().apply {
-            putString("id", fields.id)
-            putString("date", fields.date)
-            putDouble("timestamp", fields.timestamp)
-            putString("content", fields.content)
-            putBoolean("isFavorite", fields.isFavorite)
-            // 未绑定时必须是 null —— 契约 `isValidNoteEntry` 对每条 NoteEntry 载荷生效。
-            // 显式 putNull（与 emitStateChanged 的写法一致），绝不退化成空串。
-            if (fields.sessionId == null) putNull("sessionId") else putString("sessionId", fields.sessionId)
-        }
-
-    private fun settingsMap(settings: UserSettings): WritableMap {
-        val fields = BridgeMappers.settingsFields(settings)
-        return Arguments.createMap().apply {
-            putString("examDate", fields.examDate)
-            putString("targetSchool", fields.targetSchool)
-            putString("targetMajor", fields.targetMajor)
-            putDouble("dailyGoalHours", settings.dailyGoalHours.toDouble())
-            putString("themePreference", fields.themePreference)
-        }
-    }
 
     companion object {
         const val EVENT_DATA_CHANGED = "onDataChanged"

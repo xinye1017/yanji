@@ -26,7 +26,10 @@ export function loadTypeScript(entry, mocks = {}, globals = {}) {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
     const context = createContext({ module, exports: module.exports, require, console,
-      setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, ...globals });
+      setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
+      fetch: (...args) => globalThis.fetch(...args),
+      AbortController: globalThis.AbortController,
+      ...globals });
     new Script(output, { filename: file }).runInContext(context);
     return module.exports;
   }

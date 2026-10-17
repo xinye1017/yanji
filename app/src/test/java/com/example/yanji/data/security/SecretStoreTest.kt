@@ -84,6 +84,21 @@ class SecretStoreTest {
         assertEquals("", failingStore.readAiApiKey())
     }
 
+    @Test
+    fun saveAndReadAndClearDecisionApiKey() {
+        val directory = temporaryFolder.newFolder("decision-key")
+        val store = KeystoreSecretStore(directory, FakeCrypto())
+
+        assertEquals("", store.readDecisionApiKey())
+        val saveResult = store.saveDecisionApiKey("sk-openrouter-test")
+        assertTrue(saveResult is SecretWriteResult.Saved)
+        assertEquals("sk-openrouter-test", store.readDecisionApiKey())
+
+        val clearResult = store.clearDecisionApiKey()
+        assertTrue(clearResult is SecretWriteResult.Cleared)
+        assertEquals("", store.readDecisionApiKey())
+    }
+
     private class FakeCrypto(
         private val encryptFailure: Throwable? = null
     ) : SecretPayloadCrypto {

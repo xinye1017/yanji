@@ -36,6 +36,10 @@ interface SecretStore {
     fun clearAiApiKey(): SecretWriteResult
     fun migrateLegacyApiKeyIfPresent(): LegacySecretMigrationResult
 
+    fun saveDecisionApiKey(value: String): SecretWriteResult
+    fun readDecisionApiKey(): String
+    fun clearDecisionApiKey(): SecretWriteResult
+
     companion object {
         /** Temporary v7 -> v8 hand-off. Deleted only after an encrypted write succeeds. */
         const val LEGACY_FILE_NAME = "yanji_legacy_ai_api_key"
@@ -60,18 +64,21 @@ internal interface SecretPayloadCrypto {
  */
 class KeystoreSecretStore private constructor(
     private val credentialFile: File,
+    private val decisionCredentialFile: File,
     private val legacyFile: File,
     private val crypto: SecretPayloadCrypto
 ) : SecretStore {
 
     constructor(context: Context) : this(
         credentialFile = File(context.applicationContext.noBackupFilesDir, CREDENTIAL_FILE_NAME),
+        decisionCredentialFile = File(context.applicationContext.noBackupFilesDir, DECISION_CREDENTIAL_FILE_NAME),
         legacyFile = File(context.applicationContext.noBackupFilesDir, SecretStore.LEGACY_FILE_NAME),
         crypto = AndroidKeystorePayloadCrypto()
     )
 
     internal constructor(directory: File, crypto: SecretPayloadCrypto) : this(
         credentialFile = File(directory, CREDENTIAL_FILE_NAME),
+        decisionCredentialFile = File(directory, DECISION_CREDENTIAL_FILE_NAME),
         legacyFile = File(directory, SecretStore.LEGACY_FILE_NAME),
         crypto = crypto
     )
@@ -130,6 +137,47 @@ class KeystoreSecretStore private constructor(
         SecretWriteResult.Cleared
     }.getOrElse { error ->
         Log.e(TAG, "清除凭据失败", error)
+        SecretWriteResult.Failure(error)
+    }
+
+    override fun saveDecisionApiKey(value: String): SecretWriteResult {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return clearDecisionApiKey()
+
+        return runCatching {
+            val encrypted = crypto.encrypt(trimmed)
+            require(encrypted.startsWith(VERSION_PREFIX)) { "加密器返回了不受支持的凭据格式" }
+            replaceAtomically(decisionCredentialFile, encrypted)
+            SecretWriteResult.Saved
+        }.getOrElse { error ->
+            Log.e(TAG, "Keystore 加密或决策模型凭据落盘失败；拒绝保存未加密内容", error)
+            SecretWriteResult.Failure(error)
+        }
+    }
+
+    override fun readDecisionApiKey(): String {
+        if (!decisionCredentialFile.exists()) return ""
+        val stored = runCatching { decisionCredentialFile.readText(Charsets.UTF_8) }.getOrElse {
+            Log.e(TAG, "读取决策模型凭据文件失败", it)
+            return ""
+        }
+        if (stored.isBlank()) return ""
+        return runCatching { crypto.decrypt(stored) }.getOrElse { error ->
+            Log.w(TAG, "决策模型凭据无法解密，已隔离本地副本", error)
+            val unreadable = File(decisionCredentialFile.parentFile, "${decisionCredentialFile.name}.unreadable")
+            runCatching {
+                if (unreadable.exists()) unreadable.delete()
+                if (!decisionCredentialFile.renameTo(unreadable)) decisionCredentialFile.delete()
+            }
+            ""
+        }
+    }
+
+    override fun clearDecisionApiKey(): SecretWriteResult = runCatching {
+        deleteIfPresent(decisionCredentialFile)
+        SecretWriteResult.Cleared
+    }.getOrElse { error ->
+        Log.e(TAG, "清除决策模型凭据失败", error)
         SecretWriteResult.Failure(error)
     }
 
@@ -202,6 +250,7 @@ class KeystoreSecretStore private constructor(
         const val VERSION_PREFIX = "v1:"
         const val PLAIN_PREFIX = "plain:"
         const val CREDENTIAL_FILE_NAME = "yanji_ai_credential"
+        const val DECISION_CREDENTIAL_FILE_NAME = "yanji_decision_credential"
     }
 }
 

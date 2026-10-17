@@ -39,6 +39,29 @@ test('the backdrop excludes the dock and secondary settings layer', () => {
   }
 });
 
+test('the dock resolves its whole surface from the glass material', () => {
+  // The backdrop and hairline used to be literals in the component while the
+  // tint and selection came from `YanjiLiquidGlass`, so the same surface had
+  // two sources and a palette change could update one and miss the other. The
+  // material now owns every colour the dock paints.
+  for (const variant of ['light', 'dark']) {
+    const material = YanjiLiquidGlass[variant];
+    for (const role of ['tint', 'backdrop', 'border', 'selection']) {
+      assert.equal(typeof material[role], 'string', `YanjiLiquidGlass.${variant}.${role} is a colour`);
+      assert.ok(material[role].length > 0, `YanjiLiquidGlass.${variant}.${role} is not empty`);
+    }
+    assert.notEqual(material.backdrop, material.tint,
+      `${variant} keeps the unblurred backdrop distinct from the sampled tint`);
+  }
+
+  const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
+  for (const role of ['tint', 'backdrop', 'border', 'selection']) {
+    assert.match(dock, new RegExp(`material\\.${role}\\b`), `the dock paints its ${role} from the material`);
+  }
+  assert.ok(!/rgba\(/.test(dock),
+    'the dock hardcodes no colour of its own; every one comes from the material');
+});
+
 test('both native glass components are registered through the manual Fabric pipeline', () => {
   const registration = readFileSync(new URL('../app/src/main/jni/OnLoad.cpp', import.meta.url), 'utf8');
   for (const component of ['SajjadBlurOverlay', 'SajjadBlurTarget']) {
@@ -49,3 +72,21 @@ test('both native glass components are registered through the manual Fabric pipe
   const cmake = readFileSync(new URL('../app/src/main/jni/CMakeLists.txt', import.meta.url), 'utf8');
   assert.ok(cmake.includes('react-native-blur-overlay:RNBlurOverlaySpec'));
 });
+
+test('the dock pill is centered vertically with hairlineWidth compensation', () => {
+  const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
+  assert.match(dock, /contentHeight\s*=\s*height\s*-\s*2\s*\*\s*paper\.layout\.hairlineWidth/);
+  assert.match(dock, /height:\s*contentHeight/);
+  assert.match(dock, /justifyContent:\s*'center'/);
+});
+
+test('timeline entries maintain clearance around dots and unify spacing to focus records', () => {
+  const review = readFileSync(new URL('../src/screens/ReviewScreen.tsx', import.meta.url), 'utf8');
+  assert.match(review, /isFirst=\{index === 0\}/);
+  assert.match(review, /isLast=\{index === entries\.length - 1\}/);
+  assert.match(review, /nextEntryKind=\{entries\[index \+ 1\]\?\.kind\}/);
+  assert.match(review, /clearance\s*=\s*nodeRadius\s*\+\s*dotGap/);
+  assert.match(review, /top:\s*dotCenterY\s*\+\s*clearance/);
+  assert.match(review, /entry\.kind === 'note' && nextEntryKind === 'session'\s*\?\s*YanjiSpacing\.sm\s*:\s*YanjiSpacing\.lg/);
+});
+

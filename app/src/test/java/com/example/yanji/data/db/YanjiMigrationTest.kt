@@ -6,6 +6,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -43,7 +44,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 22
+    private val CURRENT_VERSION = 23
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -190,7 +191,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_18_19,
         YanjiDatabase.MIGRATION_19_20,
         YanjiDatabase.MIGRATION_20_21,
-        YanjiDatabase.MIGRATION_21_22
+        YanjiDatabase.MIGRATION_21_22,
+        YanjiDatabase.MIGRATION_22_23
     )
 
     /**
@@ -1160,6 +1162,36 @@ class YanjiMigrationTest {
             "#222222",
             db.textValue("SELECT colorHex FROM subjects WHERE id='custom-x'")
         )
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 22 -> 23 随笔分类与解决状态 + 决策模型配置
+
+    @Test
+    fun migrate22To23_addsCategoryAndResolutionAndDecisionSettings() {
+        val db22 = helper.createDatabase(22)
+        db22.prepare(
+            "INSERT INTO journal_entries (id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, isDraft, sessionId) VALUES " +
+                "('j22', '2026-10-16', '标题', '复习高数中值定理', 5, 4, 5, '', '', '', 1000, 1000, 0, 0, NULL)"
+        ).use { it.step() }
+        db22.prepare(
+            "INSERT INTO user_settings (id, targetExamDate, targetSchool, targetMajor, dailyGoalHours, " +
+                "validStudyThresholdMinutes, defaultSubjectId, soundEnabled, vibrationEnabled, aiProvider, " +
+                "aiBaseUrl, aiModel, aiProtocol, themeMode, mascotTheme) VALUES " +
+                "(1, '2026-12-26', '清华', '计算机', 8.0, 30, 'math_advanced', 1, 1, 'DeepSeek', " +
+                "'https://api.deepseek.com/v1', 'deepseek-chat', 'OPENAI_CHAT', 'SYSTEM', 'CLOUD')"
+        ).use { it.step() }
+        db22.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(22))
+
+        assertEquals("INSPIRATION", db.textValue("SELECT category FROM journal_entries WHERE id='j22'"))
+        assertEquals(0, db.intValue("SELECT isResolved FROM journal_entries WHERE id='j22'"))
+        assertEquals(1L, db.longValue("SELECT CASE WHEN resolvedAt IS NULL THEN 1 ELSE 0 END FROM journal_entries WHERE id='j22'"))
+        assertEquals("openrouter", db.textValue("SELECT decisionProvider FROM user_settings WHERE id=1"))
+        assertEquals("respan/span-01-lite:free", db.textValue("SELECT decisionModel FROM user_settings WHERE id=1"))
+        assertEquals("https://openrouter.ai/api/alpha/decisions", db.textValue("SELECT decisionEndpoint FROM user_settings WHERE id=1"))
         db.close()
     }
 

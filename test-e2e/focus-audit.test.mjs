@@ -342,6 +342,7 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
       YanjiIcon: noop, YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
+    '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
     '../components/RecordMomentModal': { RecordMomentModal: noop },
     '../navigation/NavigationShell': {
       useNavigationState: () => ({ focusPreset: null }),

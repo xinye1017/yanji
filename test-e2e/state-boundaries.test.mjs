@@ -43,7 +43,7 @@ const session = (elapsedSeconds = 0) => ({ sessionId: 'owned', subjectId: 'math'
 const tick = elapsedSeconds => ({ elapsedSeconds, remainingSeconds: 600 - elapsedSeconds, phase: 'FOCUS', isPaused: false });
 
 test('App shell reconciles a foreground transition that happened before its listener attached', () => {
-  const effects = [], states = [], gates = [];
+  const effects = [], states = [], gates = [], seeds = [];
   const dummy = () => null;
   const appState = { currentState: 'background', addEventListener: () => {
     appState.currentState = 'active'; // Native cache changed before the shell could receive the event.
@@ -75,14 +75,17 @@ test('App shell reconciles a foreground transition that happened before its list
     './src/bridge': { onDataChanged: () => dummy },
     './src/state/dataRefresh': { dataRefreshCoordinator: {
       setForeground: value => gates.push(value), enqueueDataChanged: dummy, handleForeground: dummy,
-    } },
+    }, seedLaunchSnapshot: properties => seeds.push(properties) },
     './src/state/timerStore': { setTimerForeground: dummy, useActiveSession: () => null },
   };
   for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
     mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
   }
   const app = loadTypeScript('App.tsx', mocks);
-  let element = app.default();
+  const launch = { date: '2026-10-10', dailySnapshot: daily('2026-10-10') };
+  let element = app.default(launch);
+  // The host's preheated snapshot must be seeded before any pane renders.
+  assert.deepEqual(seeds, [launch]);
   while (element.type.name !== 'AppShell') element = element.props.children;
   element.type();
   effects[0]();
@@ -137,7 +140,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
       './src/bridge': { onDataChanged: () => dummy },
       './src/state/dataRefresh': { dataRefreshCoordinator: {
         setForeground: dummy, enqueueDataChanged: dummy, handleForeground: dummy,
-      } },
+      }, seedLaunchSnapshot: dummy },
       './src/state/timerStore': {
         setTimerForeground: dummy,
         useActiveSession: enabled => {
@@ -304,6 +307,78 @@ function fixture(overrides = {}) {
   return { coordinator, reads };
 }
 
+const launchProperties = date => ({
+  date,
+  dailySnapshot: { ...daily(date), totalDurationSeconds: 3600 },
+  settings: { examDate: '2026-12-19', dailyGoalHours: 8 },
+  examCountdown: { examDate: '2026-12-19', daysRemaining: 63 },
+});
+
+test('a seeded launch payload paints the first frame without any bridged read', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+  const seeded = coordinator.getSettingsSnapshot();
+  assert.equal(seeded.settings.dailyGoalHours, 8);
+  assert.equal(seeded.examCountdown.daysRemaining, 63);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, []);
+  assert.equal(reads.settings, 0);
+});
+
+test('a seeded snapshot stays invalidated by native data changes', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  coordinator.enqueueDataChanged('sessions');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  // A session change never touches settings, so the seeded settings stay as they are.
+  assert.equal(reads.settings, 0);
+  // The fresh read replaces the seeded value instead of being skipped as cached.
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+});
+
+test('a launch payload for another date is discarded and read normally', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed({ ...launchProperties('2026-10-10'), dailySnapshot: daily('2026-10-09') });
+  // The mismatched snapshot is dropped; settings carry no date, so they still seed.
+  assert.equal(coordinator.getDailySnapshot('2026-10-09'), null);
+  assert.equal(coordinator.getSettingsSnapshot().settings.dailyGoalHours, 8);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  // Settings came from the same payload, so only the discarded snapshot is reread.
+  assert.equal(reads.settings, 0);
+});
+
+test('a failed preheat leaves the shell on the bridged read path', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(undefined);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  assert.equal(reads.settings, 1);
+});
+
+test('a second launch payload cannot roll back an already refreshed snapshot', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  coordinator.enqueueDataChanged('tasks');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
+});
+
 test('same-date readers share one request and one native write batch causes one reread', async () => {
   const { coordinator, reads } = fixture();
   coordinator.setDailyReader('today', '2026-10-10');
@@ -403,6 +478,114 @@ test('switching date suppresses the obsolete response and never rereads the hidd
   assert.equal(coordinator.getDailySnapshot('2026-10-09'), null);
   assert.equal(coordinator.getDailySnapshot('2026-10-10').date, '2026-10-10');
   assert.deepEqual(calls, ['2026-10-09', '2026-10-10']);
+});
+
+function dataHookFixture() {
+  const reads = { daily: [], review: [] };
+  const effects = [];
+  let observer;
+  const hooks = loadTypeScript('src/state/dataRefresh.ts', {
+    react: {
+      useCallback: fn => fn,
+      useEffect: fn => effects.push(fn),
+      useSyncExternalStore: (subscribe, get) => {
+        observer = { subscribe, get };
+        return get();
+      },
+    },
+    '../bridge': { YanjiDataNative: {
+      getDailySnapshot: date => {
+        const read = deferred(); reads.daily.push({ date, ...read }); return read.promise;
+      },
+      getReviewOverview: (...args) => {
+        const read = deferred(); reads.review.push({ args, ...read }); return read.promise;
+      },
+    } },
+  });
+  return { hooks, reads, effects, observer: () => observer };
+}
+
+test('mounted daily hook retains loaded content through hiding, invalidation and an in-flight read', async () => {
+  const f = dataHookFixture();
+  const date = '2026-10-10';
+  const coordinator = f.hooks.dataRefreshCoordinator;
+  f.hooks.useDailySnapshot('today', date, true);
+  let unsubscribe = f.observer().subscribe(() => {});
+  let detach = f.effects.pop()();
+  f.reads.daily[0].resolve(daily(date));
+  await settle();
+  const shown = f.observer().get();
+  assert.ok(shown);
+
+  // React changes the subscription before running passive reader cleanup.
+  f.hooks.useDailySnapshot('today', date, false);
+  unsubscribe();
+  unsubscribe = f.observer().subscribe(() => {});
+  detach();
+  detach = f.effects.pop()();
+  coordinator.enqueueDataChanged('notes');
+  await coordinator.refreshDailySnapshot(date);
+  await settle();
+  assert.equal(f.reads.daily.length, 1, 'a mounted hidden page does not query Room');
+  assert.equal(f.observer().get(), shown, 'hiding must not replace real content with loading content');
+
+  f.hooks.useDailySnapshot('today', date, true);
+  detach();
+  detach = f.effects.pop()();
+  assert.equal(f.reads.daily.length, 2);
+  assert.equal(f.observer().get(), shown, 'keep content while reactivation refreshes');
+
+  f.hooks.useDailySnapshot('today', date, false);
+  unsubscribe();
+  unsubscribe = f.observer().subscribe(() => {});
+  detach();
+  detach = f.effects.pop()();
+  f.reads.daily[1].resolve({ ...daily(date), focusCount: 1 });
+  await settle();
+  assert.equal(f.observer().get(), shown, 'a superseded in-flight read cannot prune a mounted snapshot');
+  assert.equal(f.reads.daily.length, 2);
+  unsubscribe();
+  detach();
+  assert.equal(coordinator.getDailySnapshot(date), null, 'unmount releases the retained date');
+});
+
+test('mounted Review overview stays available while hidden and releases obsolete windows', async () => {
+  const f = dataHookFixture();
+  const request = { scope: 'CALENDAR_WEEK', periodsBack: 0, anchorDate: '2026-10-10' };
+  const coordinator = f.hooks.dataRefreshCoordinator;
+  f.hooks.useReviewOverview(request);
+  const unsubscribe = f.observer().subscribe(() => {});
+  f.hooks.useReviewDataVisibility('review', [request], true);
+  const detach = f.effects.pop()();
+  f.reads.review[0].resolve({ totalSeconds: 600 });
+  await settle();
+  const shown = f.observer().get();
+  detach();
+  coordinator.enqueueDataChanged('sessions');
+  await coordinator.refreshReviewOverview(request);
+  await settle();
+  assert.equal(f.observer().get(), shown);
+  assert.equal(f.reads.review.length, 1, 'hidden overview is retained without a query');
+  unsubscribe();
+  assert.equal(coordinator.getReviewOverview(request), null);
+});
+
+test('daily subscriptions retain only dates still mounted while Review browses history', async () => {
+  const { coordinator } = fixture();
+  let unsubscribe = () => {};
+  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06']) {
+    unsubscribe();
+    unsubscribe = coordinator.subscribeDailySnapshot(date, () => {});
+    coordinator.setDailyReader('review', date);
+    await settle();
+  }
+  coordinator.setDailyReader('review', null);
+  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']) {
+    assert.equal(coordinator.getDailySnapshot(date), null, 'obsolete dates are released');
+  }
+  assert.ok(coordinator.getDailySnapshot('2026-10-06'));
+  unsubscribe();
+  assert.equal(coordinator.getDailySnapshot('2026-10-06'), null);
 });
 
 test('changing Review scope prevents an obsolete overview from replacing the new scope', async () => {

@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
 import Animated, {
   useAnimatedStyle,
@@ -66,9 +66,16 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
     offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
   }, [index, offset, reduceMotion, theme.motion.spring.snappy]);
 
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: offset.value * slotWidth }],
-  }));
+  const pillStyle = useAnimatedStyle(() => {
+    'worklet';
+    // Clamp the spring value so overshoot never pushes the pill beyond slot 0 (left) or slot (TABS.length - 1) (right).
+    const clampedOffset = Math.max(0, Math.min(TABS.length - 1, offset.value));
+    return {
+      transform: [{ translateX: clampedOffset * slotWidth }],
+    };
+  });
+
+  const contentHeight = height - 2 * paper.layout.hairlineWidth;
 
   return (
     <View
@@ -83,6 +90,10 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         bottom,
         height,
         borderRadius: height / 2,
+        backgroundColor: material.backdrop,
+        borderWidth: paper.layout.hairlineWidth,
+        borderColor: material.border,
+        justifyContent: 'center',
         ...theme.shadow.floating(theme.isDark),
       }, { opacity: visible ? 1 : 0 }]}
     >
@@ -98,16 +109,17 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         saturation={YanjiLiquidGlass.saturation}
         interactive={!reduceMotion}
         fadeDuration={0}
-        style={{ borderRadius: height / 2, overflow: 'hidden' }}
+        style={[{ ...StyleSheet.absoluteFill, borderRadius: height / 2, overflow: 'hidden' }]}
       >
         <View
           onLayout={onRowLayout}
           style={{
             flexDirection: 'row',
             width: '100%',
-            height,
+            height: contentHeight,
             borderRadius: YanjiRadius.full,
             padding: CAPSULE_PADDING,
+            overflow: 'hidden',
           }}
         >
           {/* Sliding selection pill — behind the labels, one slot wide. */}

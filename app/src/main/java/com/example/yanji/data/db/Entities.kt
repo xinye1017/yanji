@@ -144,7 +144,13 @@ data class NoteEntryEntity(
      * v21 新增：关联的专注会话 id。可空、无默认值 ——
      * 存量行一律为 NULL：升级前的记录不可能有时段归属，**迁移不编造归属**。
      */
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    /** v23 新增：类别（INSPIRATION / DOUBT） */
+    val category: String = "INSPIRATION",
+    /** v23 新增：疑点解决状态（0/1） */
+    val isResolved: Int = 0,
+    /** v23 新增：解决时间戳 */
+    val resolvedAt: Long? = null
 ) {
     fun toDomainModel(): NoteEntry {
         return NoteEntry(
@@ -162,7 +168,10 @@ data class NoteEntryEntity(
             updatedAt = updatedAt,
             isFavorite = isFavorite != 0,
             isDraft = isDraft != 0,
-            sessionId = sessionId?.ifBlank { null }
+            sessionId = sessionId?.ifBlank { null },
+            category = category,
+            isResolved = isResolved != 0,
+            resolvedAt = resolvedAt
         )
     }
 
@@ -183,7 +192,10 @@ data class NoteEntryEntity(
                 updatedAt = model.updatedAt,
                 isFavorite = if (model.isFavorite) 1 else 0,
                 isDraft = if (model.isDraft) 1 else 0,
-                sessionId = model.sessionId?.ifBlank { null }
+                sessionId = model.sessionId?.ifBlank { null },
+                category = model.category,
+                isResolved = if (model.isResolved) 1 else 0,
+                resolvedAt = model.resolvedAt
             )
         }
     }
@@ -210,7 +222,10 @@ data class UserSettingsEntity(
     val aiModel: String,
     val aiProtocol: String = "OPENAI_CHAT",
     val themeMode: String,
-    val mascotTheme: String
+    val mascotTheme: String,
+    val decisionProvider: String = "openrouter",
+    val decisionModel: String = "respan/span-01-lite:free",
+    val decisionEndpoint: String = "https://openrouter.ai/api/alpha/decisions"
 ) {
     fun toDomainModel(): UserSettings {
         return UserSettings(
@@ -228,7 +243,10 @@ data class UserSettingsEntity(
             aiModel = aiModel,
             aiProtocol = aiProtocol,
             themeMode = themeMode,
-            mascotTheme = mascotTheme
+            mascotTheme = mascotTheme,
+            decisionProvider = decisionProvider,
+            decisionModel = decisionModel,
+            decisionEndpoint = decisionEndpoint
         )
     }
 
@@ -249,7 +267,10 @@ data class UserSettingsEntity(
                 aiModel = model.aiModel,
                 aiProtocol = model.aiProtocol,
                 themeMode = model.themeMode,
-                mascotTheme = model.mascotTheme
+                mascotTheme = model.mascotTheme,
+                decisionProvider = model.decisionProvider,
+                decisionModel = model.decisionModel,
+                decisionEndpoint = model.decisionEndpoint
             )
         }
     }

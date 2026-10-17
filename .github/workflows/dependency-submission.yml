@@ -25,7 +25,7 @@ permissions:
 jobs:
   submit:
     name: Submit resolved dependency graph
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     # Submitting needs a write token. Fork pull requests only ever receive a read-only token,
     # so skip those instead of failing the check and blocking an otherwise healthy PR.

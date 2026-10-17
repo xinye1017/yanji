@@ -21,6 +21,7 @@ import { YanjiDataNative, YanjiTimerNative } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
+import { RollingTimeDisplay } from '../components/RollingTimeDisplay';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
@@ -529,15 +530,16 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   {formatEstimatedEndTime(durationMinutes)}
                 </Text>
 
+                <RollingTimeDisplay
+                  valueMinutes={durationMinutes}
+                  color={paper.colors.ink}
+                  style={{ marginVertical: YanjiSpacing.xs }}
+                />
+
                 <Text
                   testID="focus-duration-value"
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.6}
-                  numberOfLines={1}
-                  style={[
-                    paper.typography.displayDial,
-                    { color: paper.colors.ink, marginVertical: YanjiSpacing.xs, textAlign: 'center' },
-                  ]}
+                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                  accessible={false}
                 >
                   {formatDialMinutes(durationMinutes)}
                 </Text>

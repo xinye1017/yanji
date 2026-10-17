@@ -3,8 +3,12 @@
  *
  * The tint and selection are the paper domain's `canvas` and `brand` in RGBA:
  * the dock samples the paper behind it, so its veil has to be the same warmth
- * or it reads as a cold pane laid over warm paper. The geometry, blur radius,
- * downsampling and saturation below are the renderer's own inputs and stay put.
+ * or it reads as a cold pane laid over warm paper. `backdrop` and `border` are
+ * the dock's own surface and hairline — the parts that stay when the blur is
+ * unavailable — and live here so the dock reads one material instead of
+ * resolving half of it from the theme and half from literals in the component.
+ * The geometry, blur radius, downsampling and saturation below are the
+ * renderer's own inputs and stay put.
  */
 export const YanjiLiquidGlass = {
   targetId: 'yanji-tab-content',
@@ -22,14 +26,22 @@ export const YanjiLiquidGlass = {
   light: {
     /** paper light `canvas` #F6F4EF */
     tint: 'rgba(246,244,239,0.36)',
+    /** The dock's own veil, sampled through the blur. */
+    backdrop: 'rgba(246,244,239,0.85)',
+    /** Hairline that keeps a light veil legible over a light page. */
+    border: 'rgba(0,0,0,0.08)',
     /** paper light `brand` #C84B31 */
     selection: 'rgba(200,75,49,0.14)',
   },
   dark: {
-    /** paper dark `canvas` #111315 */
-    tint: 'rgba(17,19,21,0.76)',
+    /** paper dark slate surface for contrast against deep canvas */
+    tint: 'rgba(28,30,35,0.85)',
+    /** Deeper than the tint: a dark dock has to read as a surface, not a hole. */
+    backdrop: 'rgba(28,30,35,0.88)',
+    /** Hairline that separates a dark veil from a dark page. */
+    border: 'rgba(255,255,255,0.16)',
     /** paper dark `brand` #E06D53 */
-    selection: 'rgba(224,109,83,0.20)',
+    selection: 'rgba(224,109,83,0.24)',
   },
 } as const;
 

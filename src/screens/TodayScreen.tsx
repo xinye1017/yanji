@@ -120,6 +120,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const pending = tasks?.filter(task => !task.completed) ?? [];
   const completed = tasks?.filter(task => task.completed) ?? [];
   const latestNotes = useMemo(() => [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
+  const todayDoubts = useMemo(() => (notes ?? []).filter(note => note.category === 'DOUBT'), [notes]);
+  const resolvedDoubts = useMemo(() => todayDoubts.filter(note => note.isResolved), [todayDoubts]);
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
@@ -147,6 +149,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
     try {
       if (!await YanjiDataNative.toggleFavoriteNote(note.id)) throw new Error('refused');
     } catch { setActionError('收藏未保存，请再次点击收藏重试。'); }
+    finally { setBusyNote(null); }
+  };
+  const toggleResolved = async (note: NoteEntry) => {
+    if (busyNote) return;
+    setBusyNote(note.id);
+    setActionError(null);
+    try {
+      if (!await YanjiDataNative.toggleNoteResolved(note.id)) throw new Error('refused');
+    } catch { setActionError('疑点状态未保存，请重试。'); }
     finally { setBusyNote(null); }
   };
   const openGoal = () => {
@@ -291,6 +302,76 @@ export function TodayScreen({ visible, foregroundRevision }: {
             onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)} onStartFocus={() => startTask(task)} />
         ))}
 
+        {todayDoubts.length > 0 ? (
+          <View style={{ marginTop: layout.sectionGap }}>
+            <YanjiPaperSectionHeading
+              title="今日疑点"
+              countText={`${resolvedDoubts.length}/${todayDoubts.length}`}
+            />
+            <YanjiCard variant="default">
+              {todayDoubts.map((doubt, index) => (
+                <View key={doubt.id}>
+                  {index > 0 ? <YanjiHairline style={{ marginVertical: YanjiSpacing.sm }} /> : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.gridGap }}>
+                    <Pressable
+                      onPress={() => void toggleResolved(doubt)}
+                      disabled={busyNote !== null}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: !!doubt.isResolved }}
+                      accessibilityLabel={`${doubt.isResolved ? '标记为未解决' : '标记为已解决'}：${noteTitle(doubt)}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={({ pressed }) => ({
+                        minHeight: layout.rowMinHeight,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.65 : 1,
+                      })}
+                    >
+                      <YanjiIcon
+                        name={doubt.isResolved ? 'doubtResolved' : 'doubtUnresolved'}
+                        size={20}
+                        color={doubt.isResolved ? colors.positive : colors.secondary}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setEditingNote(doubt); setRecordOpen(true); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`编辑疑点：${noteTitle(doubt)}`}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        minHeight: layout.rowMinHeight,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.65 : 1,
+                      })}
+                    >
+                      <Text
+                        style={[
+                          typography.bodyExcerpt,
+                          {
+                            color: doubt.isResolved ? colors.secondary : colors.ink,
+                            textDecorationLine: doubt.isResolved ? 'line-through' : 'none',
+                          },
+                        ]}
+                        numberOfLines={3}
+                      >
+                        {doubt.content}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginTop: 4 }}>
+                        <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                          {timeLabel(doubt.timestamp)}
+                        </Text>
+                        <YanjiBadge
+                          tone={doubt.isResolved ? 'positive' : 'brand'}
+                          label={doubt.isResolved ? '已解决' : '待解决'}
+                        />
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </YanjiCard>
+          </View>
+        ) : null}
+
         <YanjiCard variant="hero" style={{ marginTop: layout.sectionGap }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
@@ -308,8 +389,20 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 <Pressable onPress={() => { setEditingNote(note); setRecordOpen(true); }}
                   accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
                   style={({ pressed }) => ({ flex: 1, minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-                  {index > 0 ? <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.xs }]}>{timeLabel(note.timestamp)}</Text> : null}
-                  <Text style={[typography.bodyExcerpt, { color: colors.ink }]} numberOfLines={4}>“{note.content}”</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginBottom: YanjiSpacing.xs }}>
+                    {index > 0 ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{timeLabel(note.timestamp)}</Text> : null}
+                    <YanjiBadge
+                      tone={note.category === 'DOUBT' ? (note.isResolved ? 'positive' : 'brand') : 'neutral'}
+                      label={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决') : '灵感'}
+                    />
+                  </View>
+                  <Text style={[
+                    typography.bodyExcerpt,
+                    {
+                      color: note.category === 'DOUBT' && note.isResolved ? colors.secondary : colors.ink,
+                      textDecorationLine: note.category === 'DOUBT' && note.isResolved ? 'line-through' : 'none',
+                    },
+                  ]} numberOfLines={4}>“{note.content}”</Text>
                 </Pressable>
                 <YanjiIconButton icon={note.isFavorite ? 'star' : 'starOutline'} onPress={() => void toggleFavorite(note)}
                   selected={note.isFavorite} disabled={busyNote !== null}

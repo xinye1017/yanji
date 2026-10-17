@@ -51,7 +51,10 @@ export const BridgeSchemas = {
       // Contract (src/bridge/index.ts): sessionId is a nullable string.
       // null means the note is not bound to a focus session. Empty string is NOT a
       // valid representation of "unbound" - it must be null.
-      (obj.sessionId === null || (typeof obj.sessionId === 'string' && obj.sessionId.length > 0))
+      (obj.sessionId === null || (typeof obj.sessionId === 'string' && obj.sessionId.length > 0)) &&
+      (obj.category === 'INSPIRATION' || obj.category === 'DOUBT') &&
+      typeof obj.isResolved === 'boolean' &&
+      (obj.resolvedAt === null || typeof obj.resolvedAt === 'number')
     );
   },
 

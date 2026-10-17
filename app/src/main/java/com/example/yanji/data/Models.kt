@@ -319,7 +319,13 @@ data class NoteEntry(
      * 由 JS 侧解析后作为参数传入（见 `RecordMomentModal.tsx`），桥接层**不自行反查**
      * 活动会话——那会让"绑哪一场"出现第二个事实来源。
      */
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    /** 类别（v23 新增）：'INSPIRATION'（灵感）或 'DOUBT'（疑点） */
+    val category: String = "INSPIRATION",
+    /** 疑点是否已解决（v23 新增）：仅对 DOUBT 生效 */
+    val isResolved: Boolean = false,
+    /** 解决时间戳（v23 新增）：解决时记录 */
+    val resolvedAt: Long? = null
 )
 
 @Serializable
@@ -360,7 +366,11 @@ data class UserSettings(
      */
     val themeMode: String = com.example.yanji.theme.YanjiThemeMode.SYSTEM.name,
     /** 当前学习伙伴主题；未知值由主题层安全回落到 CLOUD（卷卷）。 */
-    val mascotTheme: String = com.example.yanji.theme.MascotThemeId.CLOUD.name
+    val mascotTheme: String = com.example.yanji.theme.MascotThemeId.CLOUD.name,
+    /** 决策模型配置（v23 新增）：Provider、模型名、Endpoint */
+    val decisionProvider: String = "openrouter",
+    val decisionModel: String = "respan/span-01-lite:free",
+    val decisionEndpoint: String = "https://openrouter.ai/api/alpha/decisions"
 ) {
     val isAiConfigured: Boolean
         get() = aiApiKey.isNotBlank() || (aiBaseUrl.isNotBlank() && !aiBaseUrl.contains("api.deepseek.com"))

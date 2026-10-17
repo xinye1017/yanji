@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -166,9 +167,9 @@ class YanjiTimerModule(
 
     private fun observeCoordinator() {
         scope.launch {
-            ActiveSessionCoordinator.coordinatorState.collectLatest { state ->
-                emitStateChanged(state)
-            }
+            // Pause/resume updates the active session while its phase stays ACTIVE.
+            combine(ActiveSessionCoordinator.coordinatorState, ActiveSessionCoordinator.active) { state, _ -> state }
+                .collectLatest { state -> emitStateChanged(state) }
         }
     }
 

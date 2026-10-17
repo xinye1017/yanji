@@ -15,6 +15,7 @@ import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
+import { classifyMoment } from '../services/decisionClient';
 import {
   YanjiHairline,
   YanjiPaperSheetHeading,
@@ -82,7 +83,14 @@ export function RecordMomentModal({
         } catch {
           sessionId = null;
         }
-        await YanjiDataNative.saveQuickNote(content, date, sessionId);
+        // 使用决策模型自动研判是否为疑点（阈值 0.7），不显示手动打标按钮
+        let category = 'INSPIRATION';
+        try {
+          category = await classifyMoment(content);
+        } catch {
+          category = 'INSPIRATION';
+        }
+        await YanjiDataNative.saveQuickNote(content, date, sessionId, category);
       }
       if (!editingNote) captureDraft.current = '';
       setText('');

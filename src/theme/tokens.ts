@@ -451,12 +451,35 @@ export const YanjiPaperLayout = {
   timelineAxisColumn: 16,
   timelineNodeSize: 8,
   /**
+   * The band every element of an entry's first line centres on: the clock, the
+   * spine node, the title, `+时长` and the trailing delete control. Sharing one
+   * height is what keeps them collinear — without it the clock and the node
+   * anchor to the top of the row while the title centres in it, and they drift
+   * apart by a few dp.
+   *
+   * The trailing controls are sized to this band too, so they cannot grow the
+   * line past the alignment it exists to hold. `YanjiIconButton` carries 8dp of
+   * hit slop on each side, which is what lifts a 28dp control to the 44dp
+   * `YanjiTouch.min` floor without widening the visible glyph.
+   *
+   * That slop deliberately reaches past the band, which the public `hitSlop`
+   * docs read as impossible ("the touch area never extends past the parent view
+   * bounds"). Fabric is what makes it work: `YogaLayoutableShadowNode::
+   * getContentBounds` unions each child's frame with its `hitSlop` before the
+   * parent's `overflowInset` is computed, and `TouchTargetHelper` tests a point
+   * against `hitSlopRect` before the view's own bounds — so a touch above or
+   * below the band still routes to the control. The effective floor is
+   * `timelineHeadBand + 2 * hitSlop`; shrinking the slop to stay inside the band
+   * is what would actually drop these controls below `YanjiTouch.min`.
+   */
+  timelineHeadBand: 28,
+  /**
    * How far the timeline's clock column and trailing delete control may sit
    * from the page gutter. Negative pulls the clock toward the screen edge and
    * the delete glyph past the gutter; the timeline reads as a full-bleed spine
    * rather than a column of text indented inside it.
    */
-  timelineEdgeBleed: 8,
+  timelineEdgeBleed: 12,
   /** A dated cell in the review filmstrip — day number above its subject dot. */
   filmstripCellMinHeight: 58,
   sheetTopRadius: 26,

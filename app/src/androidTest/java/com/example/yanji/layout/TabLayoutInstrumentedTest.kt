@@ -20,6 +20,7 @@ import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
+import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.action.GeneralSwipeAction
 import androidx.test.espresso.action.Swipe
 import androidx.test.espresso.action.Press
@@ -31,17 +32,23 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.yanji.MainActivity
+import com.example.yanji.YanjiApplication
 import com.example.yanji.data.timer.ActiveSessionCoordinator
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.db.YanjiDatabase
+import com.example.yanji.data.NoteEntry
 import com.example.yanji.service.FocusTimerService
 import com.facebook.react.views.view.ReactViewGroup
 import com.facebook.react.uimanager.PointerEvents
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import android.os.ParcelFileDescriptor
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import org.hamcrest.Description
 import org.hamcrest.TypeSafeMatcher
 import org.hamcrest.Matchers.allOf
@@ -88,6 +95,7 @@ class TabLayoutInstrumentedTest {
         await("three native RN scroll viewports mounted") {
             root?.let { views(it).filterIsInstance<ScrollView>().count { scroll -> scroll.height > 0 } == 3 } == true
         }
+        await("launched activity window focused") { root?.hasWindowFocus() == true }
     }
 
     @Test
@@ -133,11 +141,21 @@ class TabLayoutInstrumentedTest {
             // Close the Activity first: FocusScreen holds the task preset in
             // local state, so the owned row must not be deleted from under it.
             scenario.close()
+            // ReactActivity stops its Fabric surface asynchronously. Finish JS
+            // teardown before the next test mounts another app in the same host.
+            val stopped = (context.applicationContext as YanjiApplication).reactHost
+                .destroy("Layout test teardown", null)
+            check(stopped.waitForCompletion(15, TimeUnit.SECONDS) && !stopped.isFaulted() && !stopped.isCancelled()) {
+                "React host teardown failed: ${stopped.getError()}"
+            }
         }
         // Only remove records created through this test's UI flow.
         runBlocking {
             val noteDao = YanjiDatabase.getDatabase(context).noteEntryDao()
-            noteDao.getAllOnce().filter { it.content == ownedNoteText || it.content == "$ownedNoteText edited" }
+            // Every note this test writes starts with the per-run `ownedNoteText`
+            // prefix (the plain record, its edit, and the scroll seed rows), so
+            // the prefix identifies this run's rows and nothing the user owns.
+            noteDao.getAllOnce().filter { it.content.startsWith(ownedNoteText) }
                 .forEach { noteDao.deleteById(it.id) }
             val taskDao = YanjiDatabase.getDatabase(context).studyTaskDao()
             taskDao.getAllFlow().first()
@@ -198,15 +216,16 @@ class TabLayoutInstrumentedTest {
 
     @Test
     fun realScrollGesturesReachTheLastElementAndOffsetsSurviveSwitching() {
+        seedScrollableToday()
         for (tab in tabs) {
             select(tab)
+            if (tab == "review") await("Review daily snapshot loaded") {
+                findText("正在读取这一天的记录…", "review") == null
+            }
             val scroll = onMain { required("scroll-$tab") as ScrollView }
-            var atEnd = false
+            awaitScrollSettled(scroll)
             for (attempt in 0 until 20) {
-                if (onMain { !scroll.canScrollVertically(1) }) {
-                    atEnd = true
-                    break
-                }
+                if (onMain { !scroll.canScrollVertically(1) }) break
                 onView(testId("scroll-$tab")).perform(GeneralSwipeAction(
                     Swipe.FAST,
                     { view ->
@@ -220,9 +239,9 @@ class TabLayoutInstrumentedTest {
                     },
                     Press.FINGER
                 ))
-                SystemClock.sleep(250) // Let native fling settle before measuring.
+                awaitScrollSettled(scroll)
             }
-            assertTrue("$tab must reach the bottom through native gestures", atEnd)
+            onMain { assertFalse("$tab must reach the bottom through native gestures", scroll.canScrollVertically(1)) }
             val offset = onMain {
                 val viewport = bounds(scroll)
                 val content = scroll.getChildAt(0) as ViewGroup
@@ -232,8 +251,15 @@ class TabLayoutInstrumentedTest {
                 Log.i("YanjiLayoutTest", "$tab scrollY=${scroll.scrollY} viewport=$viewport last=${bounds(last)}")
                 scroll.scrollY
             }
+            val contentHeight = onMain { scroll.getChildAt(0).height }
             select(tabs.first { it != tab })
+            awaitScrollSettled(scroll)
+            onMain {
+                assertEquals("$tab hidden content height must remain stable", contentHeight, scroll.getChildAt(0).height)
+                assertEquals("$tab hidden offset must remain stable", offset, scroll.scrollY)
+            }
             select(tab)
+            awaitScrollSettled(scroll)
             onMain {
                 assertSame(scroll, required("scroll-$tab"))
                 assertEquals("$tab offset must survive tab switching", offset, scroll.scrollY)
@@ -251,11 +277,16 @@ class TabLayoutInstrumentedTest {
             listOf(db.focusSessionDao().count(), db.examSessionDao().count(), db.noteEntryDao().count())
         }
         select("focus")
-        onView(withContentDescription("预设 90 分钟")).perform(click())
+        // 90 minutes is a real user reachable value: the ruler steps by five
+        // from 5 to 180. Drive it through the same accessibility action a
+        // screen reader exposes, not through a coordinate tap on the scale.
+        adjustDurationTo(90)
         await("duration selected") { selectedPreset(90) }
         select("review")
+        onView(allOf(withText("趋势统计"), isDescendantOfA(testId("scroll-review")))).perform(scrollTo(), click())
+        await("Review period selector mounted") { find("review-date") is TextView }
         val initialDate = onMain { (required("review-date") as TextView).text.toString() }
-        onView(withContentDescription("前一天")).perform(click())
+        onView(withContentDescription("上一周期")).perform(scrollTo(), click())
         await("date changed") { (required("review-date") as TextView).text.toString() != initialDate }
         val chosenDate = onMain { (required("review-date") as TextView).text.toString() }
         select("today")
@@ -264,18 +295,22 @@ class TabLayoutInstrumentedTest {
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
         await("Today scrolled to footer") { !(required("scroll-today") as ScrollView).canScrollVertically(1) }
-        onView(withContentDescription("新建今日记录")).perform(click())
+        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("draft note editor opened") { root?.hasWindowFocus() == false }
         val draft = "unsaved layout regression draft"
         onView(withContentDescription("记录内容")).inRoot(isDialog()).perform(replaceText(draft), closeSoftKeyboard())
         pressBack() // Exercise the modal's onRequestClose without a moving sheet target.
+        await("draft note editor closed") { root?.hasWindowFocus() == true }
         select("focus")
         onMain { assertTrue("Focus duration was preserved", selectedPreset(90)) }
         select("review")
         onMain { assertEquals(chosenDate, (required("review-date") as TextView).text.toString()) }
         select("today")
-        onView(withContentDescription("新建今日记录")).perform(click())
+        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("draft note editor reopened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog()).check(matches(withText(draft)))
         pressBack()
+        await("draft note editor closed again") { root?.hasWindowFocus() == true }
 
         select("focus")
         onMain {
@@ -288,7 +323,9 @@ class TabLayoutInstrumentedTest {
         }
         val sessionId = checkNotNull(ownedSessionId)
         val elapsed = FocusTimerService.elapsedSecondsForUi.value
-        onView(withContentDescription("返回今天，专注继续在后台运行")).perform(click())
+        await("immersive focus mounted") { find("focus-running") != null }
+        pressBack()
+        await("system back returns to Today without stopping the timer") { required("pane-today").alpha == 1f }
         select("review")
         await("native timer progresses while its page is hidden") {
             FocusTimerService.elapsedSecondsForUi.value >= elapsed + 2
@@ -299,9 +336,15 @@ class TabLayoutInstrumentedTest {
             ActiveSessionCoordinator.active.value?.targetDurationSeconds)
         Log.i("YanjiLayoutTest", "Native timer continued across tabs: elapsed=$elapsed -> ${FocusTimerService.elapsedSecondsForUi.value}")
         onMain { assertEquals(bounds(required("tab-content")), bounds(required("pane-focus"))) }
-        onView(withContentDescription("暂停专注")).perform(click())
-        await("test session paused") { ActiveSessionCoordinator.active.value?.paused == true }
-        onView(withContentDescription("放弃本轮")).perform(click())
+        await("running focus controls mounted") { find("focus-running") != null }
+        onView(withContentDescription("暂停专注")).perform(scrollTo(), click())
+        await("test session paused") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
+        onView(withContentDescription("继续专注")).perform(scrollTo(), click())
+        await("test session resumed") { ActiveSessionCoordinator.active.value?.paused == false && find("focus-running") != null }
+        onView(withContentDescription("暂停专注")).perform(scrollTo(), click())
+        await("test session paused again") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
+        onView(withContentDescription("放弃本轮")).perform(scrollTo(), click())
+        await("discard confirmation dialog opened") { root?.hasWindowFocus() == false }
         onView(withText("确认放弃")).inRoot(isDialog()).perform(click())
         await("test session discarded without saving a study record") { ActiveSessionCoordinator.active.value == null }
         val countsAfter = runBlocking {
@@ -323,7 +366,8 @@ class TabLayoutInstrumentedTest {
             val scroll = required("scroll-today") as ScrollView
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
-        onView(withContentDescription("新建今日记录")).perform(click())
+        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        await("note editor opened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText(ownedNoteText), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -332,7 +376,8 @@ class TabLayoutInstrumentedTest {
         await("new note appears after Room invalidation") {
             findText(ownedNoteText, "today") != null
         }
-        onView(withContentDescription("编辑记录：$ownedNoteText")).perform(click())
+        onView(withContentDescription("编辑记录：$ownedNoteText")).perform(scrollTo(), click())
+        await("note editor opened for edit") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText("$ownedNoteText edited"), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -365,12 +410,13 @@ class TabLayoutInstrumentedTest {
         // Deterministic owned fixture: create the task through the UI with a
         // per-run title. No fallback to a pre-existing user row, and no
         // three-pending-task threshold that silently degrades the assertions.
-        onView(withContentDescription("添加任务")).perform(click())
+        onView(withContentDescription("添加任务")).perform(scrollTo(), click())
+        await("task editor opened") { root?.hasWindowFocus() == false }
         onView(withContentDescription("任务名称")).inRoot(isDialog())
             .perform(replaceText(ownedTaskTitle), closeSoftKeyboard())
         val category = YanjiRepository.getInstance().subjects.value.first { it.enabled && it.parentId == null }
-        onView(withText(category.name)).inRoot(isDialog()).perform(click())
-        onView(withContentDescription("保存任务")).inRoot(isDialog()).perform(click())
+        onView(withText(category.name)).inRoot(isDialog()).perform(scrollTo(), click())
+        onView(withContentDescription("保存任务")).inRoot(isDialog()).perform(scrollTo(), click())
         awaitRoom("new task is persisted") { db.studyTaskDao().getAllFlow().first().any { it.title == ownedTaskTitle } }
         // Bind the exact row to this test instance *before* any UI wait. A wait
         // can fail after the row is already durable, and teardown must still be
@@ -379,7 +425,7 @@ class TabLayoutInstrumentedTest {
         ownedTaskId = task.id
         await("task editor closed after saving") { root?.hasWindowFocus() == true }
         await("new task is visible after native table invalidation") { findText(ownedTaskTitle, "today") != null }
-        onView(withContentDescription("为${task.title}设置专注")).perform(click())
+        onView(withContentDescription("为${task.title}设置专注")).perform(scrollTo(), click())
         await("Focus consumes the task preset") { required("pane-focus").alpha == 1f }
         await("Task binding is shown") { findText("关联任务 · ${task.title}", "focus") != null }
         onMain { assertTrue("Preset adopts the task's planned duration", selectedPreset(task.plannedMinutes)) }
@@ -391,16 +437,54 @@ class TabLayoutInstrumentedTest {
         }
         // Clear the local binding before the owned row is deleted, so a later
         // submit can never carry a task id this test removed.
-        onView(withContentDescription("取消关联任务")).perform(click())
+        onView(withContentDescription("取消关联任务")).perform(scrollTo(), click())
         await("task binding cleared") { findText("关联任务 · ${task.title}", "focus") == null }
         assertNull("Preparing a preset does not start a native session", ActiveSessionCoordinator.active.value)
         Log.i("YanjiLayoutTest", "Task preset survives tab switching without starting or changing a study session")
     }
 
-    // Fabric can flatten the pane wrapper. The native ScrollView remains the
-    // actual parent of that page's text and keeps hidden-page matches separate.
+    /** Seeds two owned notes through the repository so Today can scroll even on a tall phone. */
+    private fun seedScrollableToday() {
+        select("today")
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        repeat(2) { index ->
+            val content = "$ownedNoteText seed $index\nScroll preservation\nHidden page content\nReturned page content"
+            runBlocking {
+                YanjiRepository.getInstance().addOrUpdateNoteAndAwait(
+                    NoteEntry(
+                        id = UUID.randomUUID().toString(),
+                        date = todayStr,
+                        content = content
+                    )
+                )
+            }
+            await("seeded note is rendered") { findText(content, "today") != null }
+        }
+        val today = onMain { required("scroll-today") as ScrollView }
+        awaitScrollSettled(today)
+        onMain {
+            assertTrue("Today has enough real content to exercise a nonzero scroll offset",
+                today.getChildAt(0).height > today.height)
+        }
+    }
+
+    private fun awaitScrollSettled(scroll: ScrollView) {
+        var previous: Pair<Int, Int>? = null
+        var stableSamples = 0
+        await("native scroll and content layout settled") {
+            val current = scroll.scrollY to scroll.getChildAt(0).height
+            stableSamples = if (current == previous && !scroll.isLayoutRequested) stableSamples + 1 else 0
+            previous = current
+            stableSamples >= 4
+        }
+    }
+
+    // Fabric can flatten the pane wrapper; scope matches to the native page.
+    // Today frames saved note text with typographic quotes.
     private fun findText(text: String, tab: String): TextView? = find("scroll-$tab")?.let {
-        views(it).filterIsInstance<TextView>().firstOrNull { view -> view.text.toString() == text }
+        views(it).filterIsInstance<TextView>().firstOrNull { view ->
+            view.text.toString() in listOf(text, "“$text”")
+        }
     }
 
     private fun select(tab: String) {
@@ -432,20 +516,44 @@ class TabLayoutInstrumentedTest {
     }
 
     /**
-     * The duration presets expose their selected state through accessibility,
-     * not through a combined "90 分钟" text node — the app renders the number
-     * alone plus a separate "分钟" label, so an exact-text match can never hit.
+     * The countdown duration is a vernier ruler, not a row of preset chips: the
+     * old `预设 N 分钟` content description no longer exists. The ruler sets
+     * `accessibilityValue={{min, now, max, text}}`, and RN folds the `text` into
+     * the node's content description (`调整倒计时长度, 45 分钟`) while also
+     * publishing the numbers as `RangeInfo` — so match the label by prefix and
+     * read the value from the accessibility tree, as a screen reader would.
      */
-    private fun selectedPreset(minutes: Int): Boolean {
-        // Fabric can flatten native parents while the chip clips its children.
-        // Locate the view from the window, as Espresso does.
-        var view = views(root!!).firstOrNull { it.contentDescription == "预设 $minutes 分钟" }
-            ?: return false
-        while (view !== root) {
-            if (view.createAccessibilityNodeInfo().isSelected) return true
-            view = view.parent as View
+    private fun dialView() = views(root!!)
+        .firstOrNull { it.contentDescription?.startsWith("调整倒计时长度") == true }
+
+    /** Read the value exposed to accessibility services. */
+    private fun dialRange(): Int? = dialView()?.createAccessibilityNodeInfo()?.rangeInfo?.current?.toInt()
+
+    private fun selectedPreset(minutes: Int): Boolean = dialRange() == minutes
+
+    /**
+     * Steps the ruler to `target` through its accessibility actions. This is
+     * the shipped assistive path (ReactAccessibilityDelegate maps `increment` /
+     * `decrement` to ACTION_SCROLL_FORWARD / BACKWARD), so the test exercises
+     * the control the way a screen-reader user reaches it instead of tapping
+     * ruler coordinates that depend on the device width.
+     */
+    private fun adjustDurationTo(target: Int) {
+        await("duration ruler mounted") { dialRange() != null }
+        repeat(60) {
+            val current = onMain { checkNotNull(dialRange()) }
+            if (current == target) return
+            onMain {
+                val action = if (current < target) {
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                } else {
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                }
+                checkNotNull(dialView()).performAccessibilityAction(action, null)
+            }
+            await("duration advances from $current") { dialRange()?.let { it != current } == true }
         }
-        return false
+        fail("Duration ruler did not reach $target minutes")
     }
 
     private fun <T> onMain(block: () -> T): T {

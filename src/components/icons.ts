@@ -24,6 +24,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Circle,
+  CircleCheck,
+  CircleQuestionMark,
+  Key,
+  Lightbulb,
   ListChecks,
   Minus,
   Pause,
@@ -32,6 +37,7 @@ import {
   Plus,
   RotateCcw,
   Settings,
+  Sparkles,
   Sprout,
   Star,
   Sun,
@@ -67,7 +73,13 @@ export type YanjiIconName =
   | 'chartMinimal'
   | 'star'
   | 'starOutline'
-  | 'reset';
+  | 'reset'
+  | 'doubt'
+  | 'doubtResolved'
+  | 'doubtUnresolved'
+  | 'inspiration'
+  | 'sparkles'
+  | 'key';
 
 const ICONS: Record<YanjiIconName, LucideIcon> = {
   today: Sun,
@@ -94,6 +106,12 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   star: Star,
   starOutline: Star,
   reset: RotateCcw,
+  doubt: CircleQuestionMark,
+  doubtResolved: CircleCheck,
+  doubtUnresolved: Circle,
+  inspiration: Lightbulb,
+  sparkles: Sparkles,
+  key: Key,
 };
 
 /** Stroke width shared by every icon so the set reads as one family. */

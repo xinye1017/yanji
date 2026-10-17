@@ -45,7 +45,11 @@ export class MockYanjiBridge {
       targetSchool: '',
       targetMajor: '',
       themePreference: 'SYSTEM',
+      decisionProvider: 'openrouter',
+      decisionModel: 'respan/span-01-lite:free',
+      decisionEndpoint: 'https://openrouter.ai/api/alpha/decisions',
     };
+    this.decisionApiKey = initialData.decisionApiKey || '';
     this.themeState = {
       mode: 'SYSTEM',
       isDark: true, // defaults to dark (Midnight Blue) for quiet focus
@@ -240,7 +244,7 @@ export class MockYanjiBridge {
     return true;
   }
 
-  async saveQuickNote(content, date, sessionId = null) {
+  async saveQuickNote(content, date, sessionId = null, category = 'INSPIRATION') {
     if (!content || content.trim().length === 0) {
       throw new Error('Note content cannot be empty');
     }
@@ -251,6 +255,9 @@ export class MockYanjiBridge {
       content: content.trim(),
       sessionId: sessionId || (this.activeSession ? this.activeSession.sessionId : null),
       isFavorite: false,
+      category: category === 'DOUBT' ? 'DOUBT' : 'INSPIRATION',
+      isResolved: false,
+      resolvedAt: null,
     };
     this.notes.push(newNote);
     this._emitDataChanged('notes');
@@ -270,6 +277,15 @@ export class MockYanjiBridge {
     const note = this.notes.find(n => n.id === noteId);
     if (!note) return false;
     note.isFavorite = !note.isFavorite;
+    this._emitDataChanged('notes');
+    return true;
+  }
+
+  async toggleNoteResolved(noteId) {
+    const note = this.notes.find(n => n.id === noteId);
+    if (!note) return false;
+    note.isResolved = !note.isResolved;
+    note.resolvedAt = note.isResolved ? this.virtualClockMs : null;
     this._emitDataChanged('notes');
     return true;
   }
@@ -550,7 +566,10 @@ export class MockYanjiBridge {
   }
 
   async getUserSettings() {
-    return { ...this.userSettings };
+    return {
+      ...this.userSettings,
+      hasDecisionApiKey: Boolean(this.decisionApiKey && this.decisionApiKey.trim()),
+    };
   }
 
   async updateUserSettings(settings) {
@@ -559,6 +578,20 @@ export class MockYanjiBridge {
       ...settings,
     };
     this._emitDataChanged('settings');
+    return true;
+  }
+
+  async saveDecisionApiKey(key) {
+    this.decisionApiKey = key;
+    return true;
+  }
+
+  async getDecisionApiKey() {
+    return this.decisionApiKey;
+  }
+
+  async clearDecisionApiKey() {
+    this.decisionApiKey = '';
     return true;
   }
 

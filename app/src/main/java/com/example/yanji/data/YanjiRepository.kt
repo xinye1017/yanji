@@ -77,6 +77,22 @@ class YanjiRepository private constructor() {
     @Volatile
     private var cachedAiApiKey: String = ""
 
+    /**
+     * 冷启动预热用的就绪信号：设置与学科的首次 DB 快照都已回灌进内存镜像。
+     *
+     * `settings` / `SubjectCatalog` 都是异步回灌的，没等它们就同步读出来的
+     * 「目标小时数」和「学科名」是默认值而不是用户真实配置。
+     */
+    private val settingsHydrated = CompletableDeferred<Unit>()
+    private val subjectsHydrated = CompletableDeferred<Unit>()
+
+    /**
+     * 等待内存镜像与 DB 对齐。预热（见 `bridge/LaunchPreheat`）读快照前必须调用。
+     */
+    suspend fun awaitHydration() {
+        awaitAll(settingsHydrated, subjectsHydrated)
+    }
+
     val defaultSubjects = SubjectCatalog.defaults
 
     private val _subjects = MutableStateFlow(SubjectCatalog.all)
@@ -297,6 +313,7 @@ class YanjiRepository private constructor() {
                         // 凭据不在 Room 中，读取时从 SecretStore 注入，保证 UI 拿到的 settings 是完整的。
                         _settings.value = entity.toDomainModel().copy(aiApiKey = cachedAiApiKey)
                     }
+                    settingsHydrated.complete(Unit)
                 }
             }
             checkInStore.bind(db)
@@ -309,6 +326,7 @@ class YanjiRepository private constructor() {
                         SubjectCatalog.replaceAll(subjects)
                         _subjects.value = SubjectCatalog.all
                     }
+                    subjectsHydrated.complete(Unit)
                 }
             }
             launch {
@@ -548,7 +566,36 @@ class YanjiRepository private constructor() {
     suspend fun updateNoteContentAndAwait(id: String, content: String) =
         noteStore.updateContentAndAwait(id, content)
 
+    /** 更新疑点解决状态（可等待），返回 false 表示 id 不存在。 */
+    suspend fun setNoteResolvedAndAwait(id: String, isResolved: Boolean) =
+        noteStore.setResolvedAndAwait(id, isResolved)
+
     fun deleteNote(id: String) = noteStore.delete(id)
+
+    /** 决策模型 API Key 读写（通过 SecretStore 加密存储在 Keystore） */
+    fun saveDecisionApiKey(key: String): Boolean {
+        val store = secretStore ?: return false
+        return when (store.saveDecisionApiKey(key)) {
+            SecretWriteResult.Saved,
+            SecretWriteResult.Cleared -> true
+            is SecretWriteResult.Failure -> false
+        }
+    }
+
+    fun getDecisionApiKey(): String =
+        secretStore?.readDecisionApiKey().orEmpty()
+
+    fun clearDecisionApiKey(): Boolean {
+        val store = secretStore ?: return false
+        return when (store.clearDecisionApiKey()) {
+            SecretWriteResult.Saved,
+            SecretWriteResult.Cleared -> true
+            is SecretWriteResult.Failure -> false
+        }
+    }
+
+    fun hasDecisionApiKey(): Boolean =
+        getDecisionApiKey().isNotBlank()
 
     /**
      * 保存用户设置。

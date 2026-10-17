@@ -91,6 +91,11 @@ export function FocusVernierDial({
     [disabled, onChangeMinutes, ticks, valueMinutes],
   );
 
+  const lastEmittedValue = useRef(valueMinutes);
+  useEffect(() => {
+    lastEmittedValue.current = valueMinutes;
+  }, [valueMinutes]);
+
   const selectOffset = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (!userDragging.current) return;
@@ -98,6 +103,19 @@ export function FocusVernierDial({
       selectIndex(Math.round(e.nativeEvent.contentOffset.x / tickWidth));
     },
     [selectIndex, tickWidth],
+  );
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!userDragging.current || disabled || ticks.length === 0) return;
+      const index = Math.round(e.nativeEvent.contentOffset.x / tickWidth);
+      const target = ticks[Math.max(0, Math.min(ticks.length - 1, index))];
+      if (target !== undefined && target !== lastEmittedValue.current) {
+        lastEmittedValue.current = target;
+        onChangeMinutes(target);
+      }
+    },
+    [disabled, onChangeMinutes, tickWidth, ticks],
   );
 
   const adjust = useCallback(
@@ -155,11 +173,16 @@ export function FocusVernierDial({
           snapToInterval={tickWidth}
           snapToAlignment="start"
           decelerationRate={reducedMotion ? 'normal' : 'fast'}
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
           onScrollBeginDrag={() => {
             userDragging.current = true;
           }}
           onScrollEndDrag={e => {
             if (Math.abs(e.nativeEvent.velocity?.x ?? 0) < 0.1) selectOffset(e);
+          }}
+          onMomentumScrollBegin={() => {
+            userDragging.current = true;
           }}
           onMomentumScrollEnd={selectOffset}
           contentContainerStyle={{
