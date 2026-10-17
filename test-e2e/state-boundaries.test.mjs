@@ -405,6 +405,114 @@ test('switching date suppresses the obsolete response and never rereads the hidd
   assert.deepEqual(calls, ['2026-10-09', '2026-10-10']);
 });
 
+function dataHookFixture() {
+  const reads = { daily: [], review: [] };
+  const effects = [];
+  let observer;
+  const hooks = loadTypeScript('src/state/dataRefresh.ts', {
+    react: {
+      useCallback: fn => fn,
+      useEffect: fn => effects.push(fn),
+      useSyncExternalStore: (subscribe, get) => {
+        observer = { subscribe, get };
+        return get();
+      },
+    },
+    '../bridge': { YanjiDataNative: {
+      getDailySnapshot: date => {
+        const read = deferred(); reads.daily.push({ date, ...read }); return read.promise;
+      },
+      getReviewOverview: (...args) => {
+        const read = deferred(); reads.review.push({ args, ...read }); return read.promise;
+      },
+    } },
+  });
+  return { hooks, reads, effects, observer: () => observer };
+}
+
+test('mounted daily hook retains loaded content through hiding, invalidation and an in-flight read', async () => {
+  const f = dataHookFixture();
+  const date = '2026-10-10';
+  const coordinator = f.hooks.dataRefreshCoordinator;
+  f.hooks.useDailySnapshot('today', date, true);
+  let unsubscribe = f.observer().subscribe(() => {});
+  let detach = f.effects.pop()();
+  f.reads.daily[0].resolve(daily(date));
+  await settle();
+  const shown = f.observer().get();
+  assert.ok(shown);
+
+  // React changes the subscription before running passive reader cleanup.
+  f.hooks.useDailySnapshot('today', date, false);
+  unsubscribe();
+  unsubscribe = f.observer().subscribe(() => {});
+  detach();
+  detach = f.effects.pop()();
+  coordinator.enqueueDataChanged('notes');
+  await coordinator.refreshDailySnapshot(date);
+  await settle();
+  assert.equal(f.reads.daily.length, 1, 'a mounted hidden page does not query Room');
+  assert.equal(f.observer().get(), shown, 'hiding must not replace real content with loading content');
+
+  f.hooks.useDailySnapshot('today', date, true);
+  detach();
+  detach = f.effects.pop()();
+  assert.equal(f.reads.daily.length, 2);
+  assert.equal(f.observer().get(), shown, 'keep content while reactivation refreshes');
+
+  f.hooks.useDailySnapshot('today', date, false);
+  unsubscribe();
+  unsubscribe = f.observer().subscribe(() => {});
+  detach();
+  detach = f.effects.pop()();
+  f.reads.daily[1].resolve({ ...daily(date), focusCount: 1 });
+  await settle();
+  assert.equal(f.observer().get(), shown, 'a superseded in-flight read cannot prune a mounted snapshot');
+  assert.equal(f.reads.daily.length, 2);
+  unsubscribe();
+  detach();
+  assert.equal(coordinator.getDailySnapshot(date), null, 'unmount releases the retained date');
+});
+
+test('mounted Review overview stays available while hidden and releases obsolete windows', async () => {
+  const f = dataHookFixture();
+  const request = { scope: 'CALENDAR_WEEK', periodsBack: 0, anchorDate: '2026-10-10' };
+  const coordinator = f.hooks.dataRefreshCoordinator;
+  f.hooks.useReviewOverview(request);
+  const unsubscribe = f.observer().subscribe(() => {});
+  f.hooks.useReviewDataVisibility('review', [request], true);
+  const detach = f.effects.pop()();
+  f.reads.review[0].resolve({ totalSeconds: 600 });
+  await settle();
+  const shown = f.observer().get();
+  detach();
+  coordinator.enqueueDataChanged('sessions');
+  await coordinator.refreshReviewOverview(request);
+  await settle();
+  assert.equal(f.observer().get(), shown);
+  assert.equal(f.reads.review.length, 1, 'hidden overview is retained without a query');
+  unsubscribe();
+  assert.equal(coordinator.getReviewOverview(request), null);
+});
+
+test('daily subscriptions retain only dates still mounted while Review browses history', async () => {
+  const { coordinator } = fixture();
+  let unsubscribe = () => {};
+  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06']) {
+    unsubscribe();
+    unsubscribe = coordinator.subscribeDailySnapshot(date, () => {});
+    coordinator.setDailyReader('review', date);
+    await settle();
+  }
+  coordinator.setDailyReader('review', null);
+  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']) {
+    assert.equal(coordinator.getDailySnapshot(date), null, 'obsolete dates are released');
+  }
+  assert.ok(coordinator.getDailySnapshot('2026-10-06'));
+  unsubscribe();
+  assert.equal(coordinator.getDailySnapshot('2026-10-06'), null);
+});
+
 test('changing Review scope prevents an obsolete overview from replacing the new scope', async () => {
   const old = deferred(), next = deferred();
   const week = { scope: 'CALENDAR_WEEK', periodsBack: 0, anchorDate: '2026-10-10' };

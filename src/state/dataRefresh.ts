@@ -21,11 +21,10 @@ export function useDailySnapshot(
   date: string,
   visible: boolean
 ) {
+  // Mounted panes retain their snapshot; only visible readers trigger Room reads.
   const subscribe = useCallback(
-    (listener: () => void) => visible
-      ? dataRefreshCoordinator.subscribeDailySnapshot(date, listener)
-      : noSubscribe(listener),
-    [date, visible]
+    (listener: () => void) => dataRefreshCoordinator.subscribeDailySnapshot(date, listener),
+    [date]
   );
   const getSnapshot = useCallback(
     () => dataRefreshCoordinator.getDailySnapshot(date),
@@ -41,12 +40,10 @@ export function useDailySnapshot(
   return snapshot;
 }
 
-export function useReviewOverview(request: ReviewRequestKey, visible: boolean) {
+export function useReviewOverview(request: ReviewRequestKey) {
   const subscribe = useCallback(
-    (listener: () => void) => visible
-      ? dataRefreshCoordinator.subscribeReviewOverview(request, listener)
-      : noSubscribe(listener),
-    [request.anchorDate, request.periodsBack, request.scope, visible]
+    (listener: () => void) => dataRefreshCoordinator.subscribeReviewOverview(request, listener),
+    [request.anchorDate, request.periodsBack, request.scope]
   );
   const getSnapshot = useCallback(
     () => dataRefreshCoordinator.getReviewOverview(request),

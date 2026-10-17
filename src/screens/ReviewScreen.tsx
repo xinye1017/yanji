@@ -78,11 +78,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     () => [overviewRequest, previousRequest, weekRequest],
     [overviewRequest, previousRequest, weekRequest]
   );
-  const trendVisible = visible && view === 'trend';
-  const overview = useReviewOverview(overviewRequest, trendVisible);
-  const previousOverview = useReviewOverview(previousRequest, trendVisible);
-  // The strip is part of the timeline view, so its week window is read there.
-  const weekOverview = useReviewOverview(weekRequest, visible && view === 'timeline');
+  const overview = useReviewOverview(overviewRequest);
+  const previousOverview = useReviewOverview(previousRequest);
+  const weekOverview = useReviewOverview(weekRequest);
   useReviewDataVisibility('review', reviewRequests, visible);
   const sessions = snapshot?.sessions ?? [];
   const dayTasks = snapshot?.tasks ?? [];
@@ -743,7 +741,7 @@ function PeriodSelectorBar({
         >
           <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>‹</Text>
         </Pressable>
-        <Text style={[typography.captionMeta, {
+        <Text testID="review-date" style={[typography.captionMeta, {
           color: colors.secondary,
           fontVariant: ['tabular-nums'],
           fontSize: 11,
