@@ -43,7 +43,7 @@ const session = (elapsedSeconds = 0) => ({ sessionId: 'owned', subjectId: 'math'
 const tick = elapsedSeconds => ({ elapsedSeconds, remainingSeconds: 600 - elapsedSeconds, phase: 'FOCUS', isPaused: false });
 
 test('App shell reconciles a foreground transition that happened before its listener attached', () => {
-  const effects = [], states = [], gates = [];
+  const effects = [], states = [], gates = [], seeds = [];
   const dummy = () => null;
   const appState = { currentState: 'background', addEventListener: () => {
     appState.currentState = 'active'; // Native cache changed before the shell could receive the event.
@@ -75,14 +75,17 @@ test('App shell reconciles a foreground transition that happened before its list
     './src/bridge': { onDataChanged: () => dummy },
     './src/state/dataRefresh': { dataRefreshCoordinator: {
       setForeground: value => gates.push(value), enqueueDataChanged: dummy, handleForeground: dummy,
-    } },
+    }, seedLaunchSnapshot: properties => seeds.push(properties) },
     './src/state/timerStore': { setTimerForeground: dummy, useActiveSession: () => null },
   };
   for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
     mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
   }
   const app = loadTypeScript('App.tsx', mocks);
-  let element = app.default();
+  const launch = { date: '2026-10-10', dailySnapshot: daily('2026-10-10') };
+  let element = app.default(launch);
+  // The host's preheated snapshot must be seeded before any pane renders.
+  assert.deepEqual(seeds, [launch]);
   while (element.type.name !== 'AppShell') element = element.props.children;
   element.type();
   effects[0]();
@@ -137,7 +140,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
       './src/bridge': { onDataChanged: () => dummy },
       './src/state/dataRefresh': { dataRefreshCoordinator: {
         setForeground: dummy, enqueueDataChanged: dummy, handleForeground: dummy,
-      } },
+      }, seedLaunchSnapshot: dummy },
       './src/state/timerStore': {
         setTimerForeground: dummy,
         useActiveSession: enabled => {
@@ -303,6 +306,78 @@ function fixture(overrides = {}) {
   });
   return { coordinator, reads };
 }
+
+const launchProperties = date => ({
+  date,
+  dailySnapshot: { ...daily(date), totalDurationSeconds: 3600 },
+  settings: { examDate: '2026-12-19', dailyGoalHours: 8 },
+  examCountdown: { examDate: '2026-12-19', daysRemaining: 63 },
+});
+
+test('a seeded launch payload paints the first frame without any bridged read', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+  const seeded = coordinator.getSettingsSnapshot();
+  assert.equal(seeded.settings.dailyGoalHours, 8);
+  assert.equal(seeded.examCountdown.daysRemaining, 63);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, []);
+  assert.equal(reads.settings, 0);
+});
+
+test('a seeded snapshot stays invalidated by native data changes', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  coordinator.enqueueDataChanged('sessions');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  // A session change never touches settings, so the seeded settings stay as they are.
+  assert.equal(reads.settings, 0);
+  // The fresh read replaces the seeded value instead of being skipped as cached.
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+});
+
+test('a launch payload for another date is discarded and read normally', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed({ ...launchProperties('2026-10-10'), dailySnapshot: daily('2026-10-09') });
+  // The mismatched snapshot is dropped; settings carry no date, so they still seed.
+  assert.equal(coordinator.getDailySnapshot('2026-10-09'), null);
+  assert.equal(coordinator.getSettingsSnapshot().settings.dailyGoalHours, 8);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  // Settings came from the same payload, so only the discarded snapshot is reread.
+  assert.equal(reads.settings, 0);
+});
+
+test('a failed preheat leaves the shell on the bridged read path', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.seed(undefined);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  assert.equal(reads.settings, 1);
+});
+
+test('a second launch payload cannot roll back an already refreshed snapshot', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  coordinator.enqueueDataChanged('tasks');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
+});
 
 test('same-date readers share one request and one native write batch causes one reread', async () => {
   const { coordinator, reads } = fixture();

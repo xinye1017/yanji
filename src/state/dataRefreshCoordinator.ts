@@ -5,6 +5,7 @@ import type {
   ReviewOverview,
   ReviewScope,
   UserSettings,
+  YanjiLaunchProperties,
 } from '../bridge';
 
 export interface ReviewRequestKey {
@@ -65,11 +66,42 @@ export class DataRefreshCoordinator {
   private readonly pendingEvents = new Set<DataChangedType>();
   private flushScheduled = false;
   private foreground = true;
+  private seeded = false;
 
   constructor(private readonly loaders: DataRefreshLoaders) {}
 
   setForeground(isForeground: boolean): void {
     this.foreground = isForeground;
+  }
+
+  /**
+   * 冷启动预热：把宿主在首帧前读好的真实数据直接装进缓存。
+   *
+   * 首页第一帧读的是 `getDailySnapshot()` / `getSettingsSnapshot()`，冷启动时它们是空的，
+   * 于是只能先渲染「正在读取…」。宿主（`bridge/LaunchPreheat`）把同一份 Room 数据提前读好
+   * 当 launch options 送进来，这里在首帧前播种，页面第一帧就是有数据的。
+   *
+   * 只接受一次：重复挂载（Fast Refresh、二次 `runApplication`）不得让旧的启动载荷覆盖
+   * 已经刷新过的缓存。日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
+   *
+   * 另外只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
+   */
+  seed(properties: Partial<YanjiLaunchProperties> | null | undefined): void {
+    if (this.seeded || !properties) return;
+    this.seeded = true;
+
+    const date = properties.date;
+    const daily = properties.dailySnapshot;
+    if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
+      this.dailyValues.set(date, daily);
+      this.dailyDirty.delete(date);
+    }
+    const settings = properties.settings;
+    const examCountdown = properties.examCountdown;
+    if (settings && examCountdown && !this.settingsValue) {
+      this.settingsValue = { settings, examCountdown };
+      this.settingsDirty = false;
+    }
   }
 
   getDailySnapshot(date: string): DailySnapshot | null {

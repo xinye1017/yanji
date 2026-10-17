@@ -164,6 +164,21 @@ export interface DailySnapshot {
   notes: NoteEntry[];
 }
 
+/**
+ * 宿主冷启动预热载荷（`MainActivity.getLaunchOptions()` → 根组件 props）。
+ *
+ * 与 [DailySnapshot]、[UserSettings]、[ExamCountdown] 逐字段一致，只是**提前**到了
+ * JS 首帧之前：首页第一帧直接渲染真实数据，不再先显示「正在读取…」再过桥刷新一次。
+ * 预热失败时这些 props 不存在，页面照原路径过桥读取。
+ */
+export interface YanjiLaunchProperties {
+  /** 预热时原生侧认定的「今天」（`yyyy-MM-dd`）；与 dailySnapshot.date 不符时 JS 侧丢弃。 */
+  date: string;
+  dailySnapshot: DailySnapshot;
+  settings: UserSettings;
+  examCountdown: ExamCountdown;
+}
+
 export interface UserSettings {
   examDate: string;
   targetSchool: string;

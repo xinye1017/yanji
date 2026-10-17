@@ -13,6 +13,11 @@
  * subject/duration choice and the Review date all survive a tab switch. The
  * running focus session is owned by the Kotlin business layer, so switching
  * tabs can never interrupt the timer.
+ *
+ * The props are the host's launch options: `MainActivity.getLaunchOptions()`
+ * hands over today's snapshot, read before the first frame, so Today never
+ * opens on 「正在读取…」. They are absent when the preheat failed, and the shell
+ * then falls back to the regular bridged reads.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -28,7 +33,9 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { YanjiThemeProvider, useYanjiTheme } from './src/theme/ThemeProvider';
 import { onDataChanged } from './src/bridge';
+import type { YanjiLaunchProperties } from './src/bridge';
 import { dataRefreshCoordinator } from './src/state/dataRefresh';
+import { seedLaunchSnapshot } from './src/state/dataRefresh';
 import { setTimerForeground, useActiveSession } from './src/state/timerStore';
 
 /**
@@ -183,7 +190,10 @@ function AppShell(): React.JSX.Element {
   );
 }
 
-export default function App(): React.JSX.Element {
+export default function App(launchProperties: Partial<YanjiLaunchProperties>): React.JSX.Element {
+  // Seed the host's preheated snapshot before the first render: Today's first
+  // frame then paints real data instead of 「正在读取…」.
+  seedLaunchSnapshot(launchProperties);
   return (
     <YanjiThemeProvider>
       <SafeAreaProvider>

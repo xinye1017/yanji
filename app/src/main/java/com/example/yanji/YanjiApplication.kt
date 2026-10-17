@@ -1,6 +1,7 @@
 package com.example.yanji
 
 import android.app.Application
+import com.example.yanji.bridge.LaunchPreheat
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.bridge.YanjiPackage
 import com.facebook.react.ReactHost
@@ -61,5 +62,8 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
         SoLoader.init(this, YanjiMergedSoMapping())
         DefaultNewArchitectureEntryPoint.load()
         YanjiRepository.init(this)
+        // 预热必须在 Repository 就绪之后立刻开始：它读的正是 Repository 背后的同一份 Room
+        // 数据，Activity 的首帧会等它（见 MainActivity.onCreate）。
+        LaunchPreheat.start()
     }
 }

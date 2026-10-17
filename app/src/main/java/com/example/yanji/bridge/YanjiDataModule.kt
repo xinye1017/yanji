@@ -7,11 +7,9 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.example.yanji.data.DailyStudySnapshot
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
-import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.CancellationException
@@ -462,7 +460,7 @@ class YanjiDataModule(
     @ReactMethod
     fun getUserSettings(promise: Promise) {
         val settings = repository.settings.value
-        promise.resolve(settingsMap(settings))
+        promise.resolve(settingsMap(repository, settings))
     }
 
     @ReactMethod
@@ -499,29 +497,7 @@ class YanjiDataModule(
     /** 考研倒计时。考试日期早于今天时夹紧为 0，不返回负值。 */
     @ReactMethod
     fun getExamCountdown(promise: Promise) {
-        val settings = repository.settings.value
-        val examDateRaw = settings.targetExamDate
-        if (examDateRaw.isBlank()) {
-            promise.resolve(Arguments.createMap().apply {
-                putString("examDate", "")
-                putInt("daysRemaining", 0)
-            })
-            return
-        }
-        val examDate = YanjiTime.parseIsoDate(examDateRaw)
-        if (examDate == null) {
-            promise.resolve(Arguments.createMap().apply {
-                putString("examDate", examDateRaw)
-                putInt("daysRemaining", 0)
-            })
-            return
-        }
-        val today = YanjiTime.today()
-        val days = java.time.temporal.ChronoUnit.DAYS.between(today, examDate).coerceAtLeast(0)
-        promise.resolve(Arguments.createMap().apply {
-            putString("examDate", examDateRaw)
-            putInt("daysRemaining", days.toInt())
-        })
+        promise.resolve(examCountdownMap(repository.settings.value.targetExamDate))
     }
 
     // ------------------------------------------------------------ 事件
@@ -542,77 +518,6 @@ class YanjiDataModule(
     }
 
     // ------------------------------------------------------------ 映射
-
-    private fun dailySnapshotMap(snapshot: DailyStudySnapshot): WritableMap =
-        Arguments.createMap().apply {
-            putString("date", snapshot.date)
-            putString("formattedDate", snapshot.formattedDate)
-            putDouble("totalDurationSeconds", snapshot.totalDurationSeconds.toDouble())
-            putInt("focusCount", snapshot.focusCount)
-            putInt("examCount", snapshot.examCount)
-            putArray(
-                "sessions",
-                Arguments.createArray().apply {
-                    snapshot.sessions.forEach { item ->
-                        pushMap(Arguments.createMap().apply {
-                            putString("id", item.id)
-                            putString("title", item.title)
-                            putString("subjectId", item.subjectId)
-                            putString("subjectName", item.subjectName)
-                            putString("subjectColor", item.subjectColor)
-                            putDouble("startTime", item.startTime.toDouble())
-                            putDouble("endTime", item.endTime.toDouble())
-                            putDouble("durationSeconds", item.durationSeconds.toDouble())
-                            putBoolean("isExam", item.isExam)
-                            putString("note", item.note)
-                            putInt("pauseCount", item.pauseCount)
-                            putString("mode", item.mode)
-                            // 未挂计划时必须是 null（与 note.sessionId 同一写法）。
-                            if (item.taskId == null) putNull("taskId") else putString("taskId", item.taskId)
-                        })
-                    }
-                }
-            )
-            putArray(
-                "tasks",
-                Arguments.createArray().apply {
-                    snapshot.tasks.forEach { task ->
-                        pushMap(taskMap(task, snapshot.taskActualSeconds[task.id]))
-                    }
-                }
-            )
-            putArray(
-                "notes",
-                Arguments.createArray().apply {
-                    snapshot.notes.forEach { note ->
-                        pushMap(noteMap(BridgeMappers.noteFields(note)))
-                    }
-                }
-            )
-        }
-
-    /**
-     * 只装配 `WritableMap`；契约语义全部在 [BridgeMappers] 里，可在 JVM 单测逐字段断言。
-     */
-    private fun taskMap(
-        task: com.example.yanji.data.StudyTask,
-        actualSeconds: Long? = null
-    ): WritableMap {
-        val fields = BridgeMappers.taskFields(task, actualSeconds)
-        return Arguments.createMap().apply {
-            putString("id", fields.id)
-            putString("date", fields.date)
-            putString("subjectId", fields.subjectId)
-            putString("subjectName", fields.subjectName)
-            putString("subjectColor", fields.subjectColor)
-            putString("title", fields.title)
-            putInt("plannedMinutes", fields.plannedMinutes)
-            // 真实累计分钟数（秒 / 60），不再是恒为 0 的占位值。
-            putInt("actualMinutes", fields.actualMinutes)
-            putBoolean("completed", fields.completed)
-            putDouble("createdAt", fields.createdAt)
-        }
-    }
 
     /**
      * 回顾概览载荷（`ReviewOverview`）。这里只做 `WritableMap` 装配，
@@ -664,36 +569,6 @@ class YanjiDataModule(
                 }
             )
         }
-
-    private fun noteMap(fields: BridgeMappers.NoteFields): WritableMap =
-        Arguments.createMap().apply {
-            putString("id", fields.id)
-            putString("date", fields.date)
-            putDouble("timestamp", fields.timestamp)
-            putString("content", fields.content)
-            putBoolean("isFavorite", fields.isFavorite)
-            // 未绑定时必须是 null —— 契约 `isValidNoteEntry` 对每条 NoteEntry 载荷生效。
-            // 显式 putNull（与 emitStateChanged 的写法一致），绝不退化成空串。
-            if (fields.sessionId == null) putNull("sessionId") else putString("sessionId", fields.sessionId)
-            putString("category", fields.category)
-            putBoolean("isResolved", fields.isResolved)
-            if (fields.resolvedAt == null) putNull("resolvedAt") else putDouble("resolvedAt", fields.resolvedAt)
-        }
-
-    private fun settingsMap(settings: UserSettings): WritableMap {
-        val fields = BridgeMappers.settingsFields(settings)
-        return Arguments.createMap().apply {
-            putString("examDate", fields.examDate)
-            putString("targetSchool", fields.targetSchool)
-            putString("targetMajor", fields.targetMajor)
-            putDouble("dailyGoalHours", settings.dailyGoalHours.toDouble())
-            putString("themePreference", fields.themePreference)
-            putString("decisionProvider", fields.decisionProvider)
-            putString("decisionModel", fields.decisionModel)
-            putString("decisionEndpoint", fields.decisionEndpoint)
-            putBoolean("hasDecisionApiKey", repository.hasDecisionApiKey())
-        }
-    }
 
     companion object {
         const val EVENT_DATA_CHANGED = "onDataChanged"

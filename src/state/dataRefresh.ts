@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { YanjiDataNative } from '../bridge';
+import type { YanjiLaunchProperties } from '../bridge';
 import type { ReviewRequestKey } from './dataRefreshCoordinator';
 import { DataRefreshCoordinator } from './dataRefreshCoordinator';
 
@@ -84,4 +85,17 @@ export function refreshDailySnapshot(date: string): Promise<void> {
 
 export function refreshSettingsSnapshot(): Promise<void> {
   return dataRefreshCoordinator.refreshSettings();
+}
+
+/**
+ * 播种宿主冷启动预热读好的真实数据。
+ *
+ * 必须在首页第一次渲染**之前**调用（根组件 `App` 里做），否则首帧仍是空的、
+ * 之后才被刷新。预热失败时 `properties` 为 undefined，此时不播种，页面照旧
+ * 由 `useDailySnapshot` / `useSettingsSnapshot` 过桥读取。
+ */
+export function seedLaunchSnapshot(
+  properties: Partial<YanjiLaunchProperties> | null | undefined
+): void {
+  dataRefreshCoordinator.seed(properties);
 }
