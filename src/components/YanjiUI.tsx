@@ -543,14 +543,28 @@ export function YanjiChronoSpectrum({
 // referent — exactly the "unexplained dot" this section was rebuilt to remove —
 // so an empty day draws the axis and nothing else.
 //
-// Purely visual: the owning row carries the spoken summary, so the chart must
-// not become a second accessibility node inside it.
+// Purely visual for its bars, but the axis range is the section's scope and a
+// screen reader user needs it: the range used to live in the collapsed row's
+// `accessibilityLabel` and would otherwise survive only as painted text inside
+// a `no-hide-descendants` subtree. The chart therefore publishes one spoken
+// node carrying the range (and an optional summary), and hides only the bars.
 // ---------------------------------------------------------------------------
 
-export interface YanjiMiniRhythmBucket {
+export interface YanjiDayRhythmBucket {
   hour: number;
   seconds: number;
   color?: string;
+}
+
+/**
+ * How many hourly slots actually carry saved focus.
+ *
+ * Exported because it is the one fact the strip's appearance is derived from,
+ * and both the spoken summary and the tests should ask the same question of the
+ * data rather than inspect the rendered style objects.
+ */
+export function measuredRhythmHours(buckets: readonly YanjiDayRhythmBucket[]): number {
+  return buckets.filter(bucket => bucket.seconds > 0).length;
 }
 
 export function YanjiDayRhythmChart({
@@ -558,21 +572,26 @@ export function YanjiDayRhythmChart({
   currentHour,
   startLabel,
   endLabel,
+  accessibilityLabel,
 }: {
-  buckets: readonly YanjiMiniRhythmBucket[];
+  buckets: readonly YanjiDayRhythmBucket[];
   currentHour: number;
   startLabel: string;
   endLabel: string;
+  /** Spoken scope for the strip; defaults to the axis range alone. */
+  accessibilityLabel?: string;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   // Half an hour of focus is the smallest bar worth seeing; a shorter session
   // must still leave the axis rather than vanish into it.
   const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
-  const hasData = buckets.some(bucket => bucket.seconds > 0);
+  const hasData = measuredRhythmHours(buckets) > 0;
   return (
-    <View accessible={false} importantForAccessibility="no-hide-descendants">
+    <View>
       <View
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
         style={{
           flexDirection: 'row',
           alignItems: 'flex-end',
@@ -586,6 +605,10 @@ export function YanjiDayRhythmChart({
           return (
             <View
               key={bucket.hour}
+              // `testID` names what the slot means, so a test can ask "is this
+              // hour marked?" without reaching into numeric style values that
+              // any layout refactor is free to change.
+              testID={`rhythm-hour-${bucket.hour}`}
               style={{
                 flex: 1,
                 flexBasis: 0,
@@ -602,7 +625,14 @@ export function YanjiDayRhythmChart({
         })}
       </View>
       <YanjiHairline />
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+      {/* The painted range is decorative text; the spoken range is the node
+          below, so the two can never disagree about the section's scope. */}
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel ?? `时间范围 ${startLabel} 至 ${endLabel}`}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}
+      >
         <Text style={[typography.captionMeta, { color: colors.secondary }]}>{startLabel}</Text>
         <Text style={[typography.captionMeta, { color: colors.secondary }]}>{endLabel}</Text>
       </View>

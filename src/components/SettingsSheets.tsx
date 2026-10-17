@@ -28,8 +28,8 @@ import {
   shiftMonth,
   todayIso,
   weekdayLabelOf,
-} from '../screens/settingsViewLogic';
-import type { CalendarMonth } from '../screens/settingsViewLogic';
+} from '../state/settingsViewLogic';
+import type { CalendarMonth } from '../state/settingsViewLogic';
 
 /** Sheet shell: scrim, bottom-anchored page, grabber and heading. */
 function SettingsSheet({
@@ -110,11 +110,14 @@ export function ExamDateSheet({
   const [month, setMonth] = useState<CalendarMonth>(() => monthOf(initialDate || today));
 
   // Reopen on whatever is actually stored, not on the last thing that was tapped.
+  // `today` is a dependency even though it looks constant: a sheet left open
+  // across midnight must re-anchor to the new day rather than keep claiming the
+  // old one is "today".
   useEffect(() => {
     if (!visible) return;
     setSelected(initialDate);
     setMonth(monthOf(initialDate || today));
-  }, [visible, initialDate]);
+  }, [visible, initialDate, today]);
 
   const weeks = buildMonthGrid(month);
   const selectedWeekday = weekdayLabelOf(selected);
@@ -239,12 +242,22 @@ export function ExamDateSheet({
   );
 }
 
+/** Shortcut targets, in minutes. Module scope so they are not reallocated per render. */
+const GOAL_PRESETS = [240, 360, 480, 600] as const;
+/** The stepper's ceiling: twelve hours. */
+const GOAL_MAX_MINUTES = 720;
+
 /**
  * Daily study goal sheet.
  *
  * The stepper owns the value and the four presets are shortcuts into it, so
  * there is one source of truth for "what will be saved" — a row of independent
  * preset buttons plus a separate stepper would let the two disagree.
+ *
+ * Zero is a real value here: it means "no goal", which the page and Today both
+ * read as 未设置. It is reachable through the stepper on purpose, so the save
+ * button says 「清除目标」 rather than 「保存目标」 when the draft is zero — the
+ * user must be able to tell the difference between setting a goal and removing it.
  */
 export function DailyGoalSheet({
   visible,
@@ -264,7 +277,6 @@ export function DailyGoalSheet({
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  const GOAL_PRESETS = [240, 360, 480, 600];
   const [minutes, setMinutes] = useState(() => Math.max(0, Math.round((initialHours ?? 0) * 60)));
 
   useEffect(() => {
@@ -272,7 +284,7 @@ export function DailyGoalSheet({
     setMinutes(Math.max(0, Math.round((initialHours ?? 0) * 60)));
   }, [visible, initialHours]);
 
-  const adjust = (delta: number) => setMinutes(current => Math.max(0, Math.min(720, current + delta)));
+  const adjust = (delta: number) => setMinutes(current => Math.max(0, Math.min(GOAL_MAX_MINUTES, current + delta)));
 
   return (
     <SettingsSheet
@@ -358,7 +370,7 @@ export function DailyGoalSheet({
       ) : null}
 
       <YanjiPrimaryButton
-        label={saving ? '保存中…' : '保存目标'}
+        label={saving ? '保存中…' : minutes > 0 ? '保存目标' : '清除目标'}
         onPress={() => onSave(minutes)}
         disabled={saving}
       />

@@ -26,19 +26,26 @@ const theme = {
   motion: tokens.YanjiMotion,
 };
 
-const logic = loadTypeScript('src/screens/settingsViewLogic.ts');
+const logic = loadTypeScript('src/state/settingsViewLogic.ts');
 
-/** Every element matching `predicate`, descending through rendered components. */
+/**
+ * Every element matching `predicate`, descending through rendered components.
+ *
+ * Component functions are invoked **once per distinct element** and the result
+ * is cached: the harness's `useState` stub advances a shared slot counter, so
+ * re-invoking a component while walking would re-run its hooks against the next
+ * slots and read somebody else's state.
+ */
 function nodes(tree, predicate) {
   const result = [];
+  const rendered = new Map();
   function walk(node) {
     if (Array.isArray(node)) { node.forEach(walk); return; }
     if (!node || typeof node !== 'object' || !('type' in node)) return;
     if (predicate(node)) result.push(node);
-    // A component in the tree is both an element the assertion may match and a
-    // renderer for the elements inside it, so it is recorded *and* descended.
     if (typeof node.type === 'function') {
-      walk(node.type(node.props));
+      if (!rendered.has(node)) rendered.set(node, node.type(node.props));
+      walk(rendered.get(node));
       return;
     }
     walk(node.props.children);
@@ -46,7 +53,6 @@ function nodes(tree, predicate) {
   walk(tree);
   return result;
 }
-
 const byComponent = name => node => typeof node.type === 'function' && node.type.name === name;
 
 /**
@@ -103,15 +109,26 @@ test('the goal reads back at the precision it was stored with', () => {
   assert.equal(logic.goalHoursFromMinutes(-30), 0);
 });
 
-test('the month grid is Monday-first, padded, and never shorter than five weeks', () => {
+test('the month grid is Monday-first and never changes height between months', () => {
   const december = logic.buildMonthGrid({ year: 2026, month: 12 });
   assert.equal(december[0][1], 1, '2026-12-01 is a Tuesday, so Monday stays blank');
-  assert.ok(december.length >= 5 && december.length <= 6);
   assert.ok(december.every(week => week.length === 7));
   const february = logic.buildMonthGrid({ year: 2027, month: 2 });
   assert.equal(february.flat().filter(day => day !== null).length, 28);
   const leapFebruary = logic.buildMonthGrid({ year: 2028, month: 2 });
   assert.equal(leapFebruary.flat().filter(day => day !== null).length, 29);
+
+  // The sheet must not resize while paging. A 28-day February that starts on a
+  // Monday fits in four rows, which is why this asserts the *floor* rather than
+  // only the multiple-of-seven padding.
+  const rowCounts = new Set();
+  for (let year = 2024; year <= 2040; year++) {
+    for (let month = 1; month <= 12; month++) {
+      rowCounts.add(logic.buildMonthGrid({ year, month }).length);
+    }
+  }
+  assert.deepEqual([...rowCounts].sort(), [5, 6],
+    'every month renders five or six rows, so the sheet height is stable');
 });
 
 test('month paging crosses year boundaries in both directions', () => {
@@ -127,12 +144,24 @@ test('month paging crosses year boundaries in both directions', () => {
 function settingsHarness({ settings, calls = [] } = {}) {
   const states = {};
   let index = 0;
+  /** The advanced section's own slot counter; see the note where it is loaded. */
+  let sectionIndex = 0;
   const names = [
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiHairline',
     'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading', 'YanjiPaperSegmentedControl',
     'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiTextAction', 'YanjiTextInput',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
+  // Loaded once and shared: the advanced section renders the real disclosure
+  // row, so it needs the same component instance the page would get.
+  const rows = loadTypeScript('src/components/SettingsRows.tsx', {
+    react: { useState: () => [null, () => {}], useEffect: () => {} },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+    './YanjiUI': ui,
+    './icons': { getYanjiIcon: name => name, YANJI_ICON_STROKE: 1.75 },
+    '../theme/ThemeProvider': { useYanjiTheme: () => theme },
+    '../theme/tokens': tokens,
+  });
   const { SettingsScreen } = loadTypeScript('src/screens/SettingsScreen.tsx', {
     react: {
       useState: initial => {
@@ -163,14 +192,7 @@ function settingsHarness({ settings, calls = [] } = {}) {
       onThemeChanged: () => () => {},
     },
     '../components/YanjiUI': ui,
-    '../components/SettingsRows': loadTypeScript('src/components/SettingsRows.tsx', {
-      react: { useState: () => [null, () => {}], useEffect: () => {} },
-      'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
-      './YanjiUI': ui,
-      './icons': { getYanjiIcon: name => name, YANJI_ICON_STROKE: 1.75 },
-      '../theme/ThemeProvider': { useYanjiTheme: () => theme },
-      '../theme/tokens': tokens,
-    }),
+    '../components/SettingsRows': rows,
     '../components/SettingsSheets': loadTypeScript('src/components/SettingsSheets.tsx', {
       react: {
         useState: initial => {
@@ -188,7 +210,35 @@ function settingsHarness({ settings, calls = [] } = {}) {
       './YanjiUI': ui,
       '../theme/ThemeProvider': { useYanjiTheme: () => theme },
       '../theme/tokens': tokens,
-      '../screens/settingsViewLogic': logic,
+      '../state/settingsViewLogic': logic,
+    }),
+    // The advanced block owns its own form state; the page only composes it, so
+    // the test loads the real component with the same stubs it needs. Its state
+    // slots are keyed by *slot order within one render of that component*, which
+    // is why the counter is reset by `render()` and not on every re-render.
+    '../components/DecisionModelSection': loadTypeScript('src/components/DecisionModelSection.tsx', {
+      react: {
+        useState: initial => {
+          const i = 2000 + sectionIndex++;
+          if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+          return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+        },
+        useEffect: () => {},
+      },
+      'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+      './YanjiUI': ui,
+      './SettingsRows': rows,
+      '../bridge': {
+        YanjiDataNative: {
+          updateUserSettings: async patch => { calls.push(['updateUserSettings', patch]); return true; },
+          saveDecisionApiKey: async () => true,
+          clearDecisionApiKey: async () => true,
+          getDecisionApiKey: async () => '',
+        },
+      },
+      '../services/decisionClient': { testDecisionConnection: async () => ({ success: true, message: 'ok' }) },
+      '../theme/ThemeProvider': { useYanjiTheme: () => theme },
+      '../theme/tokens': tokens,
     }),
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({ closeSettings: () => calls.push(['closeSettings']) }),
@@ -204,7 +254,7 @@ function settingsHarness({ settings, calls = [] } = {}) {
       refreshSettingsSnapshot: async () => {},
     },
     '../services/decisionClient': { testDecisionConnection: async () => ({ success: true, message: 'ok' }) },
-    './settingsViewLogic': logic,
+    '../state/settingsViewLogic': logic,
   }, {
     Date: class extends Date {
       constructor(...args) { super(...(args.length ? args : ['2026-10-17T12:00:00'])); }
@@ -214,7 +264,11 @@ function settingsHarness({ settings, calls = [] } = {}) {
   return {
     calls,
     setState: (slot, value) => { states[slot] = value; },
-    render: () => { index = 0; return SettingsScreen(); },
+    render: () => {
+      index = 0;
+      sectionIndex = 0;
+      return SettingsScreen();
+    },
   };
 }
 
@@ -273,19 +327,58 @@ test('a settings snapshot that has not arrived yet is not reported as 未设置'
 
 test('the advanced block is collapsed until it is opened', () => {
   const harness = settingsHarness({ settings: stored() });
-  const collapsed = nodes(harness.render(), byComponent('YanjiSettingDisclosureRow'));
-  assert.equal(collapsed.length, 1);
-  assert.equal(collapsed[0].props.expanded, false);
-  assert.equal(collapsed[0].props.summary, '未配置');
 
-  // Opening it is what reveals the decision-model form. Slot 5 is
-  // `advancedOpen`: the page's hooks run in declaration order, and every one
-  // before it (theme mode, open sheet, saving, two error slots) is fixed.
-  harness.setState(5, true);
-  const opened = harness.render();
-  const inputs = nodes(opened, node => node.type === 'YanjiTextInput');
-  assert.ok(inputs.length >= 3, 'model, endpoint and API key fields appear once expanded');
-  assert.equal(nodes(opened, byComponent('YanjiSettingDisclosureRow'))[0].props.expanded, true);
+  /**
+   * Walk the rendered tree exactly once.
+   *
+   * `nodes()` re-invokes component functions as it descends, and the harness's
+   * `useState` stub advances a slot counter per invocation. Walking the same
+   * tree twice would therefore hand the advanced block a different set of slots
+   * on the second pass, so every assertion here reads one snapshot.
+   */
+  const snapshot = tree => {
+    const found = { sections: [], disclosures: 0, inputs: 0 };
+    const seen = new Set();
+    const walk = node => {
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (!node || typeof node !== 'object' || !('type' in node)) return;
+      if (typeof node.type === 'function' && node.type.name === 'YanjiDecisionModelSection') found.sections++;
+      if (typeof node.type === 'string' && node.type === 'YanjiTextInput') found.inputs++;
+      if (typeof node.type === 'function') {
+        if (seen.has(node)) return;
+        seen.add(node);
+        walk(node.type(node.props));
+        return;
+      }
+      // A disclosure rendered by the block is a real component element; capture
+      // it so the test can press it.
+      if (typeof node.type === 'function' && node.type.name === 'YanjiSettingDisclosureRow') {
+        found.disclosures++;
+        found.disclosure = node;
+      }
+      walk(node.props.children);
+    };
+    walk(tree);
+    return found;
+  };
+
+  const collapsed = snapshot(harness.render());
+  assert.equal(collapsed.sections, 1, 'the page must render the advanced section');
+  assert.equal(collapsed.inputs, 0, 'the decision-model form is not built while collapsed');
+
+  const collapsedTree = harness.render();
+  const disclosure = nodes(collapsedTree, byComponent('YanjiSettingDisclosureRow'))[0];
+  assert.ok(disclosure, 'the block must publish exactly one disclosure row');
+  assert.equal(disclosure.props.expanded, false);
+  assert.equal(disclosure.props.summary, '未配置');
+
+  // Drive the real control instead of poking a hook slot: the disclosure's own
+  // press handler is what toggles it, so adding or reordering the page's hooks
+  // cannot silently point this test at the wrong state.
+  disclosure.props.onPress();
+
+  const opened = snapshot(harness.render());
+  assert.ok(opened.inputs >= 3, 'model, endpoint and API key fields appear once expanded');
 });
 
 test('saving the exam date writes the chosen ISO day and nothing else', async () => {
@@ -294,9 +387,12 @@ test('saving the exam date writes the chosen ISO day and nothing else', async ()
   assert.equal(sheets().length, 1);
   assert.equal(sheets()[0].props.visible, false, 'the sheet starts closed');
 
-  // The page opens the sheet from its row, and the sheet's save is the only writer.
-  // Slot 1 is `openSheet`, the second hook the page declares.
-  harness.setState(1, 'examDate');
+  // Open the sheet through the row that owns it, so the test exercises the real
+  // path instead of depending on where `openSheet` sits in the hook order.
+  const rows = nodes(harness.render(), byComponent('YanjiSettingRow'));
+  rows[0].props.onPress();
+  assert.equal(sheets()[0].props.visible, true, 'the exam-date row opens its sheet');
+
   await sheets()[0].props.onSave('2026-12-26');
   assert.deepEqual(plain(harness.calls.filter(call => call[0] === 'updateUserSettings')),
     [['updateUserSettings', { examDate: '2026-12-26' }]]);
@@ -311,6 +407,25 @@ test('saving the daily goal converts minutes back into the stored hours column',
   const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
   assert.equal(writes.length, 1);
   assert.equal(writes[0][1].dailyGoalHours, 6.5, '390 minutes is stored as 6.5 hours');
+});
+
+test('a goal of zero means "no goal" and the sheet says so before saving it', async () => {
+  // Zero is reachable through the stepper, and `dailyGoalHours: 0` is how this
+  // codebase stores "unset" (both Today and this page read <= 0 that way). The
+  // action is therefore labelled 「清除目标」: writing zero is a removal, and the
+  // button must not read as if it were setting a target.
+  const harness = settingsHarness({ settings: stored({ dailyGoalHours: 0 }) });
+  const sheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+  // `YanjiPrimaryButton` is a stub in this harness, so its label is read from
+  // the element the sheet renders rather than from a real render pass.
+  const save = nodes(sheet(), node => node.type === 'YanjiPrimaryButton')[0];
+  assert.ok(save, 'the sheet must publish its save action');
+  assert.equal(save.props.label, '清除目标');
+
+  await sheet().props.onSave(0);
+  const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][1].dailyGoalHours, 0, 'clearing writes zero, the stored "unset"');
 });
 
 test('the page no longer ships a full-width return button', () => {

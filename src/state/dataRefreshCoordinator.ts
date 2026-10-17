@@ -66,6 +66,14 @@ export class DataRefreshCoordinator {
   private readonly pendingEvents = new Set<DataChangedType>();
   private flushScheduled = false;
   private foreground = true;
+  /**
+   * Whether `seed` has already run in this process.
+   *
+   * This is NOT the retired one-shot latch (which refused to seed again and left
+   * a remounted root with nothing). It only records that the host payload has
+   * been consumed once, so a later re-seed can be treated as possibly stale.
+   */
+  private hasSeeded = false;
 
   constructor(private readonly loaders: DataRefreshLoaders) {}
 
@@ -93,10 +101,18 @@ export class DataRefreshCoordinator {
    * 于是只能先渲染「正在读取…」。宿主（`bridge/LaunchPreheat`）把同一份 Room 数据提前读好
    * 当 launch options 送进来，这里在首帧前播种，页面第一帧就是有数据的。
    *
-   * 只接受一次：重复挂载（Fast Refresh、二次 `runApplication`）不得让旧的启动载荷覆盖
-   * 已经刷新过的缓存。日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
+   * 日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
    *
-   * 另外只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
+   * 只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
+   * 因此重复调用是幂等的，不需要「一生只 seed 一次」的门闩（那个门闩反而会让
+   * Activity 重挂载后的新根组件既拿不到预热数据、也不再触发读取）。
+   *
+   * 新鲜度分两种情况，因为宿主载荷只读一次（`Application.onCreate`），之后不会更新：
+   *  - **本进程首次播种**：载荷与 Room 的偏差只有启动那一瞬，可信。保持不脏，
+   *    首帧直接用，不发多余读取——这正是预热要省掉的那一次。
+   *  - **重播种**（进程存活期间 Activity 重挂载）：距首次读已过去任意长时间，载荷可能
+   *    比 Room 旧。标脏，让紧随其后的第一次可见读取用真实数据覆盖它；首帧仍有内容，
+   *    但不会把过期快照当成最终答案。
    */
   seed(properties: Partial<YanjiLaunchProperties> | null | undefined): void {
     if (!properties) return;
@@ -105,25 +121,20 @@ export class DataRefreshCoordinator {
     const daily = properties.dailySnapshot;
     const settings = properties.settings;
     const examCountdown = properties.examCountdown;
+    // A re-seed reuses the payload the host read at process start, so anything
+    // it fills now may already be older than Room.
+    const stale = this.hasSeeded;
+    this.hasSeeded = true;
 
-    /**
-     * 只填空槽，并且**每次挂载都允许补**。
-     *
-     * 这里不再用「一生只 seed 一次」的门闩。宿主把同一份 `LaunchPreheat` 载荷交给每个
-     * 新建的根组件，而 Activity 退出再进入（进程仍存活）时 React 树会重新挂载、协调器
-     * 的缓存却已被上一轮的 `prune` 清空。一次性门闩会让这次挂载既拿不到预热数据、
-     * 又不再触发读取，首页就永远停在「正在读取」。
-     *
-     * 判据因此改成**缓存是否真的为空**：已有值说明桥接读回来过，那才是更新的数据，
-     * 绝不用旧载荷覆盖它。
-     */
+    // 只填空槽：已有值说明桥接读回来过，那才是更新的数据，绝不用旧载荷覆盖它。
     if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
       this.dailyValues.set(date, daily);
-      this.dailyDirty.delete(date);
+      if (stale) this.dailyDirty.add(date);
+      else this.dailyDirty.delete(date);
     }
     if (settings && examCountdown && !this.settingsValue) {
       this.settingsValue = { settings, examCountdown };
-      this.settingsDirty = false;
+      this.settingsDirty = stale;
     }
   }
 
@@ -262,7 +273,15 @@ export class DataRefreshCoordinator {
     }
   }
 
-  handleForeground(): void {
+  /**
+   * Re-reads everything a resume can have missed.
+   *
+   * Private: `setForeground` is the only legitimate trigger, because a resume is
+   * exactly a `false → true` transition. Keeping a public entry point would let
+   * a caller re-read without that transition and silently invalidate the read it
+   * just started.
+   */
+  private handleForeground(): void {
     for (const date of this.visibleDailyDates()) {
       this.invalidateDaily(date);
       void this.ensureDaily(date);

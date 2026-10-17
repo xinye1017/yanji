@@ -25,6 +25,7 @@ import {
   greeting, hourRangeLabel, rhythmSummary, sessionPrecise, spectrumLegend,
   summarizeSubjects, taskMeta,
 } from './todayViewLogic';
+import { examCountdownText, todayIso } from '../state/settingsViewLogic';
 
 type ChartMode = 'subjects' | 'timeline';
 type Selection = { key: string; subjectId: string; subjectName: string; seconds: number } | null;
@@ -164,10 +165,17 @@ export function TodayScreen({ visible, foregroundRevision }: {
     openSettings();
   };
   const newNote = () => { setEditingNote(null); setRecordOpen(true); };
-  const countdownLabel = countdown?.examDate
-    ? countdown.daysRemaining > 0
-      ? `距 ${countdown.examDate.slice(0, 4)} 考研 · ${countdown.daysRemaining} 天`
-      : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'
+  // Share the settings page's formatter rather than reading the native countdown
+  // directly: the native value is clamped at 0, so `daysRemaining === 0` cannot
+  // tell "today is the exam" from "the date passed weeks ago". Settings already
+  // computes this locally and correctly; reading the payload here made the two
+  // pages contradict each other after the exam date.
+  const countdownExamDate = countdown?.examDate ?? '';
+  const countdownLocal = countdownExamDate ? examCountdownText(countdownExamDate, todayIso()) : null;
+  // `examCountdownText` already reads 「距初试 N 天」/「已过设定日期 N 天」, so the
+  // badge only adds the year it belongs to rather than restating the count.
+  const countdownLabel = countdown && countdownLocal
+    ? `${countdownExamDate.slice(0, 4)} 考研 · ${countdownLocal}`
     : null;
   const savedStatus = !snapshot ? '正在读取今日记录…'
     : goalSeconds && effectiveSeconds > goalSeconds ? `超出目标 +${compactDuration(effectiveSeconds - goalSeconds)}`
@@ -438,7 +446,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
               <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.captionMeta.fontSize + 3} color={colors.secondary} />
             </Pressable>} />
           <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
-            startLabel="06:00" endLabel="24:00" />
+            startLabel="06:00" endLabel="24:00"
+            accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
           <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
             {rhythmSummaryText}
           </Text>

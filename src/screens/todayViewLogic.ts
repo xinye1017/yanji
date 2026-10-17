@@ -1,12 +1,19 @@
 import type { DailySession, StudyTask } from '../bridge';
-import type { YanjiMiniRhythmBucket, YanjiSpectrumSegment } from '../components/YanjiUI';
+import type { YanjiDayRhythmBucket, YanjiSpectrumSegment } from '../components/YanjiUI';
 
 export const DAY_PARTS = [
   { name: '凌晨', from: 0, to: 6 }, { name: '上午', from: 6, to: 12 },
   { name: '下午', from: 12, to: 18 }, { name: '晚上', from: 18, to: 24 },
 ] as const;
 
-const RHYTHM_HOURS = Array.from({ length: 18 }, (_, index) => index + 6);
+/** The strip's window; anything outside it is not drawn and must not be claimed. */
+export const RHYTHM_FIRST_HOUR = 6;
+export const RHYTHM_LAST_HOUR = 24;
+
+const RHYTHM_HOURS = Array.from(
+  { length: RHYTHM_LAST_HOUR - RHYTHM_FIRST_HOUR },
+  (_, index) => index + RHYTHM_FIRST_HOUR,
+);
 const CHINESE_DIGITS = '零一二三四五六七八九';
 
 function chineseNumber(value: number): string {
@@ -94,7 +101,7 @@ export function buildRhythmBuckets(
   date: string,
   sessions: readonly DailySession[],
   fallbackColor: string,
-): YanjiMiniRhythmBucket[] {
+): YanjiDayRhythmBucket[] {
   const precise = sessions.filter(sessionPrecise);
   return RHYTHM_HOURS.map(hour => {
     const start = new Date(`${date}T00:00:00`);
@@ -133,9 +140,14 @@ export function buildRhythmBuckets(
  * the reader had to expand it to learn whether the day had any shape at all.
  * This says it in the collapsed state — including the honest empty case — and
  * names the busiest hour whenever the strip has something to point at.
+ *
+ * The window only starts at 06:00, so a session that ended before it is not in
+ * the strip at all. Saying "已确认 X 连续专注" without qualification would claim a
+ * total that omits those hours and then contradict 今日累计专注 on the same
+ * screen, so the sentence names its own window whenever it reports a figure.
  */
 export function rhythmSummary(
-  buckets: readonly YanjiMiniRhythmBucket[],
+  buckets: readonly YanjiDayRhythmBucket[],
   loaded: boolean,
   hourLabel: (hour: number) => string,
 ): string {
@@ -146,7 +158,8 @@ export function rhythmSummary(
   // Ties resolve to the earlier hour: the first time the day reached its peak
   // is the more useful statement than an arbitrary pick among equals.
   const peak = measured.reduce((best, bucket) => (bucket.seconds > best.seconds ? bucket : best), measured[0]);
-  return `已确认 ${compactDuration(total)} 连续专注，分布在 ${measured.length} 个小时；最集中的是 ${hourLabel(peak.hour)}。`;
+  const window = `${String(RHYTHM_FIRST_HOUR).padStart(2, '0')}:00 之后`;
+  return `${window}已确认 ${compactDuration(total)} 连续专注，分布在 ${measured.length} 个小时；最集中的是 ${hourLabel(peak.hour)}。`;
 }
 
 /** 24h clock label for a bucket hour, e.g. `09:00–10:00`. */

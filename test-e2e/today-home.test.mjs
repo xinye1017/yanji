@@ -259,7 +259,7 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   assert.equal(toggle().props.accessibilityState.expanded, true);
 });
 
-test('the rhythm section explains itself before it is expanded', () => {
+test('the rhythm section states its own window so the summary cannot overclaim', () => {
   const harness = screenHarness(snapshot());
   const tree = harness.render();
   // The collapsed section must name what it measures and what the strip means,
@@ -270,6 +270,11 @@ test('the rhythm section explains itself before it is expanded', () => {
   assert.equal(chart.props.startLabel, '06:00');
   assert.equal(chart.props.endLabel, '24:00');
   assert.equal(chart.props.buckets.length, 18);
+  // The axis range is the section's scope. It sits inside a subtree that is
+  // hidden from the a11y tree, so the chart must publish it separately or a
+  // screen-reader user cannot learn it at all.
+  assert.match(chart.props.accessibilityLabel ?? '', /06:00/);
+  assert.match(chart.props.accessibilityLabel ?? '', /24:00/);
   // An honest empty day says so rather than drawing an unexplained strip.
   assert.match(text(tree), /今天还没有可确认的连续专注/);
 });
@@ -277,32 +282,44 @@ test('the rhythm section explains itself before it is expanded', () => {
 test('the rhythm summary names the busiest hour and the measured total', () => {
   const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
-  assert.match(text(tree), /已确认 50m 连续专注/);
+  assert.match(text(tree), /06:00 之后已确认 50m 连续专注/);
   assert.match(text(tree), /最集中的是 09:00–10:00/);
 });
 
-test('an empty rhythm strip draws the axis and nothing else', () => {
+test('a pre-dawn session is excluded from the strip and the summary says so', () => {
+  // The window starts at 06:00. A 05:00 session is real saved focus, but it is
+  // not in the strip, so the sentence must not read as if it covered the day.
+  const sessions = [session('dawn', '05:00', '05:40'), session('morning', '09:00', '09:30')];
+  const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 4200, focusCount: 2 })).render();
+  const summary = text(tree).match(/[^。]*连续专注[^。]*/)[0];
+  assert.match(summary, /06:00 之后/, 'the summary must name its window');
+  assert.match(summary, /30m/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
+});
+
+test('an empty rhythm strip marks no hour at all', () => {
   // A lone "current hour" tick on a day with no data is the same unexplained
-  // mark the section was rebuilt to remove, so it must not be painted.
+  // mark the section was rebuilt to remove, so nothing may be painted.
   const empty = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
   const chart = shared.YanjiDayRhythmChart({ buckets: empty, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
-  const bars = nodes(chart.props.children, node => node.type === 'View' && node.props.style?.flex === 1);
-  assert.equal(bars.length, 18);
-  for (const bar of bars) {
-    assert.equal(bar.props.style.height, 0, 'no hour may draw a mark on an empty day');
-    assert.equal(bar.props.style.backgroundColor, 'transparent');
+  assert.equal(shared.measuredRhythmHours(empty), 0);
+  for (const bucket of empty) {
+    const slot = nodes(chart, node => node.props.testID === `rhythm-hour-${bucket.hour}`)[0];
+    assert.ok(slot, `hour ${bucket.hour} still reserves its slot in the axis`);
+    assert.equal(slot.props.style.height, 0, 'no hour may draw a mark on an empty day');
   }
 });
 
 test('the current-hour tick appears once the strip has real data', () => {
   const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
   buckets[4] = { hour: 10, seconds: 1800, color: '#356AE6' };
+  assert.equal(shared.measuredRhythmHours(buckets), 1);
   const chart = shared.YanjiDayRhythmChart({ buckets, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
-  const bars = nodes(chart.props.children, node => node.type === 'View' && node.props.style?.flex === 1);
-  const now = bars.find(bar => bar.props.style.height === tokens.YanjiPaperLayout.rhythmEmptyHeight
-    && bar.props.style.backgroundColor === theme.paper.colors.secondary);
-  assert.ok(now, 'the current hour is marked so the reader can place "now" against the bars');
-  assert.equal(bars.filter(bar => bar.props.style.backgroundColor !== 'transparent').length, 2);
+  const marked = buckets.filter(bucket => {
+    const slot = nodes(chart, node => node.props.testID === `rhythm-hour-${bucket.hour}`)[0];
+    return slot.props.style.height > 0;
+  });
+  assert.deepEqual(marked.map(bucket => bucket.hour), [10, 20],
+    'the measured hour and the current hour are the only marks');
 });
 
 test('production homepage keeps loading distinct from an empty saved day', () => {

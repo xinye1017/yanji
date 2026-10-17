@@ -122,9 +122,12 @@ export function formatMonthTitle({ year, month }: CalendarMonth): string {
 /**
  * The month laid out as Monday-first weeks.
  *
- * Always at least five rows and at most six, with blanks (`null`) where a day
- * does not exist, so the grid does not jump in height as the user pages
- * between months.
+ * Always exactly five or six rows, with blanks (`null`) where a day does not
+ * exist, so the grid does not jump in height as the user pages between months.
+ * A 28-day February that starts on a Monday fits in four rows, which would make
+ * the sheet visibly shrink; the minimum of five rows is what keeps the height
+ * stable, and it is the reason this pads to a floor rather than only to a
+ * multiple of seven.
  */
 export function buildMonthGrid({ year, month }: CalendarMonth): ReadonlyArray<ReadonlyArray<number | null>> {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -134,7 +137,7 @@ export function buildMonthGrid({ year, month }: CalendarMonth): ReadonlyArray<Re
     ...Array.from({ length: leadingBlanks }, () => null),
     ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
   ];
-  while (cells.length % 7 !== 0) cells.push(null);
+  while (cells.length % 7 !== 0 || cells.length < 35) cells.push(null);
 
   const weeks: Array<ReadonlyArray<number | null>> = [];
   for (let index = 0; index < cells.length; index += 7) {

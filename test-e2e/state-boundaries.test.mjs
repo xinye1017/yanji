@@ -435,7 +435,10 @@ test('hidden pages and background readers issue no reads; activation repairs the
   coordinator.setDailyReader('review', null);
   coordinator.enqueueDataChanged('sessions');
   coordinator.enqueueDataChanged('tasks');
-  coordinator.handleForeground();
+  // A resume is the only public way to ask for the repair; `handleForeground`
+  // is private so nothing can re-read without the transition that justifies it.
+  coordinator.setForeground(false);
+  coordinator.setForeground(true);
   await settle();
   assert.equal(reads.daily.length, 1);
   coordinator.setDailyReader('review', '2026-10-09');
@@ -483,6 +486,41 @@ test('a reader registered while backgrounded is repaired by the foreground trans
   await settle();
   assert.deepEqual(reads.daily, ['2026-10-10']);
   assert.equal(reads.settings, 1);
+});
+
+test('a remount that finds the coordinator already foregrounded issues no extra read', async () => {
+  // AppShell calls `setForeground(currentForeground)` unconditionally on mount.
+  // If the coordinator already agrees it is foregrounded, that call must be a
+  // no-op: a remount is not a resume, and treating it as one would issue a full
+  // re-read of every visible date on every remount (font scale, locale, split
+  // screen — all rebuild the Activity).
+  const { coordinator, reads } = fixture();
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.equal(reads.daily.length, 1);
+  assert.equal(reads.settings, 1);
+
+  // The remount: the readers re-register with the same date, then AppShell
+  // re-asserts the foreground state it already had.
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  coordinator.setForeground(true);
+  await settle();
+  assert.equal(reads.daily.length, 1, 'a remount is not a resume, so it must not re-read');
+  assert.equal(reads.settings, 1);
+});
+
+test('a repeated foreground signal is not a second read', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.setForeground(true);
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.equal(reads.daily.length, 1);
+  coordinator.setForeground(true);
+  coordinator.setForeground(true);
+  await settle();
+  assert.equal(reads.daily.length, 1, 'only a false → true transition may trigger the repair');
 });
 
 test('event types refresh only their dependent reads', async () => {
