@@ -85,26 +85,31 @@ function AppShell(): React.JSX.Element {
     );
     const appState = AppState.addEventListener('change', next => {
       const isForeground = next === 'active';
+      // `setForeground` itself reconciles the readers when it sees a real
+      // background → foreground transition, so it is the single place a resume
+      // can trigger reads. Calling `handleForeground` here as well would
+      // invalidate the read it just started and issue a second one.
       dataRefreshCoordinator.setForeground(isForeground);
       setTimerForeground(isForeground);
       setForeground(isForeground);
-      if (isForeground) {
-        dataRefreshCoordinator.handleForeground();
-        setForegroundRevision(revision => revision + 1);
-      }
+      if (isForeground) setForegroundRevision(revision => revision + 1);
     });
     // AppState may change between the initial render and listener attachment.
     // Reconcile its current native cache after subscribing so a resumed shell
     // cannot remain hidden or keep its readers suspended until another event.
+    //
+    // This also covers the case the coordinator cannot see on its own: after an
+    // Activity exit and re-entry in the same process the React tree remounts
+    // while the coordinator still believes it is backgrounded. Its readers
+    // register during the child effects — before this line runs — so their
+    // registration is gated, and without the transition here nothing would ever
+    // read Room again and Today would sit on 「正在读取」 forever.
     const currentForeground = AppState.currentState === 'active';
     dataRefreshCoordinator.setForeground(currentForeground);
     setTimerForeground(currentForeground);
     if (currentForeground !== foreground) {
       setForeground(currentForeground);
-      if (currentForeground) {
-        dataRefreshCoordinator.handleForeground();
-        setForegroundRevision(revision => revision + 1);
-      }
+      if (currentForeground) setForegroundRevision(revision => revision + 1);
     }
     return () => {
       unsubscribeData();
@@ -191,9 +196,17 @@ function AppShell(): React.JSX.Element {
 }
 
 export default function App(launchProperties: Partial<YanjiLaunchProperties>): React.JSX.Element {
-  // Seed the host's preheated snapshot before the first render: Today's first
-  // frame then paints real data instead of 「正在读取…」.
-  seedLaunchSnapshot(launchProperties);
+  // Seed the host's preheated snapshot before the first render, so Today's first
+  // frame paints real data instead of 「正在读取…」.
+  //
+  // `useState` runs this exactly once per mounted root and discards the result:
+  // seeding is a cache fill, not state. Doing it on every render would mutate the
+  // coordinator during render for no gain, and a `useEffect` would be too late —
+  // the first frame is the one that has to be right.
+  useState(() => {
+    seedLaunchSnapshot(launchProperties);
+    return null;
+  });
   return (
     <YanjiThemeProvider>
       <SafeAreaProvider>
