@@ -1,15 +1,18 @@
 /**
- * Yanji settings screen — a secondary destination reached from the Today header.
+ * Yanji settings — a secondary destination reached from the Today header.
  *
- * Scope discipline: only settings the 2.0 product actually needs. Achievements,
- * mascots, AI configuration, backup files, fluid-cloud switches and notification
- * toggles are not part of this phase's surface, so none of them are offered —
- * an inert switch would be a lie about what the app can do.
+ * Shape of the page: three short groups, one line per setting, no cards.
+ *  1. 备考 — the two values the product actually measures against (考试日期 /
+ *     每日学习时长). Both are edited here, in the sheet that owns them.
+ *  2. 外观 — the app theme preference.
+ *  3. 高级 — the decision-model configuration, collapsed by default. It is a
+ *     long form that is configured once and then never touched, so letting it
+ *     occupy the first screen was the single biggest source of clutter.
  *
- * Every value shown here is read from the native snapshot (`UserSettings`), and
- * the one write this screen performs (the theme preference) goes straight to the
- * native module. The daily goal is displayed from the same Room row that Today
- * edits, so there is exactly one writer for it.
+ * Everything printed here comes from the native snapshot (`UserSettings`), and
+ * the only writes are `updateUserSettings` (date, goal, decision model) and the
+ * theme module. Today still reads the same Room row, so the two pages can never
+ * disagree — but there is exactly one editor per value, on this page.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -18,18 +21,27 @@ import { YanjiDataNative, YanjiThemeNative, onThemeChanged } from '../bridge';
 import type { ThemeMode } from '../bridge';
 import {
   YanjiEditorialHeader,
+  YanjiHairline,
   YanjiIconButton,
   YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl,
-  YanjiPrimaryButton,
   YanjiTextAction,
   YanjiTextInput,
 } from '../components/YanjiUI';
+import { YanjiSettingDisclosureRow, YanjiSettingRow } from '../components/SettingsRows';
+import { DailyGoalSheet, ExamDateSheet } from '../components/SettingsSheets';
 import { useNavigationActions } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import { refreshSettingsSnapshot, useSettingsSnapshot } from '../state/dataRefresh';
 import { testDecisionConnection } from '../services/decisionClient';
+import {
+  examCountdownText,
+  formatExamDate,
+  formatGoalDuration,
+  goalHoursFromMinutes,
+  todayIso,
+} from './settingsViewLogic';
 
 const THEME_OPTIONS: Array<{ mode: ThemeMode; label: string }> = [
   { mode: 'SYSTEM', label: '跟随系统' },
@@ -42,25 +54,37 @@ const DECISION_PROVIDERS: Array<{ value: 'openrouter' | 'typesafe'; label: strin
   { value: 'typesafe', label: 'TypeSafe (Jev)' },
 ];
 
-function formatGoalHours(hours: number | undefined): string {
-  if (hours === undefined || !Number.isFinite(hours) || hours <= 0) return '未设置';
-  const whole = Math.floor(hours);
-  const minutes = Math.round((hours - whole) * 60);
-  if (whole === 0) return `${minutes} 分钟`;
-  return minutes === 0 ? `${whole} 小时` : `${whole} 小时 ${minutes} 分钟`;
-}
+const PROVIDER_DEFAULTS: Record<'openrouter' | 'typesafe', { model: string; endpoint: string }> = {
+  openrouter: {
+    model: 'respan/span-01-lite:free',
+    endpoint: 'https://openrouter.ai/api/alpha/decisions',
+  },
+  typesafe: {
+    model: 'jev-latest',
+    endpoint: 'https://api.typesafe.ai/v1/systemone',
+  },
+};
+
+type Sheet = 'examDate' | 'dailyGoal' | null;
 
 export function SettingsScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
+  const { colors, typography, layout, radius } = paper;
   const { closeSettings } = useNavigationActions();
   const settingsSnapshot = useSettingsSnapshot('settings', true);
   const settings = settingsSnapshot?.settings ?? null;
-  const [mode, setMode] = useState<ThemeMode>(theme.mode);
 
+  const [mode, setMode] = useState<ThemeMode>(theme.mode);
+  const [openSheet, setOpenSheet] = useState<Sheet>(null);
+  const [saving, setSaving] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [provider, setProvider] = useState<'openrouter' | 'typesafe'>('openrouter');
-  const [model, setModel] = useState('respan/span-01-lite:free');
-  const [endpoint, setEndpoint] = useState('https://openrouter.ai/api/alpha/decisions');
+  const [model, setModel] = useState(PROVIDER_DEFAULTS.openrouter.model);
+  const [endpoint, setEndpoint] = useState(PROVIDER_DEFAULTS.openrouter.endpoint);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [hasKey, setHasKey] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -72,10 +96,15 @@ export function SettingsScreen(): React.JSX.Element {
     if (!settings) return;
     const currentProvider = (settings.decisionProvider as 'openrouter' | 'typesafe') || 'openrouter';
     setProvider(currentProvider);
-    setModel(settings.decisionModel || (currentProvider === 'typesafe' ? 'jev-latest' : 'respan/span-01-lite:free'));
-    setEndpoint(settings.decisionEndpoint || (currentProvider === 'typesafe' ? 'https://api.typesafe.ai/v1/systemone' : 'https://openrouter.ai/api/alpha/decisions'));
+    setModel(settings.decisionModel || PROVIDER_DEFAULTS[currentProvider].model);
+    setEndpoint(settings.decisionEndpoint || PROVIDER_DEFAULTS[currentProvider].endpoint);
     setHasKey(!!settings.hasDecisionApiKey);
-  }, [settings?.decisionProvider, settings?.decisionModel, settings?.decisionEndpoint, settings?.hasDecisionApiKey]);
+  }, [
+    settings?.decisionProvider,
+    settings?.decisionModel,
+    settings?.decisionEndpoint,
+    settings?.hasDecisionApiKey,
+  ]);
 
   useEffect(() => {
     YanjiThemeNative.getThemePreference()
@@ -85,31 +114,71 @@ export function SettingsScreen(): React.JSX.Element {
       });
   }, []);
 
-  useEffect(() => {
-    return onThemeChanged(pref => setMode(pref.mode));
-  }, []);
+  useEffect(() => onThemeChanged(pref => setMode(pref.mode)), []);
 
   const handleThemeChange = useCallback(async (next: ThemeMode) => {
     setMode(next);
     try {
       await YanjiThemeNative.setThemePreference(next);
     } catch {
-      // Revert on failure.
       const pref = await YanjiThemeNative.getThemePreference();
       setMode(pref.mode);
     }
   }, []);
 
+  const openSheetWith = (sheet: Exclude<Sheet, null>) => {
+    setSheetError(null);
+    setActionError(null);
+    setOpenSheet(sheet);
+  };
+
+  const closeSheet = () => {
+    if (saving) return;
+    setSheetError(null);
+    setOpenSheet(null);
+  };
+
+  const saveExamDate = async (iso: string) => {
+    setSaving(true);
+    setSheetError(null);
+    try {
+      if (!await YanjiDataNative.updateUserSettings({ examDate: iso })) throw new Error('refused');
+      await refreshSettingsSnapshot();
+      setOpenSheet(null);
+    } catch {
+      setSheetError('考试日期未保存，请稍后再试。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveDailyGoal = async (minutes: number) => {
+    setSaving(true);
+    setSheetError(null);
+    try {
+      if (!await YanjiDataNative.updateUserSettings({ dailyGoalHours: goalHoursFromMinutes(minutes) })) {
+        throw new Error('refused');
+      }
+      await refreshSettingsSnapshot();
+      setOpenSheet(null);
+    } catch {
+      setSheetError('每日学习时长未保存，请稍后再试。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleProviderChange = (nextProvider: 'openrouter' | 'typesafe') => {
     setProvider(nextProvider);
     setTestResult(null);
     setAiMessage(null);
-    if (nextProvider === 'typesafe') {
-      if (!model || model === 'respan/span-01-lite:free') setModel('jev-latest');
-      if (!endpoint || endpoint === 'https://openrouter.ai/api/alpha/decisions') setEndpoint('https://api.typesafe.ai/v1/systemone');
-    } else {
-      if (!model || model === 'jev-latest') setModel('respan/span-01-lite:free');
-      if (!endpoint || endpoint === 'https://api.typesafe.ai/v1/systemone') setEndpoint('https://openrouter.ai/api/alpha/decisions');
+    // Only swap the defaults when the field still holds the *other* provider's
+    // default: a hand-edited model name must survive a provider switch.
+    if (!model || model === PROVIDER_DEFAULTS.openrouter.model || model === PROVIDER_DEFAULTS.typesafe.model) {
+      setModel(PROVIDER_DEFAULTS[nextProvider].model);
+    }
+    if (!endpoint || endpoint === PROVIDER_DEFAULTS.openrouter.endpoint || endpoint === PROVIDER_DEFAULTS.typesafe.endpoint) {
+      setEndpoint(PROVIDER_DEFAULTS[nextProvider].endpoint);
     }
   };
 
@@ -122,13 +191,13 @@ export function SettingsScreen(): React.JSX.Element {
       if (!keyToTest && hasKey) {
         keyToTest = (await YanjiDataNative.getDecisionApiKey()) ?? '';
       }
-      const res = await testDecisionConnection(
+      const result = await testDecisionConnection(
         { provider, model: model.trim(), endpoint: endpoint.trim() },
         keyToTest
       );
-      setTestResult(res);
-    } catch (e: any) {
-      setTestResult({ success: false, message: e?.message || '测试连接异常' });
+      setTestResult(result);
+    } catch (error) {
+      setTestResult({ success: false, message: (error as Error | null)?.message || '测试连接异常' });
     } finally {
       setTesting(false);
     }
@@ -139,12 +208,12 @@ export function SettingsScreen(): React.JSX.Element {
     setTestResult(null);
     setAiMessage(null);
     try {
-      const ok = await YanjiDataNative.updateUserSettings({
+      const saved = await YanjiDataNative.updateUserSettings({
         decisionProvider: provider,
         decisionModel: model.trim(),
         decisionEndpoint: endpoint.trim(),
       });
-      if (!ok) throw new Error('保存配置失败');
+      if (!saved) throw new Error('保存配置失败');
 
       if (apiKeyDraft.trim()) {
         const savedKey = await YanjiDataNative.saveDecisionApiKey(apiKeyDraft.trim());
@@ -154,8 +223,8 @@ export function SettingsScreen(): React.JSX.Element {
       }
       await refreshSettingsSnapshot();
       setAiMessage('AI 决策模型配置已保存');
-    } catch (e: any) {
-      setAiMessage(e?.message || '保存失败，请稍后再试');
+    } catch (error) {
+      setAiMessage((error as Error | null)?.message || '保存失败，请稍后再试');
     } finally {
       setSavingAi(false);
     }
@@ -173,242 +242,260 @@ export function SettingsScreen(): React.JSX.Element {
     }
   };
 
+  const examDate = settings?.examDate ?? '';
+  const countdownText = examDate ? examCountdownText(examDate, todayIso()) : null;
+  const goalHours = settings?.dailyGoalHours;
+  const advancedSummary = hasKey ? '已配置' : '未配置';
+  // Until the settings snapshot arrives, the page must not claim the values are
+  // unset: it simply has not read them yet.
+  const loading = settings === null;
+
   return (
-    <View style={{ flex: 1, backgroundColor: paper.colors.canvas }}>
+    <View style={{ flex: 1, backgroundColor: colors.canvas }}>
       <ScrollView
+        testID="scroll-settings"
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
         contentContainerStyle={{
-          paddingHorizontal: paper.layout.pageGutter,
-          paddingTop: YanjiSpacing.md,
-          paddingBottom: 120,
+          paddingHorizontal: layout.pageGutter,
+          paddingTop: YanjiSpacing.lg,
+          paddingBottom: YanjiSpacing.xxl + YanjiSpacing.lg,
         }}
       >
         <YanjiEditorialHeader
           title="设置"
-          subtitle="只保留当前真正可用的选项"
+          subtitle="考试日期与每日时长决定「今天」的进度刻度"
           trailing={
             <YanjiIconButton
               icon="close"
               accessibilityLabel="完成"
               onPress={closeSettings}
               tone="filled"
+              size={layout.rowMinHeight}
             />
           }
         />
 
-        <YanjiPaperSectionHeading title="外观" />
-        <YanjiPaperSegmentedControl
-          accessibilityLabel="主题外观"
-          value={mode}
-          options={THEME_OPTIONS.map(option => ({
-            value: option.mode,
-            label: option.label,
-          }))}
-          onChange={next => void handleThemeChange(next)}
-        />
-        <Text
-          style={[
-            paper.typography.captionMeta,
-            { color: paper.colors.secondary, marginTop: YanjiSpacing.md },
-          ]}
-        >
-          研迹只读取系统深浅色，不会修改你的系统设置。
-        </Text>
-
-        <YanjiPaperSectionHeading title="备考" />
-        <View
-          style={{
-            borderTopWidth: paper.layout.hairlineWidth,
-            borderBottomWidth: paper.layout.hairlineWidth,
-            borderColor: paper.colors.hairline,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              minHeight: paper.layout.rowMinHeight,
-              paddingVertical: YanjiSpacing.sm,
-            }}
+        {actionError ? (
+          <Text
+            accessibilityRole="alert"
+            style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}
           >
-            <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-              目标考试日期
-            </Text>
-            <Text
-              style={[
-                paper.typography.bodyPrimary,
-                { color: paper.colors.ink, fontWeight: '600' },
-              ]}
-            >
-              {settings?.examDate && settings.examDate.length > 0 ? settings.examDate : '未设置'}
-            </Text>
-          </View>
-          <View
-            style={{
-              height: paper.layout.hairlineWidth,
-              backgroundColor: paper.colors.hairline,
-            }}
+            {actionError}
+          </Text>
+        ) : null}
+
+        <View style={{ marginTop: YanjiSpacing.lg }}>
+          <YanjiPaperSectionHeading title="备考" />
+          <YanjiSettingRow
+            label="考试日期"
+            value={examDate ? formatExamDate(examDate) : '未设置'}
+            hint={countdownText ?? '用于首页倒计时与回顾窗口'}
+            accessibilityLabel={`考试日期，${examDate ? formatExamDate(examDate) : '未设置'}${countdownText ? `，${countdownText}` : ''}，点击修改`}
+            pending={loading}
+            onPress={() => openSheetWith('examDate')}
           />
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              minHeight: paper.layout.rowMinHeight,
-              paddingVertical: YanjiSpacing.sm,
-            }}
-          >
-            <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-              默认每日时长
-            </Text>
-            <Text
-              style={[
-                paper.typography.bodyPrimary,
-                { color: paper.colors.ink, fontWeight: '600' },
-              ]}
-            >
-              {formatGoalHours(settings?.dailyGoalHours)}
-            </Text>
-          </View>
+          <YanjiSettingRow
+            label="每日学习时长"
+            value={formatGoalDuration(goalHours)}
+            hint="作为每日目标，不改变已记录的学习时长"
+            accessibilityLabel={`每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
+            isLast
+            pending={loading}
+            onPress={() => openSheetWith('dailyGoal')}
+          />
         </View>
+
+        <View style={{ marginTop: layout.sectionGap }}>
+          <YanjiPaperSectionHeading title="外观" />
+          <YanjiPaperSegmentedControl
+            accessibilityLabel="主题外观"
+            value={mode}
+            options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
+            onChange={next => void handleThemeChange(next)}
+          />
+          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
+            只读取系统深浅色，不会修改你的系统设置。
+          </Text>
+        </View>
+
+        <View style={{ marginTop: layout.sectionGap }}>
+          <YanjiPaperSectionHeading title="高级" />
+          <YanjiSettingDisclosureRow
+            label="AI 决策模型"
+            summary={advancedSummary}
+            icon="sparkles"
+            expanded={advancedOpen}
+            isLast
+            onPress={() => setAdvancedOpen(open => !open)}
+          />
+
+          {advancedOpen ? (
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.sm }]}>
+                用于「记录此刻」自动区分灵感与疑点。密钥加密保存在系统 Keystore 中，不进入备份。
+              </Text>
+
+              <YanjiPaperSegmentedControl
+                accessibilityLabel="决策模型提供商"
+                value={provider}
+                options={DECISION_PROVIDERS}
+                onChange={next => handleProviderChange(next as 'openrouter' | 'typesafe')}
+              />
+
+              <View style={{ marginTop: YanjiSpacing.md, gap: YanjiSpacing.sm }}>
+                <View>
+                  <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: 4 }]}>
+                    模型标识
+                  </Text>
+                  <YanjiTextInput
+                    value={model}
+                    onChangeText={setModel}
+                    placeholder={PROVIDER_DEFAULTS[provider].model}
+                    autoCapitalize="none"
+                    accessibilityLabel="模型标识"
+                  />
+                </View>
+
+                <View>
+                  <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: 4 }]}>
+                    接口地址
+                  </Text>
+                  <YanjiTextInput
+                    value={endpoint}
+                    onChangeText={setEndpoint}
+                    placeholder={PROVIDER_DEFAULTS[provider].endpoint}
+                    autoCapitalize="none"
+                    accessibilityLabel="接口地址"
+                  />
+                </View>
+
+                <View>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                      API Key {hasKey ? '(已保存在 Keystore)' : '(未配置)'}
+                    </Text>
+                    {hasKey ? (
+                      <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} />
+                    ) : null}
+                  </View>
+                  <YanjiTextInput
+                    value={apiKeyDraft}
+                    onChangeText={setApiKeyDraft}
+                    placeholder={hasKey ? '已加密存储（输入新密钥以覆盖）' : 'sk-...'}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    accessibilityLabel="API Key"
+                  />
+                </View>
+
+                {testResult ? (
+                  <View
+                    style={{
+                      padding: YanjiSpacing.sm,
+                      borderRadius: radius.surface,
+                      backgroundColor: testResult.success ? colors.positiveSubtle : colors.brandSubtle,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        typography.captionMeta,
+                        {
+                          color: testResult.success ? colors.positive : colors.brandInk,
+                          fontWeight: '600',
+                        },
+                      ]}
+                    >
+                      {testResult.success ? '✓ ' : '✕ '}
+                      {testResult.message}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {aiMessage ? (
+                  <Text style={[typography.captionMeta, { color: colors.brandInk }]}>{aiMessage}</Text>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, marginTop: YanjiSpacing.xs }}>
+                  <View style={{ flex: 1 }}>
+                    <Pressable
+                      onPress={() => void handleTestConnection()}
+                      disabled={testing || savingAi || (!hasKey && !apiKeyDraft.trim())}
+                      accessibilityRole="button"
+                      accessibilityLabel="测试决策模型连通性"
+                      style={({ pressed }) => ({
+                        minHeight: layout.rowMinHeight,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: radius.pill,
+                        backgroundColor: colors.subtle,
+                        borderWidth: layout.hairlineWidth,
+                        borderColor: colors.hairline,
+                        opacity: pressed || (!hasKey && !apiKeyDraft.trim()) ? 0.6 : 1,
+                      })}
+                    >
+                      <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '600' }]}>
+                        {testing ? '测试中…' : '测试连通性'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Pressable
+                      onPress={() => void handleSaveAi()}
+                      disabled={savingAi || testing}
+                      accessibilityRole="button"
+                      accessibilityLabel="保存 AI 决策配置"
+                      style={({ pressed }) => ({
+                        minHeight: layout.rowMinHeight,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: radius.pill,
+                        backgroundColor: colors.ink,
+                        opacity: pressed || savingAi ? 0.7 : 1,
+                      })}
+                    >
+                      <Text style={[typography.bodyPrimary, { color: colors.canvas, fontWeight: '700' }]}>
+                        {savingAi ? '保存中…' : '保存配置'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <YanjiHairline style={{ marginTop: layout.sectionGap }} />
         <Text
-          style={[
-            paper.typography.captionMeta,
-            { color: paper.colors.secondary, marginTop: YanjiSpacing.md },
-          ]}
+          style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}
         >
-          考试日期与每日时长在「今天」页调整，这里显示的是同一份设置。
+          研迹 2.0 · 数据只保存在这台设备上
         </Text>
-
-        <YanjiPaperSectionHeading title="AI 决策模型" />
-        <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginBottom: YanjiSpacing.sm }]}>
-          用于「记录此刻」通过决策模型（Span / Jev）自动识别灵感与疑点。密钥加密保存在系统 Keystore 中。
-        </Text>
-
-        <YanjiPaperSegmentedControl
-          accessibilityLabel="决策模型提供商"
-          value={provider}
-          options={DECISION_PROVIDERS}
-          onChange={next => handleProviderChange(next as 'openrouter' | 'typesafe')}
-        />
-
-        <View style={{ marginTop: YanjiSpacing.md, gap: YanjiSpacing.sm }}>
-          <View>
-            <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginBottom: 4 }]}>
-              模型标识 (Model)
-            </Text>
-            <YanjiTextInput
-              value={model}
-              onChangeText={setModel}
-              placeholder={provider === 'typesafe' ? 'jev-latest' : 'respan/span-01-lite:free'}
-              autoCapitalize="none"
-              accessibilityLabel="模型标识"
-            />
-          </View>
-
-          <View>
-            <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginBottom: 4 }]}>
-              接口地址 (Endpoint)
-            </Text>
-            <YanjiTextInput
-              value={endpoint}
-              onChangeText={setEndpoint}
-              placeholder={provider === 'typesafe' ? 'https://api.typesafe.ai/v1/systemone' : 'https://openrouter.ai/api/alpha/decisions'}
-              autoCapitalize="none"
-              accessibilityLabel="接口地址"
-            />
-          </View>
-
-          <View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                API Key {hasKey ? '(已保存在 Keystore)' : '(未配置)'}
-              </Text>
-              {hasKey ? (
-                <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} />
-              ) : null}
-            </View>
-            <YanjiTextInput
-              value={apiKeyDraft}
-              onChangeText={setApiKeyDraft}
-              placeholder={hasKey ? '已加密存储 (输入新密钥以覆盖)' : 'sk-...'}
-              secureTextEntry
-              autoCapitalize="none"
-              accessibilityLabel="API Key"
-            />
-          </View>
-
-          {testResult ? (
-            <View style={{
-              padding: YanjiSpacing.sm,
-              borderRadius: paper.radius.surface,
-              backgroundColor: testResult.success ? paper.colors.positiveSubtle : paper.colors.brandSubtle,
-            }}>
-              <Text style={[
-                paper.typography.captionMeta,
-                { color: testResult.success ? paper.colors.positive : paper.colors.brandInk, fontWeight: '600' }
-              ]}>
-                {testResult.success ? '✓ ' : '✕ '}{testResult.message}
-              </Text>
-            </View>
-          ) : null}
-
-          {aiMessage ? (
-            <Text style={[paper.typography.captionMeta, { color: paper.colors.brandInk }]}>
-              {aiMessage}
-            </Text>
-          ) : null}
-
-          <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, marginTop: YanjiSpacing.xs }}>
-            <View style={{ flex: 1 }}>
-              <Pressable
-                onPress={() => void handleTestConnection()}
-                disabled={testing || savingAi || (!hasKey && !apiKeyDraft.trim())}
-                accessibilityRole="button"
-                accessibilityLabel="测试决策模型连通性"
-                style={({ pressed }) => ({
-                  minHeight: paper.layout.rowMinHeight,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: paper.radius.pill,
-                  backgroundColor: paper.colors.subtle,
-                  borderWidth: paper.layout.hairlineWidth,
-                  borderColor: paper.colors.hairline,
-                  opacity: pressed || (!hasKey && !apiKeyDraft.trim()) ? 0.6 : 1,
-                })}
-              >
-                <Text style={[paper.typography.bodyPrimary, { color: paper.colors.ink, fontWeight: '600' }]}>
-                  {testing ? '测试中…' : '测试连通性'}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Pressable
-                onPress={() => void handleSaveAi()}
-                disabled={savingAi || testing}
-                accessibilityRole="button"
-                accessibilityLabel="保存 AI 决策配置"
-                style={({ pressed }) => ({
-                  minHeight: paper.layout.rowMinHeight,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: paper.radius.pill,
-                  backgroundColor: paper.colors.ink,
-                  opacity: pressed || savingAi ? 0.7 : 1,
-                })}
-              >
-                <Text style={[paper.typography.bodyPrimary, { color: paper.colors.canvas, fontWeight: '700' }]}>
-                  {savingAi ? '保存中…' : '保存配置'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        <View style={{ marginTop: YanjiSpacing.xxl }}>
-          <YanjiPrimaryButton label="返回今天" icon="today" onPress={closeSettings} />
-        </View>
       </ScrollView>
+
+      <ExamDateSheet
+        visible={openSheet === 'examDate'}
+        initialDate={examDate}
+        saving={saving}
+        error={sheetError}
+        onClose={closeSheet}
+        onSave={iso => void saveExamDate(iso)}
+      />
+      <DailyGoalSheet
+        visible={openSheet === 'dailyGoal'}
+        initialHours={goalHours}
+        saving={saving}
+        error={sheetError}
+        onClose={closeSheet}
+        onSave={minutes => void saveDailyGoal(minutes)}
+      />
     </View>
   );
 }

@@ -1,15 +1,13 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
   YanjiMiniRhythmSparkline, YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
-  YanjiPaperSheetHeading, YanjiPrimaryButton, YanjiSubjectProportionRow,
+  YanjiPrimaryButton, YanjiSubjectProportionRow,
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -62,8 +60,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
   const { openSettings, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset } = useNavigationActions();
   const { taskEditorOpen } = useNavigationState();
   const [now, setNow] = useState(() => new Date());
@@ -80,10 +76,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [taskInfo, setTaskInfo] = useState<StudyTask | null>(null);
-  const [goalOpen, setGoalOpen] = useState(false);
-  const [goalDraft, setGoalDraft] = useState(0);
-  const [goalError, setGoalError] = useState<string | null>(null);
-  const [savingGoal, setSavingGoal] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
   const [busyNote, setBusyNote] = useState<string | null>(null);
@@ -161,20 +153,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
     finally { setBusyNote(null); }
   };
   const openGoal = () => {
-    if (!settings) { openSettings(); return; }
-    setGoalDraft(Math.max(0, Math.round((settings.dailyGoalHours ?? 0) * 60)));
-    setGoalError(null);
-    setGoalOpen(true);
-  };
-  const saveGoal = async () => {
-    setSavingGoal(true);
-    setGoalError(null);
-    try {
-      if (!await YanjiDataNative.updateUserSettings({ dailyGoalHours: goalDraft / 60 })) throw new Error('refused');
-      await refreshSettingsSnapshot();
-      setGoalOpen(false);
-    } catch { setGoalError('保存失败，请稍后再试'); }
-    finally { setSavingGoal(false); }
+    // The goal is edited on the settings page only: one writer per stored value
+    // means Today can never save a goal the settings row does not show.
+    openSettings();
   };
   const newNote = () => { setEditingNote(null); setRecordOpen(true); };
   const countdownLabel = countdown?.examDate
@@ -492,33 +473,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
 
       <RecordMomentModal visible={recordOpen} date={date} editingNote={editingNote} onClose={() => { setRecordOpen(false); setEditingNote(null); }} />
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
-      <Modal visible={goalOpen} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => { if (!savingGoal) setGoalOpen(false); }}>
-        <View style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}>
-          <ScrollView showsVerticalScrollIndicator={false} overScrollMode="never"
-            contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}
-            style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}>
-            <YanjiPaperSheetHeading title="日常学习目标" subtitle="调整默认目标，不更改已记录的学习时长。" onClose={() => { if (!savingGoal) setGoalOpen(false); }} />
-            <Text style={[typography.metricHero, { color: colors.ink, marginVertical: YanjiSpacing.lg, textAlign: 'center' }]}>{goalDraft ? duration(goalDraft * 60) : '未设置'}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: layout.gridGap }}>
-              <YanjiIconButton icon="remove" onPress={() => setGoalDraft(Math.max(0, goalDraft - 30))} disabled={savingGoal || goalDraft <= 0} accessibilityLabel="减少30分钟" size={layout.rowMinHeight} tone="filled" />
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, flexShrink: 1 }]}>每次调整30分钟</Text>
-              <YanjiIconButton icon="add" onPress={() => setGoalDraft(Math.min(720, goalDraft + 30))} disabled={savingGoal || goalDraft >= 720} accessibilityLabel="增加30分钟" size={layout.rowMinHeight} tone="filled" />
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: layout.gridGap, marginVertical: YanjiSpacing.lg }}>
-              {[240, 360, 480, 600].map(value => <Pressable key={value} onPress={() => setGoalDraft(value)} disabled={savingGoal} accessibilityRole="button" accessibilityState={{ selected: goalDraft === value, disabled: savingGoal }}
-                style={({ pressed }) => ({ minHeight: layout.rowMinHeight, paddingHorizontal: YanjiSpacing.md, justifyContent: 'center', borderRadius: radius.pill,
-                  backgroundColor: goalDraft === value ? colors.brandSubtle : colors.subtle, borderWidth: layout.hairlineWidth, borderColor: goalDraft === value ? colors.brand : colors.hairline, opacity: pressed ? 0.65 : 1 })}>
-                <Text style={[typography.captionMeta, { color: goalDraft === value ? colors.brandInk : colors.secondary, fontWeight: goalDraft === value ? '700' : '500' }]}>{duration(value * 60)}</Text>
-              </Pressable>)}
-            </View>
-            {goalError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginBottom: YanjiSpacing.md }]}>{goalError}</Text> : null}
-            <YanjiPrimaryButton label={savingGoal ? '保存中…' : '保存目标'} onPress={() => void saveGoal()} disabled={savingGoal} />
-            <Pressable onPress={() => setGoalOpen(false)} disabled={savingGoal} accessibilityRole="button" style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>取消</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
 }
