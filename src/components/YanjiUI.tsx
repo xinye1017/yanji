@@ -527,7 +527,20 @@ export function YanjiChronoSpectrum({
 }
 
 // ---------------------------------------------------------------------------
-// YanjiMiniRhythmSparkline — saved continuous focus, 06:00–24:00
+// YanjiDayRhythmChart — saved continuous focus across 06:00–24:00
+//
+// A fixed-width bar with a fixed gap used to render as a row of dots: on a
+// day with no saved focus that row of 18 tiny ticks read as a pagination
+// indicator rather than a timeline. The bars therefore share the full width,
+// stand on a hairline axis, and the axis is labelled at both ends so the strip
+// says "this is today's clock", not "there are more pages".
+//
+// An hour with no focus draws nothing rather than a stub, so an empty day is a
+// clean, labelled axis instead of a second dashed line. The current hour keeps
+// a small tick: it is the one position the strip can honestly point at.
+//
+// Purely visual: the owning row carries the spoken summary, so the chart must
+// not become a second accessibility node inside it.
 // ---------------------------------------------------------------------------
 
 export interface YanjiMiniRhythmBucket {
@@ -536,48 +549,78 @@ export interface YanjiMiniRhythmBucket {
   color?: string;
 }
 
-export function YanjiMiniRhythmSparkline({
+export function YanjiDayRhythmChart({
   buckets,
   currentHour,
+  startLabel,
+  endLabel,
 }: {
   buckets: readonly YanjiMiniRhythmBucket[];
   currentHour: number;
+  startLabel: string;
+  endLabel: string;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, layout, radius } = paper;
+  const { colors, typography, layout, radius } = paper;
+  // Half an hour of focus is the smallest bar worth seeing; a shorter session
+  // must still leave the axis rather than vanish into it.
   const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
   return (
-    <View
-      importantForAccessibility="no-hide-descendants"
-      style={{ flexDirection: 'row', alignItems: 'flex-end', gap: layout.rhythmBarGap, height: layout.rhythmBarHeight }}
-    >
-      {buckets.map(bucket => (
-        <View
-          key={bucket.hour}
-          style={{
-            width: layout.rhythmBarWidth,
-            height: bucket.seconds > 0
-              ? Math.max(layout.rhythmEmptyHeight, bucket.seconds / maximum * layout.rhythmBarHeight)
-              : layout.rhythmEmptyHeight,
-            borderRadius: radius.tick,
-            backgroundColor: bucket.seconds > 0 ? bucket.color ?? colors.secondary
-              : bucket.hour === currentHour ? colors.secondary : colors.subtle,
-          }}
-        />
-      ))}
+    <View accessible={false} importantForAccessibility="no-hide-descendants">
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          gap: layout.rhythmBarGap,
+          height: layout.rhythmChartHeight,
+        }}
+      >
+        {buckets.map(bucket => {
+          const measured = bucket.seconds > 0;
+          const isNow = bucket.hour === currentHour;
+          return (
+            <View
+              key={bucket.hour}
+              style={{
+                flex: 1,
+                flexBasis: 0,
+                height: measured
+                  ? Math.max(layout.rhythmEmptyHeight, bucket.seconds / maximum * layout.rhythmChartHeight)
+                  : isNow ? layout.rhythmEmptyHeight : 0,
+                borderRadius: radius.tick,
+                backgroundColor: measured
+                  ? bucket.color ?? colors.secondary
+                  : isNow ? colors.secondary : 'transparent',
+              }}
+            />
+          );
+        })}
+      </View>
+      <YanjiHairline />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{startLabel}</Text>
+        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{endLabel}</Text>
+      </View>
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
 // YanjiTextAction — compact label inside a full-size touch target
+//
+// `tone` is how a page keeps one accent. The default `brand` is the in-place
+// action a section is *about* (add the thing this list is missing); `quiet`
+// is a secondary invitation that must stay findable without competing with
+// the page's one filled CTA.
 // ---------------------------------------------------------------------------
 
-export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false }: {
+export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false, tone = 'brand' }: {
   label: string;
   accessibilityLabel?: string;
   onPress: () => void;
   disabled?: boolean;
+  /** `brand` = the section's own in-place action; `quiet` = a secondary invitation. */
+  tone?: 'brand' | 'quiet';
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   return (
@@ -594,7 +637,13 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
         opacity: pressed ? 0.65 : 1,
       })}
     >
-      <Text style={[paper.typography.captionMeta, { color: paper.colors.brandInk, fontWeight: '700' }]}>
+      <Text style={[
+        paper.typography.captionMeta,
+        {
+          color: tone === 'quiet' ? paper.colors.secondary : paper.colors.brandInk,
+          fontWeight: tone === 'quiet' ? '600' : '700',
+        },
+      ]}>
         {label}
       </Text>
     </Pressable>

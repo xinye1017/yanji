@@ -4,9 +4,9 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
-  YanjiMiniRhythmSparkline, YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
+  YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
   YanjiPrimaryButton, YanjiSubjectProportionRow,
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
@@ -22,7 +22,8 @@ import {
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
   buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
-  greeting, sessionPrecise, spectrumLegend, summarizeSubjects, taskMeta,
+  greeting, hourRangeLabel, rhythmSummary, sessionPrecise, spectrumLegend,
+  summarizeSubjects, taskMeta,
 } from './todayViewLogic';
 
 type ChartMode = 'subjects' | 'timeline';
@@ -118,6 +119,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
   const rhythmBuckets = useMemo(() => buildRhythmBuckets(date, sessions ?? [], colors.secondary), [date, sessions, colors.secondary]);
+  const rhythmSummaryText = useMemo(
+    () => rhythmSummary(rhythmBuckets, snapshot !== null, hourRangeLabel),
+    [rhythmBuckets, snapshot],
+  );
+  const rhythmToggleLabel = rhythmExpanded ? '收起今日学习节奏详情' : '展开今日学习节奏详情';
   const chartTotal = subjects.reduce((sum, subject) => sum + subject.seconds, 0);
   const selectSegment = (next: NonNullable<Selection>) =>
     setSelection(current => current?.key === next.key ? null : next);
@@ -353,7 +359,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
           </View>
         ) : null}
 
-        <YanjiCard variant="hero" style={{ marginTop: layout.sectionGap }}>
+        {/* The journal slip stays a flat sheet on the desk. It used to be the
+            page's only lifted white card, which put it ahead of 今日计划 in the
+            reading order even though the plan is what the day is about. A
+            hairline sheet keeps the capture path visible without outranking it. */}
+        <YanjiCard variant="default" style={{ marginTop: layout.sectionGap }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
               <YanjiIcon name="compose" size={typography.bodyPrimary.fontSize} color={colors.secondary} />
@@ -361,7 +371,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 记录此刻 · 近期随笔{latestNotes.length > 0 ? ` (${timeLabel(latestNotes[0].timestamp)})` : ''}
               </Text>
             </View>
-            <YanjiTextAction label="＋ 写此刻" accessibilityLabel="新建今日记录" onPress={newNote} />
+            <YanjiTextAction label="＋ 写此刻" accessibilityLabel="新建今日记录" onPress={newNote} tone="quiet" />
           </View>
           {latestNotes.length > 0 ? latestNotes.map((note, index) => (
             <View key={note.id}>
@@ -401,17 +411,37 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </YanjiCard>
         {(notes?.length ?? 0) > 2 ? <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} /> : null}
 
-        <View style={{ marginTop: layout.sectionGap }}>
-          <Pressable onPress={() => setRhythmExpanded(expanded => !expanded)} accessibilityRole="button"
-            accessibilityLabel="今日学习节奏 (06:00-24:00)" accessibilityState={{ expanded: rhythmExpanded }}
-            accessibilityHint={rhythmExpanded ? '收起学科与时段详情' : '展开学科与时段详情'}
-            style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: YanjiSpacing.md, opacity: pressed ? 0.72 : 1 })}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日学习节奏 (06:00–24:00)</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-              <YanjiMiniRhythmSparkline buckets={rhythmBuckets} currentHour={now.getHours()} />
-              <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.bodyPrimary.fontSize} color={colors.secondary} />
-            </View>
-          </Pressable>
+        {/* 今日学习节奏.
+            Collapsed, this used to be a caption, a row of 18 fixed-width ticks
+            and a chevron — a title with no subject, and a strip that read as a
+            pagination indicator. The section now shows the day's shape on a
+            labelled clock and states it in one sentence, so the collapsed state
+            already answers "what is this?" without repeating the 06:00–24:00
+            range that the axis labels already carry. Expanding is a named
+            control, not just an arrow. */}
+        {/* `marginTop: sm` plus the heading's own 16dp keeps the 24dp section
+            gap this page already used, so adding a real heading does not also
+            add air. */}
+        <View style={{ marginTop: YanjiSpacing.sm }}>
+          <YanjiPaperSectionHeading
+            title="今日学习节奏"
+            right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
+              accessibilityRole="button"
+              accessibilityLabel={rhythmToggleLabel}
+              accessibilityState={{ expanded: rhythmExpanded }}
+              accessibilityHint={rhythmExpanded ? '收起学科与时段详情' : '展开学科与时段详情'}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
+              <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                {rhythmExpanded ? '收起详情' : '展开详情'}
+              </Text>
+              <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.captionMeta.fontSize + 3} color={colors.secondary} />
+            </Pressable>} />
+          <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
+            startLabel="06:00" endLabel="24:00" />
+          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
+            {rhythmSummaryText}
+          </Text>
           {rhythmExpanded ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               <YanjiPaperSegmentedControl value={chart} options={CHART_MODES} accessibilityLabel="今日节奏视图"
@@ -461,7 +491,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 </View>
               )}
               <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                迷你图按小时汇总可确认的连续专注，以当小时投入最多的学科着色。暂停与起止不一致的记录仍计入累计时长；06:00 前的记录可在专注时段查看。
+                柱高按小时汇总可确认的连续专注，以当小时投入最多的学科着色。暂停与起止不一致的记录仍计入累计时长；06:00 前的记录可在专注时段查看。
               </Text>
               {selection?.key.startsWith('session:') ? <Text accessibilityLiveRegion="polite" style={[typography.bodyPrimary, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
                 {selection.subjectName} · {duration(selection.seconds)}

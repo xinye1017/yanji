@@ -178,8 +178,8 @@ function screenHarness(snapshot) {
   const states = [];
   const calls = [];
   let index = 0;
-  const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
-    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiMiniRhythmSparkline', 'YanjiPaperSectionHeading',
+  const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
+    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
     'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
@@ -249,11 +249,36 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   rows[0].props.onStartFocus();
   assert.equal(harness.calls[0][1].taskId, pending.id);
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 0);
-  const toggle = nodes(tree, node => node.props.accessibilityLabel === '今日学习节奏 (06:00-24:00)')[0];
-  toggle.props.onPress();
+  // The expand control lives in the section heading's accessory slot, so the
+  // walk has to enter that prop rather than the heading's children.
+  const heading = () => nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = () => nodes(heading().props.right, node => node.type === 'Pressable')[0];
+  toggle().props.onPress();
   tree = harness.render();
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 1);
-  assert.equal(nodes(tree, node => node.props.accessibilityLabel === '今日学习节奏 (06:00-24:00)')[0].props.accessibilityState.expanded, true);
+  assert.equal(toggle().props.accessibilityState.expanded, true);
+});
+
+test('the rhythm section explains itself before it is expanded', () => {
+  const harness = screenHarness(snapshot());
+  const tree = harness.render();
+  // The collapsed section must name what it measures and what the strip means,
+  // so the reader does not have to expand it to find out what the dots are.
+  const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  assert.ok(heading, 'the section must be a real section heading, not a bare caption row');
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  assert.equal(chart.props.startLabel, '06:00');
+  assert.equal(chart.props.endLabel, '24:00');
+  assert.equal(chart.props.buckets.length, 18);
+  // An honest empty day says so rather than drawing an unexplained strip.
+  assert.match(text(tree), /今天还没有可确认的连续专注/);
+});
+
+test('the rhythm summary names the busiest hour and the measured total', () => {
+  const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
+  const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
+  assert.match(text(tree), /已确认 50m 连续专注/);
+  assert.match(text(tree), /最集中的是 09:00–10:00/);
 });
 
 test('production homepage keeps loading distinct from an empty saved day', () => {

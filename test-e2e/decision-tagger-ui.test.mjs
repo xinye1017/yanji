@@ -42,7 +42,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
   const calls = [];
   const names = [
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
-    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiMiniRhythmSparkline', 'YanjiPaperSectionHeading',
+    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiDayRhythmChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
     'YanjiTaskLedgerRow', 'YanjiTextAction',
   ];

@@ -442,9 +442,20 @@ export const YanjiPaperLayout = {
   compactActionHeight: 28,
   /** Inline capsule inset — AB-01's `5px 10px` play trigger. */
   compactActionPadding: 10,
-  rhythmBarWidth: 4,
+  /**
+   * The day's rhythm strip. Bars share the full width — a fixed 4dp bar with a
+   * 3dp gap reads as a row of dots, which is what made the section look like a
+   * pagination indicator.
+   */
   rhythmBarGap: 3,
-  rhythmBarHeight: 22,
+  /** Tall enough for an hour of study to have a readable slope, not a tick. */
+  rhythmChartHeight: 34,
+  /**
+   * The height a bar falls back to when an hour has a measurable amount that
+   * rounds below a pixel — and the tick marking the current hour on an empty
+   * day. Hours with nothing saved draw nothing at all, so an empty day is a
+   * clean axis rather than a second dashed line.
+   */
   rhythmEmptyHeight: 2,
   timelineTimeColumn: 46,
   /** The spine between the clock column and the entry — node plus its rule. */

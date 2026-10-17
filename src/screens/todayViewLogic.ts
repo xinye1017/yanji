@@ -125,3 +125,33 @@ export function buildRhythmBuckets(
     return { hour, seconds, color };
   });
 }
+
+/**
+ * One sentence stating what the rhythm strip actually shows.
+ *
+ * The collapsed section used to be a title and an unlabelled row of ticks, so
+ * the reader had to expand it to learn whether the day had any shape at all.
+ * This says it in the collapsed state — including the honest empty case — and
+ * names the busiest hour whenever the strip has something to point at.
+ */
+export function rhythmSummary(
+  buckets: readonly YanjiMiniRhythmBucket[],
+  loaded: boolean,
+  hourLabel: (hour: number) => string,
+): string {
+  if (!loaded) return '正在读取今日节奏…';
+  const measured = buckets.filter(bucket => bucket.seconds > 0);
+  if (measured.length === 0) return '今天还没有可确认的连续专注，柱形只画出时间轴。';
+  const total = measured.reduce((sum, bucket) => sum + bucket.seconds, 0);
+  // Ties resolve to the earlier hour: the first time the day reached its peak
+  // is the more useful statement than an arbitrary pick among equals.
+  const peak = measured.reduce((best, bucket) => (bucket.seconds > best.seconds ? bucket : best), measured[0]);
+  return `已确认 ${compactDuration(total)} 连续专注，分布在 ${measured.length} 个小时；最集中的是 ${hourLabel(peak.hour)}。`;
+}
+
+/** 24h clock label for a bucket hour, e.g. `09:00–10:00`. */
+export function hourRangeLabel(hour: number): string {
+  const start = String(hour).padStart(2, '0');
+  const end = String(hour + 1).padStart(2, '0');
+  return `${start}:00–${end}:00`;
+}
