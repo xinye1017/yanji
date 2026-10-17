@@ -405,6 +405,30 @@ test('a remounted root can seed the same launch payload again after the cache wa
   assert.equal(reads.settings, 0, 'the settings slot was never released, so it is not re-seeded');
 });
 
+test('a re-seed is confirmed against Room before it is trusted', async () => {
+  // The host payload is read once at `Application.onCreate`, so by the time a
+  // remount re-seeds it, it may already be older than Room. The first frame may
+  // paint it, but a real read must follow — otherwise the page shows a stale
+  // total until some unrelated event happens to arrive. Deleting the stale flag
+  // would leave every other assertion here green.
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.deepEqual(reads.daily, [], 'the cold-start payload is trusted and costs no read');
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+  coordinator.setDailyReader('today', null);
+
+  // The remount: same payload, but any amount of time may have passed.
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10'],
+    'a re-seeded payload must be confirmed against Room before it is trusted');
+  // The fixture's own read reports 0s, so the correction is observable.
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+});
+
 test('a re-seed never overwrites a snapshot a bridged read already refreshed', async () => {
   const { coordinator } = fixture();
   coordinator.setDailyReader('today', '2026-10-10');

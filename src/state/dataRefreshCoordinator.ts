@@ -238,9 +238,26 @@ export class DataRefreshCoordinator {
     }
   }
 
-  refreshSettings(): Promise<void> {
+  /**
+   * Re-reads settings and **reports failure to the caller**.
+   *
+   * `ensureSettings` deliberately swallows a failed read: it also runs from
+   * background paths (reader registration, data-changed events, resume) where
+   * there is nobody to catch a rejection and the next event will simply retry.
+   * But an explicit refresh is different — it is the user pressing 「重新读取」,
+   * and if it fails silently the page that asked for it stays on 「—」 forever
+   * with no way to tell them anything happened.
+   *
+   * So this waits for the attempt and rejects when the read did not produce a
+   * value, while the background path keeps its fire-and-forget behaviour.
+   */
+  async refreshSettings(): Promise<void> {
     this.invalidateSettings();
-    return this.settingsReaders.size > 0 ? this.ensureSettings() : Promise.resolve();
+    if (this.settingsReaders.size === 0) return;
+    await this.ensureSettings();
+    // `ensureSettings` resolved but may have failed internally; the dirty flag
+    // is exactly the "we still have no usable settings" signal it leaves behind.
+    if (this.settingsDirty) throw new Error('settings read failed');
   }
 
   enqueueDataChanged(type: DataChangedType): void {
