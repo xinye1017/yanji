@@ -452,9 +452,10 @@ export const YanjiPaperLayout = {
   rhythmChartHeight: 34,
   /**
    * The height a bar falls back to when an hour has a measurable amount that
-   * rounds below a pixel — and the tick marking the current hour on an empty
-   * day. Hours with nothing saved draw nothing at all, so an empty day is a
-   * clean axis rather than a second dashed line.
+   * rounds below a pixel — and the tick marking the current hour, which is only
+   * drawn once the strip has a bar to relate to. Hours with nothing saved draw
+   * nothing at all, so an empty day is a clean axis rather than a second
+   * dashed line.
    */
   rhythmEmptyHeight: 2,
   timelineTimeColumn: 46,

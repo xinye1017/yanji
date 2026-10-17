@@ -536,8 +536,12 @@ export function YanjiChronoSpectrum({
 // says "this is today's clock", not "there are more pages".
 //
 // An hour with no focus draws nothing rather than a stub, so an empty day is a
-// clean, labelled axis instead of a second dashed line. The current hour keeps
-// a small tick: it is the one position the strip can honestly point at.
+// clean, labelled axis instead of a second dashed line.
+//
+// The current hour gets a short tick, but only once the strip actually has a
+// bar to relate to. On a fully empty day that tick is a lone mark with no
+// referent — exactly the "unexplained dot" this section was rebuilt to remove —
+// so an empty day draws the axis and nothing else.
 //
 // Purely visual: the owning row carries the spoken summary, so the chart must
 // not become a second accessibility node inside it.
@@ -565,6 +569,7 @@ export function YanjiDayRhythmChart({
   // Half an hour of focus is the smallest bar worth seeing; a shorter session
   // must still leave the axis rather than vanish into it.
   const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
+  const hasData = buckets.some(bucket => bucket.seconds > 0);
   return (
     <View accessible={false} importantForAccessibility="no-hide-descendants">
       <View
@@ -577,7 +582,7 @@ export function YanjiDayRhythmChart({
       >
         {buckets.map(bucket => {
           const measured = bucket.seconds > 0;
-          const isNow = bucket.hour === currentHour;
+          const isNow = hasData && bucket.hour === currentHour;
           return (
             <View
               key={bucket.hour}

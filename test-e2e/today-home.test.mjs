@@ -281,6 +281,30 @@ test('the rhythm summary names the busiest hour and the measured total', () => {
   assert.match(text(tree), /最集中的是 09:00–10:00/);
 });
 
+test('an empty rhythm strip draws the axis and nothing else', () => {
+  // A lone "current hour" tick on a day with no data is the same unexplained
+  // mark the section was rebuilt to remove, so it must not be painted.
+  const empty = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
+  const chart = shared.YanjiDayRhythmChart({ buckets: empty, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
+  const bars = nodes(chart.props.children, node => node.type === 'View' && node.props.style?.flex === 1);
+  assert.equal(bars.length, 18);
+  for (const bar of bars) {
+    assert.equal(bar.props.style.height, 0, 'no hour may draw a mark on an empty day');
+    assert.equal(bar.props.style.backgroundColor, 'transparent');
+  }
+});
+
+test('the current-hour tick appears once the strip has real data', () => {
+  const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
+  buckets[4] = { hour: 10, seconds: 1800, color: '#356AE6' };
+  const chart = shared.YanjiDayRhythmChart({ buckets, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
+  const bars = nodes(chart.props.children, node => node.type === 'View' && node.props.style?.flex === 1);
+  const now = bars.find(bar => bar.props.style.height === tokens.YanjiPaperLayout.rhythmEmptyHeight
+    && bar.props.style.backgroundColor === theme.paper.colors.secondary);
+  assert.ok(now, 'the current hour is marked so the reader can place "now" against the bars');
+  assert.equal(bars.filter(bar => bar.props.style.backgroundColor !== 'transparent').length, 2);
+});
+
 test('production homepage keeps loading distinct from an empty saved day', () => {
   const tree = screenHarness(null).render();
   assert.match(text(tree), /正在读取今日记录/);
