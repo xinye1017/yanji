@@ -204,7 +204,7 @@ function screenHarness(snapshot) {
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
         selectTab: tab => calls.push(['tab', tab]), requestFocusPreset: preset => calls.push(['preset', preset]),
-        openSettings: () => {}, openTaskEditor: () => {}, closeTaskEditor: () => {},
+        openSettings: () => calls.push(['openSettings']), openTaskEditor: () => {}, closeTaskEditor: () => {},
       }),
       useNavigationState: () => ({ taskEditorOpen: false }),
     },
@@ -261,4 +261,35 @@ test('production homepage keeps loading distinct from an empty saved day', () =>
   assert.match(text(tree), /正在读取今日记录/);
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading')[0].props.countText, '—');
   assert.equal(nodes(tree, node => node.type === 'YanjiChronoSpectrum')[0].props.accessibilityLabel, '正在读取今日专注');
+});
+
+test('the goal is edited on the settings page, not in a page-owned sheet', () => {
+  // Today used to open its own goal modal and write updateUserSettings itself,
+  // so two screens could hold two drafts of one Room column. The route to
+  // Settings is now the only path, and the page must own no goal sheet at all.
+  const harness = screenHarness(snapshot());
+  const tree = harness.render();
+  const goalTrigger = nodes(tree, node => node.props.accessibilityLabel === '调整日常学习目标')[0];
+  assert.ok(goalTrigger, 'the metric block still offers a way to change the goal');
+  goalTrigger.props.onPress();
+  assert.deepEqual(harness.calls, [['openSettings']],
+    'the goal tap routes to the settings page and does nothing else');
+  assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
+    'Today must not render its own goal modal');
+  assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
+});
+
+test('the journal slip is a flat sheet so the plan keeps the reading order', () => {
+  // It was the page's only lifted card, which put it ahead of 今日计划 even
+  // though the plan is what the day is about.
+  const tree = screenHarness(snapshot()).render();
+  const cards = nodes(tree, node => node.type === 'YanjiCard');
+  assert.ok(cards.length > 0, 'the journal slip still groups its content');
+  for (const card of cards) {
+    assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
+  }
+  // 写此刻's quiet tone arrives with the today-rhythm stage that introduces the
+  // `tone` prop; the card's weight is what this stage owns.
+  const planHeading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日计划')[0];
+  assert.ok(planHeading, 'the plan section still renders');
 });
