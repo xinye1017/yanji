@@ -204,7 +204,7 @@ function screenHarness(snapshot) {
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
         selectTab: tab => calls.push(['tab', tab]), requestFocusPreset: preset => calls.push(['preset', preset]),
-        openSettings: () => {}, openTaskEditor: () => {}, closeTaskEditor: () => {},
+        openSettings: () => calls.push(['openSettings']), openTaskEditor: () => {}, closeTaskEditor: () => {},
       }),
       useNavigationState: () => ({ taskEditorOpen: false }),
     },
@@ -259,6 +259,18 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   assert.equal(toggle().props.accessibilityState.expanded, true);
 });
 
+test('the expand control is named, and the name flips when it is collapsed', () => {
+  const harness = screenHarness(snapshot());
+  const heading = () => nodes(harness.render(), node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = () => nodes(heading().props.right, node => node.type === 'Pressable')[0];
+  assert.equal(toggle().props.accessibilityLabel, '展开今日学习节奏详情');
+  toggle().props.onPress();
+  assert.equal(toggle().props.accessibilityLabel, '收起今日学习节奏详情');
+  toggle().props.onPress();
+  assert.equal(toggle().props.accessibilityLabel, '展开今日学习节奏详情',
+    'collapsing names the action that is available, not the state just left');
+});
+
 test('the rhythm section states its own window so the summary cannot overclaim', () => {
   const harness = screenHarness(snapshot());
   const tree = harness.render();
@@ -298,28 +310,46 @@ test('a pre-dawn session is excluded from the strip and the summary says so', ()
 
 test('an empty rhythm strip marks no hour at all', () => {
   // A lone "current hour" tick on a day with no data is the same unexplained
-  // mark the section was rebuilt to remove, so nothing may be painted.
+  // mark the section was rebuilt to remove, so nothing may be painted. This is
+  // asserted as geometry (`rhythmSlots`) rather than by inspecting the rendered
+  // style objects, so no test-only prop has to exist on the component.
   const empty = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
-  const chart = shared.YanjiDayRhythmChart({ buckets: empty, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
-  assert.equal(shared.measuredRhythmHours(empty), 0);
-  for (const bucket of empty) {
-    const slot = nodes(chart, node => node.props.testID === `rhythm-hour-${bucket.hour}`)[0];
-    assert.ok(slot, `hour ${bucket.hour} still reserves its slot in the axis`);
-    assert.equal(slot.props.style.height, 0, 'no hour may draw a mark on an empty day');
-  }
+  const slots = shared.rhythmSlots(empty, 20, tokens.YanjiPaperLayout.rhythmChartHeight,
+    tokens.YanjiPaperLayout.rhythmEmptyHeight);
+  assert.equal(slots.length, 18, 'every hour keeps its slot so the axis stays a clock');
+  assert.deepEqual(slots.filter(slot => slot.height > 0), [],
+    'no hour may draw a mark on an empty day');
+  assert.deepEqual(slots.filter(slot => slot.isNow), [],
+    'and the current hour is not singled out when there is nothing to relate it to');
+});
+
+test('the chart publishes the axis range as a spoken node, not just a prop', () => {
+  // The range sits inside a `no-hide-descendants` subtree as painted text, so it
+  // only reaches a screen reader if the component itself renders an accessible
+  // node carrying it. Asserting the prop TodayScreen passes would not catch that
+  // node being removed, so this walks the rendered component.
+  const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 600 }));
+  const chart = shared.YanjiDayRhythmChart({
+    buckets, currentHour: 20, startLabel: '06:00', endLabel: '24:00',
+    accessibilityLabel: '今日学习节奏，时间范围 06:00 至 24:00。已确认 3h。',
+  });
+  const spoken = nodes(chart, node => node.props?.accessible === true && typeof node.props?.accessibilityLabel === 'string')[0];
+  assert.ok(spoken, 'the chart must render an accessible node for its range');
+  assert.match(spoken.props.accessibilityLabel, /06:00/);
+  assert.match(spoken.props.accessibilityLabel, /24:00/);
+  assert.equal(spoken.props.accessibilityRole, 'text');
 });
 
 test('the current-hour tick appears once the strip has real data', () => {
   const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
   buckets[4] = { hour: 10, seconds: 1800, color: '#356AE6' };
-  assert.equal(shared.measuredRhythmHours(buckets), 1);
-  const chart = shared.YanjiDayRhythmChart({ buckets, currentHour: 20, startLabel: '06:00', endLabel: '24:00' });
-  const marked = buckets.filter(bucket => {
-    const slot = nodes(chart, node => node.props.testID === `rhythm-hour-${bucket.hour}`)[0];
-    return slot.props.style.height > 0;
-  });
-  assert.deepEqual(marked.map(bucket => bucket.hour), [10, 20],
+  const slots = shared.rhythmSlots(buckets, 20, tokens.YanjiPaperLayout.rhythmChartHeight,
+    tokens.YanjiPaperLayout.rhythmEmptyHeight);
+  assert.deepEqual(slots.filter(slot => slot.height > 0).map(slot => slot.hour), [10, 20],
     'the measured hour and the current hour are the only marks');
+  assert.deepEqual(slots.filter(slot => slot.isNow).map(slot => slot.hour), [20]);
+  // The measured bar is full height: 1800s is this strip's scale floor.
+  assert.equal(slots.find(slot => slot.hour === 10).height, tokens.YanjiPaperLayout.rhythmChartHeight);
 });
 
 test('production homepage keeps loading distinct from an empty saved day', () => {

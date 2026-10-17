@@ -567,6 +567,46 @@ export function measuredRhythmHours(buckets: readonly YanjiDayRhythmBucket[]): n
   return buckets.filter(bucket => bucket.seconds > 0).length;
 }
 
+/** One rendered slot's geometry, independent of how it is painted. */
+export interface YanjiRhythmSlot {
+  hour: number;
+  /** True when this hour carries saved focus. */
+  measured: boolean;
+  /** True when this slot is the current hour *and* the strip has any data. */
+  isNow: boolean;
+  /** Height in dp; `0` means the slot draws nothing. */
+  height: number;
+}
+
+/**
+ * The strip's slots: which hours are painted, and how tall.
+ *
+ * Separated from the component so the "an empty day draws nothing" rule can be
+ * stated as arithmetic instead of asserting on style objects, and so no
+ * test-only prop has to exist on the rendered tree.
+ */
+export function rhythmSlots(
+  buckets: readonly YanjiDayRhythmBucket[],
+  currentHour: number,
+  chartHeight: number,
+  emptyHeight: number,
+): YanjiRhythmSlot[] {
+  const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
+  const hasData = measuredRhythmHours(buckets) > 0;
+  return buckets.map(bucket => {
+    const measured = bucket.seconds > 0;
+    const isNow = hasData && bucket.hour === currentHour;
+    return {
+      hour: bucket.hour,
+      measured,
+      isNow,
+      height: measured
+        ? Math.max(emptyHeight, bucket.seconds / maximum * chartHeight)
+        : isNow ? emptyHeight : 0,
+    };
+  });
+}
+
 export function YanjiDayRhythmChart({
   buckets,
   currentHour,
@@ -583,10 +623,7 @@ export function YanjiDayRhythmChart({
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  // Half an hour of focus is the smallest bar worth seeing; a shorter session
-  // must still leave the axis rather than vanish into it.
-  const maximum = Math.max(1800, ...buckets.map(bucket => bucket.seconds));
-  const hasData = measuredRhythmHours(buckets) > 0;
+  const slots = rhythmSlots(buckets, currentHour, layout.rhythmChartHeight, layout.rhythmEmptyHeight);
   return (
     <View>
       <View
@@ -599,30 +636,20 @@ export function YanjiDayRhythmChart({
           height: layout.rhythmChartHeight,
         }}
       >
-        {buckets.map(bucket => {
-          const measured = bucket.seconds > 0;
-          const isNow = hasData && bucket.hour === currentHour;
-          return (
-            <View
-              key={bucket.hour}
-              // `testID` names what the slot means, so a test can ask "is this
-              // hour marked?" without reaching into numeric style values that
-              // any layout refactor is free to change.
-              testID={`rhythm-hour-${bucket.hour}`}
-              style={{
-                flex: 1,
-                flexBasis: 0,
-                height: measured
-                  ? Math.max(layout.rhythmEmptyHeight, bucket.seconds / maximum * layout.rhythmChartHeight)
-                  : isNow ? layout.rhythmEmptyHeight : 0,
-                borderRadius: radius.tick,
-                backgroundColor: measured
-                  ? bucket.color ?? colors.secondary
-                  : isNow ? colors.secondary : 'transparent',
-              }}
-            />
-          );
-        })}
+        {slots.map(slot => (
+          <View
+            key={slot.hour}
+            style={{
+              flex: 1,
+              flexBasis: 0,
+              height: slot.height,
+              borderRadius: radius.tick,
+              backgroundColor: slot.measured
+                ? buckets.find(bucket => bucket.hour === slot.hour)?.color ?? colors.secondary
+                : slot.isNow ? colors.secondary : 'transparent',
+            }}
+          />
+        ))}
       </View>
       <YanjiHairline />
       {/* The painted range is decorative text; the spoken range is the node
