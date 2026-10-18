@@ -406,12 +406,6 @@ export const YanjiPaperTypography = {
     fontWeight: '600' as const,
     fontFamily: 'serif',
   },
-  /** Home moment previews: the user's words lead, metadata stays quiet. */
-  bodyMoment: {
-    fontSize: 16,
-    lineHeight: 25,
-    fontWeight: '400' as const,
-  },
   captionMeta: {
     fontSize: 12,
     lineHeight: 17,
@@ -480,10 +474,12 @@ export const YanjiPaperLayout = {
   timelineNodeSize: 8,
   /** Home moments share the paper palette without inheriting Review's clock column. */
   momentAxisGap: 8,
-  momentItemGap: 18,
+  /** Compact one-line rows: the inter-item gap doubles as the visible rail length. */
+  momentItemGap: 12,
   momentIconSize: 19,
   momentPreviewIconSize: 17,
-  momentActionTarget: 32,
+  /** Anchored action menu: wide enough for 「标记为已解决」 plus its icon. */
+  momentMenuWidth: 176,
   /**
    * The band every element of an entry's first line centres on: the clock, the
    * spine node, the title, `+时长` and the trailing delete control. Sharing one
@@ -538,6 +534,5 @@ export const YanjiPaperMotion = {
   sheetEnterMs: 280,
   sheetExitMs: 210,
   selectionMs: 160,
-  momentFavoriteMs: 160,
   opacityReducedMs: 120,
 } as const;

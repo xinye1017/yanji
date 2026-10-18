@@ -1,6 +1,7 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
@@ -10,8 +11,9 @@ import {
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
-import { MomentTimelineItem } from '../components/MomentTimelineItem';
-import { MomentActionSheet } from '../components/MomentActionSheet';
+import { TimelineCompactRow } from '../components/TimelineCompactRow';
+import { TimelineActionPopover } from '../components/TimelineActionPopover';
+import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { TaskEditorModal } from '../components/TaskEditorModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
@@ -77,6 +79,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
+  const insets = useSafeAreaInsets();
+  const windowSize = useWindowDimensions();
   const { openSettings, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset } = useNavigationActions();
   const { taskEditorOpen } = useNavigationState();
   const [now, setNow] = useState(() => new Date());
@@ -92,7 +96,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
-  const [actionNote, setActionNote] = useState<NoteEntry | null>(null);
+  /** Anchored 「···」 menu: the note it acts on plus the button's window rect. */
+  const [momentMenu, setMomentMenu] = useState<{ note: NoteEntry; anchor: PopoverAnchor } | null>(null);
   const [taskInfo, setTaskInfo] = useState<StudyTask | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
@@ -105,7 +110,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
       previousDate.current = date;
       if (visible) void refreshSettingsSnapshot();
       setSelection(null);
-      setActionNote(null);
+      setMomentMenu(null);
     }
   }, [date, visible]);
   useEffect(() => {
@@ -114,7 +119,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
   }, [visible, foregroundRevision]);
-  useEffect(() => { if (!visible) setActionNote(null); }, [visible]);
+  useEffect(() => { if (!visible) setMomentMenu(null); }, [visible]);
+  // A rotation or a window resize invalidates both the anchor and the menu's
+  // clamped placement; closing is the only honest response.
+  useEffect(() => { setMomentMenu(null); }, [windowSize.width, windowSize.height]);
 
   const retryRead = useCallback(async () => {
     setRetrying(true);
@@ -164,7 +172,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
     setActionError(null);
     try {
       if (!await YanjiDataNative.toggleFavoriteNote(note.id)) throw new Error('refused');
-    } catch { setActionError('收藏未保存，请再次点击收藏重试。'); }
+    } catch { setActionError('收藏未保存，请重试。'); }
     finally { setBusyNote(null); }
   };
   const toggleResolved = async (note: NoteEntry) => {
@@ -183,11 +191,28 @@ export function TodayScreen({ visible, foregroundRevision }: {
   };
   const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
   const openNote = (note: NoteEntry, confirmDelete = false) => {
-    setActionNote(null);
+    setMomentMenu(null);
     setEditingNote(note);
     setConfirmDeleteNote(confirmDelete);
     setRecordOpen(true);
   };
+  /** The anchored menu is the only management surface a moment row has. */
+  const noteMenuActions = (note: NoteEntry): TimelineAction[] => [
+    {
+      key: 'favorite',
+      icon: note.isFavorite ? 'star' : 'starOutline',
+      label: note.isFavorite ? '取消收藏' : '收藏记录',
+      onPress: () => void toggleFavorite(note),
+    },
+    ...(note.category === 'DOUBT' ? [{
+      key: 'resolve',
+      icon: 'check' as const,
+      label: note.isResolved ? '标记为待解决' : '标记为已解决',
+      onPress: () => void toggleResolved(note),
+    }] : []),
+    { key: 'edit', icon: 'compose', label: '编辑记录', onPress: () => openNote(note) },
+    { key: 'delete', icon: 'delete', label: '删除记录', danger: true, onPress: () => openNote(note, true) },
+  ];
   // Share the settings page's formatter rather than reading the native countdown
   // directly: the native value is clamped at 0, so `daysRemaining === 0` cannot
   // tell "today is the exam" from "the date passed weeks ago". Settings already
@@ -212,6 +237,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
       <ScrollView testID="scroll-today" style={{ flex: 1 }}
         showsVerticalScrollIndicator={false} overScrollMode="never"
+        onScrollBeginDrag={() => setMomentMenu(null)}
+        onMomentumScrollBegin={() => setMomentMenu(null)}
+        // While the menu is up its backdrop owns every touch; hide the list from
+        // TalkBack too, so the modal panel is the only thing being read.
+        accessibilityElementsHidden={momentMenu !== null}
+        importantForAccessibility={momentMenu ? 'no-hide-descendants' : 'auto'}
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
         <YanjiEditorialHeader
           eyebrow={displayDate(date)}
@@ -406,17 +437,17 @@ export function TodayScreen({ visible, foregroundRevision }: {
           {latestNotes.length > 0 ? (
             <View style={{ marginTop: YanjiSpacing.xs }}>
               {latestNotes.map((note, index) => (
-                <MomentTimelineItem key={note.id}
+                <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
-                  categoryLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
+                  tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
                     : note.category === 'INSPIRATION' ? '灵感' : null}
-                  content={note.content} isFavorite={note.isFavorite} isResolved={note.isResolved}
+                  tagTone={note.category === 'INSPIRATION' ? 'positive'
+                    : note.category === 'DOUBT' ? 'brand' : 'neutral'}
+                  content={note.content}
                   isFirst={index === 0} isLast={index === latestNotes.length - 1}
                   disabled={busyNote !== null}
                   onPressContent={() => openNote(note)}
-                  onToggleFavorite={() => void toggleFavorite(note)}
-                  onToggleResolved={note.category === 'DOUBT' ? () => void toggleResolved(note) : undefined}
-                  onMore={() => setActionNote(note)} />
+                  onMore={anchor => setMomentMenu({ note, anchor })} />
               ))}
               {(notes?.length ?? 0) > 2 ? (
                 <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
@@ -565,10 +596,18 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       </ScrollView>
 
-      <MomentActionSheet visible={actionNote !== null} disabled={busyNote !== null}
-        onClose={() => setActionNote(null)}
-        onEdit={() => { if (actionNote) openNote(actionNote); }}
-        onDelete={() => { if (actionNote) openNote(actionNote, true); }} />
+      {momentMenu ? (
+        <TimelineActionPopover
+          anchor={momentMenu.anchor}
+          topInset={insets.top}
+          containerWidth={windowSize.width}
+          containerHeight={windowSize.height - insets.top}
+          bottomInset={contentPadding}
+          disabled={busyNote !== null}
+          actions={noteMenuActions(momentMenu.note)}
+          onClose={() => setMomentMenu(null)}
+        />
+      ) : null}
       <RecordMomentModal
         visible={recordOpen}
         date={editingNote?.date ?? date}

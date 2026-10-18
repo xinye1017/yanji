@@ -61,9 +61,10 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
     },
     'react-native-reanimated': { useReducedMotion: () => true },
-    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 24, bottom: 0 }) },
     '../bridge': {
       YanjiDataNative: {
         toggleNoteResolved: async (id) => {
@@ -75,8 +76,8 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
-    '../components/MomentTimelineItem': { MomentTimelineItem: 'MomentTimelineItem' },
-    '../components/MomentActionSheet': { MomentActionSheet: 'MomentActionSheet' },
+    '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
@@ -163,6 +164,8 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
+    '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
@@ -250,7 +253,7 @@ test('TodayScreen renders 今日疑点 and allows toggling resolution when doubt
   assert.deepEqual(harness.calls, [['toggleNoteResolved', 'doubt-today-1']]);
 });
 
-test('ReviewScreen renders category badge and handles doubt resolution toggle', async () => {
+test('ReviewScreen tags doubts/inspirations and resolves them through the anchored menu', async () => {
   const harness = reviewHarness({
     date,
     totalDurationSeconds: 1200,
@@ -283,13 +286,19 @@ test('ReviewScreen renders category badge and handles doubt resolution toggle', 
   });
 
   const tree = harness.render();
-  const badges = nodes(tree, node => node.type === 'YanjiBadge');
-  const labels = badges.map(b => b.props?.label);
-  assert.ok(labels.includes('待解决'), 'Review timeline must display 待解决 badge');
-  assert.ok(labels.includes('灵感'), 'Review timeline must display 灵感 badge');
+  const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
+  const tags = rows.map(row => row.props.tagLabel);
+  assert.ok(tags.includes('疑点 · 待解决'), 'the doubt row carries its state tag');
+  assert.ok(tags.includes('灵感'), 'the inspiration row carries its category tag');
+  assert.deepEqual(rows.map(row => row.props.tagTone).sort(), ['brand', 'positive']);
 
-  const toggleButtons = nodes(tree, node => node.type === 'Pressable' && node.props?.accessibilityLabel?.includes('疑点待解决'));
-  assert.ok(toggleButtons.length > 0, 'Toggle button for doubt resolution must exist');
-  await toggleButtons[0].props.onPress();
+  // The row itself no longer toggles resolution: the anchored menu does.
+  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
+  doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  const menu = nodes(harness.render(), node => node.type === 'TimelineActionPopover')[0];
+  const resolve = menu.props.actions.find(action => action.label === '标记为已解决');
+  assert.ok(resolve, 'the menu offers the resolution action');
+  menu.props.onClose();
+  await resolve.onPress();
   assert.deepEqual(harness.calls, [['toggleNoteResolved', 'doubt-rev-1']]);
 });

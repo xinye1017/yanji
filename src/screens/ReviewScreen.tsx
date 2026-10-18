@@ -1,18 +1,21 @@
 /** Paper journal: event times are native facts; completed tasks have no time. */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
-  YanjiIcon, YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
+  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { SessionNoteModal } from '../components/SessionNoteModal';
+import { TimelineCompactRow } from '../components/TimelineCompactRow';
+import { TimelineActionPopover } from '../components/TimelineActionPopover';
+import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
@@ -39,25 +42,19 @@ const SCOPES: readonly { value: ReviewScope; label: string }[] = [
 ];
 const HOUR_TICKS = [0, 6, 12, 18];
 const TREND_CHART_HEIGHT = 108;
-/**
- * The trailing glyphs on a timeline entry. They are lighter than
- * `YanjiIconButton`'s 20dp default so three of them (duration, delete, and the
- * note card's compose/star pair) sit quietly beside the title instead of
- * competing with it. Their tap targets come from the button's own hit slop, not
- * from the glyph size.
- */
-const ENTRY_ICON_SIZE = 17;
 
 export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const [date, setDate] = useState(todayIso);
   const [view, setView] = useState<ReviewView>('timeline');
   const [scope, setScope] = useState<ReviewScope>('TODAY');
+  /** Anchored 「···」 menu: the entry it acts on plus the button's window rect. */
+  const [timelineMenu, setTimelineMenu] = useState<{ entry: TimelineEntry; anchor: PopoverAnchor } | null>(null);
   const daily = useDailySnapshot('review', date, visible);
   const snapshot = daily?.date === date ? daily : null;
   const settingsSnapshot = useSettingsSnapshot('review', visible);
@@ -98,6 +95,10 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
+  // A new day, a new view, or a resize invalidates the anchor and the clamped
+  // placement; closing is the only honest response.
+  useEffect(() => { setTimelineMenu(null); }, [date, view, windowWidth, windowHeight]);
+  useEffect(() => { if (!visible) setTimelineMenu(null); }, [visible]);
   const today = todayIso();
   const isToday = date === today;
   const relativeLabel = relativeDayLabel(date, today);
@@ -139,6 +140,66 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     } catch { setDeleteError('删除失败，记录已保留。请重试或取消。'); }
     finally { setDeleting(false); }
   };
+  /** Every management action of a timeline row lives in its anchored menu. */
+  const timelineActions = (entry: TimelineEntry): TimelineAction[] => {
+    if (entry.kind === 'session') {
+      const session = entry.session;
+      return [
+        ...(session.isExam ? [] : [{
+          key: 'edit',
+          icon: 'compose' as const,
+          label: '编辑随笔',
+          onPress: () => setNoteTarget({
+            sessionId: session.id, isExam: session.isExam, title: session.subjectName, note: session.note,
+          }),
+        }]),
+        {
+          key: 'delete',
+          icon: 'delete' as const,
+          label: '删除记录',
+          danger: true,
+          onPress: () => {
+            setDeleteError(null);
+            setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
+          },
+        },
+      ];
+    }
+    const note = entry;
+    return [
+      {
+        key: 'favorite',
+        icon: note.isFavorite ? 'star' as const : 'starOutline' as const,
+        label: note.isFavorite ? '取消收藏' : '收藏记录',
+        onPress: () => void toggleFavorite(note.noteId),
+      },
+      ...(note.category === 'DOUBT' ? [{
+        key: 'resolve',
+        icon: 'check' as const,
+        label: note.isResolved ? '标记为待解决' : '标记为已解决',
+        onPress: () => void toggleResolved(note.noteId),
+      }] : []),
+      {
+        key: 'edit',
+        icon: 'compose' as const,
+        label: '编辑记录',
+        onPress: () => {
+          setEditingNote({ id: note.noteId, content: note.content });
+          setConfirmDeleteNote(false);
+        },
+      },
+      {
+        key: 'delete',
+        icon: 'delete' as const,
+        label: '删除记录',
+        danger: true,
+        onPress: () => {
+          setEditingNote({ id: note.noteId, content: note.content });
+          setConfirmDeleteNote(true);
+        },
+      },
+    ];
+  };
   const days = overview?.days ?? [];
   const columns = useMemo(() => buildTrendColumns(days, overview?.subjectDistribution ?? []), [days, overview]);
   const peak = peakTrendDay(columns);
@@ -169,6 +230,12 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     <ScrollView testID="scroll-review" style={{ flex: 1 }}
       showsVerticalScrollIndicator={false} overScrollMode="never"
+      onScrollBeginDrag={() => setTimelineMenu(null)}
+      onMomentumScrollBegin={() => setTimelineMenu(null)}
+      // While the menu is up its backdrop owns every touch; hide the list from
+      // TalkBack too, so the modal panel is the only thing being read.
+      accessibilityElementsHidden={timelineMenu !== null}
+      importantForAccessibility={timelineMenu ? 'no-hide-descendants' : 'auto'}
       contentContainerStyle={{
         paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
       }}>
@@ -204,20 +271,11 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
             onEditSession={session => setNoteTarget({
               sessionId: session.id, isExam: session.isExam, title: session.subjectName, note: session.note,
             })}
-            onDeleteSession={session => {
-              setDeleteError(null);
-              setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
-            }}
-            onToggleFavorite={noteId => void toggleFavorite(noteId)}
-            onToggleResolved={noteId => void toggleResolved(noteId)}
             onEditNote={note => {
               setEditingNote({ id: note.noteId, content: note.content });
               setConfirmDeleteNote(false);
             }}
-            onDeleteNote={note => {
-              setEditingNote({ id: note.noteId, content: note.content });
-              setConfirmDeleteNote(true);
-            }}
+            onOpenMenu={(entry, anchor) => setTimelineMenu({ entry, anchor })}
           />
         </>
       ) : (
@@ -262,6 +320,19 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         </>
       )}
     </ScrollView>
+
+    {timelineMenu ? (
+      <TimelineActionPopover
+        anchor={timelineMenu.anchor}
+        topInset={insets.top}
+        containerWidth={windowWidth}
+        containerHeight={windowHeight - insets.top}
+        bottomInset={contentPadding}
+        disabled={busyNote !== null}
+        actions={timelineActions(timelineMenu.entry)}
+        onClose={() => setTimelineMenu(null)}
+      />
+    ) : null}
 
     <SessionNoteModal visible={noteTarget !== null} sessionId={noteTarget?.sessionId ?? null} sessionTitle={noteTarget?.title ?? ''}
       initialNote={noteTarget?.note ?? ''} examSession={noteTarget?.isExam ?? false} onClose={() => setNoteTarget(null)} onSaved={() => setNoteTarget(null)} />
@@ -402,279 +473,79 @@ function DaySummary({ snapshot, goalSeconds }: {
 // The timeline — one spine, clock on the left, event on the right
 // ---------------------------------------------------------------------------
 
-function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote, onDeleteNote }: {
+function Timeline({ entries, dayTasks, busyNote, onEditSession, onEditNote, onOpenMenu }: {
   entries: readonly TimelineEntry[];
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
   onEditSession: (session: DailySession) => void;
-  onDeleteSession: (session: DailySession) => void;
-  onToggleFavorite: (noteId: string) => void;
-  onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
-  onDeleteNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+  onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { typography, layout } = paper;
+  const { typography } = paper;
   return <View style={{ marginTop: YanjiSpacing.lg }}>
     {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
       isFirst={index === 0} isLast={index === entries.length - 1}
-      nextEntryKind={entries[index + 1]?.kind}
       dayTasks={dayTasks} busyNote={busyNote}
-      onEditSession={onEditSession} onDeleteSession={onDeleteSession}
-      onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved}
-      onEditNote={onEditNote} onDeleteNote={onDeleteNote} />)}
+      onEditSession={onEditSession} onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
     {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
       按真实发生时刻排列；完成计划不标记未提供的完成时刻。
     </Text> : null}
   </View>;
 }
 
-function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote, onDeleteNote }: {
+function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSession, onEditNote, onOpenMenu }: {
   entry: TimelineEntry;
   isFirst: boolean;
   isLast: boolean;
-  nextEntryKind?: 'session' | 'note';
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
   onEditSession: (session: DailySession) => void;
-  onDeleteSession: (session: DailySession) => void;
-  onToggleFavorite: (noteId: string) => void;
-  onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
-  onDeleteNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+  onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
-  const nodeColor = entry.kind === 'session'
-    ? entry.session.subjectColor || colors.secondary
-    : entry.category === 'DOUBT'
-      ? (entry.isResolved ? colors.positive : colors.brand)
-      : colors.brand;
-
-  const headBand = layout.timelineHeadBand;
-  const isSession = entry.kind === 'session';
-  // A session centers its title, time, and node inside `timelineHeadBand` (28dp).
-  // A note is an elevated card whose top edge begins at y = 0.
-  // To align the node with the top of the card's orange accent stripe,
-  // the node center sits at `timelineNodeSize / 2 + 2` (~6dp), and the clock aligns with it.
-  const dotCenterY = isSession ? headBand / 2 : (layout.timelineNodeSize / 2 + 2);
-  const nodeRadius = layout.timelineNodeSize / 2; // 4dp
-  const dotGap = YanjiSpacing.xs; // 4dp clearance so the guide line never touches the dot
-  const clearance = nodeRadius + dotGap; // 8dp clearance around the dot center
-
-  // Next dot position: used to ensure the guide line stops before the next dot's clearance
-  const nextIsSession = nextEntryKind === 'session';
-  const nextDotCenterY = nextIsSession ? headBand / 2 : (layout.timelineNodeSize / 2 + 2);
-  const nextClearanceOverflow = Math.max(0, clearance - nextDotCenterY);
-
-  // Spacing unification:
-  // Card-to-card gap is `YanjiSpacing.lg` (16dp).
-  // When a card is followed by a session, the session's first row has its title and dot
-  // centered at 14dp (`headBand / 2`). Setting `paddingBottom` to `YanjiSpacing.sm` (8dp)
-  // keeps the visual distance from the card bottom to the session content unified (~16dp).
-  const itemPaddingBottom = isLast
-    ? 0
-    : (entry.kind === 'note' && nextEntryKind === 'session' ? YanjiSpacing.sm : YanjiSpacing.lg);
-
-  const topSegmentHeight = dotCenterY - clearance;
-
-  return (
-    <View style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
-      <View style={{
-        width: layout.timelineTimeColumn,
-        height: isSession ? headBand : 16,
-        justifyContent: 'center',
-        marginTop: isSession ? 0 : Math.max(0, dotCenterY - 8),
-      }}>
-        <Text style={[typography.captionMeta, {
-          color: colors.secondary, textAlign: 'right',
-        }]}>
-          {formatClockFromEpoch(entry.at)}
-        </Text>
-      </View>
-      <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
-        {/* Guide line top segment: stops above the dot with clearance (never touches the dot) */}
-        {!isFirst && topSegmentHeight > 0 ? (
-          <View
-            style={{
-              position: 'absolute',
-              top: 0,
-              height: topSegmentHeight,
-              width: layout.hairlineWidth,
-              backgroundColor: colors.hairline,
-            }}
-          />
-        ) : null}
-
-        {/* Timeline node */}
-        <View
-          style={{
-            position: 'absolute',
-            top: dotCenterY - nodeRadius,
-            width: layout.timelineNodeSize,
-            height: layout.timelineNodeSize,
-            borderRadius: nodeRadius,
-            backgroundColor: nodeColor,
-          }}
-        />
-
-        {/* Guide line bottom segment: starts below the dot with clearance, stops before next dot */}
-        {!isLast ? (
-          <View
-            style={{
-              position: 'absolute',
-              top: dotCenterY + clearance,
-              bottom: nextClearanceOverflow,
-              width: layout.hairlineWidth,
-              backgroundColor: colors.hairline,
-            }}
-          />
-        ) : null}
-      </View>
-      <View style={{ flex: 1, paddingBottom: itemPaddingBottom, minHeight: 56 }}>
-        {entry.kind === 'session'
-          ? <SessionEntry session={entry.session} boundTitle={boundTaskTitle(entry.session.taskId, dayTasks)}
-            onEdit={() => onEditSession(entry.session)} onDelete={() => onDeleteSession(entry.session)} />
-          : <NoteEntry entry={entry} busy={busyNote}
-            onToggleFavorite={() => onToggleFavorite(entry.noteId)}
-            onToggleResolved={() => onToggleResolved?.(entry.noteId)}
-            onEdit={() => onEditNote(entry)}
-            onDelete={() => onDeleteNote(entry)} />}
-      </View>
-    </View>
-  );
-}
-
-function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
-  session: DailySession; boundTitle: string | null; onEdit: () => void; onDelete: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
-  const label = `${session.subjectName} · ${session.isExam ? '模考' : '专注'}`;
-
-  // The whole entry opens the note editor — title, chip and the note text all
-  // lead to the same place, because tapping the entry is the gesture, not
-  // tapping one particular line of it. The delete control sits inside this
-  // Pressable and claims its own press, so it never opens the editor first.
-  return (
-    <Pressable onPress={onEdit} accessibilityRole="button"
-      accessibilityLabel={`${label}，${formatDuration(session.durationSeconds)}，${session.isExam ? '模考不支持编辑随笔' : '编辑随笔'}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
-      <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', gap: layout.gridGap }}>
-        <Text numberOfLines={1} style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700', flex: 1 }]}>
-          {label}
-        </Text>
-        <Text style={[typography.captionMeta, {
-          color: session.subjectColor || colors.secondary, fontWeight: '700',
-        }]}>
-          +{formatDuration(session.durationSeconds)}
-        </Text>
-        {/* Sized to the band so the control cannot grow the line it aligns to;
-            its 8dp hit slop is what carries the target to `YanjiTouch.min` —
-            see `timelineHeadBand` for why slop may reach past the band.
-            The button centres its glyph in a square box, so the negative margin
-            cancels that inset before bleeding: what lands on the bleed edge is
-            the glyph the eye sees, not the invisible tap box around it. */}
-        <YanjiIconButton icon="delete" onPress={onDelete} size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE}
-          style={{ marginRight: -(layout.timelineHeadBand - ENTRY_ICON_SIZE) / 2 }}
-          accessibilityLabel={`删除记录 ${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起，${formatDuration(session.durationSeconds)}`} />
-      </View>
-      <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-        {formatDuration(session.durationSeconds)}
-        {session.pauseCount > 0 ? ` · 暂停 ${session.pauseCount} 次` : ''}
-        {/* No "编辑随笔 ›" here: the entry itself is the trigger, so naming the
-            gesture in the subtitle only repeats what tapping already does. The
-            empty case still says so, because there the entry shows no note. */}
-        {session.isExam ? ' · 模考随笔暂不支持编辑' : session.note ? '' : ' · 添一段专注随笔'}
-      </Text>
-      {/* The chip names the plan this session completed. It is not folded into
-          the title: the board shows a subject line ("408 计算机 · 虚拟内存页面
-          置换") and a *different* plan name below it, so merging them would
-          print the same words twice for our data, where the bound task title is
-          what the session already says it was about. */}
-      {boundTitle ? <View style={{
-        alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs,
-        backgroundColor: colors.subtle, borderRadius: radius.tag, paddingHorizontal: YanjiSpacing.sm,
-        paddingVertical: layout.taskTagPadding, marginTop: YanjiSpacing.sm,
-      }}>
-        <YanjiIcon name="check" size={typography.captionMeta.fontSize} color={colors.secondary} />
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>达成关联任务：{boundTitle}</Text>
-      </View> : null}
-      {session.note ? <Text style={[typography.bodyJournal, { color: colors.ink, marginTop: YanjiSpacing.sm }]}>{session.note}</Text> : null}
-    </Pressable>
-  );
-}
-
-function NoteEntry({ entry, busy, onToggleFavorite, onToggleResolved, onEdit, onDelete }: {
-  entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean;
-  onToggleFavorite: () => void;
-  onToggleResolved?: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
-  const isDoubt = entry.category === 'DOUBT';
-  const isResolved = !!entry.isResolved;
-
-  // Like a session entry, the whole card is the trigger; the controls sit
-  // inside it and claim their own presses.
-  return (
-    <Pressable onPress={onEdit} accessibilityRole="button"
-      accessibilityLabel={`编辑随笔：${entry.content}`}
-      style={({ pressed }) => ({
-        backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
-        borderLeftWidth: 3,
-        borderLeftColor: isDoubt ? (isResolved ? colors.positive : colors.brand) : colors.brand,
-        borderRadius: radius.tag,
-        paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
-        opacity: pressed ? 0.7 : 1,
-      })}>
-      <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flex: 1 }}>
-          <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>
-            记录此刻
-          </Text>
-          {isDoubt ? (
-            <Pressable
-              onPress={onToggleResolved}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel={isResolved ? '疑点已解决，点击标记为待解决' : '疑点待解决，点击标记为已解决'}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            >
-              <YanjiBadge
-                tone={isResolved ? 'positive' : 'brand'}
-                label={isResolved ? '已解决' : '待解决'}
-              />
-            </Pressable>
-          ) : (
-            <YanjiBadge tone="neutral" label="灵感" />
-          )}
-          {entry.isFavorite ? (
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>· 已收藏</Text>
-          ) : null}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <YanjiIconButton icon="compose" accessibilityLabel="编辑这条记录" onPress={onEdit}
-            size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
-          <YanjiIconButton icon={entry.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={entry.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
-            onPress={onToggleFavorite} disabled={busy} selected={entry.isFavorite}
-            size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
-          <YanjiIconButton icon="delete" accessibilityLabel="删除这条记录" onPress={onDelete}
-            disabled={busy} size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
-        </View>
-      </View>
-      <Text style={[
-        typography.bodyJournal,
-        {
-          color: isDoubt && isResolved ? colors.secondary : colors.ink,
-          textDecorationLine: isDoubt && isResolved ? 'line-through' : 'none',
-        },
-      ]}>{entry.content}</Text>
-    </Pressable>
-  );
+  const { colors } = paper;
+  if (entry.kind === 'session') {
+    const session = entry.session;
+    const boundTitle = boundTaskTitle(session.taskId, dayTasks);
+    // The note is what the reader came for; when it is empty the bound plan (or
+    // the fact that this was a focus block) is the honest one-line summary.
+    const body = session.note.trim()
+      ? session.note
+      : boundTitle
+        ? `达成「${boundTitle}」`
+        : session.isExam ? '模考' : '专注';
+    return <TimelineCompactRow
+      timeLabel={formatClockFromEpoch(entry.at)}
+      tagLabel={session.subjectName}
+      tagTone="neutral"
+      dotColor={session.subjectColor || colors.secondary}
+      metaText={formatDuration(session.durationSeconds)}
+      content={body}
+      isFirst={isFirst} isLast={isLast} disabled={busyNote}
+      accessibilityLabel={`${session.subjectName}，${session.isExam ? '模考' : '专注'}，${formatDuration(session.durationSeconds)}`}
+      accessibilityHint={session.isExam ? '模考随笔暂不支持编辑' : '打开这次专注的随笔'}
+      moreAccessibilityLabel={`更多操作：${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起`}
+      onPressContent={() => onEditSession(session)}
+      onMore={anchor => onOpenMenu(entry, anchor)}
+    />;
+  }
+  const tagLabel = entry.category === 'DOUBT'
+    ? (entry.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
+    : entry.category === 'INSPIRATION' ? '灵感' : null;
+  return <TimelineCompactRow
+    timeLabel={formatClockFromEpoch(entry.at)}
+    tagLabel={tagLabel}
+    tagTone={entry.category === 'DOUBT' ? 'brand' : entry.category === 'INSPIRATION' ? 'positive' : 'neutral'}
+    content={entry.content}
+    isFirst={isFirst} isLast={isLast} disabled={busyNote}
+    accessibilityLabel={`编辑随笔：${entry.content}`}
+    accessibilityHint="打开这条记录，可阅读全文或编辑"
+    moreAccessibilityLabel={`更多操作：${entry.content.slice(0, 24)}`}
+    onPressContent={() => onEditNote(entry)}
+    onMore={anchor => onOpenMenu(entry, anchor)}
+  />;
 }
 
 // ---------------------------------------------------------------------------

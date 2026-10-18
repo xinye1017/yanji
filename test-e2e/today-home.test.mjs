@@ -194,14 +194,18 @@ function screenHarness(snapshot, bridge = {}) {
       },
       useMemo: fn => fn(), useCallback: fn => fn, useRef: value => ({ current: value }), useEffect: () => {},
     },
-    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal', RefreshControl: 'RefreshControl' },
+    'react-native': {
+      View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      RefreshControl: 'RefreshControl',
+      useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
+    },
     'react-native-reanimated': { useReducedMotion: () => true },
-    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 24, bottom: 0 }) },
     '../bridge': { YanjiDataNative: bridge },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
-    '../components/MomentTimelineItem': { MomentTimelineItem: 'MomentTimelineItem' },
-    '../components/MomentActionSheet': { MomentActionSheet: 'MomentActionSheet' },
+    '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
@@ -406,7 +410,7 @@ test('the journal slip is an unboxed timeline section so the plan keeps the read
   assert.match(text(tree), /留一句想法，让今天有自己的注脚/);
 });
 
-test('the journal section renders notes in timeline style with timestamps and actions', () => {
+test('the journal section renders one compact timeline row per note', () => {
   const note = {
     id: 'note-1',
     timestamp: at('10:30'),
@@ -416,17 +420,33 @@ test('the journal section renders notes in timeline style with timestamps and ac
     isResolved: false,
   };
   const tree = screenHarness(snapshot({ notes: [note] })).render();
-  const item = nodes(tree, node => node.type === 'MomentTimelineItem')[0];
+  const item = nodes(tree, node => node.type === 'TimelineCompactRow')[0];
   assert.equal(item.props.timeLabel, '10:30');
   assert.equal(item.props.content, note.content);
-  assert.equal(item.props.isFavorite, true);
-  assert.equal(item.props.categoryLabel, '灵感');
+  assert.equal(item.props.tagLabel, '灵感');
+  assert.equal(item.props.tagTone, 'positive');
   assert.equal(item.props.isFirst, true);
   assert.equal(item.props.isLast, true);
   assert.equal(typeof item.props.onMore, 'function');
+  // The row no longer owns favorite/edit/delete; the anchored menu does.
+  assert.equal('onToggleFavorite' in item.props, false);
+  assert.equal('onToggleResolved' in item.props, false);
+
+  const doubt = { ...note, id: 'note-doubt', category: 'DOUBT', isResolved: false };
+  const doubtItem = nodes(screenHarness(snapshot({ notes: [doubt] })).render(), n => n.type === 'TimelineCompactRow')[0];
+  assert.equal(doubtItem.props.tagTone, 'brand');
+  assert.match(doubtItem.props.tagLabel, /疑点/);
 });
 
-test('moment actions retain note identity, original date, persisted favorite and delete confirmation', async () => {
+/** The popover closes first, then the chosen command runs — mimic that order. */
+const pressMenuAction = (menu, label) => {
+  const action = menu.props.actions.find(item => item.label === label);
+  assert.ok(action, `the menu offers 「${label}」`);
+  menu.props.onClose();
+  action.onPress();
+};
+
+test('the anchored menu keeps note identity, persisted favorite and delete confirmation', async () => {
   const calls = [];
   const older = { id: 'older', date, timestamp: at('10:30'), content: '旧记录', category: 'INSPIRATION' };
   const latest = { ...older, id: 'latest', timestamp: at('17:56'), content: '最新记录', isFavorite: true };
@@ -435,35 +455,87 @@ test('moment actions retain note identity, original date, persisted favorite and
     toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
     deleteNote: async id => { calls.push(['delete', id]); return true; },
   });
+  const anchor = { x: 210, y: 420, width: 44, height: 44 };
+
   let tree = h.render();
-  let items = nodes(tree, n => n.type === 'MomentTimelineItem');
+  let items = nodes(tree, n => n.type === 'TimelineCompactRow');
   assert.deepEqual(items.map(n => n.props.content), ['最新记录', '旧记录']);
   assert.equal(items[0].props.isLast, false);
   assert.equal(items[1].props.isFirst, false);
   assert.equal(items[1].props.isLast, true);
-  await items[1].props.onToggleFavorite();
-  assert.deepEqual(calls, [['favorite', 'older']]);
-  items[1].props.onMore();
+
+  // Opening the menu from the second row anchors it to that row's button.
+  items[1].props.onMore(anchor);
   tree = h.render();
-  let sheet = nodes(tree, n => n.type === 'MomentActionSheet')[0];
-  assert.equal(sheet.props.visible, true);
-  sheet.props.onEdit();
+  let menu = nodes(tree, n => n.type === 'TimelineActionPopover')[0];
+  assert.ok(menu, 'the row opens the anchored menu');
+  assert.deepEqual(menu.props.anchor, anchor);
+  assert.equal(menu.props.topInset, 24);
+  assert.equal(menu.props.containerWidth, 390);
+  assert.equal(menu.props.containerHeight, 820);
+  assert.equal(menu.props.bottomInset, 96, 'the floating dock is reserved at the bottom');
+  assert.deepEqual(JSON.parse(JSON.stringify(menu.props.actions.map(action => action.label))),
+    ['收藏记录', '编辑记录', '删除记录'], 'an inspiration has no resolution action');
+
+  pressMenuAction(menu, '收藏记录');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [['favorite', 'older']], 'the stored note, not the menu, is updated');
+  assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0);
+
+  items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
+  items[0].props.onMore(anchor);
+  menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
+  pressMenuAction(menu, '编辑记录');
   tree = h.render();
   let editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
-  assert.equal(editor.props.editingNote.id, 'older');
-  assert.equal(editor.props.date, older.date);
+  assert.equal(editor.props.editingNote.id, 'latest');
+  assert.equal(editor.props.editingNote.content, '最新记录');
   assert.equal(editor.props.initialConfirmDelete, false);
+  assert.equal(nodes(tree, n => n.type === 'TimelineActionPopover').length, 0,
+    'the menu closes before the editor opens');
   editor.props.onClose();
-  items = nodes(h.render(), n => n.type === 'MomentTimelineItem');
-  items[0].props.onMore();
-  sheet = nodes(h.render(), n => n.type === 'MomentActionSheet')[0];
-  sheet.props.onDelete();
+
+  items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
+  items[1].props.onMore(anchor);
+  menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
+  pressMenuAction(menu, '删除记录');
   tree = h.render();
   editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
-  assert.equal(editor.props.editingNote.id, 'latest');
-  assert.equal(editor.props.initialConfirmDelete, true);
-  assert.equal(nodes(tree, n => n.type === 'MomentActionSheet')[0].props.visible, false);
-  assert.deepEqual(calls, [['favorite', 'older']], 'menu delete only opens confirmation');
+  assert.equal(editor.props.editingNote.id, 'older');
+  assert.equal(editor.props.initialConfirmDelete, true, 'delete only opens the existing confirmation');
+  assert.deepEqual(calls, [['favorite', 'older']], 'menu delete never deletes directly');
+});
+
+test('a failed favorite surfaces the existing error and keeps the note', async () => {
+  const note = { id: 'note-1', date, timestamp: at('10:30'), content: '旧记录', category: 'INSPIRATION' };
+  const h = screenHarness(snapshot({ notes: [note] }), { toggleFavoriteNote: async () => false });
+  const items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
+  items[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  const menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
+  pressMenuAction(menu, '收藏记录');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const tree = h.render();
+  assert.match(text(tree), /收藏未保存，请重试/);
+  assert.equal(nodes(tree, n => n.type === 'TimelineCompactRow').length, 1, 'the note is not removed');
+});
+
+test('one anchored menu at a time, and scrolling closes it', () => {
+  const older = { id: 'older', date, timestamp: at('10:30'), content: '旧记录', category: 'INSPIRATION' };
+  const latest = { ...older, id: 'latest', timestamp: at('17:56'), content: '最新记录' };
+  const h = screenHarness(snapshot({ notes: [older, latest] }));
+  let items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
+
+  items[1].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  items[0].props.onMore({ x: 20, y: 200, width: 44, height: 44 });
+  const tree = h.render();
+  const menus = nodes(tree, n => n.type === 'TimelineActionPopover');
+  assert.equal(menus.length, 1, 'opening another row replaces the menu instead of stacking');
+  assert.deepEqual(menus[0].props.anchor, { x: 20, y: 200, width: 44, height: 44 });
+
+  const scroll = nodes(tree, n => n.props?.testID === 'scroll-today')[0];
+  scroll.props.onScrollBeginDrag();
+  assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0,
+    'a scroll invalidates the anchor, so the menu closes');
 });
 
 test('a morning focus session with pauses is properly displayed on the rhythm chart and day parts spectrum', () => {

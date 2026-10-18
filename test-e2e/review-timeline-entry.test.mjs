@@ -1,21 +1,14 @@
 /**
- * Tier 1 — the review timeline's entry is one tappable surface.
- *
- * Why this test exists: the requirement is "点击时间线上的任务，即可直接进入编辑页".
- * A still screenshot does not establish which tap target opens the sheet, so
- * this drives the real `ReviewScreen` through its handlers and checks the
- * resulting editor state.
+ * Tier 1 — the review timeline's row is one compact line with an anchored menu.
  *
  * What it pins:
- *  1. the session title, the bound-plan chip and the note body all sit inside
- *     one Pressable that opens the note editor, so tapping any of them works;
- *  2. the nested delete handler opens its confirmation, keeps the editor closed
- *     and does not delete a native record before confirmation;
- *  3. the subtitle no longer advertises "编辑随笔" (the entry itself is the
- *     trigger), while an entry with no note still says so.
- *
- * This drives production source through `loadTypeScript`, the same harness
- * `today-home.test.mjs` uses.
+ *  1. a session renders as clock · subject tag · one-line body · duration ·
+ *     「···」, and its body opens the existing session-note editor;
+ *  2. the body falls back to the bound plan name, then to the kind of block, so
+ *     an empty note never leaves the row blank;
+ *  3. every destructive/editing action goes through the anchored menu and the
+ *     existing confirmation — the menu never deletes a native record directly;
+ *  4. note rows keep favorite/resolve/edit/delete in that same menu.
  */
 
 import test from 'node:test';
@@ -51,6 +44,18 @@ const session = (changes = {}) => ({
   ...changes,
 });
 
+const note = (changes = {}) => ({
+  id: 'note-a',
+  date,
+  timestamp: at('16:10'),
+  content: '手画了一遍指针断链过程',
+  isFavorite: false,
+  category: 'INSPIRATION',
+  isResolved: false,
+  resolvedAt: null,
+  ...changes,
+});
+
 const snapshot = changes => ({
   date,
   formattedDate: '2026年10月6日',
@@ -67,11 +72,9 @@ const snapshot = changes => ({
 /**
  * Walk a rendered element tree, expanding function components as it goes.
  *
- * `ReviewScreen` delegates the timeline to `Timeline` / `TimelineItem` /
- * `SessionEntry`, which React would normally invoke. Nothing invokes them here —
- * there is no renderer — so a naive walk stops at `jsx(Timeline, {...})` and
- * never sees the entry the test is about. Calling each function component with
- * its own props is what makes the assertion reach the real markup.
+ * `ReviewScreen` delegates the timeline to `Timeline` / `TimelineItem`, which
+ * React would normally invoke. Nothing invokes them here — there is no renderer
+ * — so a naive walk stops at `jsx(Timeline, {...})` and never sees the row.
  */
 function nodes(tree, predicate) {
   const result = [];
@@ -99,14 +102,9 @@ function text(tree) {
   return typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
 }
 
-/** True when `needle` renders somewhere inside `tree`. */
-function renders(tree, needle) {
-  return text(tree).includes(needle);
-}
-
 const UI_NAMES = [
-  'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiIcon',
-  'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
+  'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
+  'YanjiLineChart', 'YanjiPaperSectionHeading',
   'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
   'YanjiStackedBarChart', 'YanjiSubjectProportionRow',
 ];
@@ -135,13 +133,16 @@ function screenHarness(daySnapshot) {
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
     '../bridge': {
       YanjiDataNative: {
-        toggleFavoriteNote: async () => true,
-        deleteSessionRecord: async (...args) => { calls.push(args); return true; },
+        toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
+        toggleNoteResolved: async id => { calls.push(['resolve', id]); return true; },
+        deleteSessionRecord: async (...args) => { calls.push(['delete', ...args]); return true; },
       },
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
+    '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
@@ -156,12 +157,26 @@ function screenHarness(daySnapshot) {
   return {
     calls,
     render: () => { index = 0; return ReviewScreen({ visible: true }); },
-    /** The `SessionNoteModal` element, whose `visible`/`sessionId` say what opened. */
+    rows: tree => nodes(tree, node => node.type === 'TimelineCompactRow'),
+    menu: tree => nodes(tree, node => node.type === 'TimelineActionPopover')[0],
     noteModal: tree => nodes(tree, node => node.type === 'SessionNoteModal')[0],
+    recordModal: tree => nodes(tree, node => node.type === 'RecordMomentModal')[0],
+    confirmation: tree => nodes(tree, node => node.type === 'Modal')[0],
   };
 }
 
-test('tapping the title, the bound-plan chip and the note body all open the note editor', () => {
+/** The popover closes first, then the chosen command runs — mimic that order. */
+const pressMenuAction = (menu, label) => {
+  const action = menu.props.actions.find(item => item.label === label);
+  assert.ok(action, `the menu offers 「${label}」`);
+  menu.props.onClose();
+  action.onPress();
+};
+
+/** Call arguments cross the VM boundary, so compare payloads, not realm objects. */
+const plain = value => JSON.parse(JSON.stringify(value));
+
+test('a session is one compact line whose body opens its note editor', () => {
   const harness = screenHarness(snapshot({
     sessions: [session({ note: '手画了一遍指针断链过程', taskId: 'task-os-ch4' })],
     tasks: [{
@@ -170,71 +185,97 @@ test('tapping the title, the bound-plan chip and the note body all open the note
     }],
   }));
   const tree = harness.render();
+  const rows = harness.rows(tree);
+  assert.equal(rows.length, 1);
+  const row = rows[0];
 
-  // The modal starts closed: nothing opened it yet.
+  assert.equal(row.props.tagLabel, '数据结构');
+  assert.equal(row.props.tagTone, 'neutral');
+  assert.equal(row.props.dotColor, '#2D7A5E', 'the node keeps the subject colour');
+  assert.equal(row.props.content, '手画了一遍指针断链过程', 'the note is the body');
+  assert.equal(row.props.metaText, '2 小时 6 分', 'duration rides on the same line');
+  assert.equal(row.props.isFirst, true);
+  assert.equal(row.props.isLast, true);
+
   assert.equal(harness.noteModal(tree).props.visible, false);
-
-  // One Pressable carries the whole entry, so every line of it is a trigger.
-  const entry = nodes(tree, node => node.type === 'Pressable'
-    && node.props.accessibilityLabel?.startsWith('数据结构 · 专注')).at(0);
-  assert.ok(entry, 'the session entry is one Pressable');
-
-  const inside = [];
-  (function collect(node) {
-    if (Array.isArray(node)) node.forEach(collect);
-    else if (node && typeof node === 'object' && 'type' in node) { inside.push(node); collect(node.props.children); }
-  })(entry.props.children);
-
-  for (const [name, content] of [
-    ['title', '数据结构 · 专注'],
-    ['bound-plan chip', '达成关联任务：王道操作系统第四章'],
-    ['note body', '手画了一遍指针断链过程'],
-  ]) {
-    const node = inside.find(child => child.type === 'Text' && text(child) === content);
-    assert.ok(node, `the ${name} renders inside the entry's Pressable`);
-    assert.equal(nodes(entry, child => child.type === 'Pressable' && renders(child, content)).length, 1,
-      `the ${name} uses the entry's handler without a nested press target`);
-  }
-
-  // The trigger opens the editor for *this* session, not merely some sheet.
-  entry.props.onPress();
+  row.props.onPressContent();
   const reopened = harness.noteModal(harness.render());
-  assert.equal(reopened.props.visible, true, 'tapping the entry opens the note editor');
+  assert.equal(reopened.props.visible, true, 'tapping the body opens the note editor');
   assert.equal(reopened.props.sessionId, 'focus-a', 'it opens the session that was tapped');
 });
 
-test('the delete control requests confirmation without opening the editor or deleting early', async () => {
-  const harness = screenHarness(snapshot({ sessions: [session()] }));
-  const tree = harness.render();
+test('an empty session note falls back to the bound plan, then to the kind of block', () => {
+  const bound = screenHarness(snapshot({
+    sessions: [session({ taskId: 'task-1' })],
+    tasks: [{ id: 'task-1', title: '王道操作系统第四章' }],
+  })).render();
+  assert.equal(screenHarness(snapshot({
+    sessions: [session({ taskId: 'task-1' })],
+    tasks: [{ id: 'task-1', title: '王道操作系统第四章' }],
+  })).rows(bound)[0].props.content, '达成「王道操作系统第四章」');
 
-  const entry = nodes(tree, node => node.type === 'Pressable'
-    && node.props.accessibilityLabel?.startsWith('数据结构 · 专注')).at(0);
-  const remove = nodes(entry, node => node.type === 'YanjiIconButton'
-    && node.props.icon === 'delete')[0];
-  assert.ok(remove, 'the entry carries its own delete control');
+  const plain = screenHarness(snapshot({ sessions: [session()] })).render();
+  assert.equal(screenHarness(snapshot({ sessions: [session()] })).rows(plain)[0].props.content, '专注');
 
-  const confirmation = root => nodes(root, node => node.type === 'Modal')[0];
-  assert.equal(confirmation(tree).props.visible, false);
-  remove.props.onPress();
-  await Promise.resolve();
-
-  // This covers the delete handler's state changes; native responder arbitration
-  // between the nested button and entry still needs a device interaction check.
-  const after = harness.render();
-  assert.equal(harness.noteModal(after).props.visible, false);
-  assert.equal(confirmation(after).props.visible, true, 'the delete handler actually opens its confirmation');
-  assert.deepEqual(harness.calls, [], 'opening the confirmation must not delete a native record');
+  const exam = screenHarness(snapshot({ sessions: [session({ isExam: true, subjectName: '英语一' })] })).render();
+  assert.equal(screenHarness(snapshot({
+    sessions: [session({ isExam: true, subjectName: '英语一' })],
+  })).rows(exam)[0].props.content, '模考');
 });
 
-test('the subtitle drops 编辑随笔 but still speaks up when there is no note', () => {
-  const withNote = screenHarness(snapshot({ sessions: [session({ note: '已写好的随笔' })] })).render();
-  assert.ok(!renders(withNote, '编辑随笔 ›'), 'a session with a note does not advertise the gesture');
+test('the session menu keeps edit/delete behind the existing confirmation', async () => {
+  const harness = screenHarness(snapshot({ sessions: [session({ note: '已写好的随笔' })] }));
+  let tree = harness.render();
+  harness.rows(tree)[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  tree = harness.render();
+  const menu = harness.menu(tree);
+  assert.ok(menu, 'the row opens the anchored menu');
+  assert.deepEqual(plain(menu.props.actions.map(action => action.label)), ['编辑随笔', '删除记录']);
 
-  const withoutNote = screenHarness(snapshot({ sessions: [session({ note: '' })] })).render();
-  assert.ok(renders(withoutNote, '添一段专注随笔'), 'a session with no note still says so');
+  pressMenuAction(menu, '删除记录');
+  const after = harness.render();
+  assert.equal(harness.confirmation(after).props.visible, true, 'the existing confirmation opens');
+  assert.deepEqual(plain(harness.calls), [], 'opening the confirmation must not delete a native record');
 
-  const exam = screenHarness(snapshot({
-    sessions: [session({ isExam: true, subjectName: '英语一' })],
-  })).render();
-  assert.ok(renders(exam, '模考随笔暂不支持编辑'), 'an exam states that it has no editable note');
+  const exam = screenHarness(snapshot({ sessions: [session({ isExam: true })] }));
+  exam.rows(exam.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  assert.deepEqual(plain(exam.menu(exam.render()).props.actions.map(action => action.label)), ['删除记录'],
+    'an exam has no editable note');
+});
+
+test('note rows keep favorite, resolution and editing in the anchored menu', async () => {
+  const harness = screenHarness(snapshot({
+    notes: [
+      note({ id: 'doubt-1', content: '二叉树前序遍历与线索化区别', category: 'DOUBT' }),
+      note({ id: 'insp-1', content: '今天背词效率很高', timestamp: at('16:20') }),
+    ],
+  }));
+  const rows = harness.rows(harness.render());
+  assert.deepEqual(plain(rows.map(row => row.props.tagLabel).sort()), ['疑点 · 待解决', '灵感'].sort());
+  assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['brand', 'positive']);
+
+  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
+  doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  let menu = harness.menu(harness.render());
+  assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
+    ['收藏记录', '标记为已解决', '编辑记录', '删除记录']);
+
+  pressMenuAction(menu, '标记为已解决');
+  await Promise.resolve();
+  assert.deepEqual(plain(harness.calls), [['resolve', 'doubt-1']]);
+
+  const inspRow = harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感');
+  inspRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  menu = harness.menu(harness.render());
+  pressMenuAction(menu, '编辑记录');
+  const editor = harness.recordModal(harness.render());
+  assert.equal(editor.props.editingNote.id, 'insp-1');
+  assert.equal(editor.props.editingNote.content, '今天背词效率很高');
+  assert.equal(editor.props.initialConfirmDelete, false);
+
+  harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')
+    .props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  pressMenuAction(harness.menu(harness.render()), '删除记录');
+  assert.equal(harness.recordModal(harness.render()).props.initialConfirmDelete, true,
+    'delete only opens the existing confirmation');
 });

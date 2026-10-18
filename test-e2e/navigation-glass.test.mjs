@@ -80,13 +80,15 @@ test('the dock pill is centered vertically with hairlineWidth compensation', () 
   assert.match(dock, /justifyContent:\s*'center'/);
 });
 
-test('timeline entries maintain clearance around dots and unify spacing to focus records', () => {
+test('timeline entries share the compact spine and spacing contract', () => {
   const review = readFileSync(new URL('../src/screens/ReviewScreen.tsx', import.meta.url), 'utf8');
-  assert.match(review, /isFirst=\{index === 0\}/);
-  assert.match(review, /isLast=\{index === entries\.length - 1\}/);
-  assert.match(review, /nextEntryKind=\{entries\[index \+ 1\]\?\.kind\}/);
-  assert.match(review, /clearance\s*=\s*nodeRadius\s*\+\s*dotGap/);
-  assert.match(review, /top:\s*dotCenterY\s*\+\s*clearance/);
-  assert.match(review, /entry\.kind === 'note' && nextEntryKind === 'session'\s*\?\s*YanjiSpacing\.sm\s*:\s*YanjiSpacing\.lg/);
+  const row = readFileSync(new URL('../src/components/TimelineCompactRow.tsx', import.meta.url), 'utf8');
+  assert.match(review, /<TimelineCompactRow/);
+  assert.match(review, /isFirst=\{isFirst\}\s+isLast=\{isLast\}/);
+  assert.match(review, /onMore=\{anchor => onOpenMenu\(entry, anchor\)\}/);
+  // The row owns the clearance around the node and the inter-row gap, so Today
+  // and Review cannot drift into two different spines.
+  assert.match(row, /clearance|center - nodeRadius - YanjiSpacing\.xs/);
+  assert.match(row, /bottom: -layout\.momentItemGap/);
 });
 
