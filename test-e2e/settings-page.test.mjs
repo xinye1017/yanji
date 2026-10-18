@@ -258,7 +258,13 @@ function settingsHarness({ settings, calls = [] } = {}) {
           getDecisionApiKey: async () => '',
         },
       },
-      '../services/decisionClient': { testDecisionConnection: async () => ({ success: true, message: 'ok' }) },
+      '../services/decisionClient': {
+        testDecisionConnection: async () => ({ success: true, message: 'ok' }),
+        toBaseUrl: (url, provider) => {
+          if (!url) return provider === 'typesafe' ? 'https://api.typesafe.ai/v1' : 'https://openrouter.ai/api/v1';
+          return url.replace(/\/api\/alpha\/decisions$/, '/api/v1').replace(/\/v1\/systemone$/, '/v1');
+        },
+      },
       '../theme/ThemeProvider': { useYanjiTheme: () => theme },
       '../theme/tokens': tokens,
     }),

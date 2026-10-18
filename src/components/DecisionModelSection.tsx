@@ -15,7 +15,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { YanjiPaperSegmentedControl, YanjiTextAction, YanjiTextInput } from './YanjiUI';
 import { YanjiSettingDisclosureRow } from './SettingsRows';
-import { testDecisionConnection } from '../services/decisionClient';
+import { testDecisionConnection, toBaseUrl } from '../services/decisionClient';
 import { YanjiDataNative } from '../bridge';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
@@ -29,11 +29,11 @@ export const DECISION_PROVIDERS: Array<{ value: 'openrouter' | 'typesafe'; label
 export const PROVIDER_DEFAULTS: Record<'openrouter' | 'typesafe', { model: string; endpoint: string }> = {
   openrouter: {
     model: 'respan/span-01-lite:free',
-    endpoint: 'https://openrouter.ai/api/alpha/decisions',
+    endpoint: 'https://openrouter.ai/api/v1',
   },
   typesafe: {
     model: 'jev-latest',
-    endpoint: 'https://api.typesafe.ai/v1/systemone',
+    endpoint: 'https://api.typesafe.ai/v1',
   },
 };
 
@@ -71,7 +71,8 @@ export function YanjiDecisionModelSection({
     const currentProvider = (settings.decisionProvider as 'openrouter' | 'typesafe') || 'openrouter';
     setProvider(currentProvider);
     setModel(settings.decisionModel || PROVIDER_DEFAULTS[currentProvider].model);
-    setEndpoint(settings.decisionEndpoint || PROVIDER_DEFAULTS[currentProvider].endpoint);
+    const rawEndpoint = settings.decisionEndpoint || PROVIDER_DEFAULTS[currentProvider].endpoint;
+    setEndpoint(toBaseUrl(rawEndpoint, currentProvider));
     setHasKey(!!settings.hasDecisionApiKey);
   }, [
     settings?.decisionProvider,
@@ -89,7 +90,13 @@ export function YanjiDecisionModelSection({
     if (!model || model === PROVIDER_DEFAULTS.openrouter.model || model === PROVIDER_DEFAULTS.typesafe.model) {
       setModel(PROVIDER_DEFAULTS[nextProvider].model);
     }
-    if (!endpoint || endpoint === PROVIDER_DEFAULTS.openrouter.endpoint || endpoint === PROVIDER_DEFAULTS.typesafe.endpoint) {
+    if (
+      !endpoint ||
+      endpoint === PROVIDER_DEFAULTS.openrouter.endpoint ||
+      endpoint === PROVIDER_DEFAULTS.typesafe.endpoint ||
+      endpoint === 'https://openrouter.ai/api/alpha/decisions' ||
+      endpoint === 'https://api.typesafe.ai/v1/systemone'
+    ) {
       setEndpoint(PROVIDER_DEFAULTS[nextProvider].endpoint);
     }
   };
@@ -194,15 +201,18 @@ export function YanjiDecisionModelSection({
 
             <View>
               <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: 4 }]}>
-                接口地址
+                API Base URL
               </Text>
               <YanjiTextInput
                 value={endpoint}
                 onChangeText={setEndpoint}
                 placeholder={PROVIDER_DEFAULTS[provider].endpoint}
                 autoCapitalize="none"
-                accessibilityLabel="接口地址"
+                accessibilityLabel="API Base URL"
               />
+              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 4 }]}>
+                只需输入基础地址（如 {PROVIDER_DEFAULTS[provider].endpoint}），端点后缀将由软件内部自动补全
+              </Text>
             </View>
 
             <View>
