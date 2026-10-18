@@ -90,11 +90,9 @@ export function spectrumLegend(
 }
 
 export function sessionPrecise(session: DailySession): boolean {
-  // Pause intervals are unavailable. Only uninterrupted, clock-consistent spans
-  // have a known position; every saved duration still contributes to the total.
-  return session.durationSeconds > 0 && session.pauseCount === 0
-    && session.endTime > session.startTime
-    && Math.abs((session.endTime - session.startTime) / 1000 - session.durationSeconds) <= 2;
+  // A session is plottable whenever it has recorded duration and valid timestamps.
+  return session.durationSeconds > 0
+    && (session.endTime > session.startTime || session.durationSeconds > 0);
 }
 
 export function buildRhythmBuckets(
@@ -102,7 +100,7 @@ export function buildRhythmBuckets(
   sessions: readonly DailySession[],
   fallbackColor: string,
 ): YanjiDayRhythmBucket[] {
-  const precise = sessions.filter(sessionPrecise);
+  const plottable = sessions.filter(sessionPrecise);
   return RHYTHM_HOURS.map(hour => {
     const start = new Date(`${date}T00:00:00`);
     start.setHours(hour, 0, 0, 0);
@@ -110,13 +108,19 @@ export function buildRhythmBuckets(
     end.setHours(hour + 1, 0, 0, 0);
     const bySubject = new Map<string, { seconds: number; color: string }>();
     let seconds = 0;
-    for (const session of precise) {
-      const overlap = Math.max(0, Math.min(end.getTime(), session.endTime) - Math.max(start.getTime(), session.startTime)) / 1000;
-      if (overlap <= 0) continue;
-      seconds += overlap;
+    for (const session of plottable) {
+      const sStart = session.startTime;
+      const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+      const spanMs = Math.max(1000, sEnd - sStart);
+      const overlapMs = Math.max(0, Math.min(end.getTime(), sEnd) - Math.max(start.getTime(), sStart));
+      if (overlapMs <= 0) continue;
+      const ratio = overlapMs / spanMs;
+      const allocated = Math.round(session.durationSeconds * ratio);
+      if (allocated <= 0) continue;
+      seconds += allocated;
       const previous = bySubject.get(session.subjectId);
-      if (previous) previous.seconds += overlap;
-      else bySubject.set(session.subjectId, { seconds: overlap, color: session.subjectColor || fallbackColor });
+      if (previous) previous.seconds += allocated;
+      else bySubject.set(session.subjectId, { seconds: allocated, color: session.subjectColor || fallbackColor });
     }
     // Several short sessions of one subject can outweigh a single longer one.
     let dominantId = '';

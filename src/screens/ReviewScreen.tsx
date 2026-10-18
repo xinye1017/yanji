@@ -161,11 +161,11 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const preciseSessions = useMemo(() => {
     const dayStart = new Date(`${date}T00:00:00`).getTime();
     const dayEnd = new Date(`${shiftIsoDate(date, 1)}T00:00:00`).getTime();
-    return sessions.filter(session => session.pauseCount === 0 && session.endTime > session.startTime
-      && Math.abs((session.endTime - session.startTime) / 1000 - session.durationSeconds) <= 2
-      && session.endTime > dayStart && session.startTime < dayEnd).map(session => ({
+    return sessions.filter(session => session.durationSeconds > 0
+      && (session.endTime > dayStart || session.startTime >= dayStart)
+      && session.startTime < dayEnd).map(session => ({
         startTime: Math.max(session.startTime, dayStart),
-        durationSeconds: (Math.min(session.endTime, dayEnd) - Math.max(session.startTime, dayStart)) / 1000,
+        durationSeconds: session.durationSeconds,
       }));
   }, [date, sessions]);
   const hourBuckets = useMemo(() => scope === 'TODAY' ? buildHourBuckets(preciseSessions) : [], [scope, preciseSessions]);

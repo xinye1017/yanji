@@ -600,18 +600,32 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     endDate.setHours(part.to);
                     const start = startDate.getTime();
                     const end = endDate.getTime();
-                    const segments = sessions?.filter(session => sessionPrecise(session) && session.endTime > start && session.startTime < end) ?? [];
+                    const segments = sessions?.filter(session => {
+                      const sStart = session.startTime;
+                      const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                      return session.durationSeconds > 0 && sEnd > start && sStart < end;
+                    }) ?? [];
                     return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
                         <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
                         <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
                       </View>
-                      <View accessible accessibilityLabel={`${part.name}，${segments.length} 段可确认的连续专注`}
+                      <View accessible accessibilityLabel={`${part.name}，${segments.length} 段专注记录`}
                         style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
-                        {segments.map(session => <View key={session.id} style={{ position: 'absolute', top: 0, bottom: 0,
-                          left: `${Math.max(0, session.startTime - start) / (end - start) * 100}%`,
-                          width: `${(Math.min(end, session.endTime) - Math.max(start, session.startTime)) / (end - start) * 100}%`,
-                          backgroundColor: session.subjectColor || colors.secondary }} />)}
+                        {segments.map(session => {
+                          const sStart = session.startTime;
+                          const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                          const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
+                          const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
+                          return (
+                            <View key={session.id} style={{
+                              position: 'absolute', top: 0, bottom: 0,
+                              left: `${segLeft}%`,
+                              width: `${segWidth}%`,
+                              backgroundColor: session.subjectColor || colors.secondary,
+                            }} />
+                          );
+                        })}
                       </View>
                     </View>;
                   })}
@@ -620,13 +634,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     accessibilityRole="button" accessibilityLabel={`${session.subjectName}，本次${duration(session.durationSeconds)}`}
                     style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline, opacity: pressed ? 0.65 : 1 })}>
                     <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                      {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}{sessionPrecise(session) ? '' : ' · 未绘连续区段'}
+                      {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}
                     </Text>
                   </Pressable>)}
                 </View>
               )}
               <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                柱高按小时汇总可确认的连续专注，以当小时投入最多的学科着色。暂停与起止不一致的记录仍计入累计时长；06:00 前的记录可在专注时段查看。
+                柱高按小时汇总专注投入，以当小时投入最多的学科着色。06:00 前的记录可在专注时段查看。
               </Text>
               {selection?.key.startsWith('session:') ? <Text accessibilityLiveRegion="polite" style={[typography.bodyPrimary, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
                 {selection.subjectName} · {duration(selection.seconds)}

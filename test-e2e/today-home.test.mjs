@@ -77,7 +77,7 @@ test('subject legend includes genuine planned subjects at zero and keeps their c
   assert.equal(reordered[1].id, 'math', 'series order must not depend on duration rank');
 });
 
-test('rhythm clips to each local hour, rejects paused spans, and aggregates dominant subject', () => {
+test('rhythm clips to each local hour, allocates paused spans faithfully, and aggregates dominant subject', () => {
   const sessions = [
     session('before', '05:45', '06:15'),
     session('cross', '09:45', '10:15'),
@@ -96,11 +96,11 @@ test('rhythm clips to each local hour, rejects paused spans, and aggregates domi
   assert.equal(hour(10).seconds, 900);
   assert.equal(hour(11).seconds, 2100);
   assert.equal(hour(11).color, '#356AE6', 'two short math sessions together outweigh the English session');
-  assert.equal(hour(12).seconds, 0);
-  assert.equal(hour(13).seconds, 0);
+  assert.equal(hour(12).seconds, 1200, 'paused session is faithfully allocated to its active hour');
+  assert.equal(hour(13).seconds, 300, 'session with duration mismatch is faithfully allocated');
   assert.equal(hour(23).seconds, 900);
   assert.equal(logic.summarizeSubjects(sessions, theme.paper.colors.secondary).reduce((sum, item) => sum + item.seconds, 0),
-    sessions.reduce((sum, item) => sum + item.durationSeconds, 0), 'excluded timeline spans still count toward saved investment');
+    sessions.reduce((sum, item) => sum + item.durationSeconds, 0), 'timeline spans count toward saved investment');
 });
 
 test('spectrum shows goal remainder and fills distribution when no goal or over goal', () => {
@@ -416,5 +416,52 @@ test('the journal section renders notes in timeline style with timestamps and ac
   const deleteBtn = nodes(tree, node => node.type === 'YanjiIconButton' && node.props.icon === 'delete');
   assert.ok(deleteBtn.length > 0, 'the note item has a delete action');
 });
+
+test('a morning focus session with pauses is properly displayed on the rhythm chart and day parts spectrum', () => {
+  // Simulates a 30m session between 10:45 and 11:15 with 4 pauses
+  const morningSession = session('morning-paused', '10:45', '11:15', {
+    durationSeconds: 1800,
+    pauseCount: 4,
+    subjectId: 'ds',
+    subjectName: '数据结构',
+    subjectColor: '#2D7A5E',
+  });
+  const harness = screenHarness(snapshot({
+    sessions: [morningSession],
+    totalDurationSeconds: 1800,
+    focusCount: 1,
+  }));
+  const tree = harness.render();
+
+  // Rhythm chart has buckets allocated to hour 10 and hour 11
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  const h10 = chart.props.buckets.find(b => b.hour === 10);
+  const h11 = chart.props.buckets.find(b => b.hour === 11);
+  assert.ok(h10.seconds > 0, 'hour 10 must have allocated seconds');
+  assert.ok(h11.seconds > 0, 'hour 11 must have allocated seconds');
+  assert.equal(h10.seconds + h11.seconds, 1800, 'total allocated seconds across hours equals session duration');
+  assert.equal(h10.color, '#2D7A5E', 'hour 10 takes the session subject color');
+  assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
+
+  // Summary states the focus time rather than empty prompt
+  assert.match(text(tree), /06:00 之后已确认 30m 连续专注/);
+
+  // Expanding rhythm details reveals the session in the morning spectrum
+  const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = nodes(heading.props.right, node => node.type === 'Pressable')[0];
+  toggle.props.onPress();
+  const expandedTree = harness.render();
+  const segmented = nodes(expandedTree, node => node.type === 'YanjiPaperSegmentedControl')[0];
+  segmented.props.onChange('dayParts');
+  const dayPartsTree = harness.render();
+
+  // Morning spectrum has the segment
+  assert.match(text(dayPartsTree), /上午/);
+  assert.match(text(dayPartsTree), /06:00—12:00/);
+  assert.match(text(dayPartsTree), /10:45 起 · 数据结构 · 30分钟/);
+  // Must NOT display "未绘连续区段"
+  assert.doesNotMatch(text(dayPartsTree), /未绘连续区段/);
+});
+
 
 
