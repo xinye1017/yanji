@@ -81,13 +81,11 @@ internal class NoteStore(
     }
 
     /**
-     * 切换收藏。只更新 `isFavorite` 与 `updatedAt`，不改正文与 `createdAt`。
+     * 等待 Room 原子切换收藏完成；只更新 `isFavorite` 与 `updatedAt`。
      */
-    fun setFavorite(id: String, favorite: Boolean) {
-        scope.launch {
-            val dao = dbProvider()?.noteEntryDao() ?: return@launch
-            dao.setFavorite(id, if (favorite) 1 else 0, System.currentTimeMillis())
-        }
+    suspend fun toggleFavoriteAndAwait(id: String): Boolean {
+        val dao = dbProvider()?.noteEntryDao() ?: return false
+        return dao.toggleFavorite(id, System.currentTimeMillis()) > 0
     }
 
     /**

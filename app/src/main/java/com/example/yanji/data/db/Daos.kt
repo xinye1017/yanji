@@ -210,11 +210,11 @@ interface NoteEntryDao {
     suspend fun insertAll(entries: List<NoteEntryEntity>)
 
     /**
-     * 切换收藏。只改 isFavorite 与 updatedAt，不触碰正文与 createdAt，
-     * 保证「初次编辑完毕时间」不因收藏动作而漂移。
+     * 在数据库内原子切换收藏，避免使用尚未回灌的内存状态计算目标值。
+     * 只改 isFavorite 与 updatedAt；返回受影响行数，0 表示记录不存在。
      */
-    @Query("UPDATE journal_entries SET isFavorite = :value, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun setFavorite(id: String, value: Int, updatedAt: Long)
+    @Query("UPDATE journal_entries SET isFavorite = 1 - isFavorite, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun toggleFavorite(id: String, updatedAt: Long): Int
 
     /**
      * 更新正文。只改 content 与 updatedAt，不触碰 createdAt、收藏状态与归属日期。

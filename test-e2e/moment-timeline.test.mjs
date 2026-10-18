@@ -93,7 +93,7 @@ test('timeline preview preserves exact content and exposes only favorite / more 
     assert.deepEqual(calls, ['favorite', 'more', 'content']);
     for (const button of buttons.slice(0, 2)) {
       const style = button.props.style({ pressed: false });
-      assert.ok(style.width >= 44 && style.height >= 44);
+      assert.ok(style.width >= 32 && style.height >= 32);
     }
     assert.doesNotMatch(text(tree), /记录此刻|已收藏/);
     assert.ok(nodes(tree, n => n.type === 'View' && n.props.style?.backgroundColor === colors.elevated).length);

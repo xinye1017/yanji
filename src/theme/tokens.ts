@@ -483,6 +483,7 @@ export const YanjiPaperLayout = {
   momentItemGap: 18,
   momentIconSize: 19,
   momentPreviewIconSize: 17,
+  momentActionTarget: 32,
   /**
    * The band every element of an entry's first line centres on: the clock, the
    * spine node, the title, `+时长` and the trailing delete control. Sharing one

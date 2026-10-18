@@ -48,10 +48,9 @@ export function MomentTimelineItem({
   const title = content.trim().split('\n').find(line => line.trim())?.trim() || '无标题记录';
   const categoryColor = onToggleResolved && isResolved ? colors.positive : colors.secondary;
   const categoryText = <Text style={[typography.captionMeta, { color: categoryColor, flexShrink: 1 }]}>{categoryLabel}</Text>;
-  // Bring the glyphs inward while keeping two separate, non-overlapping targets.
-  const iconButton = (pressed: boolean, trailing: boolean) => ({
-    width: YanjiTouch.min, height: YanjiTouch.min, paddingHorizontal: YanjiSpacing.sm,
-    borderRadius: radius.pill, alignItems: trailing ? 'flex-start' as const : 'flex-end' as const, justifyContent: 'center' as const,
+  const iconButton = (pressed: boolean) => ({
+    width: layout.momentActionTarget, height: layout.momentActionTarget,
+    borderRadius: radius.pill, alignItems: 'center' as const, justifyContent: 'center' as const,
     backgroundColor: pressed ? colors.subtle : 'transparent',
   });
 
@@ -87,10 +86,10 @@ export function MomentTimelineItem({
                 paddingHorizontal: YanjiSpacing.sm, paddingVertical: YanjiSpacing.xs }}>{categoryText}</View>
             ) : null}
           </View>
-          <View style={{ flexDirection: 'row', flexShrink: 0, marginRight: -YanjiSpacing.sm }}>
+          <View style={{ flexDirection: 'row', flexShrink: 0, marginRight: -YanjiSpacing.md }}>
             <Pressable onPress={onToggleFavorite} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`${isFavorite ? '取消收藏' : '收藏'}记录：${title}`}
-              accessibilityState={{ selected: isFavorite, disabled }} style={({ pressed }) => iconButton(pressed, false)}>
+              accessibilityState={{ selected: isFavorite, disabled }} style={({ pressed }) => iconButton(pressed)}>
               <Animated.View style={starStyle}>
                 <YanjiIcon name={isFavorite ? 'star' : 'starOutline'} size={layout.momentPreviewIconSize}
                   color={isFavorite ? colors.brandInk : colors.secondary} filled={isFavorite} />
@@ -98,7 +97,7 @@ export function MomentTimelineItem({
             </Pressable>
             <Pressable onPress={onMore} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`更多记录操作：${title}`} accessibilityState={{ disabled }}
-              style={({ pressed }) => iconButton(pressed, true)}>
+              style={({ pressed }) => iconButton(pressed)}>
               <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
             </Pressable>
           </View>

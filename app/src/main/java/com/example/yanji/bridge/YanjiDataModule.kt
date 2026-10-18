@@ -183,13 +183,13 @@ class YanjiDataModule(
     @ReactMethod
     fun toggleFavoriteNote(noteId: String, promise: Promise) {
         scope.launch {
-            val note = repository.noteEntries.value.find { it.id == noteId }
-            if (note == null) {
-                promise.resolve(false)
-                return@launch
+            try {
+                promise.resolve(repository.toggleNoteFavoriteAndAwait(noteId))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_NOTE_FAVORITE", "收藏状态保存失败", error)
             }
-            repository.setNoteFavorite(noteId, !note.isFavorite)
-            promise.resolve(true)
         }
     }
 

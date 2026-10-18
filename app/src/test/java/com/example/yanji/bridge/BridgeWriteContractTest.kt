@@ -52,6 +52,19 @@ class BridgeWriteContractTest {
     }
 
     @Test
+    fun favoriteToggleWaitsForRoomWithoutReadingTheMemoryCache() {
+        val code = codeOnly(moduleSource())
+            .substringAfter("fun toggleFavoriteNote(")
+            .substringBefore("@ReactMethod")
+        assertTrue(
+            "收藏必须等待 Room 原子切换完成后再返回，不能读取可能尚未回灌的内存列表",
+            code.contains("promise.resolve(repository.toggleNoteFavoriteAndAwait(noteId))")
+        )
+        assertFalse("收藏不能依赖内存缓存", code.contains("noteEntries"))
+        assertTrue("写入失败必须拒绝 Promise，让界面结束等待并显示错误", code.contains("promise.reject("))
+    }
+
+    @Test
     fun oneShotReadsSettleTheirPromiseOnEveryPath() {
         val code = codeOnly(moduleSource())
 
