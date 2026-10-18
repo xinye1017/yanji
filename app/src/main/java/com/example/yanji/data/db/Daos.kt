@@ -99,6 +99,9 @@ interface FocusSessionDao {
     @Query("UPDATE focus_sessions SET note = :note WHERE id = :id")
     suspend fun updateNote(id: String, note: String)
 
+    @Query("UPDATE focus_sessions SET subjectName = :newName WHERE subjectId = :subjectId")
+    suspend fun updateSubjectName(subjectId: String, newName: String)
+
     @Query("DELETE FROM focus_sessions WHERE id = :id")
     suspend fun deleteById(id: String)
 
@@ -165,6 +168,9 @@ interface ExamSessionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(sessions: List<ExamSessionEntity>)
+
+    @Query("UPDATE exam_sessions SET subjectName = :newName WHERE subjectId = :subjectId")
+    suspend fun updateSubjectName(subjectId: String, newName: String)
 
     @Query("DELETE FROM exam_sessions WHERE id = :id")
     suspend fun deleteById(id: String)
@@ -369,6 +375,9 @@ interface SubjectDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(subjects: List<SubjectEntity>)
 
+    @Query("UPDATE subjects SET name = :newName WHERE id = :id")
+    suspend fun updateName(id: String, newName: String)
+
     @Query("DELETE FROM subjects WHERE id = :id")
     suspend fun deleteById(id: String)
 
@@ -443,6 +452,9 @@ interface StudyTaskDao {
 
     @Query("UPDATE study_tasks SET isCompleted = :completed, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setCompleted(id: String, completed: Boolean, updatedAt: Long)
+
+    @Query("UPDATE study_tasks SET subjectName = :newName WHERE subjectId = :subjectId")
+    suspend fun updateSubjectName(subjectId: String, newName: String)
 
     @Query("DELETE FROM study_tasks WHERE id = :id")
     suspend fun deleteById(id: String)

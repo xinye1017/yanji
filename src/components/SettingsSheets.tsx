@@ -56,8 +56,10 @@ function SettingsSheet({
         <ScrollView
           showsVerticalScrollIndicator={false}
           overScrollMode="never"
+          keyboardShouldPersistTaps="handled"
           style={{
             flexGrow: 0,
+            maxHeight: '88%',
             backgroundColor: paper.colors.surface,
             borderTopLeftRadius: paper.radius.sheet,
             borderTopRightRadius: paper.radius.sheet,

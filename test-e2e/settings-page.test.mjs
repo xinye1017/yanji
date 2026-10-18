@@ -237,6 +237,7 @@ function settingsHarness({ settings, calls = [] } = {}) {
       '../theme/tokens': tokens,
       '../state/settingsViewLogic': logic,
     }),
+    '../components/SubjectsSheet': { SubjectsSheet: 'SubjectsSheet' },
     // The advanced block owns its own form state; the page only composes it, so
     // the test loads the real component with the same stubs it needs. Its state
     // slots are keyed by *slot order within one render of that component*, which
@@ -316,18 +317,20 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   const tree = harness.render();
 
   const rows = nodes(tree, byComponent('YanjiSettingRow'));
-  assert.equal(rows.length, 2, 'the page has exactly two editable value rows');
+  assert.equal(rows.length, 3, 'the page has editable value rows');
   assert.equal(rows[0].props.label, '考试日期');
   assert.equal(rows[0].props.value, '2026年12月19日');
   assert.equal(rows[0].props.hint, '距初试 63 天');
   assert.equal(rows[1].props.label, '每日学习时长');
   assert.equal(rows[1].props.value, '6 小时 30 分钟');
+  assert.equal(rows[2].props.label, '专注学科名称');
+  assert.equal(rows[2].props.value, '点击自定义');
 });
 
 test('every settings group title uses the group scale', () => {
   const tree = settingsHarness({ settings: stored() }).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
-  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '外观', '高级']);
+  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '学科', '外观', '高级']);
   for (const heading of headings) {
     assert.deepEqual(
       plain(heading.props.titleStyle),
@@ -364,7 +367,7 @@ test('a settings snapshot that has not arrived yet is not reported as 未设置'
   // before the bridged read returned, while the stored values were in fact
   // 2026-12-19 and 8 hours. "Not read yet" and "not set" are different facts.
   const tree = settingsHarness({ settings: null }).render();
-  const rows = nodes(tree, byComponent('YanjiSettingRow'));
+  const rows = nodes(tree, byComponent('YanjiSettingRow')).filter(r => r.props.label !== '专注学科名称');
   assert.equal(rows.length, 2);
 
   for (const row of rows) {

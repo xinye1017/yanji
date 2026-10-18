@@ -257,6 +257,103 @@ class YanjiDataModule(
         promise.resolve(array)
     }
 
+    @ReactMethod
+    fun renameSubject(subjectId: String, newName: String, promise: Promise) {
+        val clean = newName.trim()
+        if (clean.isEmpty()) {
+            promise.resolve(false)
+            return
+        }
+        scope.launch {
+            try {
+                repository.renameSubject(subjectId, clean)
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("E_RENAME_SUBJECT", e.message)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun addSubSubject(parentId: String, name: String, promise: Promise) {
+        val clean = name.trim()
+        if (clean.isEmpty()) {
+            promise.resolve(null)
+            return
+        }
+        scope.launch {
+            try {
+                val created = repository.addSubSubject(parentId, clean)
+                if (created != null) {
+                    val map = Arguments.createMap().apply {
+                        putString("id", created.id)
+                        putString("name", created.name)
+                        putString("colorHex", created.colorHex)
+                        putInt("sortOrder", created.sortOrder)
+                        putBoolean("enabled", created.enabled)
+                        putString("parentId", created.parentId)
+                        putBoolean("isCategory", created.isCategory)
+                    }
+                    promise.resolve(map)
+                } else {
+                    promise.resolve(null)
+                }
+            } catch (e: Exception) {
+                promise.reject("E_ADD_SUB_SUBJECT", e.message)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun addSubjectCategory(name: String, promise: Promise) {
+        val clean = name.trim()
+        if (clean.isEmpty()) {
+            promise.resolve(null)
+            return
+        }
+        scope.launch {
+            try {
+                val created = repository.addSubjectCategory(clean)
+                val map = Arguments.createMap().apply {
+                    putString("id", created.id)
+                    putString("name", created.name)
+                    putString("colorHex", created.colorHex)
+                    putInt("sortOrder", created.sortOrder)
+                    putBoolean("enabled", created.enabled)
+                    putNull("parentId")
+                    putBoolean("isCategory", created.isCategory)
+                }
+                promise.resolve(map)
+            } catch (e: Exception) {
+                promise.reject("E_ADD_CATEGORY", e.message)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun deleteSubject(subjectId: String, promise: Promise) {
+        scope.launch {
+            try {
+                repository.deleteSubject(subjectId)
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("E_DELETE_SUBJECT", e.message)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun restoreDefaultSubjects(promise: Promise) {
+        scope.launch {
+            try {
+                repository.restoreDefaultSubjects()
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("E_RESTORE_SUBJECTS", e.message)
+            }
+        }
+    }
+
     // ------------------------------------------------------------ 统计
 
     /**
@@ -580,4 +677,5 @@ internal fun dataEventTypesForTables(tables: Set<String>): Set<String> = buildSe
     if ("journal_entries" in tables) add("notes")
     if ("focus_sessions" in tables || "exam_sessions" in tables) add("sessions")
     if ("user_settings" in tables) add("settings")
+    if ("subjects" in tables) add("subjects")
 }

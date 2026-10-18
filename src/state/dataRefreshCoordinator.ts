@@ -274,12 +274,12 @@ export class DataRefreshCoordinator {
     const events = new Set(this.pendingEvents);
     this.pendingEvents.clear();
 
-    if (events.has('tasks') || events.has('notes') || events.has('sessions')) {
+    if (events.has('tasks') || events.has('notes') || events.has('sessions') || events.has('subjects')) {
       for (const date of this.knownDailyDates()) this.invalidateDaily(date);
       for (const date of this.visibleDailyDates()) void this.ensureDaily(date);
     }
 
-    if (events.has('sessions')) {
+    if (events.has('sessions') || events.has('subjects')) {
       for (const id of this.knownReviewIds()) this.invalidateReview(id);
       for (const id of this.visibleReviewIds()) void this.ensureReview(id);
     }

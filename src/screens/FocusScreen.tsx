@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { YanjiDataNative, YanjiTimerNative } from '../bridge';
+import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
@@ -67,13 +67,6 @@ function formatDialMinutes(minutes: number): string {
   return `${String(Math.max(0, Math.floor(minutes))).padStart(2, '0')}:00`;
 }
 
-function formatSubjectDuration(seconds: number): string {
-  const totalMinutes = Math.floor(Math.max(0, seconds) / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}m`;
-  return minutes === 0 ? `${hours}h` : `${hours}h${minutes}m`;
-}
 
 /** Projection only — it never writes a planned duration, it just reads the clock. */
 function formatEstimatedEndTime(durationMinutes: number): string {
@@ -133,6 +126,13 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   }, []);
 
   useEffect(() => { loadSubjects(); }, [loadSubjects]);
+  useEffect(() => {
+    return onDataChanged(event => {
+      if (event.type === 'subjects') {
+        loadSubjects();
+      }
+    });
+  }, [loadSubjects]);
   useEffect(() => { setActionError(null); }, [session?.sessionId]);
 
   /**
@@ -168,14 +168,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     );
   }, [selectableSubjects, subjectLoadState]);
 
-  const subjectSecondsMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const item of daily?.sessions ?? []) {
-      map[item.subjectId] = (map[item.subjectId] ?? 0) + item.durationSeconds;
-    }
-    return map;
-  }, [daily]);
-
   const selectedSubject = useMemo(
     () => selectableSubjects.find(subject => subject.id === selectedSubjectId) ?? null,
     [selectableSubjects, selectedSubjectId]
@@ -200,16 +192,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       group.children.some(child => child.id === selectedSubject.id)
     ) ?? subjectGroups[0] ?? null;
   }, [selectedSubject, subjectGroups]);
-
-  /** A category card reports its own sessions plus every child's. */
-  const groupSeconds = useCallback(
-    (group: SubjectGroup): number =>
-      group.children.reduce(
-        (sum, child) => sum + (subjectSecondsMap[child.id] ?? 0),
-        subjectSecondsMap[group.category.id] ?? 0
-      ),
-    [subjectSecondsMap]
-  );
 
   useEffect(() => {
     if (!focusPreset) return;
@@ -388,29 +370,19 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                         borderColor: isActive ? accent : paper.colors.hairline,
                         flexDirection: 'row',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
+                        gap: YanjiSpacing.sm,
                         opacity: pressed ? 0.72 : isActive ? 1 : 0.76,
                       })}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flex: 1, marginRight: YanjiSpacing.xs }}>
-                        <View style={{ width: 8, height: 8, borderRadius: paper.radius.pill, backgroundColor: accent }} />
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            paper.typography.bodyPrimary,
-                            { color: paper.colors.ink, fontWeight: isActive ? '700' : '500', flexShrink: 1 },
-                          ]}
-                        >
-                          {group.category.name}
-                        </Text>
-                      </View>
+                      <View style={{ width: 8, height: 8, borderRadius: paper.radius.pill, backgroundColor: accent }} />
                       <Text
+                        numberOfLines={1}
                         style={[
-                          paper.typography.captionMeta,
-                          { color: isActive ? accent : paper.colors.secondary },
+                          paper.typography.bodyPrimary,
+                          { color: paper.colors.ink, fontWeight: isActive ? '700' : '500', flex: 1 },
                         ]}
                       >
-                        今日 {formatSubjectDuration(groupSeconds(group))}
+                        {group.category.name}
                       </Text>
                     </Pressable>
                   );

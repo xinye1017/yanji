@@ -32,10 +32,10 @@ export class MockYanjiBridge {
     this.notes = initialData.notes ? [...initialData.notes] : [];
     this.sessionRecords = initialData.sessionRecords ? [...initialData.sessionRecords] : [];
     this.subjects = initialData.subjects ? [...initialData.subjects] : [
-      { id: 'sub-math', name: '数学', color: '#48CAE4' },
-      { id: 'sub-eng', name: '英语', color: '#52B788' },
-      { id: 'sub-pol', name: '政治', color: '#E07A5F' },
-      { id: 'sub-cs', name: '专业课', color: '#9B5DE5' },
+      { id: 'sub-math', name: '数学', color: '#48CAE4', colorHex: '#48CAE4', sortOrder: 1, enabled: true, parentId: null, isCategory: true },
+      { id: 'sub-eng', name: '英语', color: '#52B788', colorHex: '#52B788', sortOrder: 2, enabled: true, parentId: null, isCategory: true },
+      { id: 'sub-pol', name: '政治', color: '#E07A5F', colorHex: '#E07A5F', sortOrder: 3, enabled: true, parentId: null, isCategory: true },
+      { id: 'sub-cs', name: '专业课', color: '#9B5DE5', colorHex: '#9B5DE5', sortOrder: 4, enabled: true, parentId: null, isCategory: true },
     ];
     // Mirrors the domain UserSettings (Models.kt). There is deliberately no
     // focusDurationMinutes / breakDurationMinutes: those fields do not exist in
@@ -300,6 +300,86 @@ export class MockYanjiBridge {
 
   async getSubjects() {
     return this.subjects.map(s => ({ ...s }));
+  }
+
+  async renameSubject(subjectId, newName) {
+    const clean = String(newName || '').trim();
+    if (!clean) return false;
+    const target = this.subjects.find(s => s.id === subjectId);
+    if (!target) return false;
+    target.name = clean;
+    for (const record of this.sessionRecords) {
+      if (record.subjectId === subjectId) {
+        record.subjectName = clean;
+      }
+    }
+    for (const task of this.tasks) {
+      if (task.subjectId === subjectId) {
+        task.subjectName = clean;
+      }
+    }
+    this._emitDataChanged('subjects');
+    this._emitDataChanged('sessions');
+    this._emitDataChanged('tasks');
+    return true;
+  }
+
+  async addSubSubject(parentId, name) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    const parent = this.subjects.find(s => s.id === parentId);
+    if (!parent) return null;
+    const id = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const created = {
+      id,
+      name: clean,
+      color: parent.colorHex || parent.color || '#356AE6',
+      colorHex: parent.colorHex || parent.color || '#356AE6',
+      sortOrder: (parent.sortOrder || 1) * 100 + this.subjects.filter(s => s.parentId === parentId).length + 1,
+      enabled: true,
+      parentId,
+      isCategory: false,
+    };
+    this.subjects.push(created);
+    this._emitDataChanged('subjects');
+    return { ...created };
+  }
+
+  async addSubjectCategory(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return null;
+    const id = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const created = {
+      id,
+      name: clean,
+      color: '#356AE6',
+      colorHex: '#356AE6',
+      sortOrder: this.subjects.length + 1,
+      enabled: true,
+      parentId: null,
+      isCategory: true,
+    };
+    this.subjects.push(created);
+    this._emitDataChanged('subjects');
+    return { ...created };
+  }
+
+  async deleteSubject(subjectId) {
+    const index = this.subjects.findIndex(s => s.id === subjectId);
+    if (index === -1) return false;
+    const target = this.subjects[index];
+    if (target.isCategory) {
+      this.subjects = this.subjects.filter(s => s.parentId !== subjectId);
+    }
+    this.subjects = this.subjects.filter(s => s.id !== subjectId);
+    this._emitDataChanged('subjects');
+    return true;
+  }
+
+  async restoreDefaultSubjects() {
+    this.reset();
+    this._emitDataChanged('subjects');
+    return true;
   }
 
   /**

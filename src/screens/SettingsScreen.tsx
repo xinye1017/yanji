@@ -31,6 +31,7 @@ import {
 import { YanjiSettingRow } from '../components/SettingsRows';
 import { YanjiDecisionModelSection } from '../components/DecisionModelSection';
 import { DailyGoalSheet, ExamDateSheet } from '../components/SettingsSheets';
+import { SubjectsSheet } from '../components/SubjectsSheet';
 import { useNavigationActions } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
@@ -49,7 +50,7 @@ const THEME_OPTIONS: Array<{ mode: ThemeMode; label: string }> = [
   { mode: 'DARK', label: '深色' },
 ];
 
-type Sheet = 'examDate' | 'dailyGoal' | null;
+type Sheet = 'examDate' | 'dailyGoal' | 'subjects' | null;
 
 export function SettingsScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -240,6 +241,21 @@ export function SettingsScreen(): React.JSX.Element {
           />
         </View>
 
+        <View>
+          <YanjiPaperSectionHeading
+            title="学科"
+            spaceBefore={layout.sectionGap}
+            titleStyle={typography.titleGroup}
+          />
+          <YanjiSettingRow
+            label="专注学科名称"
+            value="点击自定义"
+            accessibilityLabel="专注学科名称，点击自定义"
+            isLast
+            onPress={() => openSheetWith('subjects')}
+          />
+        </View>
+
         <YanjiPaperSectionHeading
           title="外观"
           spaceBefore={layout.sectionGap}
@@ -288,6 +304,10 @@ export function SettingsScreen(): React.JSX.Element {
         error={sheetError}
         onClose={closeSheet}
         onSave={minutes => void saveDailyGoal(minutes)}
+      />
+      <SubjectsSheet
+        visible={openSheet === 'subjects'}
+        onClose={closeSheet}
       />
     </View>
   );

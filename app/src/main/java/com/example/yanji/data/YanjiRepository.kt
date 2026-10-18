@@ -142,11 +142,23 @@ class YanjiRepository private constructor() {
         return subject
     }
 
-    /** 重命名学科（类别或子学科）。 */
+    /** 重命名学科（类别或子学科），并同步更新历史专注记录与计划中的学科名称。 */
     suspend fun renameSubject(subjectId: String, newName: String) {
+        val clean = newName.trim()
+        if (clean.isBlank()) return
         val existing = SubjectCatalog.find(subjectId) ?: return
         persistSubjects {
-            it.insert(SubjectEntity.fromDomainModel(existing.copy(name = newName.trim())))
+            it.updateName(subjectId, clean)
+        }
+        database?.focusSessionDao()?.updateSubjectName(subjectId, clean)
+        database?.examSessionDao()?.updateSubjectName(subjectId, clean)
+        database?.studyTaskDao()?.updateSubjectName(subjectId, clean)
+        if (existing.isCategory) {
+            val directBucket = SubjectCatalog.directBucketId(subjectId)
+            val bucketName = "$clean（综合/未细分）"
+            database?.focusSessionDao()?.updateSubjectName(directBucket, bucketName)
+            database?.examSessionDao()?.updateSubjectName(directBucket, bucketName)
+            database?.studyTaskDao()?.updateSubjectName(directBucket, bucketName)
         }
     }
 

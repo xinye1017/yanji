@@ -232,7 +232,7 @@ export interface TimerStateChangedEvent {
   session: ActiveSessionState | null;
 }
 
-export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings';
+export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings' | 'subjects';
 
 export interface DataChangedEvent {
   type: DataChangedType;
@@ -296,6 +296,11 @@ interface YanjiDataModuleNative {
    */
   updateNote(noteId: string, content: string): Promise<boolean>;
   getSubjects(): Promise<Subject[]>;
+  renameSubject(subjectId: string, newName: string): Promise<boolean>;
+  addSubSubject(parentId: string, name: string): Promise<Subject | null>;
+  addSubjectCategory(name: string): Promise<Subject | null>;
+  deleteSubject(subjectId: string): Promise<boolean>;
+  restoreDefaultSubjects(): Promise<boolean>;
   /**
    * 回顾页的趋势概览。
    *
