@@ -166,41 +166,45 @@ export function ExamDateSheet({
               const isSelected = iso === selected;
               const isToday = iso === today;
               return (
-                <View key={iso} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                  <Pressable
-                    onPress={() => setSelected(iso)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${formatExamDate(iso)}${isToday ? '，今天' : ''}`}
-                    style={({ pressed }) => ({
-                      minHeight: layout.rowMinHeight,
-                      minWidth: layout.rowMinHeight,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: radius.surface,
-                      // Selected day is a filled ink chip; today is a hairline
-                      // ring. Two different signals, so "today" survives a
-                      // selection elsewhere in the month.
-                      backgroundColor: isSelected ? colors.ink : 'transparent',
-                      borderWidth: isToday && !isSelected ? layout.hairlineWidth : 0,
-                      borderColor: colors.hairline,
-                      opacity: pressed ? 0.6 : 1,
-                    })}
+                <Pressable
+                  key={iso}
+                  onPress={() => setSelected(iso)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`${formatExamDate(iso)}${isToday ? '，今天' : ''}`}
+                  style={({ pressed }) => ({
+                    // The cell owns its column instead of shrinking inside a
+                    // wrapper: a fixed 48dp minimum inside a flex:1 column
+                    // overflows the grid on a 360dp screen (7 × 48 > 316dp
+                    // of content width) and makes neighbouring touch targets
+                    // overlap. `flex: 1` keeps the seven days evenly divided.
+                    flex: 1,
+                    minHeight: layout.rowMinHeight,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: radius.surface,
+                    // Selected day is a filled ink chip; today is a hairline
+                    // ring. Two different signals, so "today" survives a
+                    // selection elsewhere in the month.
+                    backgroundColor: isSelected ? colors.ink : 'transparent',
+                    borderWidth: isToday && !isSelected ? layout.hairlineWidth : 0,
+                    borderColor: colors.hairline,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    style={[
+                      typography.bodyPrimary,
+                      {
+                        color: isSelected ? colors.canvas : colors.ink,
+                        fontWeight: isSelected || isToday ? '700' : '500',
+                        fontVariant: ['tabular-nums'],
+                      },
+                    ]}
                   >
-                    <Text
-                      style={[
-                        typography.bodyPrimary,
-                        {
-                          color: isSelected ? colors.canvas : colors.ink,
-                          fontWeight: isSelected || isToday ? '700' : '500',
-                          fontVariant: ['tabular-nums'],
-                        },
-                      ]}
-                    >
-                      {day}
-                    </Text>
-                  </Pressable>
-                </View>
+                    {day}
+                  </Text>
+                </Pressable>
               );
             })}
           </View>
@@ -290,7 +294,7 @@ export function DailyGoalSheet({
     <SettingsSheet
       visible={visible}
       title="每日学习时长"
-      subtitle="目标用于「今天」的进度刻度与「回顾」的达标天数"
+      subtitle="只影响进度与达标，不改变已记录时长"
       onClose={onClose}
     >
       <Text

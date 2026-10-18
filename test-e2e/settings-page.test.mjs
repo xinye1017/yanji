@@ -174,6 +174,9 @@ function settingsHarness({ settings, calls = [] } = {}) {
     'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiTextAction', 'YanjiTextInput',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
+  // The page reserves real IME height so the advanced form stays reachable;
+  // the harness has no keyboard, so it reserves nothing.
+  ui.useYanjiKeyboardInset = () => 0;
   // Loaded once and shared: the advanced section renders the real disclosure
   // row, so it needs the same component instance the page would get.
   const rows = loadTypeScript('src/components/SettingsRows.tsx', {
@@ -349,6 +352,16 @@ test('a settings snapshot that has not arrived yet is not reported as 未设置'
     assert.doesNotMatch(shown, /未设置/, `${row.props.label} must not claim it is unset while loading`);
     assert.match(shown, /—/, `${row.props.label} shows a placeholder instead`);
   }
+});
+
+test('the advanced summary does not claim 未配置 before the snapshot arrives', () => {
+  // The disclosure is the same kind of claim as the rows above: while the
+  // bridged read is still in flight it must show the placeholder, not a
+  // verdict about data the page has not seen yet.
+  const tree = settingsHarness({ settings: null }).render();
+  const disclosure = nodes(tree, byComponent('YanjiSettingDisclosureRow'))[0];
+  assert.ok(disclosure, 'the advanced block still publishes its disclosure');
+  assert.equal(disclosure.props.summary, '—');
 });
 
 test('the advanced block is collapsed until it is opened', () => {

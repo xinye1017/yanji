@@ -165,7 +165,9 @@ export function YanjiDecisionModelSection({
     <View>
       <YanjiSettingDisclosureRow
         label="AI 决策模型"
-        summary={hasKey ? '已配置' : '未配置'}
+        // Until the snapshot arrives, "未配置" is a claim the page has not
+        // verified — the rows below show 「—」 for the same reason.
+        summary={settings === null ? '—' : hasKey ? '已配置' : '未配置'}
         icon="sparkles"
         expanded={advancedOpen}
         isLast
@@ -175,7 +177,7 @@ export function YanjiDecisionModelSection({
       {advancedOpen ? (
         <View style={{ marginTop: YanjiSpacing.md }}>
           <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.sm }]}>
-            用于「记录此刻」自动区分灵感与疑点。密钥加密保存在系统 Keystore 中，不进入备份。
+            用于「记录此刻」区分灵感与疑点；正文会发送到你配置的模型服务，密钥以系统 Keystore 加密保存在本机。
           </Text>
 
           <YanjiPaperSegmentedControl
@@ -225,7 +227,7 @@ export function YanjiDecisionModelSection({
                 }}
               >
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  API Key {hasKey ? '(已保存在 Keystore)' : '(未配置)'}
+                  API Key{hasKey ? ' · 已保存' : ' · 未配置'}
                 </Text>
                 {hasKey ? (
                   <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} />
@@ -234,7 +236,7 @@ export function YanjiDecisionModelSection({
               <YanjiTextInput
                 value={apiKeyDraft}
                 onChangeText={setApiKeyDraft}
-                placeholder={hasKey ? '已加密存储（输入新密钥以覆盖）' : 'sk-...'}
+                placeholder={hasKey ? '已加密保存，输入新密钥以覆盖' : 'sk-...'}
                 secureTextEntry
                 autoCapitalize="none"
                 accessibilityLabel="API Key"

@@ -237,10 +237,16 @@ export function YanjiPaperSectionHeading({
   title,
   countText,
   right,
+  spaceBefore = YanjiSpacing.lg,
 }: {
   title: string;
   countText?: string;
   right?: React.ReactNode;
+  /**
+   * Gap above the heading. A page that gives every group the same gap passes
+   * its own value; the default keeps the three primary screens' rhythm.
+   */
+  spaceBefore?: number;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -253,7 +259,7 @@ export function YanjiPaperSectionHeading({
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
         marginBottom: 4,
-        marginTop: 16,
+        marginTop: spaceBefore,
       }}
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>

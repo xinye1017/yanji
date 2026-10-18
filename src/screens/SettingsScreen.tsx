@@ -26,6 +26,7 @@ import {
   YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl,
   YanjiTextAction,
+  useYanjiKeyboardInset,
 } from '../components/YanjiUI';
 import { YanjiSettingRow } from '../components/SettingsRows';
 import { YanjiDecisionModelSection } from '../components/DecisionModelSection';
@@ -57,6 +58,10 @@ export function SettingsScreen(): React.JSX.Element {
   const { closeSettings } = useNavigationActions();
   const settingsSnapshot = useSettingsSnapshot('settings', true);
   const settings = settingsSnapshot?.settings ?? null;
+  // The decision-model form is the only editor on this page that opens the
+  // keyboard. Reserving its real height keeps the fields and the save row
+  // reachable instead of leaving them underneath the IME.
+  const keyboardHeight = useYanjiKeyboardInset();
 
   const [mode, setMode] = useState<ThemeMode>(theme.mode);
   const [openSheet, setOpenSheet] = useState<Sheet>(null);
@@ -173,15 +178,15 @@ export function SettingsScreen(): React.JSX.Element {
         testID="scroll-settings"
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           paddingHorizontal: layout.pageGutter,
           paddingTop: YanjiSpacing.lg,
-          paddingBottom: YanjiSpacing.xxl + YanjiSpacing.lg,
+          paddingBottom: YanjiSpacing.xxl + YanjiSpacing.lg + keyboardHeight,
         }}
       >
         <YanjiEditorialHeader
           title="设置"
-          subtitle="考试日期与每日时长决定「今天」的进度刻度"
           trailing={
             <YanjiIconButton
               icon="close"
@@ -209,12 +214,14 @@ export function SettingsScreen(): React.JSX.Element {
           </View>
         ) : null}
 
-        <View style={{ marginTop: YanjiSpacing.lg }}>
-          <YanjiPaperSectionHeading title="备考" />
+        <View>
+          <YanjiPaperSectionHeading title="备考" spaceBefore={layout.sectionGap} />
           <YanjiSettingRow
             label="考试日期"
             value={examDate ? formatExamDate(examDate) : '未设置'}
-            hint={countdownText ?? '用于首页倒计时与回顾窗口'}
+            // Only the countdown earns a second line here. Why the date matters
+            // belongs to the sheet that edits it, not to the page.
+            hint={countdownText ?? undefined}
             accessibilityLabel={`考试日期，${examDate ? formatExamDate(examDate) : '未设置'}${countdownText ? `，${countdownText}` : ''}，点击修改`}
             pending={loading}
             onPress={() => openSheetWith('examDate')}
@@ -222,7 +229,6 @@ export function SettingsScreen(): React.JSX.Element {
           <YanjiSettingRow
             label="每日学习时长"
             value={formatGoalDuration(goalHours)}
-            hint="作为每日目标，不改变已记录的学习时长"
             accessibilityLabel={`每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
             isLast
             pending={loading}
@@ -230,21 +236,18 @@ export function SettingsScreen(): React.JSX.Element {
           />
         </View>
 
-        <View style={{ marginTop: layout.sectionGap }}>
-          <YanjiPaperSectionHeading title="外观" />
+        <View>
+          <YanjiPaperSectionHeading title="外观" spaceBefore={layout.sectionGap} />
           <YanjiPaperSegmentedControl
             accessibilityLabel="主题外观"
             value={mode}
             options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
             onChange={next => void handleThemeChange(next)}
           />
-          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-            只读取系统深浅色，不会修改你的系统设置。
-          </Text>
         </View>
 
-        <View style={{ marginTop: layout.sectionGap }}>
-          <YanjiPaperSectionHeading title="高级" />
+        <View>
+          <YanjiPaperSectionHeading title="高级" spaceBefore={layout.sectionGap} />
           <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} />
         </View>
 
@@ -252,7 +255,7 @@ export function SettingsScreen(): React.JSX.Element {
         <Text
           style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}
         >
-          研迹 2.0 · 数据只保存在这台设备上
+          研迹 · 学习数据默认保存在本机
         </Text>
       </ScrollView>
 
