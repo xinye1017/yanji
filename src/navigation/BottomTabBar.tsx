@@ -90,11 +90,11 @@ export function calculatePillDeformation(
   // 1. Unconstrained fluid motion & trailing stretch
   const diff = lead - trail;
   const rawSpan = 1 + Math.abs(diff);
-  const clampedSpan = Math.max(0.85, Math.min(1.35, rawSpan));
+  const clampedSpan = Math.max(0.90, Math.min(1.22, rawSpan));
   const centerSlot = (lead + trail) / 2;
 
   const rawScaleX = clampedSpan;
-  const rawScaleY = Math.max(0.85, 1 - (clampedSpan - 1) * 0.42);
+  const rawScaleY = Math.max(0.92, 1 - (clampedSpan - 1) * 0.35);
   const rawTranslateX = centerSlot * slotWidth;
 
   // 2. Measure visual edges against physical boundaries [0, wallRight]
@@ -102,13 +102,13 @@ export function calculatePillDeformation(
   const visualLeft = rawTranslateX + slotWidth / 2 - halfScaledWidth;
   const visualRight = rawTranslateX + slotWidth / 2 + halfScaledWidth;
 
-  // 3. Wall Collision & Squash on Impact
+  // 3. Wall Collision & Squash on Impact (subtle, non-exaggerated physical feel)
   if (visualLeft < 0) {
     // Colliding with Left Wall
     const overshoot = -visualLeft;
-    const compression = Math.min(0.22, overshoot / slotWidth);
-    const squashedScaleX = Math.max(0.78, 1 - compression);
-    const squashedScaleY = Math.min(1.20, 1 + compression * 0.75);
+    const compression = Math.min(0.12, (overshoot / slotWidth) * 0.45);
+    const squashedScaleX = Math.max(0.88, 1 - compression);
+    const squashedScaleY = Math.min(1.03, 1 + compression * 0.22);
 
     // Pin visual left edge to 0 (hard boundary, 0px overflow)
     const newHalfWidth = (slotWidth * squashedScaleX) / 2;
@@ -124,9 +124,9 @@ export function calculatePillDeformation(
   if (visualRight > wallRight) {
     // Colliding with Right Wall
     const overshoot = visualRight - wallRight;
-    const compression = Math.min(0.22, overshoot / slotWidth);
-    const squashedScaleX = Math.max(0.78, 1 - compression);
-    const squashedScaleY = Math.min(1.20, 1 + compression * 0.75);
+    const compression = Math.min(0.12, (overshoot / slotWidth) * 0.45);
+    const squashedScaleX = Math.max(0.88, 1 - compression);
+    const squashedScaleY = Math.min(1.03, 1 + compression * 0.22);
 
     // Pin visual right edge to wallRight (hard boundary, 0px overflow)
     const newHalfWidth = (slotWidth * squashedScaleX) / 2;

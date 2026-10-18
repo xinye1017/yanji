@@ -92,8 +92,8 @@ test('calculatePillDeformation produces wall collision squash without overflowin
   const leftVisualRight = leftCollision.translateX + slotWidth / 2 + (slotWidth * leftCollision.scaleX) / 2;
   assert.ok(Math.abs(leftVisualLeft) < 0.001, `visual left must be pinned to 0 on wall impact (saw ${leftVisualLeft})`);
   assert.ok(leftVisualRight <= wallRight, 'visual right must not exceed right boundary');
-  assert.ok(leftCollision.scaleX < 1, 'pill must squash horizontally against left wall');
-  assert.ok(leftCollision.scaleY > 1, 'pill must bulge vertically against left wall');
+  assert.ok(leftCollision.scaleX < 1 && leftCollision.scaleX >= 0.85, `scaleX must shorten gently (saw ${leftCollision.scaleX})`);
+  assert.ok(leftCollision.scaleY > 1 && leftCollision.scaleY <= 1.05, `scaleY must only bulge subtly (saw ${leftCollision.scaleY})`);
 
   // 4. Wall collision on Right Wall: lead pushed beyond tab 2 (e.g. 2.5)
   const rightCollision = calculatePillDeformation(2.5, 2.0, slotWidth, tabsCount);
@@ -101,8 +101,8 @@ test('calculatePillDeformation produces wall collision squash without overflowin
   const rightVisualRight = rightCollision.translateX + slotWidth / 2 + (slotWidth * rightCollision.scaleX) / 2;
   assert.ok(Math.abs(rightVisualRight - wallRight) < 0.001, `visual right must be pinned to wallRight on wall impact (saw ${rightVisualRight})`);
   assert.ok(rightVisualLeft >= 0, 'visual left must not exceed left boundary');
-  assert.ok(rightCollision.scaleX < 1, 'pill must squash horizontally against right wall');
-  assert.ok(rightCollision.scaleY > 1, 'pill must bulge vertically against right wall');
+  assert.ok(rightCollision.scaleX < 1 && rightCollision.scaleX >= 0.85, `scaleX must shorten gently (saw ${rightCollision.scaleX})`);
+  assert.ok(rightCollision.scaleY > 1 && rightCollision.scaleY <= 1.05, `scaleY must only bulge subtly (saw ${rightCollision.scaleY})`);
 });
 
 test('calculateTabDragOffset centers pill on finger and clamps within tab bounds', () => {
