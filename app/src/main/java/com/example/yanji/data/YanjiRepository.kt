@@ -107,6 +107,9 @@ class YanjiRepository private constructor() {
      */
     private suspend fun persistSubjects(mutate: suspend (SubjectDao) -> Unit) {
         val dao = database?.subjectDao() ?: return
+        if (dao.count() == 0) {
+            dao.insertAll(SubjectCatalog.defaults.map { SubjectEntity.fromDomainModel(it) })
+        }
         mutate(dao)
         val latest = dao.getAll().map { it.toDomainModel() }
         SubjectCatalog.replaceAll(latest)
@@ -571,8 +574,8 @@ class YanjiRepository private constructor() {
      */
     suspend fun addOrUpdateNoteAndAwait(entry: NoteEntry) = noteStore.addOrUpdateAndAwait(entry)
 
-    /** 切换随笔收藏标记（历史页向右滑 / 编辑页收藏按钮）。 */
-    fun setNoteFavorite(id: String, favorite: Boolean) = noteStore.setFavorite(id, favorite)
+    /** 等待随笔收藏状态在 Room 中完成切换，不依赖内存缓存。 */
+    suspend fun toggleNoteFavoriteAndAwait(id: String) = noteStore.toggleFavoriteAndAwait(id)
 
     /** 更新随笔正文（可等待），返回 false 表示 id 不存在。 */
     suspend fun updateNoteContentAndAwait(id: String, content: String) =

@@ -61,6 +61,17 @@ test('MockYanjiBridge subject management: add category, add sub-subject, delete,
   assert.equal(deleted, true);
   assert.equal(bridge.subjects.some(s => s.id === newSub.id), false);
 
+  // Add another sub-subject to verify category deletion cascade
+  const sub2 = await bridge.addSubSubject(newCat.id, '通信原理');
+  assert.ok(sub2);
+  assert.equal(bridge.subjects.some(s => s.id === sub2.id), true);
+
+  // Delete category (along with children)
+  const catDeleted = await bridge.deleteSubject(newCat.id);
+  assert.equal(catDeleted, true);
+  assert.equal(bridge.subjects.some(s => s.id === newCat.id), false);
+  assert.equal(bridge.subjects.some(s => s.parentId === newCat.id), false);
+
   // Restore defaults
   await bridge.restoreDefaultSubjects();
   assert.equal(bridge.subjects.length, initialCount);
@@ -159,4 +170,90 @@ test('FocusScreen category cards do not show 今日 xx duration text', () => {
     assert.doesNotMatch(str, /今日\s*\d+[hm]/, `Found subject duration text: ${str}`);
     assert.doesNotMatch(str, /今日已专注/, `Found subject duration text: ${str}`);
   }
+});
+
+test('SubjectsSheet renders edit and delete options for categories with compact icon sizes', () => {
+  const paper = {
+    colors: tokens.YanjiPaperColors.light,
+    radius: tokens.YanjiPaperRadius,
+    layout: tokens.YanjiPaperLayout,
+    typography: tokens.YanjiPaperTypography,
+  };
+
+  const sampleSubjects = [
+    { id: 'math', name: '数学一', colorHex: '#356AE6', sortOrder: 1, enabled: true, parentId: null, isCategory: true },
+    { id: 'math_adv', name: '高等数学', colorHex: '#7C3AED', sortOrder: 11, enabled: true, parentId: 'math', isCategory: false },
+  ];
+
+  let stateIdx = 0;
+  const states = [sampleSubjects, false, null, null, '', null, null, '', false, false, '', false];
+  const react = {
+    useState: initial => {
+      const i = stateIdx++;
+      if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+      return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+    },
+    useMemo: fn => fn(),
+    useCallback: fn => fn,
+    useEffect: () => {},
+    useRef: val => ({ current: val }),
+  };
+
+  const YanjiIconButton = props => ({ type: 'YanjiIconButton', props });
+  const subjectsSheetModule = loadTypeScript('src/components/SubjectsSheet.tsx', {
+    react,
+    'react-native': {
+      View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      TextInput: 'TextInput', Alert: { alert: () => {} },
+    },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) },
+    'react-native-reanimated': { useReducedMotion: () => false },
+    './YanjiUI': {
+      YanjiIcon: 'YanjiIcon',
+      YanjiPaperSheetHeading: 'YanjiPaperSheetHeading',
+      YanjiIconButton,
+    },
+    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
+    '../theme/tokens': tokens,
+    '../bridge': {
+      YanjiDataNative: {
+        getSubjects: async () => sampleSubjects,
+        renameSubject: async () => true,
+        deleteSubject: async () => true,
+      },
+    },
+  });
+
+  const element = subjectsSheetModule.SubjectsSheet({ visible: true, onClose: () => {} });
+  assert.ok(element);
+
+  function findNodes(node, predicate, acc = []) {
+    if (!node) return acc;
+    if (Array.isArray(node)) {
+      node.forEach(n => findNodes(n, predicate, acc));
+      return acc;
+    }
+    if (predicate(node)) acc.push(node);
+    if (node.props?.children) findNodes(node.props.children, predicate, acc);
+    return acc;
+  }
+  const buttonNodes = findNodes(element, n => n.type === YanjiIconButton);
+  const iconButtons = buttonNodes.map(b => b.props);
+
+  // Verify category has both edit and delete buttons
+  const editCatBtn = iconButtons.find(b => b.accessibilityLabel === '修改数学一名称');
+  assert.ok(editCatBtn, 'Category edit button must exist');
+  assert.equal(editCatBtn.size, 24, 'Category edit button size should be 24');
+  assert.equal(editCatBtn.iconSize, 14, 'Category edit button iconSize should be 14');
+
+  const deleteCatBtn = iconButtons.find(b => b.accessibilityLabel === '删除数学一');
+  assert.ok(deleteCatBtn, 'Category delete button must exist');
+  assert.equal(deleteCatBtn.size, 24, 'Category delete button size should be 24');
+  assert.equal(deleteCatBtn.iconSize, 14, 'Category delete button iconSize should be 14');
+
+  // Verify child subject has edit and delete buttons
+  const deleteChildBtn = iconButtons.find(b => b.accessibilityLabel === '删除高等数学');
+  assert.ok(deleteChildBtn, 'Child delete button must exist');
+  assert.equal(deleteChildBtn.size, 22, 'Child delete button size should be 22');
+  assert.equal(deleteChildBtn.iconSize, 13, 'Child delete button iconSize should be 13');
 });
