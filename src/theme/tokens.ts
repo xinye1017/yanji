@@ -164,15 +164,15 @@ export const YanjiPaperColors = {
      */
     brandSubtle: 'rgba(200,75,49,0.07)',
     onBrand: '#FFFFFF',
-    /** Paused / waiting accent. Measured >= 5.4:1 on every surface and on its own tint. */
+    /** Paused / waiting accent. Measured >= 5.30:1 across the four paper steps, and 4.81:1 on its own tint. */
     amber: '#875400',
     amberSubtle: 'rgba(135,84,0,0.07)',
     /** Modal / sheet scrim, derived from `ink` so the veil shares the paper's warmth. */
     scrim: 'rgba(28,30,33,0.32)',
-    /** Destructive actions. Measured 5.69:1 on `surface`, 5.18:1 on `canvas`. */
-    danger: '#BE3232',
-    /** At 3%, `danger` keeps at least 4.5:1 even over the `subtle` surface. */
-    dangerSubtle: 'rgba(190,50,50,0.03)',
+    /** Destructive actions. Measured 6.28:1 on `surface`, 5.71:1 on `canvas`, and 4.71:1 on its own tint. */
+    danger: '#B52B2B',
+    /** 7% tint matching `brandSubtle` / `amberSubtle` / `positiveSubtle` while keeping `danger` >= 4.5:1 on `subtle`. */
+    dangerSubtle: 'rgba(181,43,43,0.07)',
     /**
      * A period that improved on the one before it. Measured worst case 5.49:1
      * across the four paper steps, and 5.00:1 on its own tint below — the same
@@ -198,10 +198,10 @@ export const YanjiPaperColors = {
     tickMinor: 'rgba(234,230,223,0.22)',
     tickMajor: 'rgba(234,230,223,0.50)',
     brand: '#E06D53',
-    /** Dark `brand` already clears 4.5:1 on canvas, so the ink tier is itself. */
-    brandInk: '#E06D53',
-    /** At 2%, `brandInk` keeps at least 4.5:1 even over the `subtle` surface. */
-    brandSubtle: 'rgba(224,109,83,0.02)',
+    /** Lifted from `brand` so labels stay >= 4.5:1 (measured 4.74:1) over the 10% `brandSubtle` wash on `subtle`. */
+    brandInk: '#E87D64',
+    /** See the light-mode tint note: 10% dark wash paired with `brandInk` to stay >= 4.5:1 across all surfaces. */
+    brandSubtle: 'rgba(224,109,83,0.10)',
     onBrand: '#111315',
     amber: '#DDA059',
     amberSubtle: 'rgba(221,160,89,0.10)',

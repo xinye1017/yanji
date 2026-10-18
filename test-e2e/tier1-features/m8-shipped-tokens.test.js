@@ -98,10 +98,14 @@ export function registerShippedTokenTests() {
 
     it('status labels stay readable on their tints across all paper surfaces', () => {
       for (const [mode, colors] of Object.entries(tokens.YanjiPaperColors)) {
+        const expectedAlpha = mode === 'dark' ? 0.10 : 0.07;
         for (const [foreground, tint] of [
           ['brandInk', 'brandSubtle'], ['amber', 'amberSubtle'],
           ['positive', 'positiveSubtle'], ['danger', 'dangerSubtle'],
         ]) {
+          const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/.exec(colors[tint]);
+          assert(rgba, `${mode} ${tint} must be an rgba string`);
+          assertEqual(Number(rgba[4]), expectedAlpha, `${mode} ${tint} must keep ${expectedAlpha} wash alpha`);
           for (const surface of ['canvas', 'elevated', 'surface', 'subtle']) {
             const background = compositeOn(colors[tint], colors[surface]);
             const ratio = contrastRatio(colors[foreground], background);
@@ -119,8 +123,9 @@ export function registerShippedTokenTests() {
     });
 
     it('danger carries the retired-replacement value in light mode', () => {
-      // #D64545 was retired on a measured WCAG failure.
-      assertEqual(tokens.YanjiPaperColors.light.danger, '#BE3232', 'Light danger must be #BE3232');
+      // #D64545 was retired on a measured WCAG failure; #B52B2B clears 4.5:1
+      // even over a 7% dangerSubtle wash on the darkest light surface (subtle).
+      assertEqual(tokens.YanjiPaperColors.light.danger, '#B52B2B', 'Light danger must be #B52B2B');
     });
 
     it('every radius value used in the scale belongs to the YanjiRadius scale', () => {

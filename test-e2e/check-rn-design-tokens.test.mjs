@@ -58,12 +58,12 @@ function fixtureTree(overrides = {}) {
   };
 }
 
-const lightDangerTint = "dangerSubtle: 'rgba(190,50,50,0.03)', ";
+const lightDangerTint = "dangerSubtle: 'rgba(181,43,43,0.07)', ";
 const darkDangerTint = "dangerSubtle: 'rgba(248,113,113,0.10)', ";
 
 const paperDarkPalette = `  dark: { canvas: '#111315', surface: '#1a1d21', subtle: '#23272d', ink: '#eae6df',
     secondary: '#9ba0a8', muted: '#636870', hairline: 'rgba(234,230,223,0.08)',
-    brand: '#e06d53', brandInk: '#e06d53', onBrand: '#111315', amber: '#dda059',
+    brand: '#e06d53', brandInk: '#e87d64', onBrand: '#111315', amber: '#dda059',
     scrim: 'rgba(0,0,0,0.56)', ${darkDangerTint}danger: '#f87171' },
 `;
 
@@ -84,8 +84,8 @@ export const YanjiShadow = { sheet: () => ({}) };
 export const YanjiPaperColors = {
   light: { canvas: '#f6f4ef', surface: '#ffffff', subtle: '#edeae2', ink: '#1c1e21',
     secondary: '#5c5f66', muted: '#94969c', hairline: 'rgba(28,30,33,0.08)',
-    brand: '#c84b31', brandInk: '#b23a22', onBrand: '#ffffff', amber: '#9a6100',
-    scrim: 'rgba(28,30,33,0.32)', ${lightDangerTint}danger: '#be3232' },
+    brand: '#c84b31', brandInk: '#b23a22', onBrand: '#ffffff', amber: '#875400',
+    scrim: 'rgba(28,30,33,0.32)', ${lightDangerTint}danger: '#b52b2b' },
 ${paperDarkPalette}};
 export const YanjiPaperImmersive = {
   running: { canvas: '#15181c', ink: '#f6f4ef', secondary: '#9ba0a8', accent: '#e06d53' },

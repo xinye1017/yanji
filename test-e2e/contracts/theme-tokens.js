@@ -12,7 +12,7 @@ export const YanjiThemeTokens = {
    * Authoritative palette — the 素笺与寸阴 paper domain. Mirrors
    * `YanjiPaperColors` in src/theme/tokens.ts.
    *
-   * Light danger adopts the retired-replacement value #BE3232; the previous
+   * Light danger adopts the retired-replacement value #B52B2B; the previous
    * #D64545 failed WCAG and was formally retired.
    */
   colors: {
@@ -21,15 +21,15 @@ export const YanjiThemeTokens = {
       surface: '#FFFFFF',
       subtle: '#EDEAE2',
       ink: '#1C1E21',
-      secondary: '#5C5F66',
+      secondary: '#565960',
       muted: '#94969C',
       hairline: 'rgba(28,30,33,0.08)',
       brand: '#C84B31',          // Fills only; text uses brandInk
       brandInk: '#B23A22',       // Readable brand text on parchment (5.43:1)
       onBrand: '#FFFFFF',
-      amber: '#9A6100',
+      amber: '#875400',
       scrim: 'rgba(28,30,33,0.32)',
-      danger: '#BE3232',
+      danger: '#B52B2B',
     },
     dark: {
       canvas: '#111315',         // Warm near-black (never #000000)
@@ -40,7 +40,7 @@ export const YanjiThemeTokens = {
       muted: '#636870',
       hairline: 'rgba(234,230,223,0.08)',
       brand: '#E06D53',
-      brandInk: '#E06D53',       // Dark brand already clears 4.5:1 on canvas
+      brandInk: '#E87D64',       // Lifted so dark brand labels clear 4.5:1 on brandSubtle/subtle
       onBrand: '#111315',
       amber: '#DDA059',
       scrim: 'rgba(0,0,0,0.56)',
