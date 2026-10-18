@@ -1,5 +1,5 @@
 /** Paper journal: event times are native facts; completed tasks have no time. */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
-  dataRefreshCoordinator, refreshDailySnapshot, useDailySnapshot,
+  useDailySnapshot,
   useReviewDataVisibility, useReviewOverview, useSettingsSnapshot,
 } from '../state/dataRefresh';
 import { lineChartXCenters } from '../components/lineChartGeometry';
@@ -97,7 +97,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
   const today = todayIso();
   const isToday = date === today;
@@ -140,18 +139,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     } catch { setDeleteError('删除失败，记录已保留。请重试或取消。'); }
     finally { setDeleting(false); }
   };
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setActionError(null);
-    try {
-      await Promise.all([
-        refreshDailySnapshot(date),
-        ...reviewRequests.map(request => dataRefreshCoordinator.refreshReviewOverview(request)),
-      ]);
-    } catch { setActionError('读取失败，请重新读取。'); }
-    finally { setRefreshing(false); }
-  }, [date, reviewRequests]);
-
   const days = overview?.days ?? [];
   const columns = useMemo(() => buildTrendColumns(days, overview?.subjectDistribution ?? []), [days, overview]);
   const peak = peakTrendDay(columns);
@@ -274,11 +261,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           />
         </>
       )}
-
-      <Pressable onPress={() => void handleRefresh()} disabled={refreshing} accessibilityRole="button" accessibilityLabel="重新读取回顾数据"
-        style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', marginTop: YanjiSpacing.lg, opacity: pressed ? 0.65 : 1 })}>
-        <Text style={[typography.captionMeta, { color: colors.brandInk }]}>{refreshing ? '读取中…' : '重新读取'}</Text>
-      </Pressable>
     </ScrollView>
 
     <SessionNoteModal visible={noteTarget !== null} sessionId={noteTarget?.sessionId ?? null} sessionTitle={noteTarget?.title ?? ''}
@@ -1040,6 +1022,7 @@ function TrendSummary({
             color={slice.subjectColor || colors.secondary}
             metaText={`${formatDuration(slice.minutes * 60)} · ${formatPercent(slice.share)}`}
             ratio={slice.share}
+            showBar={false}
           />
         ))}
       </View>

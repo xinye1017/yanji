@@ -993,6 +993,7 @@ export function YanjiSubjectProportionRow({
   ratio,
   selected = false,
   onPress,
+  showBar = true,
 }: {
   label: string;
   color: string;
@@ -1000,6 +1001,12 @@ export function YanjiSubjectProportionRow({
   ratio: number;
   selected?: boolean;
   onPress?: () => void;
+  /**
+   * The per-subject bar is redundant where the page already has one overall
+   * proportion bar above the list (Review's trend view); the row then reads as
+   * dot · name · time · share only.
+   */
+  showBar?: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const clamped = Math.max(0, Math.min(1, ratio));
@@ -1042,25 +1049,27 @@ export function YanjiSubjectProportionRow({
           {metaText}
         </Text>
       </View>
-      <View
-        style={{
-          height: 4,
-          borderRadius: paper.radius.pill,
-          backgroundColor: paper.colors.subtle,
-          overflow: 'hidden',
-          marginTop: YanjiSpacing.xs + 2,
-          marginLeft: 16,
-        }}
-      >
+      {showBar ? (
         <View
           style={{
-            width: `${Math.round(clamped * 100)}%`,
             height: 4,
             borderRadius: paper.radius.pill,
-            backgroundColor: color,
+            backgroundColor: paper.colors.subtle,
+            overflow: 'hidden',
+            marginTop: YanjiSpacing.xs + 2,
+            marginLeft: 16,
           }}
-        />
-      </View>
+        >
+          <View
+            style={{
+              width: `${Math.round(clamped * 100)}%`,
+              height: 4,
+              borderRadius: paper.radius.pill,
+              backgroundColor: color,
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 
