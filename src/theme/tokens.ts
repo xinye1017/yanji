@@ -452,7 +452,13 @@ export const YanjiPaperLayout = {
   momentItemGap: 12,
   momentIconSize: 19,
   momentPreviewIconSize: 17,
-  /** Anchored action menu: wide enough for 「标记为已解决」 plus its icon. */
+  /** Fixed slot for the category glyph so every tag label starts on one line. */
+  momentTagIconSlot: 14,
+  /**
+   * Pre-layout estimate for the anchored action menu: the panel then
+   * shrink-wraps its widest row, so this is only used for the first frame's
+   * edge math (and as the test-visible width before layout).
+   */
   momentMenuWidth: 176,
   /**
    * The band every element of an entry's first line centres on: the clock, the

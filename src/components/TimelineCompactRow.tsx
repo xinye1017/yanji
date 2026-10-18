@@ -12,6 +12,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YanjiIcon } from './YanjiUI';
+import type { YanjiIconName } from './icons';
 import type { PopoverAnchor } from './TimelineActionPopover';
 
 /** Semantic colour families for the tag; the dot follows unless overridden. */
@@ -20,6 +21,8 @@ export type CompactTagTone = 'positive' | 'brand' | 'neutral';
 interface TimelineCompactRowProps {
   timeLabel: string;
   tagLabel?: string | null;
+  /** The category glyph inside the tag (lightbulb / circle-help / clock-3). */
+  tagIcon?: YanjiIconName;
   /** 灵感 = positive (green), 疑点 = brand (orange-red), sessions = neutral. */
   tagTone?: CompactTagTone;
   /** Overrides the dot colour; sessions pass their subject colour. */
@@ -50,6 +53,7 @@ function previewOf(content: string): string {
 export function TimelineCompactRow({
   timeLabel,
   tagLabel,
+  tagIcon,
   tagTone = 'neutral',
   dotColor,
   metaText,
@@ -159,12 +163,28 @@ export function TimelineCompactRow({
             <View
               style={{
                 flexShrink: 0,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: layout.taskTagPadding,
                 backgroundColor: tone.chipBg,
                 borderRadius: radius.badge,
                 paddingHorizontal: layout.taskTagPaddingHorizontal,
                 paddingVertical: layout.taskTagPadding,
               }}
             >
+              {tagIcon ? (
+                // One fixed slot for every category, so the tag text starts at
+                // the same x whether the glyph is a bulb, a question or a clock.
+                <View
+                  style={{
+                    width: layout.momentTagIconSlot,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={tone.chipInk} />
+                </View>
+              ) : null}
               <Text numberOfLines={1} style={[typography.captionMeta, { color: tone.chipInk }]}>
                 {tagLabel}
               </Text>

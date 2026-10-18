@@ -68,6 +68,7 @@ function MenuRow({ action, disabled, onPress }: MenuRowProps): React.JSX.Element
         minHeight: layout.rowMinHeight,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: YanjiSpacing.md,
         paddingHorizontal: YanjiSpacing.md,
         borderRadius: radius.badge,
@@ -76,7 +77,7 @@ function MenuRow({ action, disabled, onPress }: MenuRowProps): React.JSX.Element
       })}
     >
       <YanjiIcon name={action.icon} size={layout.momentIconSize} color={danger ? colors.danger : colors.secondary} />
-      <Text style={[typography.bodyPrimary, { color: danger ? colors.danger : colors.ink, flex: 1 }]}>
+      <Text style={[typography.bodyPrimary, { color: danger ? colors.danger : colors.ink }]}>
         {action.label}
       </Text>
     </Pressable>
@@ -123,7 +124,8 @@ export function TimelineActionPopover({
   // keeps the menu off-screen-edge math valid for the single frame it takes the
   // intrinsic width/height to arrive.
   const width = panel?.width ?? layout.momentMenuWidth;
-  // Rows + the rule that separates the destructive action + the panel inset.
+  // Height follows the number of rows, so the flip decision is made before the
+  // panel has been measured; width is the estimate above until onLayout lands.
   const height = panel?.height
     ?? padding * 2 + actions.length * layout.rowMinHeight + (hasDanger ? layout.hairlineWidth : 0);
 
@@ -164,7 +166,8 @@ export function TimelineActionPopover({
             position: 'absolute',
             left,
             top,
-            minWidth: layout.momentMenuWidth,
+            // No fixed width: the panel shrink-wraps its widest action row, and
+            // each row centres its icon + label as one group.
             maxWidth: containerWidth - edge * 2,
             // One invisible layout frame: the panel is then placed from its real
             // size, so a large system font cannot clip the labels or the box.

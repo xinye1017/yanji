@@ -61,6 +61,7 @@ const deepNodes = (tree, predicate) => {
 const rowProps = () => ({
   timeLabel: '19:43',
   tagLabel: '灵感',
+  tagIcon: 'inspiration',
   tagTone: 'positive',
   content: '第一行\n第二行 ✨',
   isFirst: true,
@@ -143,7 +144,8 @@ function popoverHarness() {
 }
 
 const menuView = tree => nodes(tree, n => n.type === 'View' &&
-  Array.isArray(n.props.style) && n.props.style[0]?.minWidth === tokens.YanjiPaperLayout.momentMenuWidth)[0];
+  Array.isArray(n.props.style) && n.props.style[0]?.position === 'absolute' &&
+  n.props.style[0]?.maxWidth !== undefined && n.props.style[0]?.paddingVertical !== undefined)[0];
 
 // ---------------------------------------------------------------------------
 // The compact row
@@ -168,6 +170,31 @@ test('an event is one line: clock, tag, single-line preview and 「···」', (
   assert.equal(calls[0].y, 200);
   assert.equal(calls[0].width, 44);
   assert.equal(calls[0].height, 44, 'the menu is anchored to the button that was actually pressed');
+});
+
+test('every tag carries a fixed-width icon slot: bulb, question or clock', () => {
+  const h = rowHarness();
+  const tagIcon = tree => nodes(tree, n => n.type === 'YanjiIcon' && n.props.name !== 'more')[0];
+
+  const bulb = h.render();
+  assert.equal(tagIcon(bulb).props.name, 'inspiration', '灵感 uses the lightbulb');
+  const slot = nodes(bulb, n => n.type === 'View' && n.props.style?.width === tokens.YanjiPaperLayout.momentTagIconSlot)[0];
+  assert.ok(slot, 'the glyph lives in a fixed-width slot');
+  assert.equal(slot.props.style.alignItems, 'center');
+  assert.equal(slot.props.style.justifyContent, 'center');
+
+  // The chip keeps its old compact padding, so the icon can never grow the row.
+  const chip = nodes(bulb, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positiveSubtle)[0];
+  assert.equal(chip.props.style.paddingVertical, tokens.YanjiPaperLayout.taskTagPadding);
+  const card = nodes(bulb, n => n.type === 'View' && n.props.style?.minHeight === tokens.YanjiTouch.min && n.props.style?.backgroundColor === theme.paper.colors.elevated)[0];
+  assert.equal(card.props.style.minHeight, tokens.YanjiTouch.min, 'the one-line row keeps its 44dp floor');
+
+  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagIcon: 'doubt', tagTone: 'brand' });
+  assert.equal(tagIcon(doubt).props.name, 'doubt', '疑点 uses the circled question mark');
+
+  const session = h.render({ tagLabel: '数据结构', tagIcon: 'clock3', tagTone: 'neutral', metaText: '30分钟' });
+  assert.equal(tagIcon(session).props.name, 'clock3', 'every focus subject shares the same clock icon');
+  assert.match(text(session), /数据结构/, 'the actual subject name still follows the icon');
 });
 
 test('the clock sits on the page gutter, and the dot/chip follow the tag tone', () => {
@@ -223,10 +250,14 @@ test('the menu opens below the button, flips above near the bottom, and clamps t
   const p = popoverHarness();
   const spacing = tokens.YanjiSpacing;
   const layout = tokens.YanjiPaperLayout;
+  // Before onLayout the panel is positioned from the estimate; it then
+  // shrink-wraps its widest row and repositions with the measured width.
+  const estimatedWidth = layout.momentMenuWidth;
 
   const view = menuView(p.render());
   assert.equal(view.props.style[0].top, 300 - 24 + 44 + spacing.xs);
-  assert.equal(view.props.style[0].left, 300 + 44 - layout.momentMenuWidth);
+  assert.equal(view.props.style[0].left, 300 + 44 - estimatedWidth);
+  assert.equal('minWidth' in view.props.style[0], false, 'the panel is not forced to a fixed width');
 
   const bottom = menuView(p.render({ anchor: { x: 300, y: 780, width: 44, height: 44 } }));
   const height = spacing.xs * 2 + 3 * layout.rowMinHeight + layout.hairlineWidth;
@@ -234,7 +265,7 @@ test('the menu opens below the button, flips above near the bottom, and clamps t
 
   assert.equal(menuView(p.render({ anchor: { x: 0, y: 300, width: 44, height: 44 } })).props.style[0].left, spacing.sm);
   assert.equal(menuView(p.render({ anchor: { x: 380, y: 300, width: 44, height: 44 } })).props.style[0].left,
-    390 - layout.momentMenuWidth - spacing.sm);
+    390 - estimatedWidth - spacing.sm);
 });
 
 test('every action closes first and then runs, with the destructive one ruled off', () => {
@@ -250,6 +281,12 @@ test('every action closes first and then runs, with the destructive one ruled of
 
   const rules = deepNodes(tree, n => n.type === 'YanjiHairline');
   assert.equal(rules.length, 1, 'only the destructive action is separated by a rule');
+
+  const row = deepNodes(tree, n => n.type === 'Pressable' && n.props.accessibilityLabel === '编辑记录')[0];
+  const rowStyle = row.props.style({ pressed: false });
+  assert.equal(rowStyle.justifyContent, 'center', 'icon and label are centred as one group');
+  const label = deepNodes(row, n => n.type === 'Text')[0];
+  assert.equal('flex' in label.props.style[1], false, 'the label does not stretch the panel');
 });
 
 test('the backdrop and Android back both close the menu; disabled rows are inert', () => {

@@ -441,6 +441,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   timeLabel={timeLabel(note.timestamp)}
                   tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
                     : note.category === 'INSPIRATION' ? '灵感' : null}
+                  tagIcon={note.category === 'INSPIRATION' ? 'inspiration'
+                    : note.category === 'DOUBT' ? 'doubt' : undefined}
                   tagTone={note.category === 'INSPIRATION' ? 'positive'
                     : note.category === 'DOUBT' ? 'brand' : 'neutral'}
                   content={note.content}

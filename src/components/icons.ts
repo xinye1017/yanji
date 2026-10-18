@@ -27,6 +27,7 @@ import {
   Circle,
   CircleCheck,
   CircleQuestionMark,
+  Clock3,
   Ellipsis,
   Key,
   Lightbulb,
@@ -81,7 +82,8 @@ export type YanjiIconName =
   | 'doubtUnresolved'
   | 'inspiration'
   | 'sparkles'
-  | 'key';
+  | 'key'
+  | 'clock3';
 
 const ICONS: Record<YanjiIconName, LucideIcon> = {
   today: Sun,
@@ -115,6 +117,7 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   inspiration: Lightbulb,
   sparkles: Sparkles,
   key: Key,
+  clock3: Clock3,
 };
 
 /** Stroke width shared by every icon so the set reads as one family. */
