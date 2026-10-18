@@ -21,12 +21,12 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import type { UserSettings } from '../bridge';
 
-export const DECISION_PROVIDERS: Array<{ value: 'openrouter' | 'typesafe'; label: string }> = [
+const DECISION_PROVIDERS: Array<{ value: 'openrouter' | 'typesafe'; label: string }> = [
   { value: 'openrouter', label: 'OpenRouter' },
   { value: 'typesafe', label: 'TypeSafe (Jev)' },
 ];
 
-export const PROVIDER_DEFAULTS: Record<'openrouter' | 'typesafe', { model: string; endpoint: string }> = {
+const PROVIDER_DEFAULTS: Record<'openrouter' | 'typesafe', { model: string; endpoint: string }> = {
   openrouter: {
     model: 'respan/span-01-lite:free',
     endpoint: 'https://openrouter.ai/api/v1',

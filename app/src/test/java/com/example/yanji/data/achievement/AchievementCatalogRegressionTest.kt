@@ -3,7 +3,6 @@ package com.example.yanji.data.achievement
 import com.example.yanji.data.AchievementCategory
 import com.example.yanji.data.AchievementRarity
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -7,7 +7,7 @@
  * through UTC epoch days so a DST shift can never move a day boundary.
  */
 
-export interface IsoDateParts {
+interface IsoDateParts {
   year: number;
   month: number;
   day: number;
@@ -52,7 +52,7 @@ export function todayIso(): string {
 }
 
 /** Whole days from `from` to `to`; negative when `to` is earlier. */
-export function daysBetweenIso(from: string, to: string): number | null {
+function daysBetweenIso(from: string, to: string): number | null {
   const start = parseIsoDate(from);
   const end = parseIsoDate(to);
   if (!start || !end) return null;

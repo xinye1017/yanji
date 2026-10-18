@@ -2,7 +2,6 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.ksp)
-  alias(libs.plugins.androidx.baselineprofile)
 }
 
 val releaseSigningStoreFile = providers.environmentVariable("YANJI_SIGNING_STORE_FILE").orNull
@@ -81,12 +80,6 @@ android {
             // supplies the production signing identity through ephemeral environment variables.
             signingConfig = signingConfigs.findByName("production")
         }
-        create("benchmark") {
-            initWith(getByName("release"))
-            signingConfig = signingConfigs.getByName("debug")
-            isDebuggable = false
-            matchingFallbacks += listOf("release")
-        }
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -141,11 +134,6 @@ android {
     }
 }
 
-baselineProfile {
-    automaticGenerationDuringBuild = false
-}
-
-
 kotlin {
     jvmToolchain(17)
 }
@@ -190,14 +178,12 @@ configurations.configureEach {
 }
 
 dependencies {
-  baselineProfile(project(":baselineprofile"))
   coreLibraryDesugaring(libs.desugar.jdk.libs)
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
-  implementation(libs.androidx.profileinstaller)
 
   // React Native Add-to-App
   implementation(libs.react.android)

@@ -28,6 +28,7 @@ import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { useDailySnapshot } from '../state/dataRefresh';
+import { todayIso } from '../state/settingsViewLogic';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 
 const MIN_MINUTES = 5;
@@ -74,15 +75,6 @@ function formatEstimatedEndTime(durationMinutes: number): string {
   const hh = String(end.getHours()).padStart(2, '0');
   const mm = String(end.getMinutes()).padStart(2, '0');
   return `预计 ${hh}:${mm} 结束本轮`;
-}
-
-function todayIso(): string {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
 }
 
 export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Element {

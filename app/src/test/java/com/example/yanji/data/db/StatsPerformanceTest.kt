@@ -1,7 +1,6 @@
 package com.example.yanji.data.db
 
 import androidx.room.testing.MigrationTestHelper
-import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.example.yanji.data.YanjiTime
 import org.junit.Assert.assertEquals

@@ -252,8 +252,8 @@ interface YanjiTimerModuleNative {
    * 开始一次专注。
    *
    * `mode` 用类型化的 [TimerMode]，不再让调用方拼中文模式名：原生侧的
-   * `FocusModes` 是给 Compose UI 看的展示层词汇，把「正向计时」这种字符串
-   * 跨桥传递曾让 STOPWATCH 在 RN 侧完全不可达。
+   * `FocusModes` 是 Room 里持久化的模式名（同时也是展示文案），把「正向计时」
+   * 这种字符串跨桥传递曾让 STOPWATCH 在 RN 侧完全不可达。
    *
    * `plannedMinutes` 是 `COUNTDOWN` 的目标时长；`STOPWATCH` 不限时长，
    * 该值被原生侧忽略。

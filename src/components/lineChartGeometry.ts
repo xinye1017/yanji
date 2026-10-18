@@ -7,10 +7,10 @@
  * - control points stay within each interval's observed endpoints, so smoothing
  *   never invents an unrecorded larger peak or a negative valley.
  */
-export interface ChartPoint { x: number; y: number }
+interface ChartPoint { x: number; y: number }
 
 /** Shared horizontal plot domain for points, peak markers, guides and axis ticks. */
-export function lineChartHorizontalBounds(width: number, horizontalPadding: number) {
+function lineChartHorizontalBounds(width: number, horizontalPadding: number) {
   const safeWidth = Math.max(0, width);
   const plotLeft = Math.min(safeWidth / 2, Math.max(0, horizontalPadding));
   return { plotLeft, plotRight: safeWidth - plotLeft };
@@ -24,7 +24,7 @@ export function lineChartXCenters(count: number, width: number, horizontalPaddin
     plotLeft + (plotRight - plotLeft) * index / (count - 1)
   );
 }
-export interface ChartSegment {
+interface ChartSegment {
   from: ChartPoint;
   control1: ChartPoint;
   control2: ChartPoint;

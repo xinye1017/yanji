@@ -30,10 +30,11 @@ import {
   formatClockFromEpoch, formatDailyAverageDuration, formatDuration, formatDurationMetric,
   durationMetricMinutes,
   formatPercent, goalReachedDays, peakHourBucket, peakTrendDay,
-  periodDelta, periodDeltaPercent, previousWindowArgs, relativeDayLabel, scopeDateRangeLabel,
-  shiftIsoDate, stepForwardWithinToday, todayIso, weekNumberOfYear,
+  periodDelta, periodDeltaPercent, previousWindowArgs, scopeDateRangeLabel,
+  shiftIsoDate, stepForwardWithinToday, weekNumberOfYear,
   type FilmstripDay, type TimelineEntry,
 } from './reviewViewLogic';
+import { todayIso } from '../state/settingsViewLogic';
 
 type ReviewView = 'timeline' | 'trend';
 const VIEWS = [{ value: 'timeline', label: '时间线' }, { value: 'trend', label: '趋势统计' }] as const;
@@ -101,8 +102,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   useEffect(() => { setTimelineMenu(null); }, [date, view, windowWidth, windowHeight]);
   useEffect(() => { if (!visible) setTimelineMenu(null); }, [visible]);
   const today = todayIso();
-  const isToday = date === today;
-  const relativeLabel = relativeDayLabel(date, today);
   const selectedDate = new Date(`${date}T12:00:00`);
   const filmstrip = useMemo(
     () => buildFilmstrip(
@@ -690,7 +689,7 @@ function TrendSummary({
   spectrum: readonly { id: string; label: string; seconds: number; color: string }[];
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
+  const { colors, typography, radius } = paper;
   const days = overview?.days ?? [];
   const chartLabel = scope === 'TODAY'
     ? `当日可确认连续区间的小时分布，${preciseSessionCount} 段记录。${peakHour ? `${peakHour.hour}时最多，${formatDuration(peakHour.minutes * 60)}` : '暂无可绘制区间'}`

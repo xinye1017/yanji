@@ -30,7 +30,7 @@ import {
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 
-export interface SessionNoteModalProps {
+interface SessionNoteModalProps {
   visible: boolean;
   /** `null` when no row is selected; saving is refused rather than guessed. */
   sessionId: string | null;

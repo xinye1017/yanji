@@ -27,7 +27,7 @@ import java.util.UUID
  *
  * 职责边界：**不绕过 Repository 直接管理 Room**（AGENTS.md §七）。
  * 所有读写都经过 [YanjiRepository] / [StudyStatisticsRepository]，
- * JS 侧拿到的永远是与 Compose UI 同一口径的真实本地数据。
+ * JS 侧拿到的永远是与原生业务层同一口径的真实本地数据。
  *
  * 事件：
  * - `onDataChanged`：`{ type: 'tasks' | 'notes' | 'sessions' | 'settings' }`

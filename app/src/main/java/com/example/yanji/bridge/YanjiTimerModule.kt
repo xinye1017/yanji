@@ -10,7 +10,6 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.example.yanji.data.FocusModes
 import com.example.yanji.data.timer.ActiveSession
 import com.example.yanji.data.timer.ActiveSessionCoordinator
-import com.example.yanji.data.timer.ActiveSessionKind
 import com.example.yanji.data.timer.CoordinatorState
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerCalculator

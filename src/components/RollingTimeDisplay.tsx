@@ -33,7 +33,7 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 const MAX_DISPLAY_SCALE = 1.15;
 const MIN_DISPLAY_SCALE = 0.85;
 
-export interface DigitSlotProps {
+interface DigitSlotProps {
   digit: string;
   direction: 1 | -1;
   height: number;
@@ -143,7 +143,7 @@ export function DigitSlot({
   );
 }
 
-export interface RollingTimeDisplayProps {
+interface RollingTimeDisplayProps {
   valueMinutes: number;
   color?: string;
   style?: StyleProp<ViewStyle>;

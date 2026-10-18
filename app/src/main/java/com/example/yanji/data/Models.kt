@@ -1,6 +1,5 @@
 package com.example.yanji.data
 
-import com.example.yanji.theme.*
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -20,11 +19,10 @@ object FocusModes {
     /**
      * 时长 → 计时模式：正好落在四个标准档位上就复用该档位名，其余走「N分钟专注」。
      *
-     * 此前这份映射在专注页的 `FocusViewModel.modeForTask` 与专注准备页的
-     * `quietModeForMinutes` 里各写了一遍。两份实现今天恰好一致，但它们服务的是同一条
-     * 「用户选了一个分钟数 → 该用哪个模式」的规则 —— 一旦某一侧单独调整档位
-     * （新增 30 分钟、或把 45 分钟改名），两侧就会静默漂移。
-     * 首页今日计划搬走后 `modeForTask` 失去唯一调用方已删除；本函数是该规则唯一实现。
+     * 此前这份映射在专注页与专注准备页各写了一遍。两份实现今天恰好一致，但它们
+     * 服务的是同一条「用户选了一个分钟数 → 该用哪个模式」的规则 —— 一旦某一侧单独
+     * 调整档位（新增 30 分钟、或把 45 分钟改名），两侧就会静默漂移。
+     * 今日计划卡片搬走后旧实现失去唯一调用方已删除；本函数是该规则唯一实现。
      */
     fun forPlannedMinutes(minutes: Int): String = when (minutes) {
         25 -> POMODORO_25
@@ -48,22 +46,6 @@ object FocusModes {
     fun targetSeconds(mode: String): Long =
         Regex("""(\d+)\s*分钟""").find(mode)?.groupValues?.get(1)?.toLongOrNull()?.times(60L) ?: 0L
 }
-
-/**
- * 从外部页面（如今日计划卡片）请求在专注页预设/启动专注的传参模型。
- *
- * [taskId] 是这次计时与「今日计划」那条记录的关联：带上它开始的会话，结束时会把
- * 用了多少时间记回这条计划，首页计划行才谈得上「实际 / 计划」对照。
- * 空值表示这次计时不属于任何计划（专注页自己进入、快捷专注、手动补记）。
- */
-@Serializable
-data class FocusPresetRequest(
-    val subjectId: String,
-    val subjectName: String,
-    val plannedMinutes: Int = 0,
-    val note: String = "",
-    val taskId: String? = null
-)
 
 /**
  * 首页快捷操作。type 区分内置模板与用户自定义组合：
@@ -362,7 +344,7 @@ data class UserSettings(
     /**
      * 外观（主题）偏好，存 [com.example.yanji.theme.YanjiThemeMode] 的 `name`。
      * 用 String 而不是枚举，是为了让 Room 迁移、旧备份导入、以及未来新增模式都能安全降级
-     * （解析走 `YanjiThemeMode.fromStorage`，未知值回落到 SYSTEM）。
+     * （解析走 [com.example.yanji.theme.YanjiThemeMode.fromStorage]，未知值回落到 SYSTEM）。
      */
     val themeMode: String = com.example.yanji.theme.YanjiThemeMode.SYSTEM.name,
     /** 当前学习伙伴主题；未知值由主题层安全回落到 CLOUD（卷卷）。 */
@@ -428,23 +410,4 @@ enum class AchievementCategory(val title: String) {
     REVIEW("复盘沉淀"),
     HIDDEN("隐藏成就")
 }
-
-@Serializable
-data class Achievement(
-    val id: String,
-    val title: String,
-    val description: String,
-    val category: AchievementCategory,
-    val rarity: AchievementRarity = AchievementRarity.COMMON,
-    val iconKey: String,
-    val currentProgress: Long,
-    val targetProgress: Long,
-    val unit: String = "",
-    val isUnlocked: Boolean = false,
-    val unlockedAt: Long? = null,
-    val rewardQuote: String = "",
-    val isHidden: Boolean = false,
-    val seriesId: String? = null,
-    val seriesOrder: Int = 0
-)
 

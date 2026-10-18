@@ -16,7 +16,7 @@ import type { YanjiIconName } from './icons';
 import type { PopoverAnchor } from './TimelineActionPopover';
 
 /** Semantic colour families for the tag; the dot follows unless overridden. */
-export type CompactTagTone = 'positive' | 'brand' | 'neutral';
+type CompactTagTone = 'positive' | 'brand' | 'neutral';
 
 interface TimelineCompactRowProps {
   timeLabel: string;

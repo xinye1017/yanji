@@ -163,7 +163,7 @@ export function YanjiPaperSheetHeading({
 // YanjiEditorialHeader — the page's opening line
 // ---------------------------------------------------------------------------
 
-export interface YanjiEditorialHeaderProps {
+interface YanjiEditorialHeaderProps {
   eyebrow?: string;
   eyebrowBadge?: React.ReactNode;
   title: string;
@@ -299,7 +299,7 @@ export function YanjiPaperSectionHeading({
 // YanjiPaperSegmentedControl — one-of-N switch inside a subtle track
 // ---------------------------------------------------------------------------
 
-export interface YanjiPaperSegmentedOption<T extends string> {
+interface YanjiPaperSegmentedOption<T extends string> {
   value: T;
   label: string;
 }
@@ -465,7 +465,7 @@ export interface YanjiSpectrumSegment {
   color: string;
 }
 
-export interface YanjiChronoSpectrumProps {
+interface YanjiChronoSpectrumProps {
   segments: readonly YanjiSpectrumSegment[];
   totalSeconds: number;
   goalSeconds: number | null;
@@ -586,7 +586,7 @@ export function measuredRhythmHours(buckets: readonly YanjiDayRhythmBucket[]): n
 }
 
 /** One rendered slot's geometry, independent of how it is painted. */
-export interface YanjiRhythmSlot {
+interface YanjiRhythmSlot {
   hour: number;
   /** True when this hour carries saved focus. */
   measured: boolean;
@@ -946,40 +946,6 @@ export function YanjiBadge({
         }}
       >
         {label}
-      </Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// YanjiStatCell — compact typographic metric block for summaries
-// ---------------------------------------------------------------------------
-
-export function YanjiStatCell({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  return (
-    <View style={{ flexGrow: 1, flexBasis: 84 }}>
-      <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-        {label}
-      </Text>
-      <Text
-        style={[
-          paper.typography.bodyPrimary,
-          {
-            color: paper.colors.ink,
-            fontWeight: '700',
-            fontVariant: ['tabular-nums'],
-            marginTop: YanjiSpacing.xs,
-          },
-        ]}
-      >
-        {value}
       </Text>
     </View>
   );
@@ -1484,7 +1450,7 @@ export function YanjiStepper({
 // empty data and about days that have not happened yet
 // ---------------------------------------------------------------------------
 
-export interface YanjiStackedBarChartColumn {
+interface YanjiStackedBarChartColumn {
   totalMinutes: number;
   segments: ReadonlyArray<{ color: string; minutes: number }>;
 }
@@ -1828,107 +1794,6 @@ export function YanjiBreathButton({
         </Text>
       </Pressable>
     </Animated.View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// YanjiEmptyState — quiet, factual empty state
-// ---------------------------------------------------------------------------
-
-export function YanjiEmptyState({
-  title,
-  hint,
-  icon = 'sprout',
-  compact = false,
-}: {
-  title: string;
-  hint?: string;
-  icon?: YanjiIconName;
-  compact?: boolean;
-}): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const paper = theme.paper;
-  return (
-    <View
-      style={{
-        paddingVertical: compact ? YanjiSpacing.md : YanjiSpacing.xxl + YanjiSpacing.xs,
-        paddingHorizontal: YanjiSpacing.lg,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <View
-        style={{
-          width: compact ? 36 : 48,
-          height: compact ? 36 : 48,
-          borderRadius: paper.radius.pill,
-          backgroundColor: paper.colors.subtle,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: compact ? YanjiSpacing.xs : YanjiSpacing.md,
-        }}
-      >
-        <YanjiIcon name={icon} size={compact ? 18 : 22} color={paper.colors.secondary} />
-      </View>
-      <Text
-        style={[
-          compact ? paper.typography.captionMeta : paper.typography.bodyPrimary,
-          { color: paper.colors.ink, textAlign: 'center' },
-        ]}
-      >
-        {title}
-      </Text>
-      {hint ? (
-        <Text
-          style={[
-            paper.typography.captionMeta,
-            {
-              color: paper.colors.secondary,
-              marginTop: compact ? 2 : YanjiSpacing.xs,
-              textAlign: 'center',
-            },
-          ]}
-        >
-          {hint}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// YanjiSectionHeader — legacy grouping header, kept for the existing screens
-// ---------------------------------------------------------------------------
-
-export function YanjiSectionHeader({
-  title,
-  rightAction,
-}: {
-  title: string;
-  rightAction?: React.ReactNode;
-}): React.JSX.Element {
-  const theme = useYanjiTheme();
-  const paper = theme.paper;
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: YanjiSpacing.sm,
-        marginBottom: YanjiSpacing.sm,
-        marginTop: paper.layout.sectionGap,
-      }}
-    >
-      <Text
-        accessibilityRole="header"
-        style={[paper.typography.titleSection, { color: paper.colors.ink }]}
-      >
-        {title}
-      </Text>
-      {rightAction}
-    </View>
   );
 }
 

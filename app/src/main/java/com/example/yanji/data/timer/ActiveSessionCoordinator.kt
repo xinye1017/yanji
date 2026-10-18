@@ -30,7 +30,7 @@ enum class CoordinatorState {
 /**
  * 一个正在进行的计时会话的元信息。
  *
- * 它由业务层持有，而不是 Compose 的 `remember` —— 这样切 Tab、Activity 重建、
+ * 它由业务层持有，而不是 UI 组件的局部状态 —— 这样切 Tab、Activity 重建、
  * 甚至前台 Service 独立运行都不会丢失"我正在进行哪一场专注 / 模考"这件事。
  */
 @Serializable

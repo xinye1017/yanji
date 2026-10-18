@@ -25,7 +25,7 @@ import {
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
   buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
-  greeting, hourRangeLabel, rhythmSummary, sessionPrecise, spectrumLegend,
+  greeting, hourRangeLabel, rhythmSummary, spectrumLegend,
   summarizeSubjects, taskMeta,
 } from './todayViewLogic';
 import { examCountdownText, todayIso } from '../state/settingsViewLogic';
@@ -47,7 +47,6 @@ type Selection =
     partName: string;
   }
   | null;
-const ENTRY_ICON_SIZE = 17;
 
 
 function localDay(day: Date): string {

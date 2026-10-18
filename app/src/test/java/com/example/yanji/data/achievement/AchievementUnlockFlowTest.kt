@@ -1,6 +1,5 @@
 package com.example.yanji.data.achievement
 
-import com.example.yanji.data.AchievementRarity
 import org.junit.Assert.*
 import org.junit.Test
 

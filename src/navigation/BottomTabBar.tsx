@@ -55,7 +55,7 @@ export function calculateTargetSlotIndex(slotAreaX: number, slotWidth: number, t
   return Math.max(0, Math.min(tabsCount - 1, slot));
 }
 
-export interface PillDeformation {
+interface PillDeformation {
   translateX: number;
   scaleX: number;
   scaleY: number;
@@ -104,7 +104,6 @@ export function calculatePillDeformation(
 
   // 3. Wall Collision & Squash on Impact (subtle, non-exaggerated physical feel)
   if (visualLeft < 0) {
-    // Colliding with Left Wall
     const overshoot = -visualLeft;
     const compression = Math.min(0.12, (overshoot / slotWidth) * 0.45);
     const squashedScaleX = Math.max(0.88, 1 - compression);
@@ -122,7 +121,6 @@ export function calculatePillDeformation(
   }
 
   if (visualRight > wallRight) {
-    // Colliding with Right Wall
     const overshoot = visualRight - wallRight;
     const compression = Math.min(0.12, (overshoot / slotWidth) * 0.45);
     const squashedScaleX = Math.max(0.88, 1 - compression);
@@ -139,7 +137,6 @@ export function calculatePillDeformation(
     };
   }
 
-  // Completely within boundaries
   return {
     translateX: rawTranslateX,
     scaleX: rawScaleX,

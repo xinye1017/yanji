@@ -21,7 +21,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 export type TabKey = 'today' | 'focus' | 'review';
 
-export interface TabDefinition {
+interface TabDefinition {
   key: TabKey;
   /** Bottom-bar label. */
   label: string;
@@ -40,7 +40,7 @@ export const TABS: readonly TabDefinition[] = [
  * A task handed from the Today tab to the Focus tab. FocusScreen consumes it
  * once (subject + duration preset + the `taskId` the started session binds to).
  */
-export interface FocusPreset {
+interface FocusPreset {
   taskId: string;
   subjectId: string;
   subjectName: string;
@@ -48,7 +48,7 @@ export interface FocusPreset {
   plannedMinutes: number;
 }
 
-export interface NavigationState {
+interface NavigationState {
   activeTab: TabKey;
   /** Settings overlay (never a tab). */
   settingsOpen: boolean;
@@ -58,7 +58,7 @@ export interface NavigationState {
   focusPreset: FocusPreset | null;
 }
 
-export interface NavigationActions {
+interface NavigationActions {
   selectTab: (tab: TabKey) => void;
   openSettings: () => void;
   closeSettings: () => void;

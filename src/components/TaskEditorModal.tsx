@@ -40,7 +40,7 @@ const MAX_MINUTES = 180;
 const STEP_MINUTES = 5;
 const DEFAULT_MINUTES = 45;
 
-export interface TaskEditorModalProps {
+interface TaskEditorModalProps {
   visible: boolean;
   /** ISO date `yyyy-MM-dd` the new task belongs to. */
   date: string;

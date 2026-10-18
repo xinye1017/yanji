@@ -1,16 +1,9 @@
 package com.example.yanji.data.achievement
 
-import com.example.yanji.data.AchievementRepository
-import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.SessionStatus
-import com.example.yanji.data.YanjiRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,16 +15,45 @@ class AchievementSideEffectFreeTest {
     private val evaluator = AchievementEvaluator()
 
     @Test
-    fun testProjectionIsPureWithoutSideEffects() {
-        val repo = AchievementRepository(
-            YanjiRepository.getInstance(),
-            CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        )
-        val definitions = repo.definitions
+    fun testCatalogProjectionIsStableAndPure() {
+        assertEquals(59, AchievementCatalog.definitions.size)
+        assertEquals(8, AchievementCatalog.getSeries(AchievementCatalog.SERIES_MATH).size)
 
-        assertEquals(59, definitions.size)
-        val mathSeries = repo.getSeries(AchievementRepository.SERIES_MATH)
-        assertEquals(8, mathSeries.size)
+        // 纯函数：同一份输入重复求值必须得到同一结果，且不修改入参集合。
+        val now = System.currentTimeMillis()
+        val focus = listOf(
+            FocusSession(
+                id = "f1",
+                subjectId = "math",
+                subjectName = "数学一",
+                startTime = now - 3600_000,
+                endTime = now,
+                durationSeconds = 3600,
+                status = SessionStatus.COMPLETED
+            )
+        )
+        val exam = listOf<ExamSession>()
+        val snapshot = focus.toList()
+
+        val first = evaluator.evaluate(
+            event = AchievementEvent.ReconcileAll,
+            focusSessions = focus,
+            examSessions = exam,
+            noteEntries = emptyList(),
+            checkIns = emptyList(),
+            unlockedIds = emptySet()
+        )
+        val second = evaluator.evaluate(
+            event = AchievementEvent.ReconcileAll,
+            focusSessions = focus,
+            examSessions = exam,
+            noteEntries = emptyList(),
+            checkIns = emptyList(),
+            unlockedIds = emptySet()
+        )
+
+        assertEquals("evaluate must be deterministic", first, second)
+        assertEquals("evaluate must not mutate its inputs", snapshot, focus)
     }
 
     @Test
@@ -98,10 +120,9 @@ class AchievementSideEffectFreeTest {
 
         val defMap = AchievementCatalog.definitions.associateBy { it.id }
         for (id in unlocked) {
-            val def = defMap[id]!!
             assertTrue(
-                "Evaluated achievement  must be relevant to focus event",
-                AchievementEventFilter.FOCUS_CANDIDATES.contains(id)
+                "Evaluated achievement $id must exist in catalog and be relevant to focus event",
+                defMap.containsKey(id) && AchievementEventFilter.FOCUS_CANDIDATES.contains(id)
             )
         }
 

@@ -26,7 +26,7 @@ import {
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 
-export interface RecordMomentModalProps {
+interface RecordMomentModalProps {
   visible: boolean;
   /** ISO date `yyyy-MM-dd`; defaults to the device's local today. */
   date: string;

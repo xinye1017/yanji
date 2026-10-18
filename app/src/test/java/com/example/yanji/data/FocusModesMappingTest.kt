@@ -4,9 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * 今日计划迁到首页后，「用户写下一个分钟数 → 该用哪个计时模式」这条规则
- * 从两处实现（专注页的 `modeForTask` 与专注准备页的 `quietModeForMinutes`）
- * 收敛到 [FocusModes.forPlannedMinutes] 单一实现。
+ * 「用户写下一个分钟数 → 该用哪个计时模式」这条规则收敛到
+ * [FocusModes.forPlannedMinutes] 单一实现（历史上它在两个页面各写了一遍）。
  *
  * 这里守住它与 [FocusModes.targetSeconds] 的**双向自洽**：
  * 凡是落在一个标准档位上的分钟数，取回的模式必须解析回同一个秒数。

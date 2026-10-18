@@ -2,9 +2,7 @@ package com.example.yanji.data
 
 
 import android.content.Context
-import android.util.Log
 import androidx.core.content.edit
-import com.example.yanji.data.backup.BackupCodec
 import com.example.yanji.data.backup.BackupImportResult
 import com.example.yanji.data.achievement.AchievementCatalog
 import com.example.yanji.data.achievement.AchievementDef
@@ -17,23 +15,17 @@ import com.example.yanji.data.checkin.DayCheckInStatus
 import com.example.yanji.data.note.NoteStore
 import com.example.yanji.data.study.StudyStats
 import com.example.yanji.data.timer.TimerStore
-import com.example.yanji.data.backup.UserSettingsBackup
-import com.example.yanji.data.backup.YanjiBackup
 import com.example.yanji.data.db.*
 import com.example.yanji.data.security.KeystoreSecretStore
 import com.example.yanji.data.security.SecretStore
 import com.example.yanji.data.security.SecretWriteResult
-import com.example.yanji.data.timer.ActiveSession
 import com.example.yanji.data.timer.ActiveSessionCoordinator
-import com.example.yanji.data.timer.ActiveSessionKind
 import com.example.yanji.data.timer.FileTimerSessionPersistence
 import com.example.yanji.data.timer.SystemMonotonicClock
-import com.example.yanji.data.timer.TimerSessionPersistence
 import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
-import java.io.File
 import java.util.UUID
 
 class YanjiRepository private constructor() {
@@ -276,8 +268,8 @@ class YanjiRepository private constructor() {
     // Current running active session if any
     val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
 
-    // 由业务层（而不是 Compose 页面）宣告"刚刚完成了一次专注 / 一场模考"。
-    // UI 只是这个事件的观察者：即使页面当时没有组合，记录也已经落库。
+    // 由业务层（而不是 UI 层）宣告"刚刚完成了一次专注 / 一场模考"。
+    // UI 只是这个事件的观察者：即使 App 当时不在前台，记录也已经落库。
     val lastCompletedFocus: StateFlow<FocusSession?> get() = timerStore.lastCompletedFocus
     val lastCompletedExam: StateFlow<ExamSession?> get() = timerStore.lastCompletedExam
 
@@ -644,8 +636,7 @@ class YanjiRepository private constructor() {
     // 备份导出 / 导入
     //
     // 职责已抽出到 [com.example.yanji.data.backup.BackupStore]（阶段 2 拆分第一刀）。
-    // 这里只保留**同名委托方法**，外部调用点（ProfileViewModel / ProfileScreen）
-    // 不需要任何改动，行为与拆分前完全一致。
+    // 这里只保留**同名委托方法**，行为与拆分前完全一致。
     //
     // 关键约定（实现见 BackupStore，语义逐字未变）：
     //  - 导出内容**不含 AI API Key**（凭据不在 Room 里；UserSettingsBackup 结构上就没有这个字段）

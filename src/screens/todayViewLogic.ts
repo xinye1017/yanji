@@ -7,8 +7,8 @@ export const DAY_PARTS = [
 ] as const;
 
 /** The strip's window; anything outside it is not drawn and must not be claimed. */
-export const RHYTHM_FIRST_HOUR = 6;
-export const RHYTHM_LAST_HOUR = 24;
+const RHYTHM_FIRST_HOUR = 6;
+const RHYTHM_LAST_HOUR = 24;
 
 const RHYTHM_HOURS = Array.from(
   { length: RHYTHM_LAST_HOUR - RHYTHM_FIRST_HOUR },
@@ -89,7 +89,7 @@ export function spectrumLegend(
   return [...legend.values()];
 }
 
-export function sessionPrecise(session: DailySession): boolean {
+function sessionPrecise(session: DailySession): boolean {
   // A session is plottable whenever it has recorded duration and valid timestamps.
   return session.durationSeconds > 0
     && (session.endTime > session.startTime || session.durationSeconds > 0);

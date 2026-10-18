@@ -24,13 +24,6 @@ import type {
 
 const MS_PER_DAY = 86_400_000;
 
-export function todayIso(): string {
-  const now = new Date();
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
 export function shiftIsoDate(iso: string, deltaDays: number): string {
   const parsed = new Date(`${iso}T00:00:00`);
   parsed.setDate(parsed.getDate() + deltaDays);
@@ -213,7 +206,7 @@ export function weekdayLabelOf(iso: string): string {
   return WEEKDAY_LABELS[new Date(`${iso}T12:00:00`).getDay()];
 }
 
-export function weekdayInitialOf(iso: string): string {
+function weekdayInitialOf(iso: string): string {
   return WEEKDAY_INITIALS[new Date(`${iso}T12:00:00`).getDay()];
 }
 
@@ -301,13 +294,13 @@ export function countElapsedDays(days: ReadonlyArray<{ isFuture: boolean }>): nu
 // The trend chart's columns
 // ---------------------------------------------------------------------------
 
-export interface TrendColumnSegment {
+interface TrendColumnSegment {
   subjectId: string;
   color: string;
   minutes: number;
 }
 
-export interface TrendColumn {
+interface TrendColumn {
   date: string;
   dayLabel: string;
   isToday: boolean;
@@ -360,7 +353,7 @@ export function peakTrendDay(columns: ReadonlyArray<TrendColumn>): TrendColumn |
   return worked.reduce((a, b) => (b.totalMinutes > a.totalMinutes ? b : a));
 }
 
-export interface PeriodDelta {
+interface PeriodDelta {
   /** Signed whole minutes; 0 when the two periods match after rounding. */
   deltaMinutes: number;
   label: string;
@@ -439,7 +432,7 @@ export function goalReachedDays(
 // The single-day view: how one day's focus sits across its 24 hours
 // ---------------------------------------------------------------------------
 
-export interface HourBucket {
+interface HourBucket {
   hour: number;
   minutes: number;
 }
@@ -475,14 +468,6 @@ export function peakHourBucket(buckets: ReadonlyArray<HourBucket>): HourBucket |
   const worked = buckets.filter(bucket => bucket.minutes > 0);
   if (worked.length === 0) return null;
   return worked.reduce((a, b) => (b.minutes > a.minutes ? b : a));
-}
-
-/** 折线图第 i 个点的 x 中心：首尾贴边，中间等距。 */
-export function lineCenters(count: number, width: number): number[] {
-  if (count <= 0 || width <= 0) return [];
-  if (count === 1) return [width / 2];
-  const step = width / (count - 1);
-  return Array.from({ length: count }, (_, index) => index * step);
 }
 
 export function formatMonthDaySlash(iso: string): string {
@@ -534,7 +519,7 @@ function axisLabelStride(dayCount: number): number {
   return 5;
 }
 
-export interface PlacedAxisLabel {
+interface PlacedAxisLabel {
   date: string;
   dayLabel: string;
   isToday: boolean;
@@ -652,7 +637,7 @@ export function computeAxisLabelsLayout<
   }));
 }
 
-export interface DurationMetricParts {
+interface DurationMetricParts {
   hours: number;
   minutes: number;
   formattedHours: string;

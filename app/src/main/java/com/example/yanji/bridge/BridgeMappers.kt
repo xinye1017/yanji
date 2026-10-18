@@ -50,7 +50,8 @@ object BridgeMappers {
      * `mode` 的唯一判据：**目标时长是否为正**。
      *
      * `targetDurationSeconds > 0` → `COUNTDOWN`；否则（正向计时，不限时长）→ `STOPWATCH`。
-     * 不使用 [ActiveSession.mode] 那个中文展示名——它是给 Compose UI 看的，不是桥接契约。
+     * 不使用 [ActiveSession.mode] 那个中文展示名——那是原生展示层给用户看的文案，
+     * 不是桥接契约。
      */
     fun timerModeOf(targetDurationSeconds: Long): String =
         if (targetDurationSeconds > 0L) MODE_COUNTDOWN else MODE_STOPWATCH

@@ -11,7 +11,7 @@
 
 import type { ViewStyle } from 'react-native';
 
-/** Semantic radius scale (Compose: YanjiRadius). Raw dp literals are forbidden at call sites. */
+/** Semantic radius scale. Raw dp literals are forbidden at call sites. */
 export const YanjiRadius = {
   xs: 4,
   sm: 8,
@@ -22,7 +22,7 @@ export const YanjiRadius = {
   full: 9999,
 } as const;
 
-/** Spacing scale (Compose: Spacing.kt). */
+/** Spacing scale shared by every layout in `src/**`. */
 export const YanjiSpacing = {
   xs: 4,
   sm: 8,

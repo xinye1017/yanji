@@ -14,12 +14,12 @@ export interface ReviewRequestKey {
   anchorDate: string;
 }
 
-export interface SettingsSnapshot {
+interface SettingsSnapshot {
   settings: UserSettings;
   examCountdown: ExamCountdown;
 }
 
-export interface DataRefreshLoaders {
+interface DataRefreshLoaders {
   getDailySnapshot(date: string): Promise<DailySnapshot>;
   getReviewOverview(
     scope: ReviewScope,
@@ -32,7 +32,7 @@ export interface DataRefreshLoaders {
 
 type Listener = () => void;
 
-export function reviewRequestId(request: ReviewRequestKey): string {
+function reviewRequestId(request: ReviewRequestKey): string {
   return `${request.scope}:${request.periodsBack}:${request.anchorDate}`;
 }
 

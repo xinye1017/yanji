@@ -1,8 +1,5 @@
 package com.example.yanji.bridge
 
-import com.example.yanji.data.NoteEntry
-import com.example.yanji.data.StudyTask
-import com.example.yanji.data.UserSettings
 import com.example.yanji.data.timer.ActiveSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,7 +16,7 @@ import org.junit.Test
  * 为什么必须挡住两类泄漏：
  *  1. `TimerPhase` 的枚举名（RUNNING / PAUSED / COMPLETED / CANCELLED）——
  *     TS 类型里根本没有这些取值，收到就是契约违背；
- *  2. 中文 `FocusModes` 展示名（`正向计时`）—— 那是给 Compose UI 看的，
+ *  2. 中文 `FocusModes` 展示名（`正向计时`）—— 那是原生展示层给用户看的文案，
  *     透传到桥对面会让 `mode` 失去可判定性。
  */
 class TimerVocabularyTest {

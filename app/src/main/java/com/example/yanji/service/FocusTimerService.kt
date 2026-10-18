@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *  - 调 [TimerMachine] 取时间事实，调 [ActiveSessionCoordinator] 落库；
  *  - 语义转换时调 [FocusLiveActivityController] 刷新常驻展示。
  *
- * **不负责**：Compose、ColorOS SDK、Android 版本判断、通知模板细节、流体云布局。
+ * **不负责**：UI 渲染、ColorOS SDK、Android 版本判断、通知模板细节、流体云布局。
  *
  * 关于每秒 tick：循环仍然存在，但只做两件事——推进 UI 展示镜像、检测倒计时归零。
  * 它**不再碰 NotificationManager**：运行期间 `44:59 → 44:58 → 44:57` 由系统
@@ -83,7 +83,8 @@ class FocusTimerService : Service() {
          * 每秒推进的展示镜像，**只给 App UI 用**，任何通知/流体云控制器都不消费它。
          *
          * 它和 [liveState] 同源于 [TimerMachine]，不是第二套计时器——只是把「单调时钟差值
-         * 在每个整秒上的取值」暴露给 Compose，让只有真正需要变化的文本节点重组（避免页面顶层全屏重组）。
+         * 在每个整秒上的取值」暴露给 RN 桥接层（`YanjiTimerModule` 转发为 tick 事件），
+         * 让 JS 侧只有真正需要变化的计时文本重新渲染，而不是整页重渲染。
          */
         val elapsedSecondsForUi: StateFlow<Long> = _elapsedSecondsForUi.asStateFlow()
 
@@ -92,8 +93,8 @@ class FocusTimerService : Service() {
         /**
          * 倒计时/模考每秒推进的剩余秒数展示镜像，**只给 App UI 用**。
          *
-         * 供 [ExamScreen] / [ImmersiveExamTimer] 以 State 消费，
-         * 避免倒计时每秒触发模考页顶层全屏重组。
+         * 与 [elapsedSecondsForUi] 同源同用途：RN 计时页以 tick 事件消费，
+         * 只有需要变化的计时文本重新渲染，避免倒计时每秒触发整页重渲染。
          */
         val remainingSecondsForUi: StateFlow<Long> = _remainingSecondsForUi.asStateFlow()
 

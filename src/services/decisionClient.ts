@@ -1,8 +1,8 @@
 import { YanjiDataNative, NoteCategory } from '../bridge';
 
-export type DecisionProvider = 'openrouter' | 'typesafe';
+type DecisionProvider = 'openrouter' | 'typesafe';
 
-export interface DecisionConfig {
+interface DecisionConfig {
   provider: DecisionProvider;
   model: string;
   endpoint: string;
@@ -14,7 +14,7 @@ export const DEFAULT_OPENROUTER_CONFIG: DecisionConfig = {
   endpoint: 'https://openrouter.ai/api/v1',
 };
 
-export const DEFAULT_TYPESAFE_CONFIG: DecisionConfig = {
+const DEFAULT_TYPESAFE_CONFIG: DecisionConfig = {
   provider: 'typesafe',
   model: 'jev-latest',
   endpoint: 'https://api.typesafe.ai/v1',
@@ -70,7 +70,6 @@ export function resolveDecisionEndpoint(
     }
     return `${url}/api/alpha/decisions`;
   } else {
-    // typesafe
     if (url.endsWith('/v1')) {
       return `${url}/systemone`;
     }
@@ -113,7 +112,7 @@ export function toBaseUrl(
 }
 
 /** 判定为「疑点」的置信度阈值：低于 0.7 自动落入「灵感」 */
-export const DOUBT_THRESHOLD = 0.7;
+const DOUBT_THRESHOLD = 0.7;
 
 const DOUBT_INSTRUCTIONS =
   '判断这段考研学习记录是否记录了一个疑点、卡点、困惑、做错的题目或尚未弄懂的知识点？';

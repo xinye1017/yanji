@@ -6,9 +6,9 @@ package com.example.yanji.theme
  * 它与 [YanjiThemeMode] 正交：前者决定品牌/吉祥物，后者决定浅色/深色。
  * 持久化始终保存 [name]，未知值安全回落到 [CLOUD]。
  *
- * 纯 Kotlin：不 import 任何 Compose 运行时。吉祥物的**调色板与 drawable 资源**属于
- * 已删除的 Compose 设计系统（`MascotPalette` / `MascotThemeSpec`），活代码只需要
- * 标识本身与它的展示名，因此这里只保留 [MascotThemes.displayName]。
+ * 纯 Kotlin：不含任何 UI 依赖。吉祥物的**调色板与 drawable 资源**已随旧原生设计
+ * 系统一并删除，活代码只需要标识本身与它的展示名，因此这里只保留
+ * [MascotThemes.displayName]。
  */
 enum class MascotThemeId {
     CLOUD,
@@ -28,7 +28,7 @@ enum class MascotThemeId {
 /**
  * 吉祥物展示名。仅供诊断快照等非 UI 文本使用。
  *
- * 名字与已删除的 Compose 主题一一对应，改这里等于改用户在自己数据里看到的称呼，
+ * 名字与历史原生主题一一对应，改这里等于改用户在自己数据里看到的称呼，
  * 因此按 id 显式列出，不做模糊匹配。
  */
 object MascotThemes {

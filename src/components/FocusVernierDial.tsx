@@ -21,7 +21,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 
-export interface FocusVernierDialProps {
+interface FocusVernierDialProps {
   valueMinutes: number;
   onChangeMinutes: (value: number) => void;
   minMinutes: number;

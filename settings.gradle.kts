@@ -57,5 +57,3 @@ rootProject.name = "Yanji"
 include(":react-native-blur-overlay")
 project(":react-native-blur-overlay").projectDir = file("node_modules/react-native-blur-overlay/android")
 include(":app")
-include(":macrobenchmark")
-include(":baselineprofile")

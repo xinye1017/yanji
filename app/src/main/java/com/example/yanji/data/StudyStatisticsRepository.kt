@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.map
 import com.example.yanji.data.db.StudySubjectAggregateRow
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
 enum class StudyTimeRange(val title: String) {
@@ -32,11 +31,11 @@ data class SubjectDistributionItem(
 )
 
 /**
- * 领域模型对 Compose 是**只读不可变**的：字段全为 val、且不含任何集合字段。
- * 标注后编译器能把它们视为稳定类型，避免以 List/整体对象作参数时跳过失败。
+ * 统计结果模型**只读不可变**：字段全为 val，且不含可变集合字段。
  *
- * 只加在真正平坦的 val-only 类型上——含 List/Map 的类型（如 NoteEntry、DayBarData）
-   * 不要标注为不可变，那等于对编译器撒谎。
+ * 这些对象由 Kotlin 统计层构建、经桥接层原样映射给 RN，中途没有任何一处需要回写；
+ * 保持扁平 val-only 让「构建完就不再变」成为类型层面的保证，而不是靠调用方自觉。
+ * 含 List/Map 的聚合模型（如 NoteEntry、DayBarData）不在此列。
  */
 data class DailySessionItem(
     val id: String,
@@ -205,9 +204,6 @@ class StudyStatisticsRepository(
      */
     private val activeDayThresholdFlow: Flow<Long> =
         repo.settings.map { it.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L }
-
-    /** 汇总构建期的兜底阈值：Flow 尚未吐出首个值时与用户默认值一致。 */
-    private val activeDayThresholdSecondsFallback = 30L * 60L
 
     private fun getSubjectColor(subjectId: String, subjectName: String): String =
         resolveStudySubjectColor(subjectId, subjectName, repo.subjects.value)

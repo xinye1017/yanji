@@ -16,7 +16,6 @@ plugins {
   alias(libs.plugins.android.application) apply false
   alias(libs.plugins.kotlin.serialization) apply false
   alias(libs.plugins.ksp) apply false
-  alias(libs.plugins.androidx.baselineprofile) apply false
   // 仅为把 RNGP 放进构建的插件类路径：node_modules 下的 RN 原生库
   // （reanimated / worklets / svg / safe-area-context）在自身构建脚本里用
   // 传统 apply(plugin = "com.facebook.react") 申请插件，而传统 apply 只从

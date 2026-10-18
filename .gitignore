@@ -32,6 +32,9 @@ build/
 .freebuff/
 node_modules/
 
+# --- Agent 工具缓存（Codex 远端附件等，不入库） ---
+.codex-remote-attachments/
+
 # --- 备份/快照类文件（含真机数据，绝不入库） ---
 *.db
 *.db-wal
@@ -43,7 +46,6 @@ device-backup/
 
 # TypeSafe local env (contains key)
 .agents/skills/*/ENVIRONMENT.local.md
-scripts/jev/.env.local
 
 # --- uiautomator 一次性产物（`adb shell uiautomator dump` 的原始输出） ---
 u.xml

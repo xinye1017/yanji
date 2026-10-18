@@ -31,17 +31,14 @@ export function SubjectsSheet({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Rename state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Add sub-subject state
   const [addingUnderParent, setAddingUnderParent] = useState<string | null>(null);
   const [newSubName, setNewSubName] = useState('');
   const [addingSubSaving, setAddingSubSaving] = useState(false);
 
-  // Add category state
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingCategorySaving, setAddingCategorySaving] = useState(false);
