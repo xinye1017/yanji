@@ -30,7 +30,7 @@ export function MomentTimelineItem({
   const reduceMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const previousFavorite = useRef(isFavorite);
-  const [headerHeight, setHeaderHeight] = useState<number>(YanjiTouch.comfortable);
+  const [headerHeight, setHeaderHeight] = useState<number>(YanjiTouch.min);
   const starStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   useEffect(() => {
     const changed = previousFavorite.current !== isFavorite;
@@ -48,9 +48,10 @@ export function MomentTimelineItem({
   const title = content.trim().split('\n').find(line => line.trim())?.trim() || '无标题记录';
   const categoryColor = onToggleResolved && isResolved ? colors.positive : colors.secondary;
   const categoryText = <Text style={[typography.captionMeta, { color: categoryColor, flexShrink: 1 }]}>{categoryLabel}</Text>;
-  const iconButton = (pressed: boolean) => ({
-    width: YanjiTouch.comfortable, height: YanjiTouch.comfortable,
-    borderRadius: radius.pill, alignItems: 'center' as const, justifyContent: 'center' as const,
+  // Bring the glyphs inward while keeping two separate, non-overlapping targets.
+  const iconButton = (pressed: boolean, trailing: boolean) => ({
+    width: YanjiTouch.min, height: YanjiTouch.min, paddingHorizontal: YanjiSpacing.sm,
+    borderRadius: radius.pill, alignItems: trailing ? 'flex-start' as const : 'flex-end' as const, justifyContent: 'center' as const,
     backgroundColor: pressed ? colors.subtle : 'transparent',
   });
 
@@ -67,9 +68,9 @@ export function MomentTimelineItem({
           width: layout.hairlineWidth, backgroundColor: colors.hairline }} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0, borderRadius: radius.surface, backgroundColor: colors.elevated,
-        paddingHorizontal: YanjiSpacing.lg, paddingTop: YanjiSpacing.xs, paddingBottom: YanjiSpacing.sm }}>
+        paddingHorizontal: YanjiSpacing.lg, paddingTop: YanjiSpacing.xs }}>
         <View onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}
-          style={{ flexDirection: 'row', alignItems: 'center', minHeight: YanjiTouch.comfortable }}>
+          style={{ flexDirection: 'row', alignItems: 'center', minHeight: YanjiTouch.min }}>
           <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: YanjiSpacing.sm }}>
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>{timeLabel}</Text>
             {categoryLabel ? onToggleResolved ? (
@@ -89,7 +90,7 @@ export function MomentTimelineItem({
           <View style={{ flexDirection: 'row', flexShrink: 0 }}>
             <Pressable onPress={onToggleFavorite} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`${isFavorite ? '取消收藏' : '收藏'}记录：${title}`}
-              accessibilityState={{ selected: isFavorite, disabled }} style={({ pressed }) => iconButton(pressed)}>
+              accessibilityState={{ selected: isFavorite, disabled }} style={({ pressed }) => iconButton(pressed, false)}>
               <Animated.View style={starStyle}>
                 <YanjiIcon name={isFavorite ? 'star' : 'starOutline'} size={layout.momentIconSize}
                   color={isFavorite ? colors.brandInk : colors.secondary} filled={isFavorite} />
@@ -97,14 +98,14 @@ export function MomentTimelineItem({
             </Pressable>
             <Pressable onPress={onMore} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`更多记录操作：${title}`} accessibilityState={{ disabled }}
-              style={({ pressed }) => iconButton(pressed)}>
+              style={({ pressed }) => iconButton(pressed, true)}>
               <YanjiIcon name="more" size={layout.momentIconSize} color={colors.secondary} />
             </Pressable>
           </View>
         </View>
         <Pressable onPress={onPressContent} accessibilityRole="button"
           accessibilityLabel={`查看完整记录：${title}`} accessibilityHint="打开这条记录，可阅读全文或编辑"
-          style={({ pressed }) => ({ minHeight: YanjiTouch.min, paddingVertical: YanjiSpacing.xs, justifyContent: 'center', opacity: pressed ? 0.75 : 1 })}>
+          style={({ pressed }) => ({ minHeight: YanjiTouch.min, paddingVertical: YanjiSpacing.xs, justifyContent: 'flex-start', opacity: pressed ? 0.75 : 1 })}>
           <Text style={[typography.bodyMoment, { color: colors.ink }]} numberOfLines={4} ellipsizeMode="tail">{content}</Text>
         </Pressable>
       </View>
