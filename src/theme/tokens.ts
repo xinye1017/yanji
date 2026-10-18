@@ -117,8 +117,8 @@ export const YanjiMotion = {
   spring: {
     /** Default settle for sheets, pills and fades. */
     gentle: { damping: 18, stiffness: 140, mass: 1 },
-    /** Selection changes that must feel immediate. */
-    snappy: { damping: 20, stiffness: 260, mass: 0.9 },
+    /** Selection changes that must feel immediate with lively bounce. */
+    snappy: { damping: 14, stiffness: 240, mass: 0.8 },
     /** Press-down feedback. */
     press: { damping: 15, stiffness: 320, mass: 0.8 },
   },

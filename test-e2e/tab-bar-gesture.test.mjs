@@ -9,6 +9,92 @@ test('BottomTabBar source imports PanResponder and binds panHandlers', () => {
   assert.match(dock, /panResponder\.panHandlers/, 'BottomTabBar must attach panHandlers to the gesture container');
   assert.match(dock, /calculateTabDragOffset/, 'BottomTabBar must export calculateTabDragOffset');
   assert.match(dock, /calculateTargetSlotIndex/, 'BottomTabBar must export calculateTargetSlotIndex');
+  assert.match(dock, /calculatePillDeformation/, 'BottomTabBar must export calculatePillDeformation');
+});
+
+test('calculatePillDeformation produces stretch-and-squish physical motion', () => {
+  const { calculatePillDeformation } = loadTypeScript('src/navigation/BottomTabBar.tsx', {
+    react: {
+      useState: initial => [initial, () => {}],
+      useRef: initial => ({ current: initial }),
+      useEffect: () => {},
+      useMemo: fn => fn(),
+    },
+    'react-native': {
+      View: 'View',
+      Text: 'Text',
+      Pressable: 'Pressable',
+      StyleSheet: { absoluteFill: {} },
+      PanResponder: { create: config => config },
+    },
+    'react-native-blur-overlay': 'BlurOverlay',
+    'react-native-reanimated': {
+      useSharedValue: initial => ({ value: initial }),
+      useAnimatedStyle: fn => fn(),
+      useReducedMotion: () => false,
+      withSpring: v => v,
+      default: { View: 'AnimatedView' },
+    },
+    './NavigationShell': {
+      TABS: [
+        { key: 'today', label: '今天', title: '今天' },
+        { key: 'focus', label: '专注', title: '专注' },
+        { key: 'review', label: '回顾', title: '回顾' },
+      ],
+      useNavigationActions: () => ({ selectTab: () => {} }),
+      useNavigationState: () => ({ activeTab: 'today' }),
+    },
+    '../components/YanjiUI': { YanjiIcon: 'YanjiIcon' },
+    '../theme/ThemeProvider': {
+      useYanjiTheme: () => ({
+        paper: { layout: { hairlineWidth: 1 }, colors: { brandInk: '#000', brand: '#f00', ink: '#333' } },
+        spacing: { lg: 16 },
+        shadow: { floating: () => ({}) },
+        motion: { spring: { snappy: {} } },
+        isDark: false,
+      }),
+    },
+    '../theme/tokens': { YanjiRadius: { full: 9999 }, YanjiTouch: { min: 44 } },
+    '../theme/liquidGlass': {
+      YanjiLiquidGlass: {
+        targetId: 'blur',
+        padding: 5,
+        itemPadding: 8,
+        iconSize: 20,
+        labelSize: 14,
+        labelLineHeight: 20,
+        labelGap: 4,
+        light: { backdrop: '', border: '', tint: '', selection: '' },
+        dark: { backdrop: '', border: '', tint: '', selection: '' },
+      },
+    },
+    './useBottomTabLayout': { useBottomTabLayout: () => ({ height: 72, bottom: 16 }) },
+  });
+
+  const slotWidth = 100;
+
+  // 1. At rest at slot 1
+  const rest = calculatePillDeformation(1, 1, slotWidth);
+  assert.equal(rest.translateX, 100, 'translateX is slot 1 position at rest');
+  assert.equal(rest.scaleX, 1, 'scaleX is 1 at rest');
+  assert.equal(rest.scaleY, 1, 'scaleY is 1 at rest');
+
+  // 2. Dragging right (lead ahead of trail: lead = 1.5, trail = 1.1)
+  const draggingRight = calculatePillDeformation(1.5, 1.1, slotWidth);
+  assert.ok(draggingRight.scaleX > 1, 'scaleX must stretch horizontally when dragging right');
+  assert.ok(draggingRight.scaleY < 1, 'scaleY must compress vertically to simulate jelly volume conservation');
+  assert.ok(draggingRight.translateX > 100, 'translateX must move along the drag direction');
+
+  // 3. Dragging left (lead moved left of trail: lead = 0.5, trail = 0.9)
+  const draggingLeft = calculatePillDeformation(0.5, 0.9, slotWidth);
+  assert.ok(draggingLeft.scaleX > 1, 'scaleX must stretch horizontally when dragging left');
+  assert.ok(draggingLeft.scaleY < 1, 'scaleY must compress vertically when dragging left');
+  assert.ok(draggingLeft.translateX < 90, 'translateX must shift towards left with lead');
+
+  // 4. Clamping maximum stretch to avoid exaggerated distortion
+  const extremeDrag = calculatePillDeformation(3, 0, slotWidth);
+  assert.ok(extremeDrag.scaleX <= 1.35, 'scaleX must be clamped within realistic physical bounds (<= 1.35)');
+  assert.ok(extremeDrag.scaleY >= 0.85, 'scaleY must stay visually pleasant (>= 0.85)');
 });
 
 test('calculateTabDragOffset centers pill on finger and clamps within tab bounds', () => {

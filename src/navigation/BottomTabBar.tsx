@@ -55,6 +55,50 @@ export function calculateTargetSlotIndex(slotAreaX: number, slotWidth: number, t
   return Math.max(0, Math.min(tabsCount - 1, slot));
 }
 
+export interface PillDeformation {
+  translateX: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+/**
+ * Calculates physical deformation (trailing stretch & vertical squish) based on
+ * leading and trailing positions.
+ *
+ * When moving right (lead > trail):
+ *   The leading edge pulls forward, while the trailing edge lags behind,
+ *   stretching the pill along the horizontal direction and compressing vertically.
+ * When moving left (lead < trail):
+ *   The leading edge pushes left, trailing edge lags right, stretching leftward.
+ * When at rest (lead === trail):
+ *   scaleX = 1, scaleY = 1, translateX = lead * slotWidth.
+ */
+export function calculatePillDeformation(
+  lead: number,
+  trail: number,
+  slotWidth: number,
+  maxSpan: number = 1.35
+): PillDeformation {
+  'worklet';
+  if (slotWidth <= 0) {
+    return { translateX: 0, scaleX: 1, scaleY: 1 };
+  }
+
+  const diff = lead - trail;
+  const rawSpan = 1 + Math.abs(diff);
+  const clampedSpan = Math.max(0.9, Math.min(maxSpan, rawSpan));
+
+  const center = (lead + trail) / 2;
+  const scaleX = clampedSpan;
+  const scaleY = Math.max(0.85, 1 - (clampedSpan - 1) * 0.42);
+
+  return {
+    translateX: center * slotWidth,
+    scaleX,
+    scaleY,
+  };
+}
+
 export function BottomTabBar({ visible = true }: { visible?: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
   const { paper } = theme;
@@ -74,8 +118,39 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
   const slotWidthRef = useRef(0);
   const activeSlotRef = useRef(index);
   const selectTabRef = useRef(selectTab);
-  const snappySpringRef = useRef(theme.motion.spring.snappy);
   const reduceMotionRef = useRef(reduceMotion);
+
+  const snappyMotion = theme.motion.spring.snappy;
+  const leadSpring = useMemo(() => ({
+    ...snappyMotion,
+    damping: 13,
+    stiffness: 280,
+    mass: 0.7,
+  }), [snappyMotion]);
+
+  const trailTapSpring = useMemo(() => ({
+    ...snappyMotion,
+    damping: 14,
+    stiffness: 210,
+    mass: 0.85,
+  }), [snappyMotion]);
+
+  const trailDragSpring = useMemo(() => ({
+    ...snappyMotion,
+    damping: 15,
+    stiffness: 180,
+    mass: 0.65,
+  }), [snappyMotion]);
+
+  const leadSpringRef = useRef(leadSpring);
+  const trailTapSpringRef = useRef(trailTapSpring);
+  const trailDragSpringRef = useRef(trailDragSpring);
+
+  useEffect(() => {
+    leadSpringRef.current = leadSpring;
+    trailTapSpringRef.current = trailTapSpring;
+    trailDragSpringRef.current = trailDragSpring;
+  }, [leadSpring, trailTapSpring, trailDragSpring]);
 
   useEffect(() => {
     activeSlotRef.current = index;
@@ -83,9 +158,8 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
 
   useEffect(() => {
     selectTabRef.current = selectTab;
-    snappySpringRef.current = theme.motion.spring.snappy;
     reduceMotionRef.current = reduceMotion;
-  }, [selectTab, theme.motion.spring.snappy, reduceMotion]);
+  }, [selectTab, reduceMotion]);
 
   /**
    * The pill slides by measured pixels rather than by a percentage of its own
@@ -110,12 +184,20 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
     });
   };
 
-  const offset = useSharedValue(index);
+  const lead = useSharedValue(index);
+  const trail = useSharedValue(index);
+
   useEffect(() => {
     if (!isDraggingRef.current) {
-      offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
+      if (reduceMotion) {
+        lead.value = index;
+        trail.value = index;
+      } else {
+        lead.value = withSpring(index, leadSpring);
+        trail.value = withSpring(index, trailTapSpring);
+      }
     }
-  }, [index, offset, reduceMotion, theme.motion.spring.snappy]);
+  }, [index, lead, trail, reduceMotion, leadSpring, trailTapSpring]);
 
   const panResponder = useMemo(() => {
     const getSlotAreaX = (screenX: number) => {
@@ -143,7 +225,8 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
           const currentX = gestureState.moveX || (gestureState.x0 + gestureState.dx);
           const slotAreaX = getSlotAreaX(currentX);
           const clampedOffset = calculateTabDragOffset(slotAreaX, sw, TABS.length);
-          offset.value = clampedOffset;
+          lead.value = clampedOffset;
+          trail.value = withSpring(clampedOffset, trailDragSpringRef.current);
 
           const targetSlot = calculateTargetSlotIndex(slotAreaX, sw, TABS.length);
           if (targetSlot !== activeSlotRef.current) {
@@ -167,26 +250,42 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         const finalSlot = calculateTargetSlotIndex(slotAreaX, sw, TABS.length);
         activeSlotRef.current = finalSlot;
         selectTabRef.current(TABS[finalSlot].key);
-        offset.value = reduceMotionRef.current
-          ? finalSlot
-          : withSpring(finalSlot, snappySpringRef.current);
+
+        if (reduceMotionRef.current) {
+          lead.value = finalSlot;
+          trail.value = finalSlot;
+        } else {
+          lead.value = withSpring(finalSlot, leadSpringRef.current);
+          trail.value = withSpring(finalSlot, trailTapSpringRef.current);
+        }
       },
       onPanResponderTerminate: () => {
         isDraggingRef.current = false;
         hasMovedRef.current = false;
-        offset.value = reduceMotionRef.current
-          ? activeSlotRef.current
-          : withSpring(activeSlotRef.current, snappySpringRef.current);
+        if (reduceMotionRef.current) {
+          lead.value = activeSlotRef.current;
+          trail.value = activeSlotRef.current;
+        } else {
+          lead.value = withSpring(activeSlotRef.current, leadSpringRef.current);
+          trail.value = withSpring(activeSlotRef.current, trailTapSpringRef.current);
+        }
       },
     });
-  }, [offset]);
+  }, [lead, trail]);
 
   const pillStyle = useAnimatedStyle(() => {
     'worklet';
-    // Clamp the spring value so overshoot never pushes the pill beyond slot 0 (left) or slot (TABS.length - 1) (right).
-    const clampedOffset = Math.max(0, Math.min(TABS.length - 1, offset.value));
+    const deformation = calculatePillDeformation(lead.value, trail.value, slotWidth);
+    const minCenter = -0.06 * slotWidth;
+    const maxCenter = (TABS.length - 1 + 0.06) * slotWidth;
+    const clampedTranslateX = Math.max(minCenter, Math.min(maxCenter, deformation.translateX));
+
     return {
-      transform: [{ translateX: clampedOffset * slotWidth }],
+      transform: [
+        { translateX: clampedTranslateX },
+        { scaleX: deformation.scaleX },
+        { scaleY: deformation.scaleY },
+      ],
     };
   });
 
