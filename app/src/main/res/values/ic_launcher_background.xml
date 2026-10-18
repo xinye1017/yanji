@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- MascotThemes.PENGUIN.palette.lightPrimarySoft -->
-    <color name="ic_launcher_background">#E6F2FB</color>
+    <!-- Warm paper background from assets/branding/launcher-icon.jpg. -->
+    <color name="ic_launcher_background">#FEF2CB</color>
 </resources>

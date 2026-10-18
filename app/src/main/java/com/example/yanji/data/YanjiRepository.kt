@@ -570,6 +570,8 @@ class YanjiRepository private constructor() {
     suspend fun setNoteResolvedAndAwait(id: String, isResolved: Boolean) =
         noteStore.setResolvedAndAwait(id, isResolved)
 
+    suspend fun deleteNoteAndAwait(id: String) = noteStore.deleteAndAwait(id)
+
     fun deleteNote(id: String) = noteStore.delete(id)
 
     /** 决策模型 API Key 读写（通过 SecretStore 加密存储在 Keystore） */

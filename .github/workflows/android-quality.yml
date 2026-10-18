@@ -35,6 +35,11 @@ jobs:
       - name: Design token guard
         run: ./scripts/check-design-tokens.sh
 
+      - name: Bundle sync guard
+        # The release build packages the committed Metro bundle directly, so a
+        # stale artifact would ship JavaScript that no longer matches `src/`.
+        run: node scripts/check-bundle-sync.mjs
+
   build:
     name: Unit, lint & build
     runs-on: ubuntu-26.04

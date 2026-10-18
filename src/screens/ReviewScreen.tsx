@@ -92,6 +92,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     sessionId: string; isExam: boolean; subjectName: string;
   } | null>(null);
   const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -160,11 +161,11 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const preciseSessions = useMemo(() => {
     const dayStart = new Date(`${date}T00:00:00`).getTime();
     const dayEnd = new Date(`${shiftIsoDate(date, 1)}T00:00:00`).getTime();
-    return sessions.filter(session => session.pauseCount === 0 && session.endTime > session.startTime
-      && Math.abs((session.endTime - session.startTime) / 1000 - session.durationSeconds) <= 2
-      && session.endTime > dayStart && session.startTime < dayEnd).map(session => ({
+    return sessions.filter(session => session.durationSeconds > 0
+      && (session.endTime > dayStart || session.startTime >= dayStart)
+      && session.startTime < dayEnd).map(session => ({
         startTime: Math.max(session.startTime, dayStart),
-        durationSeconds: (Math.min(session.endTime, dayEnd) - Math.max(session.startTime, dayStart)) / 1000,
+        durationSeconds: session.durationSeconds,
       }));
   }, [date, sessions]);
   const hourBuckets = useMemo(() => scope === 'TODAY' ? buildHourBuckets(preciseSessions) : [], [scope, preciseSessions]);
@@ -222,7 +223,14 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
             }}
             onToggleFavorite={noteId => void toggleFavorite(noteId)}
             onToggleResolved={noteId => void toggleResolved(noteId)}
-            onEditNote={note => setEditingNote({ id: note.noteId, content: note.content })}
+            onEditNote={note => {
+              setEditingNote({ id: note.noteId, content: note.content });
+              setConfirmDeleteNote(false);
+            }}
+            onDeleteNote={note => {
+              setEditingNote({ id: note.noteId, content: note.content });
+              setConfirmDeleteNote(true);
+            }}
           />
         </>
       ) : (
@@ -275,7 +283,14 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
 
     <SessionNoteModal visible={noteTarget !== null} sessionId={noteTarget?.sessionId ?? null} sessionTitle={noteTarget?.title ?? ''}
       initialNote={noteTarget?.note ?? ''} examSession={noteTarget?.isExam ?? false} onClose={() => setNoteTarget(null)} onSaved={() => setNoteTarget(null)} />
-    <RecordMomentModal visible={editingNote !== null} date={date} editingNote={editingNote} onClose={() => setEditingNote(null)} onSaved={() => setEditingNote(null)} />
+    <RecordMomentModal
+      visible={editingNote !== null}
+      date={date}
+      editingNote={editingNote}
+      initialConfirmDelete={confirmDeleteNote}
+      onClose={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
+      onSaved={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
+    />
     <Modal visible={pendingDelete !== null} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (!deleting) setPendingDelete(null); }}>
       <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>
         <ScrollView style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}
@@ -405,7 +420,7 @@ function DaySummary({ snapshot, goalSeconds }: {
 // The timeline — one spine, clock on the left, event on the right
 // ---------------------------------------------------------------------------
 
-function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
+function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote, onDeleteNote }: {
   entries: readonly TimelineEntry[];
   dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
@@ -414,6 +429,7 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
   onToggleFavorite: (noteId: string) => void;
   onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+  onDeleteNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { typography, layout } = paper;
@@ -423,14 +439,15 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onDeleteSession,
       nextEntryKind={entries[index + 1]?.kind}
       dayTasks={dayTasks} busyNote={busyNote}
       onEditSession={onEditSession} onDeleteSession={onDeleteSession}
-      onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved} onEditNote={onEditNote} />)}
+      onToggleFavorite={onToggleFavorite} onToggleResolved={onToggleResolved}
+      onEditNote={onEditNote} onDeleteNote={onDeleteNote} />)}
     {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
       按真实发生时刻排列；完成计划不标记未提供的完成时刻。
     </Text> : null}
   </View>;
 }
 
-function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote }: {
+function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNote, onEditSession, onDeleteSession, onToggleFavorite, onToggleResolved, onEditNote, onDeleteNote }: {
   entry: TimelineEntry;
   isFirst: boolean;
   isLast: boolean;
@@ -442,6 +459,7 @@ function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNot
   onToggleFavorite: (noteId: string) => void;
   onToggleResolved?: (noteId: string) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
+  onDeleteNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
@@ -538,7 +556,8 @@ function TimelineItem({ entry, isFirst, isLast, nextEntryKind, dayTasks, busyNot
           : <NoteEntry entry={entry} busy={busyNote}
             onToggleFavorite={() => onToggleFavorite(entry.noteId)}
             onToggleResolved={() => onToggleResolved?.(entry.noteId)}
-            onEdit={() => onEditNote(entry)} />}
+            onEdit={() => onEditNote(entry)}
+            onDelete={() => onDeleteNote(entry)} />}
       </View>
     </View>
   );
@@ -604,11 +623,12 @@ function SessionEntry({ session, boundTitle, onEdit, onDelete }: {
   );
 }
 
-function NoteEntry({ entry, busy, onToggleFavorite, onToggleResolved, onEdit }: {
+function NoteEntry({ entry, busy, onToggleFavorite, onToggleResolved, onEdit, onDelete }: {
   entry: Extract<TimelineEntry, { kind: 'note' }>; busy: boolean;
   onToggleFavorite: () => void;
   onToggleResolved?: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
@@ -660,6 +680,8 @@ function NoteEntry({ entry, busy, onToggleFavorite, onToggleResolved, onEdit }: 
           <YanjiIconButton icon={entry.isFavorite ? 'star' : 'starOutline'} accessibilityLabel={entry.isFavorite ? '取消收藏这条记录' : '收藏这条记录'}
             onPress={onToggleFavorite} disabled={busy} selected={entry.isFavorite}
             size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
+          <YanjiIconButton icon="delete" accessibilityLabel="删除这条记录" onPress={onDelete}
+            disabled={busy} size={layout.timelineHeadBand} iconSize={ENTRY_ICON_SIZE} />
         </View>
       </View>
       <Text style={[

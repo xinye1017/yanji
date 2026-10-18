@@ -77,7 +77,7 @@ test('subject legend includes genuine planned subjects at zero and keeps their c
   assert.equal(reordered[1].id, 'math', 'series order must not depend on duration rank');
 });
 
-test('rhythm clips to each local hour, rejects paused spans, and aggregates dominant subject', () => {
+test('rhythm clips to each local hour, allocates paused spans faithfully, and aggregates dominant subject', () => {
   const sessions = [
     session('before', '05:45', '06:15'),
     session('cross', '09:45', '10:15'),
@@ -96,11 +96,11 @@ test('rhythm clips to each local hour, rejects paused spans, and aggregates domi
   assert.equal(hour(10).seconds, 900);
   assert.equal(hour(11).seconds, 2100);
   assert.equal(hour(11).color, '#356AE6', 'two short math sessions together outweigh the English session');
-  assert.equal(hour(12).seconds, 0);
-  assert.equal(hour(13).seconds, 0);
+  assert.equal(hour(12).seconds, 1200, 'paused session is faithfully allocated to its active hour');
+  assert.equal(hour(13).seconds, 300, 'session with duration mismatch is faithfully allocated');
   assert.equal(hour(23).seconds, 900);
   assert.equal(logic.summarizeSubjects(sessions, theme.paper.colors.secondary).reduce((sum, item) => sum + item.seconds, 0),
-    sessions.reduce((sum, item) => sum + item.durationSeconds, 0), 'excluded timeline spans still count toward saved investment');
+    sessions.reduce((sum, item) => sum + item.durationSeconds, 0), 'timeline spans count toward saved investment');
 });
 
 test('spectrum shows goal remainder and fills distribution when no goal or over goal', () => {
@@ -178,8 +178,8 @@ function screenHarness(snapshot) {
   const states = [];
   const calls = [];
   let index = 0;
-  const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
-    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiMiniRhythmSparkline', 'YanjiPaperSectionHeading',
+  const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
+    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
     'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
@@ -204,7 +204,7 @@ function screenHarness(snapshot) {
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
         selectTab: tab => calls.push(['tab', tab]), requestFocusPreset: preset => calls.push(['preset', preset]),
-        openSettings: () => {}, openTaskEditor: () => {}, closeTaskEditor: () => {},
+        openSettings: () => calls.push(['openSettings']), openTaskEditor: () => {}, closeTaskEditor: () => {},
       }),
       useNavigationState: () => ({ taskEditorOpen: false }),
     },
@@ -249,11 +249,109 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   rows[0].props.onStartFocus();
   assert.equal(harness.calls[0][1].taskId, pending.id);
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 0);
-  const toggle = nodes(tree, node => node.props.accessibilityLabel === '今日学习节奏 (06:00-24:00)')[0];
-  toggle.props.onPress();
+  // The expand control lives in the section heading's accessory slot, so the
+  // walk has to enter that prop rather than the heading's children.
+  const heading = () => nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = () => nodes(heading().props.right, node => node.type === 'Pressable')[0];
+  toggle().props.onPress();
   tree = harness.render();
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 1);
-  assert.equal(nodes(tree, node => node.props.accessibilityLabel === '今日学习节奏 (06:00-24:00)')[0].props.accessibilityState.expanded, true);
+  assert.equal(toggle().props.accessibilityState.expanded, true);
+});
+
+test('the expand control is named, and the name flips when it is collapsed', () => {
+  const harness = screenHarness(snapshot());
+  const heading = () => nodes(harness.render(), node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = () => nodes(heading().props.right, node => node.type === 'Pressable')[0];
+  assert.equal(toggle().props.accessibilityLabel, '展开今日学习节奏详情');
+  toggle().props.onPress();
+  assert.equal(toggle().props.accessibilityLabel, '收起今日学习节奏详情');
+  toggle().props.onPress();
+  assert.equal(toggle().props.accessibilityLabel, '展开今日学习节奏详情',
+    'collapsing names the action that is available, not the state just left');
+});
+
+test('the rhythm section states its own window so the summary cannot overclaim', () => {
+  const harness = screenHarness(snapshot());
+  const tree = harness.render();
+  // The collapsed section must name what it measures and what the strip means,
+  // so the reader does not have to expand it to find out what the dots are.
+  const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  assert.ok(heading, 'the section must be a real section heading, not a bare caption row');
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  assert.equal(chart.props.startLabel, '06:00');
+  assert.equal(chart.props.endLabel, '24:00');
+  assert.equal(chart.props.buckets.length, 18);
+  // The axis range is the section's scope. It sits inside a subtree that is
+  // hidden from the a11y tree, so the chart must publish it separately or a
+  // screen-reader user cannot learn it at all.
+  assert.match(chart.props.accessibilityLabel ?? '', /06:00/);
+  assert.match(chart.props.accessibilityLabel ?? '', /24:00/);
+  assert.match(chart.props.accessibilityLabel, /暂无连续专注记录/);
+  assert.doesNotMatch(text(tree), /暂无连续专注记录/);
+});
+
+test('the rhythm summary is spoken without displaying text below the chart', () => {
+  const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
+  const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /最集中的是 09:00–10:00/);
+  assert.doesNotMatch(text(tree), /已确认.*连续专注|最集中的是/);
+});
+
+test('a pre-dawn session is excluded from the strip and the summary says so', () => {
+  // The window starts at 06:00. A 05:00 session is real saved focus, but it is
+  // not in the strip, so the sentence must not read as if it covered the day.
+  const sessions = [session('dawn', '05:00', '05:40'), session('morning', '09:00', '09:30')];
+  const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 4200, focusCount: 2 })).render();
+  const summary = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0].props.accessibilityLabel;
+  assert.match(summary, /06:00 之后/, 'the summary must name its window');
+  assert.match(summary, /30m/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
+});
+
+test('an empty rhythm strip marks no hour at all', () => {
+  // A lone "current hour" tick on a day with no data is the same unexplained
+  // mark the section was rebuilt to remove, so nothing may be painted. This is
+  // asserted as geometry (`rhythmSlots`) rather than by inspecting the rendered
+  // style objects, so no test-only prop has to exist on the component.
+  const empty = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
+  const slots = shared.rhythmSlots(empty, 20, tokens.YanjiPaperLayout.rhythmChartHeight,
+    tokens.YanjiPaperLayout.rhythmEmptyHeight);
+  assert.equal(slots.length, 18, 'every hour keeps its slot so the axis stays a clock');
+  assert.deepEqual(slots.filter(slot => slot.height > 0), [],
+    'no hour may draw a mark on an empty day');
+  assert.deepEqual(slots.filter(slot => slot.isNow), [],
+    'and the current hour is not singled out when there is nothing to relate it to');
+});
+
+test('the chart publishes the axis range as a spoken node, not just a prop', () => {
+  // The range sits inside a `no-hide-descendants` subtree as painted text, so it
+  // only reaches a screen reader if the component itself renders an accessible
+  // node carrying it. Asserting the prop TodayScreen passes would not catch that
+  // node being removed, so this walks the rendered component.
+  const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 600 }));
+  const chart = shared.YanjiDayRhythmChart({
+    buckets, currentHour: 20, startLabel: '06:00', endLabel: '24:00',
+    accessibilityLabel: '今日学习节奏，时间范围 06:00 至 24:00。已确认 3h。',
+  });
+  const spoken = nodes(chart, node => node.props?.accessible === true && typeof node.props?.accessibilityLabel === 'string')[0];
+  assert.ok(spoken, 'the chart must render an accessible node for its range');
+  assert.match(spoken.props.accessibilityLabel, /06:00/);
+  assert.match(spoken.props.accessibilityLabel, /24:00/);
+  assert.equal(spoken.props.accessibilityRole, 'text');
+});
+
+test('the current-hour tick appears once the strip has real data', () => {
+  const buckets = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, seconds: 0 }));
+  buckets[4] = { hour: 10, seconds: 1800, color: '#356AE6' };
+  const slots = shared.rhythmSlots(buckets, 20, tokens.YanjiPaperLayout.rhythmChartHeight,
+    tokens.YanjiPaperLayout.rhythmEmptyHeight);
+  assert.deepEqual(slots.filter(slot => slot.height > 0).map(slot => slot.hour), [10, 20],
+    'the measured hour and the current hour are the only marks');
+  assert.deepEqual(slots.filter(slot => slot.isNow).map(slot => slot.hour), [20]);
+  // The measured bar is full height: 1800s is this strip's scale floor.
+  assert.equal(slots.find(slot => slot.hour === 10).height, tokens.YanjiPaperLayout.rhythmChartHeight);
 });
 
 test('production homepage keeps loading distinct from an empty saved day', () => {
@@ -262,3 +360,110 @@ test('production homepage keeps loading distinct from an empty saved day', () =>
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading')[0].props.countText, '—');
   assert.equal(nodes(tree, node => node.type === 'YanjiChronoSpectrum')[0].props.accessibilityLabel, '正在读取今日专注');
 });
+
+test('the goal is edited on the settings page, not in a page-owned sheet', () => {
+  // Today used to open its own goal modal and write updateUserSettings itself,
+  // so two screens could hold two drafts of one Room column. The route to
+  // Settings is now the only path, and the page must own no goal sheet at all.
+  const harness = screenHarness(snapshot());
+  const tree = harness.render();
+  const goalTrigger = nodes(tree, node => node.props.accessibilityLabel === '调整日常学习目标')[0];
+  assert.ok(goalTrigger, 'the metric block still offers a way to change the goal');
+  goalTrigger.props.onPress();
+  assert.deepEqual(harness.calls, [['openSettings']],
+    'the goal tap routes to the settings page and does nothing else');
+  assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
+    'Today must not render its own goal modal');
+  assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
+});
+
+test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
+  // The journal slip no longer wraps in a lifted white card.
+  // Instead, it is an unboxed timeline section with its own quiet action.
+  const tree = screenHarness(snapshot()).render();
+  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
+  const journalHeading = headings.find(node => node.props.title === '记录此刻');
+  assert.ok(journalHeading, 'the journal section has its own section heading');
+
+  // 写此刻 is a secondary invitation; 新建任务 keeps the section accent. The actions
+  // live in the headings' accessory slots, so they are read from that prop.
+  const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
+  assert.equal(writeNow.props.tone, 'quiet', '写此刻 must not compete with the primary action');
+  const planHeading = headings.find(node => node.props.title === '今日计划');
+  const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
+  assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
+
+
+  // When empty, it renders an unboxed empty state prompt, not a lifted hero card.
+  const cards = nodes(tree, node => node.type === 'YanjiCard');
+  for (const card of cards) {
+    assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
+  }
+  assert.match(text(tree), /留一句想法，让今天有自己的注脚/);
+});
+
+test('the journal section renders notes in timeline style with timestamps and actions', () => {
+  const note = {
+    id: 'note-1',
+    timestamp: at('10:30'),
+    content: '长难句核心词汇总结完毕',
+    category: 'INSPIRATION',
+    isFavorite: true,
+    isResolved: false,
+  };
+  const tree = screenHarness(snapshot({ notes: [note] })).render();
+  assert.match(text(tree), /10:30/);
+  assert.match(text(tree), /长难句核心词汇总结完毕/);
+  assert.match(text(tree), /已收藏/);
+  const deleteBtn = nodes(tree, node => node.type === 'YanjiIconButton' && node.props.icon === 'delete');
+  assert.ok(deleteBtn.length > 0, 'the note item has a delete action');
+});
+
+test('a morning focus session with pauses is properly displayed on the rhythm chart and day parts spectrum', () => {
+  // Simulates a 30m session between 10:45 and 11:15 with 4 pauses
+  const morningSession = session('morning-paused', '10:45', '11:15', {
+    durationSeconds: 1800,
+    pauseCount: 4,
+    subjectId: 'ds',
+    subjectName: '数据结构',
+    subjectColor: '#2D7A5E',
+  });
+  const harness = screenHarness(snapshot({
+    sessions: [morningSession],
+    totalDurationSeconds: 1800,
+    focusCount: 1,
+  }));
+  const tree = harness.render();
+
+  // Rhythm chart has buckets allocated to hour 10 and hour 11
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  const h10 = chart.props.buckets.find(b => b.hour === 10);
+  const h11 = chart.props.buckets.find(b => b.hour === 11);
+  assert.ok(h10.seconds > 0, 'hour 10 must have allocated seconds');
+  assert.ok(h11.seconds > 0, 'hour 11 must have allocated seconds');
+  assert.equal(h10.seconds + h11.seconds, 1800, 'total allocated seconds across hours equals session duration');
+  assert.equal(h10.color, '#2D7A5E', 'hour 10 takes the session subject color');
+  assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
+
+  // The chart's spoken summary retains the measured focus time.
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30m 连续专注/);
+
+  // Expanding rhythm details reveals the session in the morning spectrum
+  const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
+  const toggle = nodes(heading.props.right, node => node.type === 'Pressable')[0];
+  toggle.props.onPress();
+  const expandedTree = harness.render();
+  const segmented = nodes(expandedTree, node => node.type === 'YanjiPaperSegmentedControl')[0];
+  segmented.props.onChange('dayParts');
+  const dayPartsTree = harness.render();
+
+  // Morning spectrum has the segment
+  assert.match(text(dayPartsTree), /上午/);
+  assert.match(text(dayPartsTree), /06:00—12:00/);
+  assert.match(text(dayPartsTree), /10:45 起 · 数据结构 · 30分钟/);
+  // Must NOT display "未绘连续区段"
+  assert.doesNotMatch(text(dayPartsTree), /未绘连续区段/);
+});
+
+
+

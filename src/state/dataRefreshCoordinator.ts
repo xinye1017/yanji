@@ -66,12 +66,32 @@ export class DataRefreshCoordinator {
   private readonly pendingEvents = new Set<DataChangedType>();
   private flushScheduled = false;
   private foreground = true;
-  private seeded = false;
+  /**
+   * Whether `seed` has already run in this process.
+   *
+   * This is NOT the retired one-shot latch (which refused to seed again and left
+   * a remounted root with nothing). It only records that the host payload has
+   * been consumed once, so a later re-seed can be treated as possibly stale.
+   */
+  private hasSeeded = false;
 
   constructor(private readonly loaders: DataRefreshLoaders) {}
 
+  /**
+   * 更新前台状态，并在真正回到前台时补一次读取。
+   *
+   * 为什么补偿必须在这里：Activity 退出再进入（进程与 JS 上下文都还活着）时，React 树
+   * 重新挂载，子组件的 effect **先于** `App` 的 effect 执行。于是读取方注册时
+   * `foreground` 还是上一轮遗留的 `false`，那次注册被门控挡掉了；等 `App` 把前台状态
+   * 补成 `true` 时，读取方不会再次注册（日期没变），若不在这里补一次，页面就永远停在
+   * 「正在读取」。
+   *
+   * 只在 `false → true` 的跳变上补偿：冷启动时初值就是 `true`，重复调用不会多发读取。
+   */
   setForeground(isForeground: boolean): void {
+    const wasForeground = this.foreground;
     this.foreground = isForeground;
+    if (isForeground && !wasForeground) this.handleForeground();
   }
 
   /**
@@ -81,26 +101,40 @@ export class DataRefreshCoordinator {
    * 于是只能先渲染「正在读取…」。宿主（`bridge/LaunchPreheat`）把同一份 Room 数据提前读好
    * 当 launch options 送进来，这里在首帧前播种，页面第一帧就是有数据的。
    *
-   * 只接受一次：重复挂载（Fast Refresh、二次 `runApplication`）不得让旧的启动载荷覆盖
-   * 已经刷新过的缓存。日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
+   * 日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
    *
-   * 另外只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
+   * 只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
+   * 因此重复调用是幂等的，不需要「一生只 seed 一次」的门闩（那个门闩反而会让
+   * Activity 重挂载后的新根组件既拿不到预热数据、也不再触发读取）。
+   *
+   * 新鲜度分两种情况，因为宿主载荷只读一次（`Application.onCreate`），之后不会更新：
+   *  - **本进程首次播种**：载荷与 Room 的偏差只有启动那一瞬，可信。保持不脏，
+   *    首帧直接用，不发多余读取——这正是预热要省掉的那一次。
+   *  - **重播种**（进程存活期间 Activity 重挂载）：距首次读已过去任意长时间，载荷可能
+   *    比 Room 旧。标脏，让紧随其后的第一次可见读取用真实数据覆盖它；首帧仍有内容，
+   *    但不会把过期快照当成最终答案。
    */
   seed(properties: Partial<YanjiLaunchProperties> | null | undefined): void {
-    if (this.seeded || !properties) return;
-    this.seeded = true;
+    if (!properties) return;
 
     const date = properties.date;
     const daily = properties.dailySnapshot;
-    if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
-      this.dailyValues.set(date, daily);
-      this.dailyDirty.delete(date);
-    }
     const settings = properties.settings;
     const examCountdown = properties.examCountdown;
+    // A re-seed reuses the payload the host read at process start, so anything
+    // it fills now may already be older than Room.
+    const stale = this.hasSeeded;
+    this.hasSeeded = true;
+
+    // 只填空槽：已有值说明桥接读回来过，那才是更新的数据，绝不用旧载荷覆盖它。
+    if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
+      this.dailyValues.set(date, daily);
+      if (stale) this.dailyDirty.add(date);
+      else this.dailyDirty.delete(date);
+    }
     if (settings && examCountdown && !this.settingsValue) {
       this.settingsValue = { settings, examCountdown };
-      this.settingsDirty = false;
+      this.settingsDirty = stale;
     }
   }
 
@@ -204,9 +238,26 @@ export class DataRefreshCoordinator {
     }
   }
 
-  refreshSettings(): Promise<void> {
+  /**
+   * Re-reads settings and **reports failure to the caller**.
+   *
+   * `ensureSettings` deliberately swallows a failed read: it also runs from
+   * background paths (reader registration, data-changed events, resume) where
+   * there is nobody to catch a rejection and the next event will simply retry.
+   * But an explicit refresh is different — it is the user pressing 「重新读取」,
+   * and if it fails silently the page that asked for it stays on 「—」 forever
+   * with no way to tell them anything happened.
+   *
+   * So this waits for the attempt and rejects when the read did not produce a
+   * value, while the background path keeps its fire-and-forget behaviour.
+   */
+  async refreshSettings(): Promise<void> {
     this.invalidateSettings();
-    return this.settingsReaders.size > 0 ? this.ensureSettings() : Promise.resolve();
+    if (this.settingsReaders.size === 0) return;
+    await this.ensureSettings();
+    // `ensureSettings` resolved but may have failed internally; the dirty flag
+    // is exactly the "we still have no usable settings" signal it leaves behind.
+    if (this.settingsDirty) throw new Error('settings read failed');
   }
 
   enqueueDataChanged(type: DataChangedType): void {
@@ -239,7 +290,15 @@ export class DataRefreshCoordinator {
     }
   }
 
-  handleForeground(): void {
+  /**
+   * Re-reads everything a resume can have missed.
+   *
+   * Private: `setForeground` is the only legitimate trigger, because a resume is
+   * exactly a `false → true` transition. Keeping a public entry point would let
+   * a caller re-read without that transition and silently invalidate the read it
+   * just started.
+   */
+  private handleForeground(): void {
     for (const date of this.visibleDailyDates()) {
       this.invalidateDaily(date);
       void this.ensureDaily(date);

@@ -209,8 +209,8 @@ class YanjiDataModule(
     @ReactMethod
     fun deleteNote(noteId: String, promise: Promise) {
         scope.launch {
-            repository.deleteNote(noteId)
-            promise.resolve(true)
+            val success = repository.deleteNoteAndAwait(noteId)
+            promise.resolve(success)
         }
     }
 

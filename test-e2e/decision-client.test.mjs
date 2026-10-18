@@ -170,3 +170,111 @@ test('testDecisionConnection handles network errors gracefully', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('resolveDecisionEndpoint auto-completes OpenRouter base URL ending in /v1 to decisions endpoint', async () => {
+  const { client } = createClientHarness();
+  assert.equal(
+    client.resolveDecisionEndpoint('https://openrouter.ai/api/v1', 'openrouter'),
+    'https://openrouter.ai/api/alpha/decisions'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://openrouter.ai/api/v1/', 'openrouter'),
+    'https://openrouter.ai/api/alpha/decisions'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://openrouter.ai/v1', 'openrouter'),
+    'https://openrouter.ai/api/alpha/decisions'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://openrouter.ai', 'openrouter'),
+    'https://openrouter.ai/api/alpha/decisions'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://custom-proxy.com/api/v1', 'openrouter'),
+    'https://custom-proxy.com/api/alpha/decisions'
+  );
+  // Preserves already full endpoints
+  assert.equal(
+    client.resolveDecisionEndpoint('https://openrouter.ai/api/alpha/decisions', 'openrouter'),
+    'https://openrouter.ai/api/alpha/decisions'
+  );
+});
+
+test('resolveDecisionEndpoint auto-completes TypeSafe base URL to systemone endpoint', async () => {
+  const { client } = createClientHarness();
+  assert.equal(
+    client.resolveDecisionEndpoint('https://api.typesafe.ai/v1', 'typesafe'),
+    'https://api.typesafe.ai/v1/systemone'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://api.typesafe.ai/v1/', 'typesafe'),
+    'https://api.typesafe.ai/v1/systemone'
+  );
+  assert.equal(
+    client.resolveDecisionEndpoint('https://api.typesafe.ai', 'typesafe'),
+    'https://api.typesafe.ai/v1/systemone'
+  );
+  // Preserves already full endpoints
+  assert.equal(
+    client.resolveDecisionEndpoint('https://api.typesafe.ai/v1/systemone', 'typesafe'),
+    'https://api.typesafe.ai/v1/systemone'
+  );
+});
+
+test('toBaseUrl converts legacy full endpoints to user-friendly base URLs for display', async () => {
+  const { client } = createClientHarness();
+  assert.equal(
+    client.toBaseUrl('https://openrouter.ai/api/alpha/decisions', 'openrouter'),
+    'https://openrouter.ai/api/v1'
+  );
+  assert.equal(
+    client.toBaseUrl('https://api.typesafe.ai/v1/systemone', 'typesafe'),
+    'https://api.typesafe.ai/v1'
+  );
+  assert.equal(
+    client.toBaseUrl('https://openrouter.ai/api/v1', 'openrouter'),
+    'https://openrouter.ai/api/v1'
+  );
+});
+
+test('testDecisionConnection and classifyMoment automatically complete base URL when fetching', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-or-test',
+    settings: {
+      decisionProvider: 'openrouter',
+      decisionModel: 'respan/span-01-lite:free',
+      decisionEndpoint: 'https://openrouter.ai/api/v1',
+    },
+  });
+
+  let capturedUrl = '';
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    capturedUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        model: 'respan/span-01-lite:free',
+        answers: {
+          q_doubt: { type: 'noul', noul: 0.85 },
+        },
+      }),
+    };
+  };
+
+  try {
+    const res = await client.classifyMoment('这个知识点怎么理解？');
+    assert.equal(res, 'DOUBT');
+    assert.equal(capturedUrl, 'https://openrouter.ai/api/alpha/decisions', 'fetch was sent to auto-completed decisions endpoint');
+
+    const testRes = await client.testDecisionConnection(
+      { provider: 'openrouter', model: 'respan/span-01-lite:free', endpoint: 'https://openrouter.ai/api/v1' },
+      'sk-or-test'
+    );
+    assert.equal(testRes.success, true);
+    assert.equal(capturedUrl, 'https://openrouter.ai/api/alpha/decisions', 'test connection fetch was sent to auto-completed decisions endpoint');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

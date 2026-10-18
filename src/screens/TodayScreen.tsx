@@ -1,15 +1,13 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
-  YanjiMiniRhythmSparkline, YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
-  YanjiPaperSheetHeading, YanjiPrimaryButton, YanjiSubjectProportionRow,
+  YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
+  YanjiPrimaryButton, YanjiSubjectProportionRow,
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -24,14 +22,18 @@ import {
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
   buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
-  greeting, sessionPrecise, spectrumLegend, summarizeSubjects, taskMeta,
+  greeting, hourRangeLabel, rhythmSummary, sessionPrecise, spectrumLegend,
+  summarizeSubjects, taskMeta,
 } from './todayViewLogic';
+import { examCountdownText, todayIso } from '../state/settingsViewLogic';
 
 type ChartMode = 'subjects' | 'timeline';
 type Selection = { key: string; subjectId: string; subjectName: string; seconds: number } | null;
 const CHART_MODES = [
   { value: 'subjects', label: '学科投入' }, { value: 'timeline', label: '专注时段' },
 ] as const;
+const ENTRY_ICON_SIZE = 17;
+
 
 function localDay(day: Date): string {
   return [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')].join('-');
@@ -62,8 +64,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const { contentPadding } = useBottomTabLayout();
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
   const { openSettings, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset } = useNavigationActions();
   const { taskEditorOpen } = useNavigationState();
   const [now, setNow] = useState(() => new Date());
@@ -79,11 +79,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [selection, setSelection] = useState<Selection>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [taskInfo, setTaskInfo] = useState<StudyTask | null>(null);
-  const [goalOpen, setGoalOpen] = useState(false);
-  const [goalDraft, setGoalDraft] = useState(0);
-  const [goalError, setGoalError] = useState<string | null>(null);
-  const [savingGoal, setSavingGoal] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
   const [busyNote, setBusyNote] = useState<string | null>(null);
@@ -126,6 +123,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
   const rhythmBuckets = useMemo(() => buildRhythmBuckets(date, sessions ?? [], colors.secondary), [date, sessions, colors.secondary]);
+  const rhythmSummaryText = useMemo(
+    () => rhythmSummary(rhythmBuckets, snapshot !== null, hourRangeLabel),
+    [rhythmBuckets, snapshot],
+  );
+  const rhythmToggleLabel = rhythmExpanded ? '收起今日学习节奏详情' : '展开今日学习节奏详情';
   const chartTotal = subjects.reduce((sum, subject) => sum + subject.seconds, 0);
   const selectSegment = (next: NonNullable<Selection>) =>
     setSelection(current => current?.key === next.key ? null : next);
@@ -161,26 +163,22 @@ export function TodayScreen({ visible, foregroundRevision }: {
     finally { setBusyNote(null); }
   };
   const openGoal = () => {
-    if (!settings) { openSettings(); return; }
-    setGoalDraft(Math.max(0, Math.round((settings.dailyGoalHours ?? 0) * 60)));
-    setGoalError(null);
-    setGoalOpen(true);
+    // The goal is edited on the settings page only: one writer per stored value
+    // means Today can never save a goal the settings row does not show.
+    openSettings();
   };
-  const saveGoal = async () => {
-    setSavingGoal(true);
-    setGoalError(null);
-    try {
-      if (!await YanjiDataNative.updateUserSettings({ dailyGoalHours: goalDraft / 60 })) throw new Error('refused');
-      await refreshSettingsSnapshot();
-      setGoalOpen(false);
-    } catch { setGoalError('保存失败，请稍后再试'); }
-    finally { setSavingGoal(false); }
-  };
-  const newNote = () => { setEditingNote(null); setRecordOpen(true); };
-  const countdownLabel = countdown?.examDate
-    ? countdown.daysRemaining > 0
-      ? `距 ${countdown.examDate.slice(0, 4)} 考研 · ${countdown.daysRemaining} 天`
-      : countdown.daysRemaining === 0 ? '今天是初试日' : '已过设定的考试日期'
+  const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
+  // Share the settings page's formatter rather than reading the native countdown
+  // directly: the native value is clamped at 0, so `daysRemaining === 0` cannot
+  // tell "today is the exam" from "the date passed weeks ago". Settings already
+  // computes this locally and correctly; reading the payload here made the two
+  // pages contradict each other after the exam date.
+  const countdownExamDate = countdown?.examDate ?? '';
+  const countdownLocal = countdownExamDate ? examCountdownText(countdownExamDate, todayIso()) : null;
+  // `examCountdownText` already reads 「距初试 N 天」/「已过设定日期 N 天」, so the
+  // badge only adds the year it belongs to rather than restating the count.
+  const countdownLabel = countdown && countdownLocal
+    ? `${countdownExamDate.slice(0, 4)} 考研 · ${countdownLocal}`
     : null;
   const savedStatus = !snapshot ? '正在读取今日记录…'
     : goalSeconds && effectiveSeconds > goalSeconds ? `超出目标 +${compactDuration(effectiveSeconds - goalSeconds)}`
@@ -292,7 +290,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiPaperSectionHeading title="今日计划" countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
           right={<YanjiTextAction label="＋ 新建任务" accessibilityLabel="添加任务" onPress={openTaskEditor} />} />
         {!tasks?.length ? <YanjiEmptyLedgerRow
-          prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
+          prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注…' : '正在读取今日计划…'}
           onPress={openTaskEditor} /> : null}
         {[...pending, ...completed].map((task, index, rows) => (
           <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
@@ -372,65 +370,210 @@ export function TodayScreen({ visible, foregroundRevision }: {
           </View>
         ) : null}
 
-        <YanjiCard variant="hero" style={{ marginTop: layout.sectionGap }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
-              <YanjiIcon name="compose" size={typography.bodyPrimary.fontSize} color={colors.secondary} />
-              <Text accessibilityRole="header" style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
-                记录此刻 · 近期随笔{latestNotes.length > 0 ? ` (${timeLabel(latestNotes[0].timestamp)})` : ''}
-              </Text>
-            </View>
-            <YanjiTextAction label="＋ 写此刻" accessibilityLabel="新建今日记录" onPress={newNote} />
-          </View>
-          {latestNotes.length > 0 ? latestNotes.map((note, index) => (
-            <View key={note.id}>
-              {index > 0 ? <YanjiHairline style={{ marginVertical: YanjiSpacing.sm }} /> : null}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.gridGap }}>
-                <Pressable onPress={() => { setEditingNote(note); setRecordOpen(true); }}
-                  accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                  style={({ pressed }) => ({ flex: 1, minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginBottom: YanjiSpacing.xs }}>
-                    {index > 0 ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{timeLabel(note.timestamp)}</Text> : null}
-                    <YanjiBadge
-                      tone={note.category === 'DOUBT' ? (note.isResolved ? 'positive' : 'brand') : 'neutral'}
-                      label={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决') : '灵感'}
-                    />
+        {/* 记录此刻：采用回顾页时间线语法，去外层白卡化，无随笔时展示极简紧凑单行插槽 */}
+        <View style={{ marginTop: YanjiSpacing.sm }}>
+          <YanjiPaperSectionHeading
+            title="记录此刻"
+            right={
+              <YanjiTextAction
+                label="＋ 写此刻"
+                accessibilityLabel="新建今日记录"
+                onPress={newNote}
+                tone="quiet"
+              />
+            }
+          />
+          {latestNotes.length > 0 ? (
+            <View style={{ marginTop: YanjiSpacing.xs }}>
+              {latestNotes.map((note, index) => {
+                const isFirst = index === 0;
+                const isLast = index === latestNotes.length - 1;
+                const isDoubt = note.category === 'DOUBT';
+                const isResolved = !!note.isResolved;
+                const nodeColor = isDoubt
+                  ? (isResolved ? colors.positive : colors.brand)
+                  : colors.brand;
+                const dotCenterY = layout.timelineNodeSize / 2 + 2;
+                const nodeRadius = layout.timelineNodeSize / 2;
+                const dotGap = YanjiSpacing.xs;
+                const clearance = nodeRadius + dotGap;
+                const topSegmentHeight = dotCenterY - clearance;
+
+                return (
+                  <View key={note.id} style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
+                    <View style={{
+                      width: layout.timelineTimeColumn,
+                      height: 16,
+                      justifyContent: 'center',
+                      marginTop: Math.max(0, dotCenterY - 8),
+                    }}>
+                      <Text style={[typography.captionMeta, { color: colors.secondary, textAlign: 'right' }]}>
+                        {timeLabel(note.timestamp)}
+                      </Text>
+                    </View>
+                    <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
+                      {!isFirst && topSegmentHeight > 0 ? (
+                        <View style={{
+                          position: 'absolute', top: 0, height: topSegmentHeight,
+                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
+                        }} />
+                      ) : null}
+                      <View style={{
+                        position: 'absolute', top: dotCenterY - nodeRadius,
+                        width: layout.timelineNodeSize, height: layout.timelineNodeSize,
+                        borderRadius: nodeRadius, backgroundColor: nodeColor,
+                      }} />
+                      {!isLast ? (
+                        <View style={{
+                          position: 'absolute', top: dotCenterY + clearance, bottom: 0,
+                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
+                        }} />
+                      ) : null}
+                    </View>
+                    <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.sm, minHeight: 56 }}>
+                      <Pressable
+                        onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
+                        accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
+                        style={({ pressed }) => ({
+                          backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
+                          borderLeftWidth: 3, borderLeftColor: nodeColor,
+                          borderRadius: radius.tag,
+                          paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
+                          opacity: pressed ? 0.7 : 1,
+                        })}>
+                        <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flex: 1 }}>
+                            <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>
+                              记录此刻
+                            </Text>
+                            {isDoubt ? (
+                              <Pressable
+                                onPress={() => void toggleResolved(note)}
+                                disabled={busyNote !== null}
+                                accessibilityRole="button"
+                                accessibilityLabel={isResolved ? '疑点已解决，点击标记为待解决' : '疑点待解决，点击标记为已解决'}
+                                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+                                <YanjiBadge tone={isResolved ? 'positive' : 'brand'} label={isResolved ? '疑点 · 已解决' : '疑点 · 待解决'} />
+                              </Pressable>
+                            ) : (
+                              <YanjiBadge tone="neutral" label="灵感" />
+                            )}
+                            {note.isFavorite ? (
+                              <Text style={[typography.captionMeta, { color: colors.secondary }]}>· 已收藏</Text>
+                            ) : null}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <YanjiIconButton
+                              icon="compose"
+                              accessibilityLabel={`编辑记录：${noteTitle(note)}`}
+                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                            <YanjiIconButton
+                              icon={note.isFavorite ? 'star' : 'starOutline'}
+                              accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`}
+                              onPress={() => void toggleFavorite(note)}
+                              disabled={busyNote !== null}
+                              selected={note.isFavorite}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                            <YanjiIconButton
+                              icon="delete"
+                              accessibilityLabel={`删除记录：${noteTitle(note)}`}
+                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(true); setRecordOpen(true); }}
+                              disabled={busyNote !== null}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                          </View>
+                        </View>
+                        <Text style={[
+                          typography.bodyExcerpt,
+                          {
+                            color: isDoubt && isResolved ? colors.secondary : colors.ink,
+                            textDecorationLine: isDoubt && isResolved ? 'line-through' : 'none',
+                          },
+                        ]} numberOfLines={4}>“{note.content}”</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                  <Text style={[
-                    typography.bodyExcerpt,
-                    {
-                      color: note.category === 'DOUBT' && note.isResolved ? colors.secondary : colors.ink,
-                      textDecorationLine: note.category === 'DOUBT' && note.isResolved ? 'line-through' : 'none',
-                    },
-                  ]} numberOfLines={4}>“{note.content}”</Text>
-                </Pressable>
-                <YanjiIconButton icon={note.isFavorite ? 'star' : 'starOutline'} onPress={() => void toggleFavorite(note)}
-                  selected={note.isFavorite} disabled={busyNote !== null}
-                  accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`} size={layout.rowMinHeight} />
-              </View>
+                );
+              })}
+              {(notes?.length ?? 0) > 2 ? (
+                <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
+                  <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} />
+                </View>
+              ) : null}
             </View>
-          )) : (
-            <Pressable onPress={newNote} accessibilityRole="button" accessibilityLabel="写下今日随笔"
-              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-              <Text style={[typography.bodyJournal, { color: colors.secondary }]}>
-                {snapshot ? '留一句想法，让今天有自己的注脚。' : '正在读取今日随笔…'}
+          ) : (
+            <Pressable
+              onPress={newNote}
+              accessibilityRole="button"
+              accessibilityLabel="写下今日随笔"
+              style={({ pressed }) => ({
+                minHeight: layout.rowMinHeight,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: YanjiSpacing.sm,
+                backgroundColor: colors.elevated,
+                borderWidth: layout.hairlineWidth,
+                borderColor: colors.hairline,
+                borderStyle: 'dashed',
+                borderRadius: radius.tag,
+                paddingHorizontal: YanjiSpacing.md,
+                paddingVertical: YanjiSpacing.sm,
+                marginTop: YanjiSpacing.xs,
+                opacity: pressed ? 0.65 : 1,
+              })}>
+              <View style={{
+                width: layout.timelineNodeSize,
+                height: layout.timelineNodeSize,
+                borderRadius: layout.timelineNodeSize / 2,
+                borderWidth: layout.hairlineWidth * 1.5,
+                borderColor: colors.secondary,
+              }} />
+              <Text style={[typography.captionMeta, { color: colors.secondary, flex: 1 }]}>
+                {snapshot ? '留一句想法，让今天有自己的注脚…' : '正在读取今日随笔…'}
+              </Text>
+              <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '600' }]}>
+                点击速记 ›
               </Text>
             </Pressable>
           )}
-        </YanjiCard>
-        {(notes?.length ?? 0) > 2 ? <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} /> : null}
+        </View>
 
-        <View style={{ marginTop: layout.sectionGap }}>
-          <Pressable onPress={() => setRhythmExpanded(expanded => !expanded)} accessibilityRole="button"
-            accessibilityLabel="今日学习节奏 (06:00-24:00)" accessibilityState={{ expanded: rhythmExpanded }}
-            accessibilityHint={rhythmExpanded ? '收起学科与时段详情' : '展开学科与时段详情'}
-            style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: YanjiSpacing.md, opacity: pressed ? 0.72 : 1 })}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日学习节奏 (06:00–24:00)</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-              <YanjiMiniRhythmSparkline buckets={rhythmBuckets} currentHour={now.getHours()} />
-              <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.bodyPrimary.fontSize} color={colors.secondary} />
-            </View>
-          </Pressable>
+        {/* 今日学习节奏.
+            Collapsed, this used to be a caption, a row of 18 fixed-width ticks
+            and a chevron — a title with no subject, and a strip that read as a
+            pagination indicator. The section now shows the day's shape on a
+            labelled clock, so the collapsed state
+            already answers "what is this?" without repeating the 06:00–24:00
+            range that the axis labels already carry. Expanding is a named
+            control, not just an arrow. */}
+        {/* `marginTop: sm` plus the heading's own 16dp keeps the 24dp section
+            gap this page already used, so adding a real heading does not also
+            add air. */}
+        <View style={{ marginTop: YanjiSpacing.sm }}>
+          <YanjiPaperSectionHeading
+            title="今日学习节奏"
+            right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
+              accessibilityRole="button"
+              accessibilityLabel={rhythmToggleLabel}
+              accessibilityState={{ expanded: rhythmExpanded }}
+              accessibilityHint={rhythmExpanded ? '收起学科与时段详情' : '展开学科与时段详情'}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
+              <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                {rhythmExpanded ? '收起详情' : '展开详情'}
+              </Text>
+              <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.captionMeta.fontSize + 3} color={colors.secondary} />
+            </Pressable>} />
+          <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
+            startLabel="06:00" endLabel="24:00"
+            accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
           {rhythmExpanded ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               <YanjiPaperSegmentedControl value={chart} options={CHART_MODES} accessibilityLabel="今日节奏视图"
@@ -454,18 +597,32 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     endDate.setHours(part.to);
                     const start = startDate.getTime();
                     const end = endDate.getTime();
-                    const segments = sessions?.filter(session => sessionPrecise(session) && session.endTime > start && session.startTime < end) ?? [];
+                    const segments = sessions?.filter(session => {
+                      const sStart = session.startTime;
+                      const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                      return session.durationSeconds > 0 && sEnd > start && sStart < end;
+                    }) ?? [];
                     return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
                         <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
                         <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
                       </View>
-                      <View accessible accessibilityLabel={`${part.name}，${segments.length} 段可确认的连续专注`}
+                      <View accessible accessibilityLabel={`${part.name}，${segments.length} 段专注记录`}
                         style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
-                        {segments.map(session => <View key={session.id} style={{ position: 'absolute', top: 0, bottom: 0,
-                          left: `${Math.max(0, session.startTime - start) / (end - start) * 100}%`,
-                          width: `${(Math.min(end, session.endTime) - Math.max(start, session.startTime)) / (end - start) * 100}%`,
-                          backgroundColor: session.subjectColor || colors.secondary }} />)}
+                        {segments.map(session => {
+                          const sStart = session.startTime;
+                          const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                          const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
+                          const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
+                          return (
+                            <View key={session.id} style={{
+                              position: 'absolute', top: 0, bottom: 0,
+                              left: `${segLeft}%`,
+                              width: `${segWidth}%`,
+                              backgroundColor: session.subjectColor || colors.secondary,
+                            }} />
+                          );
+                        })}
                       </View>
                     </View>;
                   })}
@@ -474,13 +631,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     accessibilityRole="button" accessibilityLabel={`${session.subjectName}，本次${duration(session.durationSeconds)}`}
                     style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline, opacity: pressed ? 0.65 : 1 })}>
                     <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                      {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}{sessionPrecise(session) ? '' : ' · 未绘连续区段'}
+                      {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}
                     </Text>
                   </Pressable>)}
                 </View>
               )}
               <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                迷你图按小时汇总可确认的连续专注，以当小时投入最多的学科着色。暂停与起止不一致的记录仍计入累计时长；06:00 前的记录可在专注时段查看。
+                柱高按小时汇总专注投入，以当小时投入最多的学科着色。06:00 前的记录可在专注时段查看。
               </Text>
               {selection?.key.startsWith('session:') ? <Text accessibilityLiveRegion="polite" style={[typography.bodyPrimary, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
                 {selection.subjectName} · {duration(selection.seconds)}
@@ -490,35 +647,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       </ScrollView>
 
-      <RecordMomentModal visible={recordOpen} date={date} editingNote={editingNote} onClose={() => { setRecordOpen(false); setEditingNote(null); }} />
+      <RecordMomentModal
+        visible={recordOpen}
+        date={date}
+        editingNote={editingNote}
+        initialConfirmDelete={confirmDeleteNote}
+        onClose={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+        onSaved={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+      />
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
-      <Modal visible={goalOpen} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => { if (!savingGoal) setGoalOpen(false); }}>
-        <View style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}>
-          <ScrollView showsVerticalScrollIndicator={false} overScrollMode="never"
-            contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}
-            style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}>
-            <YanjiPaperSheetHeading title="日常学习目标" subtitle="调整默认目标，不更改已记录的学习时长。" onClose={() => { if (!savingGoal) setGoalOpen(false); }} />
-            <Text style={[typography.metricHero, { color: colors.ink, marginVertical: YanjiSpacing.lg, textAlign: 'center' }]}>{goalDraft ? duration(goalDraft * 60) : '未设置'}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: layout.gridGap }}>
-              <YanjiIconButton icon="remove" onPress={() => setGoalDraft(Math.max(0, goalDraft - 30))} disabled={savingGoal || goalDraft <= 0} accessibilityLabel="减少30分钟" size={layout.rowMinHeight} tone="filled" />
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, flexShrink: 1 }]}>每次调整30分钟</Text>
-              <YanjiIconButton icon="add" onPress={() => setGoalDraft(Math.min(720, goalDraft + 30))} disabled={savingGoal || goalDraft >= 720} accessibilityLabel="增加30分钟" size={layout.rowMinHeight} tone="filled" />
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: layout.gridGap, marginVertical: YanjiSpacing.lg }}>
-              {[240, 360, 480, 600].map(value => <Pressable key={value} onPress={() => setGoalDraft(value)} disabled={savingGoal} accessibilityRole="button" accessibilityState={{ selected: goalDraft === value, disabled: savingGoal }}
-                style={({ pressed }) => ({ minHeight: layout.rowMinHeight, paddingHorizontal: YanjiSpacing.md, justifyContent: 'center', borderRadius: radius.pill,
-                  backgroundColor: goalDraft === value ? colors.brandSubtle : colors.subtle, borderWidth: layout.hairlineWidth, borderColor: goalDraft === value ? colors.brand : colors.hairline, opacity: pressed ? 0.65 : 1 })}>
-                <Text style={[typography.captionMeta, { color: goalDraft === value ? colors.brandInk : colors.secondary, fontWeight: goalDraft === value ? '700' : '500' }]}>{duration(value * 60)}</Text>
-              </Pressable>)}
-            </View>
-            {goalError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginBottom: YanjiSpacing.md }]}>{goalError}</Text> : null}
-            <YanjiPrimaryButton label={savingGoal ? '保存中…' : '保存目标'} onPress={() => void saveGoal()} disabled={savingGoal} />
-            <Pressable onPress={() => setGoalOpen(false)} disabled={savingGoal} accessibilityRole="button" style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>取消</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
 }
