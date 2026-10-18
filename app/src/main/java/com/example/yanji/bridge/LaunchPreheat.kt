@@ -123,6 +123,7 @@ internal fun dailySnapshotMap(snapshot: DailyStudySnapshot): WritableMap =
         putString("formattedDate", snapshot.formattedDate)
         putDouble("totalDurationSeconds", snapshot.totalDurationSeconds.toDouble())
         putInt("focusCount", snapshot.focusCount)
+        putInt("focusParticipationCount", snapshot.focusParticipationCount)
         putInt("examCount", snapshot.examCount)
         putArray(
             "sessions",

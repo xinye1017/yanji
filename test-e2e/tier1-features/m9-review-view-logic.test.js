@@ -78,6 +78,7 @@ function timeline(overrides = {}) {
     formattedDate: '2026年10月8日 星期四',
     totalDurationSeconds: 3000,
     focusCount: 2,
+    focusParticipationCount: 2,
     examCount: 0,
     sessions: [],
     tasks: [],
@@ -588,13 +589,13 @@ export function registerReviewViewLogicTests() {
   });
 
   describe('Tier 1: Review view logic — the day summary and bound plans', () => {
-    it('reports the longest single span, and zero when nothing was recorded', () => {
-      assertEqual(logic.longestSessionSeconds([]), 0);
-      assertEqual(logic.longestSessionSeconds([{ durationSeconds: 600 }]), 600);
-      assertEqual(
-        logic.longestSessionSeconds([{ durationSeconds: 600 }, { durationSeconds: 5400 }, { durationSeconds: 300 }]),
-        5400
-      );
+    it('renders the day duration as one big-minute number without rounding a real sub-minute to zero', () => {
+      assertEqual(logic.durationMetricMinutes(0), '0');
+      assertEqual(logic.durationMetricMinutes(30), '<1');
+      assertEqual(logic.durationMetricMinutes(60), '1');
+      assertEqual(logic.durationMetricMinutes(1800), '30');
+      assertEqual(logic.durationMetricMinutes(4500), '75');
+      assertEqual(logic.durationMetricMinutes(-5), '0');
     });
 
     it('names a session\'s bound plan by id alone, never by title or subject', () => {

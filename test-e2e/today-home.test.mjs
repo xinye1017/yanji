@@ -228,7 +228,7 @@ function screenHarness(snapshot, bridge = {}) {
   };
 }
 
-const snapshot = changes => ({ date, totalDurationSeconds: 0, focusCount: 0, examCount: 0, sessions: [], notes: [], tasks: [], ...changes });
+const snapshot = changes => ({ date, totalDurationSeconds: 0, focusCount: 0, focusParticipationCount: 0, examCount: 0, sessions: [], notes: [], tasks: [], ...changes });
 
 test('production homepage routes free focus and running focus without a page-level tick read', () => {
   const harness = screenHarness(snapshot());
@@ -424,6 +424,7 @@ test('the journal section renders one compact timeline row per note', () => {
   assert.equal(item.props.timeLabel, '10:30');
   assert.equal(item.props.content, note.content);
   assert.equal(item.props.tagLabel, '灵感');
+  assert.equal(item.props.tagIcon, 'inspiration');
   assert.equal(item.props.tagTone, 'positive');
   assert.equal(item.props.isFirst, true);
   assert.equal(item.props.isLast, true);
@@ -435,6 +436,7 @@ test('the journal section renders one compact timeline row per note', () => {
   const doubt = { ...note, id: 'note-doubt', category: 'DOUBT', isResolved: false };
   const doubtItem = nodes(screenHarness(snapshot({ notes: [doubt] })).render(), n => n.type === 'TimelineCompactRow')[0];
   assert.equal(doubtItem.props.tagTone, 'brand');
+  assert.equal(doubtItem.props.tagIcon, 'doubt');
   assert.match(doubtItem.props.tagLabel, /疑点/);
 });
 
@@ -551,6 +553,7 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
     sessions: [morningSession],
     totalDurationSeconds: 1800,
     focusCount: 1,
+    focusParticipationCount: 1,
   }));
   const tree = harness.render();
 

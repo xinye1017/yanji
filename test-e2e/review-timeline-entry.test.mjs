@@ -61,6 +61,7 @@ const snapshot = changes => ({
   formattedDate: '2026年10月6日',
   totalDurationSeconds: 0,
   focusCount: 0,
+  focusParticipationCount: 0,
   examCount: 0,
   sessions: [],
   notes: [],
@@ -190,6 +191,7 @@ test('a session is one compact line whose body opens its note editor', () => {
   const row = rows[0];
 
   assert.equal(row.props.tagLabel, '数据结构');
+  assert.equal(row.props.tagIcon, 'clock3', 'every focus subject shares the clock icon');
   assert.equal(row.props.tagTone, 'neutral');
   assert.equal(row.props.dotColor, '#2D7A5E', 'the node keeps the subject colour');
   assert.equal(row.props.content, '手画了一遍指针断链过程', 'the note is the body');
@@ -252,6 +254,7 @@ test('note rows keep favorite, resolution and editing in the anchored menu', asy
   }));
   const rows = harness.rows(harness.render());
   assert.deepEqual(plain(rows.map(row => row.props.tagLabel).sort()), ['疑点 · 待解决', '灵感'].sort());
+  assert.deepEqual(plain(rows.map(row => row.props.tagIcon).sort()), ['doubt', 'inspiration']);
   assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['brand', 'positive']);
 
   const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
@@ -278,4 +281,58 @@ test('note rows keep favorite, resolution and editing in the anchored menu', asy
   pressMenuAction(harness.menu(harness.render()), '删除记录');
   assert.equal(harness.recordModal(harness.render()).props.initialConfirmDelete, true,
     'delete only opens the existing confirmation');
+});
+
+/** The three big numbers in the summary strip, in column order. */
+const summaryNumbers = tree => plain(nodes(tree, node => node.type === 'Text' &&
+  node.props.style?.[0]?.fontSize === theme.paper.typography.metricHero.fontSize)
+  .map(node => text(node)));
+
+test('the day summary is exactly two rows per metric: label, then one big number', () => {
+  const tree = screenHarness(snapshot({
+    totalDurationSeconds: 1800,
+    focusCount: 1,
+    focusParticipationCount: 3,
+    tasks: [
+      { id: 'done', date, title: 'done', completed: true },
+      { id: 'open', date, title: 'open', completed: false },
+    ],
+  })).render();
+
+  for (const label of ['专注时长', '完成任务', '专注次数']) {
+    assert.ok(text(tree).includes(label), `the summary names ${label}`);
+  }
+  assert.deepEqual(summaryNumbers(tree), ['30', '1/2', '3']);
+
+  const units = plain(nodes(tree, node => node.type === 'Text' &&
+    node.props.style?.[0]?.fontSize === theme.paper.typography.bodyPrimary.fontSize &&
+    ['分钟', '次'].includes(text(node))).map(node => text(node)));
+  assert.deepEqual(units, ['分钟', '次'], 'units are smaller than the numbers but share the line');
+
+  // Baseline alignment: each column's number and unit sit in one baseline row.
+  assert.equal(nodes(tree, node => node.type === 'View' && node.props.style?.alignItems === 'baseline').length >= 3, true);
+
+  // The old third line is gone.
+  assert.doesNotMatch(text(tree), /当日专注|最长单次|目标 6|含 0 场模考/);
+});
+
+test('zero data and a loading snapshot stay truthful in the summary', () => {
+  const empty = screenHarness(snapshot({ totalDurationSeconds: 0, focusParticipationCount: 0 })).render();
+  assert.deepEqual(summaryNumbers(empty), ['0', '0/0', '0']);
+
+  const loading = screenHarness(null).render();
+  assert.deepEqual(summaryNumbers(loading), ['—', '—', '—']);
+  assert.doesNotMatch(text(loading), /分钟/, 'no unit is invented before the read returns');
+});
+
+test('the summary renders whichever day\'s snapshot is selected', () => {
+  const first = screenHarness(snapshot({
+    totalDurationSeconds: 600, focusParticipationCount: 1,
+  })).render();
+  assert.deepEqual(summaryNumbers(first), ['10', '0/0', '1']);
+
+  const second = screenHarness(snapshot({
+    totalDurationSeconds: 5400, focusParticipationCount: 4,
+  })).render();
+  assert.deepEqual(summaryNumbers(second), ['90', '0/0', '4']);
 });

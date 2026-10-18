@@ -119,6 +119,7 @@ export const BridgeSchemas = {
       typeof obj.formattedDate === 'string' &&
       Number.isFinite(obj.totalDurationSeconds) && obj.totalDurationSeconds >= 0 &&
       Number.isInteger(obj.focusCount) && obj.focusCount >= 0 &&
+      Number.isInteger(obj.focusParticipationCount) && obj.focusParticipationCount >= 0 &&
       Number.isInteger(obj.examCount) && obj.examCount >= 0 &&
       Array.isArray(obj.sessions) && obj.sessions.every(s => this.isValidDailySession(s)) &&
       Array.isArray(obj.tasks) && obj.tasks.every(task => this.isValidStudyTask(task)) &&

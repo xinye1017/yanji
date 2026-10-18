@@ -152,11 +152,20 @@ export function dayHasRecords(entries: TimelineEntry[], dayTasks: StudyTask[]): 
   return entries.length > 0 || dayTasks.length > 0;
 }
 
-/** The longest single continuous span in a day — the summary strip's third cell. */
-export function longestSessionSeconds(
-  sessions: ReadonlyArray<{ durationSeconds: number }>
-): number {
-  return sessions.reduce((longest, session) => Math.max(longest, session.durationSeconds), 0);
+/**
+ * The summary strip's first cell: the day's effective focus time as one big
+ * number of minutes plus its unit. A single number keeps the three-column strip
+ * scannable; splitting hours and minutes into four glyph groups made the middle
+ * column wider than the others and broke the shared baseline.
+ *
+ * Sub-minute work still reports 「<1 分钟」 rather than rounding a real record
+ * down to zero.
+ */
+export function durationMetricMinutes(totalSeconds: number): string {
+  const safe = Math.max(0, totalSeconds);
+  if (safe <= 0) return '0';
+  if (safe < 60) return '<1';
+  return `${Math.round(safe / 60)}`;
 }
 
 /**

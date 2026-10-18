@@ -30,6 +30,7 @@ class DailySnapshotAssemblerTest {
         assertEquals(YanjiTime.formatFullDateWithWeekday(LocalDate.parse(date)), snapshot.formattedDate)
         assertEquals(0L, snapshot.totalDurationSeconds)
         assertEquals(0, snapshot.focusCount)
+        assertEquals(0, snapshot.focusParticipationCount)
         assertEquals(0, snapshot.examCount)
         assertTrue(snapshot.sessions.isEmpty())
         assertTrue(snapshot.tasks.isEmpty())
@@ -61,10 +62,42 @@ class DailySnapshotAssemblerTest {
         assertEquals(listOf(true, false, false), snapshot.sessions.map { it.isExam })
         assertEquals(90L, snapshot.totalDurationSeconds)
         assertEquals(2, snapshot.focusCount)
+        assertEquals(2, snapshot.focusParticipationCount)
         assertEquals(1, snapshot.examCount)
         assertEquals(listOf("incomplete", "complete"), snapshot.tasks.map { it.id })
         assertEquals(listOf(false, true), snapshot.tasks.map { it.isCompleted })
         assertEquals(listOf("note-early", "note-late"), snapshot.notes.map { it.id })
+    }
+
+    /**
+     * 「参与次数」按区间相交统计：23:40→00:10 的专注在两天各计一次；
+     * 但时间轴、总时长和 focusCount 仍只挂在开始日，历史记录只有一条。
+     */
+    @Test
+    fun crossMidnightFocusParticipatesInBothDaysWithoutDuplicatingTheRow() {
+        val nextDay = "2026-10-11"
+        val nextDayStart = YanjiTime.dayRange(LocalDate.parse(nextDay)).startInclusive
+        val lateNight = focus(
+            id = "late-night",
+            startTime = nextDayStart - 20 * 60 * 1_000L,
+            seconds = 30 * 60L
+        )
+
+        val firstDay = DailySnapshotAssembler.assemble(
+            date, listOf(lateNight), emptyList(), emptyList(), emptyList()
+        )
+        assertEquals(1, firstDay.focusParticipationCount)
+        assertEquals(1, firstDay.focusCount)
+        assertEquals(listOf("late-night"), firstDay.sessions.map { it.id })
+        assertEquals(1_800L, firstDay.totalDurationSeconds)
+
+        val secondDay = DailySnapshotAssembler.assemble(
+            nextDay, listOf(lateNight), emptyList(), emptyList(), emptyList()
+        )
+        assertEquals("the after-midnight tail participates", 1, secondDay.focusParticipationCount)
+        assertEquals("the row belongs to its start day", 0, secondDay.focusCount)
+        assertTrue("history keeps exactly one complete row", secondDay.sessions.isEmpty())
+        assertEquals("duration is not split across days", 0L, secondDay.totalDurationSeconds)
     }
 
     @Test

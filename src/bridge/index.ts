@@ -157,6 +157,11 @@ export interface DailySnapshot {
   formattedDate: string;
   totalDurationSeconds: number;
   focusCount: number;
+  /**
+   * 当天「参与」过的专注次数：按时间区间相交统计，跨午夜的一条会在两天各计一次；
+   * 时间轴与总时长仍按开始日期归属，所以同一历史记录只出现、只累计一次。
+   */
+  focusParticipationCount: number;
   examCount: number;
   sessions: DailySession[];
   /** All plans for the requested day; completed plans are filtered by the view. */

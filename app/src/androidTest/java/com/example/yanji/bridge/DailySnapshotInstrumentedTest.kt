@@ -52,6 +52,7 @@ class DailySnapshotInstrumentedTest {
         assertEquals(date, snapshot.date)
         assertEquals(0L, snapshot.totalDurationSeconds)
         assertEquals(0, snapshot.focusCount)
+        assertEquals(0, snapshot.focusParticipationCount)
         assertEquals(0, snapshot.examCount)
         assertTrue(snapshot.tasks.isEmpty())
         assertTrue(snapshot.sessions.isEmpty())
@@ -101,6 +102,9 @@ class DailySnapshotInstrumentedTest {
         val snapshot = DailySnapshotReader.read(db, date)
         assertEquals(120L, snapshot.totalDurationSeconds)
         assertEquals(1, snapshot.focusCount)
+        // The "yesterday" row starts one second before midnight and ends after
+        // it: it participates today even though its row/duration stay on the 9th.
+        assertEquals(2, snapshot.focusParticipationCount)
         assertEquals(1, snapshot.examCount)
         assertEquals(listOf("exam", "today"), snapshot.sessions.map { it.id })
         assertEquals(listOf("pending", "done"), snapshot.tasks.map { it.id })

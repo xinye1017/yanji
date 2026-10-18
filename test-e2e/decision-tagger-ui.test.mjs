@@ -198,6 +198,7 @@ test('TodayScreen hides 今日疑点 card when no doubts exist', () => {
     date,
     totalDurationSeconds: 1200,
     focusCount: 1,
+    focusParticipationCount: 1,
     examCount: 0,
     sessions: [],
     notes: [
@@ -225,6 +226,7 @@ test('TodayScreen renders 今日疑点 and allows toggling resolution when doubt
     date,
     totalDurationSeconds: 1200,
     focusCount: 1,
+    focusParticipationCount: 1,
     examCount: 0,
     sessions: [],
     notes: [
@@ -258,6 +260,7 @@ test('ReviewScreen tags doubts/inspirations and resolves them through the anchor
     date,
     totalDurationSeconds: 1200,
     focusCount: 1,
+    focusParticipationCount: 1,
     examCount: 0,
     sessions: [],
     notes: [

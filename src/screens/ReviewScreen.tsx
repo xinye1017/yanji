@@ -28,7 +28,8 @@ import {
   boundTaskTitle, buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
   computeAxisLabelsLayout, countElapsedDays, countWorkedDays, dominantSubjectColors,
   formatClockFromEpoch, formatDailyAverageDuration, formatDuration, formatDurationMetric,
-  formatPercent, goalReachedDays, longestSessionSeconds, peakHourBucket, peakTrendDay,
+  durationMetricMinutes,
+  formatPercent, goalReachedDays, peakHourBucket, peakTrendDay,
   periodDelta, periodDeltaPercent, previousWindowArgs, relativeDayLabel, scopeDateRangeLabel,
   shiftIsoDate, stepForwardWithinToday, todayIso, weekNumberOfYear,
   type FilmstripDay, type TimelineEntry,
@@ -261,7 +262,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       {view === 'timeline' ? (
         <>
           <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
-          <DaySummary snapshot={snapshot} goalSeconds={goalSeconds} />
+          <DaySummary snapshot={snapshot} />
           <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
 
           <Timeline
@@ -429,42 +430,60 @@ function TimelineState({ loading, entryCount, planCount }: {
 // The day's summary strip — three facts, no card
 // ---------------------------------------------------------------------------
 
-function DaySummary({ snapshot, goalSeconds }: {
+function DaySummary({ snapshot }: {
   snapshot: DailySnapshot | null;
-  goalSeconds: number | null;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
   const completed = snapshot?.tasks.filter(task => task.completed).length ?? 0;
-  const cells: readonly { label: string; value: string; meta?: string }[] = [
+  const totalTasks = snapshot?.tasks.length ?? 0;
+  // Two rows per column only: the metric name, then the number that carries the
+  // page's weight. Units ride the number's baseline at body size so a long value
+  // can shrink (`adjustsFontSizeToFit`) without knocking the row out of line.
+  const cells: ReadonlyArray<{ label: string; value: string; unit: string | null; spoken: string }> = [
     {
-      label: '当日专注',
-      value: snapshot ? formatDuration(snapshot.totalDurationSeconds) : '—',
-      meta: goalSeconds && snapshot ? `目标 ${formatDuration(goalSeconds)}` : undefined,
+      label: '专注时长',
+      value: snapshot ? durationMetricMinutes(snapshot.totalDurationSeconds) : '—',
+      unit: snapshot ? '分钟' : null,
+      spoken: snapshot ? `专注时长 ${formatDuration(snapshot.totalDurationSeconds)}` : '正在读取专注时长',
     },
-    { label: '完成任务', value: snapshot ? `${completed} / ${snapshot.tasks.length}` : '—', meta: '项' },
     {
-      label: '最长单次',
-      value: snapshot ? formatDuration(longestSessionSeconds(snapshot.sessions ?? [])) : '—',
-      meta: snapshot && snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考` : undefined,
+      label: '完成任务',
+      value: snapshot ? `${completed}/${totalTasks}` : '—',
+      unit: null,
+      spoken: snapshot ? `完成任务 ${completed}/${totalTasks}` : '正在读取任务',
+    },
+    {
+      label: '专注次数',
+      value: snapshot ? `${snapshot.focusParticipationCount}` : '—',
+      unit: snapshot ? '次' : null,
+      spoken: snapshot ? `专注次数 ${snapshot.focusParticipationCount} 次` : '正在读取专注次数',
     },
   ];
   return <View style={{
     flexDirection: 'row',
-    paddingVertical: 12,
+    paddingVertical: YanjiSpacing.md,
     borderBottomWidth: layout.hairlineWidth,
     borderColor: colors.hairline,
   }}>
-    {cells.map((cell, index) => <View key={cell.label} style={{
+    {cells.map((cell, index) => <View key={cell.label} accessible accessibilityLabel={cell.spoken} style={{
       flex: 1, alignItems: 'center', paddingHorizontal: YanjiSpacing.xs,
       borderLeftWidth: index > 0 ? layout.hairlineWidth : 0, borderColor: colors.hairline,
     }}>
-      <Text style={[typography.captionMeta, { color: colors.secondary }]}>{cell.label}</Text>
-      <Text style={[typography.bodyPrimary, {
-        color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'],
-        marginTop: YanjiSpacing.xs, textAlign: 'center',
-      }]}>{cell.value}</Text>
-      {cell.meta ? <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2, textAlign: 'center' }]}>{cell.meta}</Text> : null}
+      <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>{cell.label}</Text>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        marginTop: YanjiSpacing.xs,
+        minHeight: typography.metricHero.lineHeight,
+      }}>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
+          style={[typography.metricHero, { color: colors.ink }]}>
+          {cell.value}
+        </Text>
+        {cell.unit ? <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 2 }]}>{cell.unit}</Text> : null}
+      </View>
     </View>)}
   </View>;
 }
@@ -519,6 +538,7 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
     return <TimelineCompactRow
       timeLabel={formatClockFromEpoch(entry.at)}
       tagLabel={session.subjectName}
+      tagIcon="clock3"
       tagTone="neutral"
       dotColor={session.subjectColor || colors.secondary}
       metaText={formatDuration(session.durationSeconds)}
@@ -537,6 +557,8 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
   return <TimelineCompactRow
     timeLabel={formatClockFromEpoch(entry.at)}
     tagLabel={tagLabel}
+    tagIcon={entry.category === 'DOUBT' ? 'doubt'
+      : entry.category === 'INSPIRATION' ? 'inspiration' : undefined}
     tagTone={entry.category === 'DOUBT' ? 'brand' : entry.category === 'INSPIRATION' ? 'positive' : 'neutral'}
     content={entry.content}
     isFirst={isFirst} isLast={isLast} disabled={busyNote}

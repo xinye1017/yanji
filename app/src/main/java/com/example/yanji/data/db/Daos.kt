@@ -54,6 +54,25 @@ interface FocusSessionDao {
     )
     suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
 
+    /**
+     * 与 [startInclusive, endExclusive) 有交集的已完成专注。
+     *
+     * 与 [getCompletedInRange] 的「按开始时间归属」不同，这里按时间区间相交：
+     * 一条 23:40→00:10 的专注会同时出现在前一天和后一天的查询里。每日快照只用
+     * 它计算「参与次数」；时间轴与总时长仍按开始日期归属，因此同一条历史记录
+     * 只显示一次、只累计一次。
+     *
+     * `endTime` 缺失的历史行回退为 `startTime + durationSeconds * 1000`，与 JS
+     * 侧绘制节奏图时的回退口径一致。
+     */
+    @Query(
+        "SELECT * FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime < :endExclusive " +
+            "AND (CASE WHEN endTime > startTime THEN endTime ELSE startTime + durationSeconds * 1000 END) > :startInclusive " +
+            "ORDER BY startTime DESC"
+    )
+    suspend fun getCompletedOverlapping(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
+
     @Query(
         "SELECT subjectId, subjectName, " +
             "COALESCE(SUM(durationSeconds), 0) AS durationSeconds, " +

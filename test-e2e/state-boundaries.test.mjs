@@ -5,7 +5,7 @@ import { loadTypeScript } from './framework/load-typescript.js';
 const { DataRefreshCoordinator } = loadTypeScript('src/state/dataRefreshCoordinator.ts');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const daily = date => ({ date, formattedDate: date, totalDurationSeconds: 0,
-  focusCount: 0, examCount: 0, sessions: [], tasks: [], notes: [] });
+  focusCount: 0, focusParticipationCount: 0, examCount: 0, sessions: [], tasks: [], notes: [] });
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });

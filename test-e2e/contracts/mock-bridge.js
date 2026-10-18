@@ -635,6 +635,7 @@ export class MockYanjiBridge {
       formattedDate: date,
       totalDurationSeconds: sessions.reduce((sum, s) => sum + s.durationSeconds, 0),
       focusCount: sessions.filter(s => !s.isExam).length,
+      focusParticipationCount: sessions.filter(s => !s.isExam).length,
       examCount: sessions.filter(s => s.isExam).length,
       sessions,
       tasks: this.tasks.filter(t => t.date === date).map(t => ({
