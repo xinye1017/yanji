@@ -560,18 +560,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   ) : null}
                 </View>;
               })}
-              {sessions?.length ? (
-                <View style={{ marginTop: YanjiSpacing.xs }}>
-                  {sessions.map(session => (
-                    <Text key={session.id} style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.sm, borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline }]}>
-                      {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                柱高按小时汇总专注投入，以当小时投入最多的学科着色；点按下方色块可查看每段专注的具体时间与学科。
-              </Text>
             </View>
           ) : null}
         </View>

@@ -509,7 +509,10 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   // Morning spectrum has the segment
   assert.match(text(expandedTree), /上午/);
   assert.match(text(expandedTree), /06:00—12:00/);
-  assert.match(text(expandedTree), /10:45 起 · 数据结构 · 30分钟/);
+  // The strip is the whole detail: no second session list, no explanatory
+  // caption and no trailing rule repeating what the tap already explains.
+  assert.doesNotMatch(text(expandedTree), /10:45 起/);
+  assert.doesNotMatch(text(expandedTree), /柱高按/);
   // Must NOT display "未绘连续区段"
   assert.doesNotMatch(text(expandedTree), /未绘连续区段/);
 
