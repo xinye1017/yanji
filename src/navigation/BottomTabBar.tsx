@@ -8,8 +8,8 @@
  * what drives the selected state.
  */
 
-import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
 import Animated, {
   useAnimatedStyle,
@@ -36,6 +36,25 @@ const TAB_ICONS: Record<TabKey, YanjiIconName> = {
 /** Shared capsule inset keeps the selection aligned with the measured slots. */
 const CAPSULE_PADDING = YanjiLiquidGlass.padding;
 
+/**
+ * Calculates the pill's animated offset while dragging, keeping the pill
+ * centered under the finger and clamped within the valid tab slots [0, tabsCount - 1].
+ */
+export function calculateTabDragOffset(slotAreaX: number, slotWidth: number, tabsCount: number): number {
+  if (slotWidth <= 0 || tabsCount <= 0) return 0;
+  const target = (slotAreaX - slotWidth / 2) / slotWidth;
+  return Math.max(0, Math.min(tabsCount - 1, target));
+}
+
+/**
+ * Maps the finger's horizontal coordinate within the slot area to a valid tab slot index [0, tabsCount - 1].
+ */
+export function calculateTargetSlotIndex(slotAreaX: number, slotWidth: number, tabsCount: number): number {
+  if (slotWidth <= 0 || tabsCount <= 0) return 0;
+  const slot = Math.floor(slotAreaX / slotWidth);
+  return Math.max(0, Math.min(tabsCount - 1, slot));
+}
+
 export function BottomTabBar({ visible = true }: { visible?: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
   const { paper } = theme;
@@ -48,6 +67,26 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
   const [slotWidth, setSlotWidth] = useState(0);
   const index = Math.max(0, TABS.findIndex(tab => tab.key === activeTab));
 
+  const isDraggingRef = useRef(false);
+  const hasMovedRef = useRef(false);
+  const rowRef = useRef<React.ElementRef<typeof View>>(null);
+  const rowPageXRef = useRef<number>(theme.spacing.lg);
+  const slotWidthRef = useRef(0);
+  const activeSlotRef = useRef(index);
+  const selectTabRef = useRef(selectTab);
+  const snappySpringRef = useRef(theme.motion.spring.snappy);
+  const reduceMotionRef = useRef(reduceMotion);
+
+  useEffect(() => {
+    activeSlotRef.current = index;
+  }, [index]);
+
+  useEffect(() => {
+    selectTabRef.current = selectTab;
+    snappySpringRef.current = theme.motion.spring.snappy;
+    reduceMotionRef.current = reduceMotion;
+  }, [selectTab, theme.motion.spring.snappy, reduceMotion]);
+
   /**
    * The pill slides by measured pixels rather than by a percentage of its own
    * width: Yoga resolves an absolutely-positioned child's percentage width
@@ -58,13 +97,89 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
   const onRowLayout = (event: LayoutChangeEvent) => {
     const rowWidth = event.nativeEvent.layout.width;
     const next = (rowWidth - CAPSULE_PADDING * 2) / TABS.length;
-    if (next > 0 && Math.abs(next - slotWidth) > 0.5) setSlotWidth(next);
+    if (next > 0) {
+      slotWidthRef.current = next;
+      if (Math.abs(next - slotWidth) > 0.5) {
+        setSlotWidth(next);
+      }
+    }
+    rowRef.current?.measure((_x: number, _y: number, _w: number, _h: number, pageX: number) => {
+      if (typeof pageX === 'number' && !isNaN(pageX)) {
+        rowPageXRef.current = pageX;
+      }
+    });
   };
 
   const offset = useSharedValue(index);
   useEffect(() => {
-    offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
+    if (!isDraggingRef.current) {
+      offset.value = reduceMotion ? index : withSpring(index, theme.motion.spring.snappy);
+    }
   }, [index, offset, reduceMotion, theme.motion.spring.snappy]);
+
+  const panResponder = useMemo(() => {
+    const getSlotAreaX = (screenX: number) => {
+      return screenX - rowPageXRef.current - CAPSULE_PADDING;
+    };
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        hasMovedRef.current = false;
+        isDraggingRef.current = false;
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        const sw = slotWidthRef.current;
+        if (sw <= 0) return;
+
+        const dx = gestureState.dx;
+        if (!hasMovedRef.current && Math.abs(dx) > 4) {
+          hasMovedRef.current = true;
+          isDraggingRef.current = true;
+        }
+
+        if (isDraggingRef.current) {
+          const currentX = gestureState.moveX || (gestureState.x0 + gestureState.dx);
+          const slotAreaX = getSlotAreaX(currentX);
+          const clampedOffset = calculateTabDragOffset(slotAreaX, sw, TABS.length);
+          offset.value = clampedOffset;
+
+          const targetSlot = calculateTargetSlotIndex(slotAreaX, sw, TABS.length);
+          if (targetSlot !== activeSlotRef.current) {
+            activeSlotRef.current = targetSlot;
+            selectTabRef.current(TABS[targetSlot].key);
+          }
+        }
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        const sw = slotWidthRef.current;
+        const wasDragging = isDraggingRef.current;
+        isDraggingRef.current = false;
+        hasMovedRef.current = false;
+
+        if (sw <= 0) return;
+
+        const currentX = wasDragging
+          ? (gestureState.moveX || (gestureState.x0 + gestureState.dx))
+          : gestureState.x0;
+        const slotAreaX = getSlotAreaX(currentX);
+        const finalSlot = calculateTargetSlotIndex(slotAreaX, sw, TABS.length);
+        activeSlotRef.current = finalSlot;
+        selectTabRef.current(TABS[finalSlot].key);
+        offset.value = reduceMotionRef.current
+          ? finalSlot
+          : withSpring(finalSlot, snappySpringRef.current);
+      },
+      onPanResponderTerminate: () => {
+        isDraggingRef.current = false;
+        hasMovedRef.current = false;
+        offset.value = reduceMotionRef.current
+          ? activeSlotRef.current
+          : withSpring(activeSlotRef.current, snappySpringRef.current);
+      },
+    });
+  }, [offset]);
 
   const pillStyle = useAnimatedStyle(() => {
     'worklet';
@@ -112,7 +227,9 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         style={[{ ...StyleSheet.absoluteFill, borderRadius: height / 2, overflow: 'hidden' }]}
       >
         <View
+          ref={rowRef}
           onLayout={onRowLayout}
+          {...panResponder.panHandlers}
           style={{
             flexDirection: 'row',
             width: '100%',
