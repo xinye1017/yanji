@@ -1,8 +1,6 @@
 package com.example.yanji.data
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import com.example.yanji.data.db.StudySubjectAggregateRow
 import java.time.DayOfWeek
@@ -145,43 +143,6 @@ data class YearlyStudySummary(
 )
 
 object DurationFormatter {
-    fun formatHoursMinutes(seconds: Long): String {
-        if (seconds <= 0) return "0m"
-        val hours = seconds / 3600
-        val mins = (seconds % 3600) / 60
-        return when {
-            hours > 0 && mins > 0 -> "${hours}h ${mins}m"
-            hours > 0 -> "${hours}h"
-            else -> "${mins}m"
-        }
-    }
-
-    fun formatDetailed(seconds: Long): String {
-        if (seconds <= 0) return "0秒"
-        val hours = seconds / 3600
-        val mins = (seconds % 3600) / 60
-        val secs = seconds % 60
-        return when {
-            hours > 0 -> "${hours}h ${mins}m"
-            mins > 0 && secs > 0 -> "${mins}m ${secs}s"
-            mins > 0 -> "${mins}m"
-            else -> "${secs}s"
-        }
-    }
-
-    fun formatTimeRange(startTime: Long, endTime: Long): String {
-        val startStr = YanjiTime.formatTime(startTime)
-        val endStr = if (endTime > startTime) YanjiTime.formatTime(endTime) else startStr
-        return "$startStr — $endStr"
-    }
-
-    fun formatDateChinese(timestamp: Long): String = YanjiTime.formatChineseDate(timestamp)
-
-    fun formatDateWithWeekday(dateStr: String): String {
-        val date = YanjiTime.parseIsoDate(dateStr) ?: return dateStr
-        return YanjiTime.formatShortDateWithWeekday(date)
-    }
-
     fun formatFullDateWithWeekday(dateStr: String): String {
         val date = YanjiTime.parseIsoDate(dateStr) ?: return dateStr
         return YanjiTime.formatFullDateWithWeekday(date)
@@ -214,228 +175,12 @@ class StudyStatisticsRepository(
     private fun examToSessionItem(es: ExamSession): DailySessionItem =
         toDailyExamSessionItem(es, ::getSubjectColor)
 
-    /**
-     * Get summary for a specific date (defaults to today).
-     * Single Source of Truth: Sum of valid focus + valid exam sessions on that day.
-     */
-    fun getDailyStudySummaryFlow(dateStr: String): Flow<DailyStudySummary> {
-        val date = YanjiTime.parseIsoDate(dateStr) ?: return flowOf(
-            buildDailyStudySummary(dateStr, emptyList(), emptyList())
-        )
-        val range = YanjiTime.dayRange(date)
-        return combine(
-            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive)
-        ) { focusList, examList ->
-            buildDailyStudySummary(dateStr, focusList, examList)
-        }
-    }
-
     private fun buildDailyStudySummary(
         dateStr: String,
         focusList: List<FocusSession>,
         examList: List<ExamSession>
     ): DailyStudySummary =
         buildDailyStudySummary(dateStr, focusList, examList, repo.subjects.value)
-
-    /**
-     * Get subject study summary across a given time range.
-     */
-    fun getSubjectStudySummaryFlow(
-        subjectId: String,
-        timeRange: StudyTimeRange
-    ): Flow<SubjectStudySummary> {
-        val range = YanjiTime.rangeFor(timeRange)
-        return combine(
-            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.subjects
-        ) { focusList, examList, subjectsList ->
-            buildSubjectStudySummary(subjectId, timeRange, focusList, examList, subjectsList)
-        }
-    }
-
-    fun getSubjectDistributionFlow(
-        range: EpochRange,
-        level: SubjectStatsLevel
-    ): Flow<List<SubjectDistributionItem>> {
-        return combine(
-            repo.observeFocusSubjectTotals(range.startInclusive, range.endExclusive),
-            repo.observeExamSubjectTotals(range.startInclusive, range.endExclusive)
-        ) { focusRows, examRows ->
-            buildSubjectDistributionFromAggregates(level, focusRows + examRows)
-        }
-    }
-
-    /**
-     * 指定日历窗口的有效学习时长。
-     *
-     * 窗口由调用方用 [YanjiTime] 现取，而不是收一个「时间范围 + 翻几期」的组合：
-     * 区间本身已经带上了「翻到第几期」的语义，仓库只负责按窗口汇总。
-     */
-    fun getStudyDurationFlow(range: EpochRange): Flow<Long> {
-        return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
-    }
-
-    /** 滚动 N 天总时长（含今天）。「本年」视角的 hero 用「近 7 天」替代无意义的「较上周」。 */
-    fun getLastDaysDurationFlow(days: Long): Flow<Long> {
-        val range = YanjiTime.lastDaysRange(days)
-        return repo.observeStudyDuration(range.startInclusive, range.endExclusive)
-    }
-
-    /**
-     * 本年汇总：自然年区间（1 月 1 日 00:00 起）的专注 + 模考。
-     *
-     * 区间有界（最多 366 天），走 startTime 索引；日粒度与月粒度聚合都在 Kotlin 侧完成，
-     * 不引入按 UTC 月份分组的 SQL —— 那种写法在跨月/跨年边界会差 8 小时，
-     * 而这里的数据量级（一年几百条）还远没到需要把分组下推到 SQL 的程度。
-     */
-    fun getYearlyStudySummaryFlow(): Flow<YearlyStudySummary> {
-        val range = YanjiTime.currentYearRange()
-        return combine(
-            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
-            activeDayThresholdFlow
-        ) { focusList, examList, threshold ->
-            buildYearlyStudySummary(focusList, examList, activeDayThresholdSeconds = threshold)
-        }
-    }
-
-    fun getSubjectDistribution(
-        timeRange: StudyTimeRange,
-        level: SubjectStatsLevel
-    ): List<SubjectDistributionItem> {
-        val range = YanjiTime.rangeFor(timeRange)
-        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildSubjectDistribution(
-            timeRange,
-            level,
-            focusList,
-            examList
-        )
-    }
-
-    fun getSubjectStudySummary(
-        subjectId: String,
-        timeRange: StudyTimeRange
-    ): SubjectStudySummary {
-        val range = YanjiTime.rangeFor(timeRange)
-        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        return buildSubjectStudySummary(
-            subjectId,
-            timeRange,
-            focusList,
-            examList,
-            repo.subjects.value
-        )
-    }
-
-    private fun buildSubjectStudySummary(
-        subjectId: String,
-        timeRange: StudyTimeRange,
-        focusList: List<FocusSession>,
-        examList: List<ExamSession>,
-        subjectsList: List<Subject>
-    ): SubjectStudySummary {
-        val resolvedSubjectId = SubjectCatalog.idForDisplayName(subjectId) ?: subjectId
-        val subject = subjectsList.find { it.id == resolvedSubjectId || it.name == subjectId }
-            ?: SubjectCatalog.find(resolvedSubjectId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX))
-        val subjectName = SubjectCatalog.displayName(resolvedSubjectId) ?: subject?.name ?: subjectId
-        val subjectColor = subject?.colorHex ?: getSubjectColor(resolvedSubjectId, subjectName)
-        val cutoff = cutoffFor(timeRange)
-
-        fun matches(recordId: String, recordName: String): Boolean {
-            if (SubjectCatalog.isDirectBucket(resolvedSubjectId)) {
-                return SubjectCatalog.subcategoryBucketId(recordId, recordName) == resolvedSubjectId
-            }
-            val catalogSubject = SubjectCatalog.find(resolvedSubjectId)
-            return if (catalogSubject?.isCategory == true) {
-                SubjectCatalog.inferCategoryId(recordId, recordName) == resolvedSubjectId
-            } else {
-                recordId == resolvedSubjectId || recordName == subjectName
-            }
-        }
-
-        val matchedFocus = focusList.filter {
-            it.status == SessionStatus.COMPLETED && matches(it.subjectId, it.subjectName) && it.startTime >= cutoff
-        }
-        val matchedExams = examList.filter {
-            it.status == SessionStatus.COMPLETED && matches(it.subjectId, it.subjectName) && it.startTime >= cutoff
-        }
-
-        val allItems = mutableListOf<DailySessionItem>()
-        allItems.addAll(matchedFocus.map { focusToSessionItem(it) })
-        allItems.addAll(matchedExams.map { examToSessionItem(it) })
-        allItems.sortByDescending { it.startTime }
-
-        val totalSecs = allItems.sumOf { it.durationSeconds }
-        val longestSecs = allItems.maxOfOrNull { it.durationSeconds } ?: 0L
-
-        return SubjectStudySummary(
-            subjectId = resolvedSubjectId,
-            subjectName = subjectName,
-            subjectColor = subjectColor,
-            timeRange = timeRange,
-            totalDurationSeconds = totalSecs,
-            sessionCount = allItems.size,
-            longestSessionSeconds = longestSecs,
-            sessions = allItems
-        )
-    }
-
-    private fun buildSubjectDistribution(
-        timeRange: StudyTimeRange,
-        level: SubjectStatsLevel,
-        focusList: List<FocusSession>,
-        examList: List<ExamSession>
-    ): List<SubjectDistributionItem> {
-        val cutoff = cutoffFor(timeRange)
-        val totals = linkedMapOf<String, Long>()
-
-        fun add(subjectId: String, subjectName: String, seconds: Long) {
-            val bucketId = when (level) {
-                SubjectStatsLevel.CATEGORY -> SubjectCatalog.inferCategoryId(subjectId, subjectName)
-                SubjectStatsLevel.SUBCATEGORY -> SubjectCatalog.subcategoryBucketId(subjectId, subjectName)
-            }
-            totals[bucketId] = (totals[bucketId] ?: 0L) + seconds
-        }
-
-        focusList.asSequence()
-            .filter { it.status == SessionStatus.COMPLETED && it.startTime >= cutoff }
-            .forEach { add(it.subjectId, it.subjectName, it.durationSeconds) }
-        examList.asSequence()
-            .filter { it.status == SessionStatus.COMPLETED && it.startTime >= cutoff }
-            .forEach { add(it.subjectId, it.subjectName, it.actualDurationSeconds) }
-
-        val baseIds = when (level) {
-            SubjectStatsLevel.CATEGORY -> SubjectCatalog.categories.map { it.id }
-            SubjectStatsLevel.SUBCATEGORY -> SubjectCatalog.selectableSubjects.map { it.id }
-        }
-        val directIds = totals.keys.filter(SubjectCatalog::isDirectBucket)
-        val orderedIds = (baseIds + directIds).distinct().sortedWith(
-            compareBy<String> { id ->
-                val category = SubjectCatalog.categoryOf(id)
-                category?.sortOrder ?: Int.MAX_VALUE
-            }.thenBy { id ->
-                when {
-                    SubjectCatalog.isDirectBucket(id) -> Int.MAX_VALUE
-                    else -> SubjectCatalog.find(id)?.sortOrder ?: Int.MAX_VALUE
-                }
-            }
-        )
-
-        return orderedIds.map { id ->
-            val name = SubjectCatalog.displayName(id) ?: id
-            SubjectDistributionItem(
-                subjectId = id,
-                subjectName = name,
-                subjectColor = getSubjectColor(id, name),
-                durationSeconds = totals[id] ?: 0L
-            )
-        }
-    }
 
     private fun buildSubjectDistributionFromAggregates(
         level: SubjectStatsLevel,
@@ -475,30 +220,6 @@ class StudyStatisticsRepository(
 
     private fun cutoffFor(timeRange: StudyTimeRange): Long {
         return YanjiTime.rangeFor(timeRange).startInclusive
-    }
-
-    /**
-     * Get Weekly summary for statistics and charts.
-     *
-     * [weeksBack] 支持回看自然周：0 = 本周，1 = 上周，以此类推。
-     */
-    fun getWeeklyStudySummaryFlow(weeksBack: Long = 0): Flow<WeeklyStudySummary> {
-        val range = YanjiTime.weekRange(weeksBack)
-        return combine(
-            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
-            activeDayThresholdFlow
-        ) { focusList, examList, threshold ->
-            buildWeeklyStudySummary(focusList, examList, weeksBack, activeDayThresholdSeconds = threshold)
-        }
-    }
-
-    fun getWeeklyStudySummary(weeksBack: Long = 0): WeeklyStudySummary {
-        val range = YanjiTime.weekRange(weeksBack)
-        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val threshold = repo.settings.value.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L
-        return buildWeeklyStudySummary(focusList, examList, weeksBack, activeDayThresholdSeconds = threshold)
     }
 
     /**
@@ -591,30 +312,6 @@ class StudyStatisticsRepository(
         DayOfWeek.FRIDAY -> "周五"
         DayOfWeek.SATURDAY -> "周六"
         DayOfWeek.SUNDAY -> "周日"
-    }
-
-    /**
-     * Get Monthly summary for statistics, heatmap, and monthly charts.
-     *
-     * [monthsBack] 支持回看自然月：0 = 本月，1 = 上月，以此类推。
-     */
-    fun getMonthlyStudySummaryFlow(monthsBack: Long = 0): Flow<MonthlyStudySummary> {
-        val range = YanjiTime.monthRange(monthsBack)
-        return combine(
-            repo.observeFocusSessionsInRange(range.startInclusive, range.endExclusive),
-            repo.observeExamSessionsInRange(range.startInclusive, range.endExclusive),
-            activeDayThresholdFlow
-        ) { focusList, examList, threshold ->
-            buildMonthlyStudySummary(focusList, examList, monthsBack, activeDayThresholdSeconds = threshold)
-        }
-    }
-
-    fun getMonthlyStudySummary(monthsBack: Long = 0): MonthlyStudySummary {
-        val range = YanjiTime.monthRange(monthsBack)
-        val focusList = repo.focusSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val examList = repo.examSessions.value.filter { it.startTime >= range.startInclusive && it.startTime < range.endExclusive }
-        val threshold = repo.settings.value.validStudyThresholdMinutes.coerceAtLeast(1).toLong() * 60L
-        return buildMonthlyStudySummary(focusList, examList, monthsBack, activeDayThresholdSeconds = threshold)
     }
 
     /**
@@ -827,14 +524,6 @@ class StudyStatisticsRepository(
         if (es != null) return examToSessionItem(es)
         val entity = repo.getExamSessionByIdFromDb(examId)
         return entity?.toDomainModel()?.let { examToSessionItem(it) }
-    }
-
-    fun deleteSession(item: DailySessionItem) {
-        if (item.isExam) {
-            repo.deleteExamSession(item.id)
-        } else {
-            repo.deleteFocusSession(item.id)
-        }
     }
 
     fun updateSessionNote(sessionId: String, isExam: Boolean, note: String) {

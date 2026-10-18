@@ -2,10 +2,7 @@ package com.example.yanji.data
 
 
 import android.content.Context
-import androidx.core.content.edit
 import com.example.yanji.data.backup.BackupImportResult
-import com.example.yanji.data.achievement.AchievementCatalog
-import com.example.yanji.data.achievement.AchievementDef
 import com.example.yanji.data.achievement.AchievementEvaluator
 import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
@@ -25,7 +22,6 @@ import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.json.JSONArray
 import java.util.UUID
 
 class YanjiRepository private constructor() {
@@ -84,8 +80,6 @@ class YanjiRepository private constructor() {
     suspend fun awaitHydration() {
         awaitAll(settingsHydrated, subjectsHydrated)
     }
-
-    val defaultSubjects = SubjectCatalog.defaults
 
     private val _subjects = MutableStateFlow(SubjectCatalog.all)
     val subjects: StateFlow<List<Subject>> = _subjects.asStateFlow()
@@ -238,18 +232,6 @@ class YanjiRepository private constructor() {
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
 
-    private val _availableAiModels = MutableStateFlow<List<String>>(emptyList())
-    val availableAiModels: StateFlow<List<String>> = _availableAiModels.asStateFlow()
-
-    fun setAvailableAiModels(models: List<String>) {
-        _availableAiModels.value = models
-        val ctx = appContext ?: return
-        val prefs = ctx.getSharedPreferences("yanji_ai_models", Context.MODE_PRIVATE)
-        val jsonArray = JSONArray()
-        models.forEach { jsonArray.put(it) }
-        prefs.edit { putString("cached_models", jsonArray.toString()) }
-    }
-
     private val _settings = MutableStateFlow(UserSettings())
     val settings: StateFlow<UserSettings> = _settings.asStateFlow()
 
@@ -257,13 +239,6 @@ class YanjiRepository private constructor() {
 
     private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
     val unlockedAchievements: StateFlow<Map<String, Long>> = _unlockedAchievements.asStateFlow()
-
-    private val _achievementUnlockChannel = kotlinx.coroutines.channels.Channel<AchievementDef>(capacity = kotlinx.coroutines.channels.Channel.BUFFERED)
-    val achievementUnlockEvents: Flow<AchievementDef> = _achievementUnlockChannel.receiveAsFlow()
-
-    fun emitCelebration(def: AchievementDef) {
-        _achievementUnlockChannel.trySend(def)
-    }
 
     // Current running active session if any
     val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
@@ -417,24 +392,6 @@ class YanjiRepository private constructor() {
         return combine(focusFlow, examFlow) { f, e -> f + e }
     }
 
-    /** 已保存的快捷专注模板。DB 是唯一事实来源。 */
-    fun observeQuickStartPresets(): Flow<List<QuickStartPreset>> =
-        requireDatabase().quickStartPresetDao().getAllFlow()
-            .map { rows -> rows.map(QuickStartPresetEntity::toDomainModel) }
-
-    suspend fun saveQuickStartPreset(preset: QuickStartPreset) {
-        requireDatabase().quickStartPresetDao().insert(QuickStartPresetEntity.fromDomainModel(preset))
-    }
-
-    suspend fun deleteQuickStartPreset(id: String) {
-        requireDatabase().quickStartPresetDao().deleteById(id)
-    }
-
-    /** 指定日期的轻量学习计划；当前 UI 只订阅今天。 */
-    fun observeStudyTasks(date: String): Flow<List<StudyTask>> =
-        requireDatabase().studyTaskDao().observeByDate(date)
-            .map { rows -> rows.map(StudyTaskEntity::toDomainModel) }
-
     /** Data-module events are driven only by changes to the persisted source tables. */
     fun observeDataTableChanges(): Flow<Set<String>> =
         requireDatabase().invalidationTracker.createFlow(
@@ -475,23 +432,6 @@ class YanjiRepository private constructor() {
     fun observeTaskActualSeconds(): Flow<Map<String, Long>> =
         requireDatabase().focusSessionDao().observeTaskActualSeconds()
             .map { rows -> rows.associate { it.taskId to it.seconds } }
-
-    /** 探测可用模型列表。协议与传输细节见 [com.example.yanji.data.ai.AiClient]。 */
-    suspend fun fetchAvailableModels(
-        baseUrl: String,
-        apiKey: String,
-        protocol: com.example.yanji.data.ai.AiProtocolType = com.example.yanji.data.ai.AiProtocolType.OPENAI_CHAT
-    ): Result<List<String>> =
-        runCatching { aiClient.fetchModels(baseUrl, apiKey, protocol) }
-
-    /** 对选中的模型进行实际请求测试。 */
-    suspend fun testModelConnection(
-        baseUrl: String,
-        apiKey: String,
-        model: String,
-        protocol: com.example.yanji.data.ai.AiProtocolType = com.example.yanji.data.ai.AiProtocolType.OPENAI_CHAT
-    ): Result<String> =
-        runCatching { aiClient.testModelConnection(baseUrl, apiKey, model, protocol) }
 
     suspend fun addFocusSession(session: FocusSession) = timerStore.addFocusSession(session)
 
@@ -672,55 +612,6 @@ class YanjiRepository private constructor() {
      */
     suspend fun importBackupJson(rawJson: String): BackupImportResult = backupStore.importJson(rawJson)
 
-    suspend fun generateAiAnalysis(periodDays: Int = 7): AiAnalysis = withContext(Dispatchers.IO) {
-        val settings = _settings.value
-        if (!settings.isAiConfigured) {
-            throw com.example.yanji.data.ai.AiException("尚未配置 AI 服务。请在【我的】→【AI API 配置】中完成设置。")
-        }
-        val db = database
-        val safePeriodDays = periodDays.coerceIn(1, 90)
-        val now = System.currentTimeMillis()
-        val (focusList, examList) = if (db != null) {
-            val endDay = YanjiTime.localDate(now)
-            val startDay = endDay.minusDays((safePeriodDays * 2 - 1).toLong())
-            val start = YanjiTime.dayRange(startDay).startInclusive
-            val focus = db.focusSessionDao().getSessionsSince(start).map { it.toDomainModel() }
-            val exams = db.examSessionDao().getSessionsSince(start).map { it.toDomainModel() }
-            focus to exams
-        } else {
-            timerStore.focusSessions.value to timerStore.examSessions.value
-        }
-
-        val snapshot = StudyDiagnosticSnapshot.from(
-            periodDays = safePeriodDays,
-            settings = settings,
-            focusSessions = focusList,
-            examSessions = examList,
-            noteEntries = noteStore.noteEntries.value,
-            now = now
-        )
-        if (!snapshot.hasStudyData) {
-            throw com.example.yanji.data.ai.AiException("本周期内暂无已完成的专注或模考，也没有已保存的随笔。记录一次学习后再生成分析。")
-        }
-        val analysis = callAiDiagnosticApi(snapshot, settings)
-        // 落库后由 bindDatabase 的 Flow 订阅回填 _aiAnalyses；仅当 db 缺席（罕见）才退回内存态。
-        if (db != null) {
-            db.aiAnalysisDao().insert(AiAnalysisEntity.fromDomainModel(analysis))
-        } else {
-            _aiAnalyses.value = listOf(analysis) + _aiAnalyses.value
-        }
-        analysis
-    }
-
-    private suspend fun callAiDiagnosticApi(
-        snapshot: StudyDiagnosticSnapshot,
-        settings: UserSettings
-    ): AiAnalysis {
-        val content = aiClient.diagnoseRaw(snapshot, settings)
-        return parseAiDiagnostic(content, snapshot, settings)
-            ?: throw com.example.yanji.data.ai.AiException("AI 分析结果格式不完整，请重新生成。", failure = com.example.yanji.data.ai.AiFailure.InvalidResponse)
-    }
-
     internal fun parseAiDiagnostic(
         content: String,
         snapshot: StudyDiagnosticSnapshot,
@@ -730,23 +621,6 @@ class YanjiRepository private constructor() {
     // Helper query computations (Unified Single Source of Truth)
     fun getTodayFocusDurationSeconds(): Long =
         StudyStats.durationOnDay(timerStore.focusSessions.value, timerStore.examSessions.value, System.currentTimeMillis())
-
-    fun getStudyDurationForPeriod(days: Int): Long =
-        StudyStats.durationSince(
-            timerStore.focusSessions.value,
-            timerStore.examSessions.value,
-            System.currentTimeMillis() - days * 86400000L
-        )
-
-    fun getTotalStudyDurationSeconds(): Long =
-        StudyStats.totalDuration(timerStore.focusSessions.value, timerStore.examSessions.value)
-
-    fun getTodaySubjectDistribution(): Map<String, Long> =
-        StudyStats.subjectDistributionOnDay(
-            timerStore.focusSessions.value,
-            timerStore.examSessions.value,
-            System.currentTimeMillis()
-        )
 
     // CheckIn & Streak operations
     fun isCheckedInToday(): Boolean = checkInStore.isCheckedInToday()
@@ -805,11 +679,6 @@ class YanjiRepository private constructor() {
         if (newlyUnlocked.isNotEmpty()) {
             val now = System.currentTimeMillis()
             _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
-            for (id in newlyUnlocked) {
-                AchievementCatalog.find(id)?.let { def ->
-                    _achievementUnlockChannel.trySend(def)
-                }
-            }
         }
     }
 
@@ -834,39 +703,5 @@ class YanjiRepository private constructor() {
             val now = System.currentTimeMillis()
             _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
         }
-    }
-
-    /** 解锁成就。幂等：已解锁的直接忽略。 */
-    fun unlockAchievement(id: String) {
-        val now = System.currentTimeMillis()
-        if (_unlockedAchievements.value.containsKey(id)) return
-        _unlockedAchievements.value = _unlockedAchievements.value + (id to now)
-        repoScope.launch {
-            database?.achievementDao()?.unlock(UnlockedAchievementEntity(id, now))
-            AchievementCatalog.find(id)?.let { def ->
-                _achievementUnlockChannel.trySend(def)
-            }
-        }
-    }
-
-    /**
-     * 初始化成就系统与学习记录（用于用户开启全新备考旅程）。
-     * 清空测试生成的专注、模考、打卡、日记、对话与成就解锁记录；
-     * 严格保留目标院校、专业、倒计时与 AI Key 等基础设置。
-     */
-    suspend fun resetAchievementsAndStudyRecords() = withContext(Dispatchers.IO) {
-        val db = database ?: return@withContext
-        ActiveSessionCoordinator.cancel()
-        db.achievementDao().deleteAll()
-        _unlockedAchievements.value = emptyMap()
-        db.focusSessionDao().deleteAll()
-        db.examSessionDao().deleteAll()
-        db.noteEntryDao().deleteAll()
-        db.checkInDao().deleteAll()
-        db.chatMessageDao().clearAll()
-        db.chatSessionDao().clearAll()
-        db.aiAnalysisDao().deleteAll()
-        db.studyTaskDao().deleteAll()
-        _aiAnalyses.value = emptyList()
     }
 }

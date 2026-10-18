@@ -353,10 +353,7 @@ data class UserSettings(
     val decisionProvider: String = "openrouter",
     val decisionModel: String = "respan/span-01-lite:free",
     val decisionEndpoint: String = "https://openrouter.ai/api/alpha/decisions"
-) {
-    val isAiConfigured: Boolean
-        get() = aiApiKey.isNotBlank() || (aiBaseUrl.isNotBlank() && !aiBaseUrl.contains("api.deepseek.com"))
-}
+)
 
 enum class ChatSender {
     USER, JUANJUAN

@@ -169,18 +169,6 @@ class YanjiDataModule(
     }
 
     @ReactMethod
-    fun getNotes(page: Double, limit: Double, promise: Promise) {
-        scope.launch {
-            val all = repository.noteEntries.value.sortedByDescending { it.createdAt }
-            val start = ((page.toInt() - 1) * limit.toInt()).coerceAtLeast(0)
-            val slice = all.drop(start).take(limit.toInt())
-            val array = Arguments.createArray()
-            slice.forEach { array.pushMap(noteMap(BridgeMappers.noteFields(it))) }
-            promise.resolve(array)
-        }
-    }
-
-    @ReactMethod
     fun toggleFavoriteNote(noteId: String, promise: Promise) {
         scope.launch {
             try {

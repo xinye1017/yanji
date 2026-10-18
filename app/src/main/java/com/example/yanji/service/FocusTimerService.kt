@@ -85,18 +85,9 @@ class FocusTimerService : Service() {
          * 它和 [liveState] 同源于 [TimerMachine]，不是第二套计时器——只是把「单调时钟差值
          * 在每个整秒上的取值」暴露给 RN 桥接层（`YanjiTimerModule` 转发为 tick 事件），
          * 让 JS 侧只有真正需要变化的计时文本重新渲染，而不是整页重渲染。
+         * 倒计时剩余秒数由桥接层按 `targetSeconds - elapsedSeconds` 自行推算，不另设镜像。
          */
         val elapsedSecondsForUi: StateFlow<Long> = _elapsedSecondsForUi.asStateFlow()
-
-        private val _remainingSecondsForUi = MutableStateFlow(0L)
-
-        /**
-         * 倒计时/模考每秒推进的剩余秒数展示镜像，**只给 App UI 用**。
-         *
-         * 与 [elapsedSecondsForUi] 同源同用途：RN 计时页以 tick 事件消费，
-         * 只有需要变化的计时文本重新渲染，避免倒计时每秒触发整页重渲染。
-         */
-        val remainingSecondsForUi: StateFlow<Long> = _remainingSecondsForUi.asStateFlow()
 
         fun startFocus(context: Context, sessionId: String, subjectName: String, targetSeconds: Long = 0) {
             dispatch(context, ACTION_START_FOCUS, sessionId, subjectName, targetSeconds)
@@ -231,7 +222,6 @@ class FocusTimerService : Service() {
 
         val elapsed = machine.elapsedSeconds()
         _elapsedSecondsForUi.value = elapsed
-        _remainingSecondsForUi.value = machine.remainingSeconds()
         publishSemanticState(elapsedSeconds = elapsed)
 
         promoteToForeground()
@@ -263,12 +253,10 @@ class FocusTimerService : Service() {
                 if (machine.snapshot.phase != TimerPhase.RUNNING) break
                 if (machine.hasReachedTarget()) {
                     _elapsedSecondsForUi.value = machine.snapshot.targetDurationSeconds
-                    _remainingSecondsForUi.value = 0L
                     onCountdownFinished()
                     break
                 }
                 _elapsedSecondsForUi.value = machine.elapsedSeconds()
-                _remainingSecondsForUi.value = machine.remainingSeconds()
             }
         }
     }
@@ -289,7 +277,6 @@ class FocusTimerService : Service() {
         releaseWakeLock()
         val elapsed = machine.elapsedSeconds()
         _elapsedSecondsForUi.value = elapsed
-        _remainingSecondsForUi.value = machine.remainingSeconds()
         ActiveSessionCoordinator.update {
             it.copy(
                 paused = true,
@@ -306,7 +293,6 @@ class FocusTimerService : Service() {
         machine.resume()
         acquireWakeLock()
         _elapsedSecondsForUi.value = machine.elapsedSeconds()
-        _remainingSecondsForUi.value = machine.remainingSeconds()
         ActiveSessionCoordinator.update { it.copy(paused = false) }
         // 语义变化 → 重新计算 Chronometer 基准，从冻结时间继续走。
         publishSemanticState()
@@ -439,7 +425,6 @@ class FocusTimerService : Service() {
         timerJob?.cancel()
         machine.freezeForCommit()
         _elapsedSecondsForUi.value = elapsedSeconds
-        _remainingSecondsForUi.value = machine.remainingSeconds()
         ActiveSessionCoordinator.update {
             it.copy(
                 paused = true,
@@ -459,7 +444,6 @@ class FocusTimerService : Service() {
         publishSemanticState()
         _liveState.value = Idle
         _elapsedSecondsForUi.value = 0L
-        _remainingSecondsForUi.value = 0L
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         liveActivity.cancelOngoing()

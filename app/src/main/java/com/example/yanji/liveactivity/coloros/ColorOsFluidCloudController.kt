@@ -1,11 +1,8 @@
 package com.example.yanji.liveactivity.coloros
 
-import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Context
-import android.content.Intent
 import android.os.Build
-import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.example.yanji.liveactivity.LiveActivityCapability
 
@@ -77,19 +74,6 @@ class ColorOsFluidCloudController(private val context: Context) {
         sdkInt = standard.sdkInt,
         standardLiveUpdateAvailable = standard.canPostPromotedOngoing
     )
-
-    /**
-     * 引导用户前往本应用的通知设置（公开 API `ACTION_APP_NOTIFICATION_SETTINGS`，
-     * API 26+）。用于「流体云/实时活动没出现」时的自查：通知总开关、渠道是否被关、
-     * 是否已授权实时活动。
-     *
-     * 不使用 `ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS`：该常量**不存在于 API 36 的
-     * android.jar**（实测全量 class 中搜不到），引用它会直接编译失败。
-     */
-    @SuppressLint("InlinedApi")
-    fun notificationSettingsIntent(): Intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /** 渠道是否仍可作为 promoted 载体（重要性不能是 MIN，且没被用户关掉）。 */
     fun ongoingChannelUsable(channelId: String): Boolean {

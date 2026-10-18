@@ -291,7 +291,6 @@ interface YanjiDataModuleNative {
     sessionId: string | null,
     category?: string | null
   ): Promise<NoteEntry>;
-  getNotes(page: number, limit: number): Promise<NoteEntry[]>;
   toggleFavoriteNote(noteId: string): Promise<boolean>;
   toggleNoteResolved(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;

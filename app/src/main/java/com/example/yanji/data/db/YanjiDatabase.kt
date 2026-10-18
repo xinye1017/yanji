@@ -617,7 +617,7 @@ abstract class YanjiDatabase : RoomDatabase() {
          * v20 → v21：`journal_entries` 新增 `sessionId`，把快速记录持久地挂到某次专注上。
          *
          * 为什么必须有这一列：此前 `sessionId` 只被注入保存回调的响应体，
-         * 每一条读取路径（`getNotes` / `getNotesForDate` / `getDailyTimeline`）都发出空串，
+         * 每一条读取路径都发出空串，
          * 于是「记录此刻自动关联正在进行的专注」在第一次读取之后就不可见了。
          *
          * 纯 `ADD COLUMN ... TEXT`（可空、无默认值）：SQLite 全版本可用，存量行一律为

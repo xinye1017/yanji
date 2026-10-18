@@ -164,8 +164,6 @@ open class ActiveSessionCoordinatorCore(
 
     fun activeKind(): ActiveSessionKind? = _active.value?.kind
 
-    fun activeSessionId(): String? = _active.value?.sessionId
-
     /**
      * 登记一个活动会话。
      *
@@ -460,14 +458,6 @@ open class ActiveSessionCoordinatorCore(
         onRestored?.invoke(session)
     }
 
-    fun resetForTesting() {
-        synchronized(stateLock) {
-            _state.value = CoordinatorState.IDLE
-            _active.value = null
-            currentTimerSnapshot = null
-            persistence = null
-        }
-    }
 }
 
 /**
