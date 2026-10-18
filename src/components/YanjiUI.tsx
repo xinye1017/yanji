@@ -719,29 +719,53 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
 export function YanjiEmptyLedgerRow({
   prompt,
   onPress,
+  actionLabel = '新建任务 ›',
 }: {
   prompt: string;
   onPress: () => void;
+  actionLabel?: string;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
+  const { colors, typography, layout, radius } = paper;
   return (
-    <View>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={prompt}
-        style={({ pressed }) => ({
-          minHeight: layout.rowMinHeight,
-          justifyContent: 'center',
-          paddingVertical: YanjiSpacing.sm,
-          opacity: pressed ? 0.72 : 1,
-        })}
-      >
-        <Text style={[typography.bodyJournal, { color: colors.secondary }]}>{prompt}</Text>
-      </Pressable>
-      <YanjiHairline />
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={prompt}
+      style={({ pressed }) => ({
+        minHeight: layout.rowMinHeight,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: YanjiSpacing.sm,
+        backgroundColor: colors.elevated,
+        borderWidth: layout.hairlineWidth,
+        borderColor: colors.hairline,
+        borderStyle: 'dashed',
+        borderRadius: radius.tag,
+        paddingHorizontal: YanjiSpacing.md,
+        paddingVertical: YanjiSpacing.sm,
+        marginTop: YanjiSpacing.xs,
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: layout.timelineNodeSize,
+          height: layout.timelineNodeSize,
+          borderRadius: layout.timelineNodeSize / 2,
+          borderWidth: layout.hairlineWidth * 1.5,
+          borderColor: colors.secondary,
+        }}
+      />
+      <Text style={[typography.captionMeta, { color: colors.secondary, flex: 1 }]}>
+        {prompt}
+      </Text>
+      {actionLabel ? (
+        <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '600' }]}>
+          {actionLabel}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 

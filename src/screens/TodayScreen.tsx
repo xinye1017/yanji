@@ -289,7 +289,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiPaperSectionHeading title="今日计划" countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
           right={<YanjiTextAction label="＋ 新建任务" accessibilityLabel="添加任务" onPress={openTaskEditor} />} />
         {!tasks?.length ? <YanjiEmptyLedgerRow
-          prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注。' : '正在读取今日计划…'}
+          prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注…' : '正在读取今日计划…'}
           onPress={openTaskEditor} /> : null}
         {[...pending, ...completed].map((task, index, rows) => (
           <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
