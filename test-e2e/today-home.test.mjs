@@ -375,21 +375,43 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
   assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
 });
 
-test('the journal slip is a flat sheet so the plan keeps the reading order', () => {
-  // It was the page's only lifted card, which put it ahead of 今日计划 even
-  // though the plan is what the day is about.
+test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
+  // The journal slip no longer wraps in a lifted white card.
+  // Instead, it is an unboxed timeline section with its own quiet action.
   const tree = screenHarness(snapshot()).render();
+  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
+  const journalHeading = headings.find(node => node.props.title === '记录此刻');
+  assert.ok(journalHeading, 'the journal section has its own section heading');
+
+  // 写此刻 is a secondary invitation; 新建任务 keeps the section accent. The actions
+  // live in the headings' accessory slots, so they are read from that prop.
+  const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
+  assert.equal(writeNow.props.tone, 'quiet', '写此刻 must not compete with the primary action');
+  const planHeading = headings.find(node => node.props.title === '今日计划');
+  const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
+  assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
+
+
+  // When empty, it renders an unboxed empty state prompt, not a lifted hero card.
   const cards = nodes(tree, node => node.type === 'YanjiCard');
-  assert.ok(cards.length > 0, 'the journal slip still groups its content');
   for (const card of cards) {
     assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
   }
-  // 写此刻 is a secondary invitation; 新建任务 keeps the section accent. The plan
-  // action lives in the heading's accessory slot, so it is read from that prop.
-  const actions = nodes(tree, node => node.type === 'YanjiTextAction');
-  const writeNow = actions.find(node => node.props.accessibilityLabel === '新建今日记录');
-  assert.equal(writeNow.props.tone, 'quiet', '写此刻 must not compete with the primary action');
-  const planHeading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日计划')[0];
-  const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
-  assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
+  assert.match(text(tree), /留一句想法，让今天有自己的注脚/);
 });
+
+test('the journal section renders notes in timeline style with timestamps and actions', () => {
+  const note = {
+    id: 'note-1',
+    timestamp: at('10:30'),
+    content: '长难句核心词汇总结完毕',
+    category: 'INSPIRATION',
+    isFavorite: true,
+    isResolved: false,
+  };
+  const tree = screenHarness(snapshot({ notes: [note] })).render();
+  assert.match(text(tree), /10:30/);
+  assert.match(text(tree), /长难句核心词汇总结完毕/);
+  assert.match(text(tree), /已收藏/);
+});
+

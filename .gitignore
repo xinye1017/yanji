@@ -47,3 +47,7 @@ scripts/jev/.env.local
 
 # --- uiautomator 一次性产物（`adb shell uiautomator dump` 的原始输出） ---
 u.xml
+
+# --- Superpowers Brainstorming 临时产物 ---
+.superpowers/
+

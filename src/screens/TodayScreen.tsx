@@ -32,6 +32,8 @@ type Selection = { key: string; subjectId: string; subjectName: string; seconds:
 const CHART_MODES = [
   { value: 'subjects', label: '学科投入' }, { value: 'timeline', label: '专注时段' },
 ] as const;
+const ENTRY_ICON_SIZE = 17;
+
 
 function localDay(day: Date): string {
   return [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')].join('-');
@@ -367,57 +369,172 @@ export function TodayScreen({ visible, foregroundRevision }: {
           </View>
         ) : null}
 
-        {/* The journal slip stays a flat sheet on the desk. It used to be the
-            page's only lifted white card, which put it ahead of 今日计划 in the
-            reading order even though the plan is what the day is about. A
-            hairline sheet keeps the capture path visible without outranking it. */}
-        <YanjiCard variant="default" style={{ marginTop: layout.sectionGap }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
-              <YanjiIcon name="compose" size={typography.bodyPrimary.fontSize} color={colors.secondary} />
-              <Text accessibilityRole="header" style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
-                记录此刻 · 近期随笔{latestNotes.length > 0 ? ` (${timeLabel(latestNotes[0].timestamp)})` : ''}
-              </Text>
-            </View>
-            <YanjiTextAction label="＋ 写此刻" accessibilityLabel="新建今日记录" onPress={newNote} tone="quiet" />
-          </View>
-          {latestNotes.length > 0 ? latestNotes.map((note, index) => (
-            <View key={note.id}>
-              {index > 0 ? <YanjiHairline style={{ marginVertical: YanjiSpacing.sm }} /> : null}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.gridGap }}>
-                <Pressable onPress={() => { setEditingNote(note); setRecordOpen(true); }}
-                  accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                  style={({ pressed }) => ({ flex: 1, minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginBottom: YanjiSpacing.xs }}>
-                    {index > 0 ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{timeLabel(note.timestamp)}</Text> : null}
-                    <YanjiBadge
-                      tone={note.category === 'DOUBT' ? (note.isResolved ? 'positive' : 'brand') : 'neutral'}
-                      label={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决') : '灵感'}
-                    />
+        {/* 记录此刻：采用回顾页时间线语法，去外层白卡化，无随笔时展示极简紧凑单行插槽 */}
+        <View style={{ marginTop: YanjiSpacing.sm }}>
+          <YanjiPaperSectionHeading
+            title="记录此刻"
+            right={
+              <YanjiTextAction
+                label="＋ 写此刻"
+                accessibilityLabel="新建今日记录"
+                onPress={newNote}
+                tone="quiet"
+              />
+            }
+          />
+          {latestNotes.length > 0 ? (
+            <View style={{ marginTop: YanjiSpacing.xs }}>
+              {latestNotes.map((note, index) => {
+                const isFirst = index === 0;
+                const isLast = index === latestNotes.length - 1;
+                const isDoubt = note.category === 'DOUBT';
+                const isResolved = !!note.isResolved;
+                const nodeColor = isDoubt
+                  ? (isResolved ? colors.positive : colors.brand)
+                  : colors.brand;
+                const dotCenterY = layout.timelineNodeSize / 2 + 2;
+                const nodeRadius = layout.timelineNodeSize / 2;
+                const dotGap = YanjiSpacing.xs;
+                const clearance = nodeRadius + dotGap;
+                const topSegmentHeight = dotCenterY - clearance;
+
+                return (
+                  <View key={note.id} style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
+                    <View style={{
+                      width: layout.timelineTimeColumn,
+                      height: 16,
+                      justifyContent: 'center',
+                      marginTop: Math.max(0, dotCenterY - 8),
+                    }}>
+                      <Text style={[typography.captionMeta, { color: colors.secondary, textAlign: 'right' }]}>
+                        {timeLabel(note.timestamp)}
+                      </Text>
+                    </View>
+                    <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
+                      {!isFirst && topSegmentHeight > 0 ? (
+                        <View style={{
+                          position: 'absolute', top: 0, height: topSegmentHeight,
+                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
+                        }} />
+                      ) : null}
+                      <View style={{
+                        position: 'absolute', top: dotCenterY - nodeRadius,
+                        width: layout.timelineNodeSize, height: layout.timelineNodeSize,
+                        borderRadius: nodeRadius, backgroundColor: nodeColor,
+                      }} />
+                      {!isLast ? (
+                        <View style={{
+                          position: 'absolute', top: dotCenterY + clearance, bottom: 0,
+                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
+                        }} />
+                      ) : null}
+                    </View>
+                    <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.sm, minHeight: 56 }}>
+                      <Pressable
+                        onPress={() => { setEditingNote(note); setRecordOpen(true); }}
+                        accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
+                        style={({ pressed }) => ({
+                          backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
+                          borderLeftWidth: 3, borderLeftColor: nodeColor,
+                          borderRadius: radius.tag,
+                          paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
+                          opacity: pressed ? 0.7 : 1,
+                        })}>
+                        <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flex: 1 }}>
+                            <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>
+                              记录此刻
+                            </Text>
+                            {isDoubt ? (
+                              <Pressable
+                                onPress={() => void toggleResolved(note)}
+                                disabled={busyNote !== null}
+                                accessibilityRole="button"
+                                accessibilityLabel={isResolved ? '疑点已解决，点击标记为待解决' : '疑点待解决，点击标记为已解决'}
+                                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+                                <YanjiBadge tone={isResolved ? 'positive' : 'brand'} label={isResolved ? '疑点 · 已解决' : '疑点 · 待解决'} />
+                              </Pressable>
+                            ) : (
+                              <YanjiBadge tone="neutral" label="灵感" />
+                            )}
+                            {note.isFavorite ? (
+                              <Text style={[typography.captionMeta, { color: colors.secondary }]}>· 已收藏</Text>
+                            ) : null}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <YanjiIconButton
+                              icon="compose"
+                              accessibilityLabel={`编辑记录：${noteTitle(note)}`}
+                              onPress={() => { setEditingNote(note); setRecordOpen(true); }}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                            <YanjiIconButton
+                              icon={note.isFavorite ? 'star' : 'starOutline'}
+                              accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`}
+                              onPress={() => void toggleFavorite(note)}
+                              disabled={busyNote !== null}
+                              selected={note.isFavorite}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                          </View>
+                        </View>
+                        <Text style={[
+                          typography.bodyExcerpt,
+                          {
+                            color: isDoubt && isResolved ? colors.secondary : colors.ink,
+                            textDecorationLine: isDoubt && isResolved ? 'line-through' : 'none',
+                          },
+                        ]} numberOfLines={4}>“{note.content}”</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                  <Text style={[
-                    typography.bodyExcerpt,
-                    {
-                      color: note.category === 'DOUBT' && note.isResolved ? colors.secondary : colors.ink,
-                      textDecorationLine: note.category === 'DOUBT' && note.isResolved ? 'line-through' : 'none',
-                    },
-                  ]} numberOfLines={4}>“{note.content}”</Text>
-                </Pressable>
-                <YanjiIconButton icon={note.isFavorite ? 'star' : 'starOutline'} onPress={() => void toggleFavorite(note)}
-                  selected={note.isFavorite} disabled={busyNote !== null}
-                  accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`} size={layout.rowMinHeight} />
-              </View>
+                );
+              })}
+              {(notes?.length ?? 0) > 2 ? (
+                <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
+                  <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} />
+                </View>
+              ) : null}
             </View>
-          )) : (
-            <Pressable onPress={newNote} accessibilityRole="button" accessibilityLabel="写下今日随笔"
-              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
-              <Text style={[typography.bodyJournal, { color: colors.secondary }]}>
-                {snapshot ? '留一句想法，让今天有自己的注脚。' : '正在读取今日随笔…'}
+          ) : (
+            <Pressable
+              onPress={newNote}
+              accessibilityRole="button"
+              accessibilityLabel="写下今日随笔"
+              style={({ pressed }) => ({
+                minHeight: layout.rowMinHeight,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: YanjiSpacing.sm,
+                backgroundColor: colors.elevated,
+                borderWidth: layout.hairlineWidth,
+                borderColor: colors.hairline,
+                borderStyle: 'dashed',
+                borderRadius: radius.tag,
+                paddingHorizontal: YanjiSpacing.md,
+                paddingVertical: YanjiSpacing.sm,
+                marginTop: YanjiSpacing.xs,
+                opacity: pressed ? 0.65 : 1,
+              })}>
+              <View style={{
+                width: layout.timelineNodeSize,
+                height: layout.timelineNodeSize,
+                borderRadius: layout.timelineNodeSize / 2,
+                borderWidth: layout.hairlineWidth * 1.5,
+                borderColor: colors.secondary,
+              }} />
+              <Text style={[typography.captionMeta, { color: colors.secondary, flex: 1 }]}>
+                {snapshot ? '留一句想法，让今天有自己的注脚…' : '正在读取今日随笔…'}
+              </Text>
+              <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '600' }]}>
+                点击速记 ›
               </Text>
             </Pressable>
           )}
-        </YanjiCard>
-        {(notes?.length ?? 0) > 2 ? <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} /> : null}
+        </View>
 
         {/* 今日学习节奏.
             Collapsed, this used to be a caption, a row of 18 fixed-width ticks
