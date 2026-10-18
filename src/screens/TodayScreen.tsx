@@ -6,8 +6,7 @@ import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
-  YanjiPaperSectionHeading, YanjiPaperSegmentedControl,
-  YanjiPrimaryButton, YanjiSubjectProportionRow,
+  YanjiPaperSectionHeading, YanjiPrimaryButton,
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -29,11 +28,23 @@ import {
 } from './todayViewLogic';
 import { examCountdownText, todayIso } from '../state/settingsViewLogic';
 
-type ChartMode = 'subjects' | 'timeline';
-type Selection = { key: string; subjectId: string; subjectName: string; seconds: number } | null;
-const CHART_MODES = [
-  { value: 'subjects', label: '学科投入' }, { value: 'timeline', label: '专注时段' },
-] as const;
+/**
+ * What the page is currently explaining.
+ *
+ * A subject chip above the chart explains that subject's total; a highlight in
+ * the expanded 专注时段 strip explains one session. They are different
+ * statements, so the variant is explicit rather than inferred from a key.
+ */
+type Selection =
+  | { kind: 'subject'; key: string; subjectId: string; subjectName: string; seconds: number }
+  | {
+    kind: 'session'; key: string; subjectId: string; subjectName: string; seconds: number;
+    /** Wall-clock bounds of the session (epoch ms) — the exact interval asked for. */
+    startTime: number; endTime: number;
+    /** The day part whose bar was tapped, so the detail renders under that bar. */
+    partName: string;
+  }
+  | null;
 const ENTRY_ICON_SIZE = 17;
 
 
@@ -76,7 +87,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const settings = settingsSnapshot?.settings ?? null;
   const countdown = settingsSnapshot?.examCountdown ?? null;
   const active = useActiveSession(visible);
-  const [chart, setChart] = useState<ChartMode>('subjects');
   const [rhythmExpanded, setRhythmExpanded] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -133,7 +143,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
     [rhythmBuckets, snapshot],
   );
   const rhythmToggleLabel = rhythmExpanded ? '收起今日学习节奏详情' : '展开今日学习节奏详情';
-  const chartTotal = subjects.reduce((sum, subject) => sum + subject.seconds, 0);
   const selectSegment = (next: NonNullable<Selection>) =>
     setSelection(current => current?.key === next.key ? null : next);
   const startTask = (task: StudyTask) => requestFocusPreset({
@@ -260,12 +269,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: YanjiSpacing.md, marginTop: YanjiSpacing.xs }}>
               {legendItems.map(item => (
                 <Pressable key={item.id}
-                  onPress={() => selectSegment({ key: `subject:${item.id}`, subjectId: item.id, subjectName: item.label, seconds: item.seconds })}
-                  accessibilityRole="button" accessibilityState={{ selected: selection?.subjectId === item.id }}
+                  onPress={() => selectSegment({ kind: 'subject', key: `subject:${item.id}`, subjectId: item.id, subjectName: item.label, seconds: item.seconds })}
+                  accessibilityRole="button" accessibilityState={{ selected: selection?.kind === 'subject' && selection.subjectId === item.id }}
                   accessibilityLabel={`${item.label}，今日专注 ${duration(item.seconds)}`}
                   style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
                   <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: item.color }} />
-                  <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.subjectId === item.id ? '700' : '500' }]}>
+                  <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.kind === 'subject' && selection.subjectId === item.id ? '700' : '500' }]}>
                     {item.label} {compactDuration(item.seconds)}
                   </Text>
                 </Pressable>
@@ -274,7 +283,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           ) : <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
             {snapshot ? '按自己的步调开始今天的第一轮专注。' : '正在读取今日记录，可点击下方重新读取。'}
           </Text>}
-          {selection?.key.startsWith('subject:') ? (
+          {selection?.kind === 'subject' ? (
             <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
               {selection.subjectName} · {duration(selection.seconds)}
             </Text>
@@ -470,7 +479,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               accessibilityRole="button"
               accessibilityLabel={rhythmToggleLabel}
               accessibilityState={{ expanded: rhythmExpanded }}
-              accessibilityHint={rhythmExpanded ? '收起学科与时段详情' : '展开学科与时段详情'}
+              accessibilityHint={rhythmExpanded ? '收起专注时段详情' : '展开专注时段详情'}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
               <Text style={[typography.captionMeta, { color: colors.secondary }]}>
@@ -483,72 +492,86 @@ export function TodayScreen({ visible, foregroundRevision }: {
             accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
           {rhythmExpanded ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
-              <YanjiPaperSegmentedControl value={chart} options={CHART_MODES} accessibilityLabel="今日节奏视图"
-                onChange={mode => { setChart(mode); setSelection(null); }} />
-              {chart === 'subjects' ? (
-                <View style={{ marginTop: YanjiSpacing.md }}>
-                  {subjects.map(subject => <YanjiSubjectProportionRow key={subject.id} label={subject.label} color={subject.color}
-                    metaText={`${duration(subject.seconds)} · ${chartTotal ? Math.round(subject.seconds / chartTotal * 100) : 0}%`}
-                    ratio={chartTotal > 0 ? subject.seconds / chartTotal : 0} selected={selection?.subjectId === subject.id}
-                    onPress={() => selectSegment({ key: `subject:${subject.id}`, subjectId: subject.id, subjectName: subject.label, seconds: subject.seconds })} />)}
-                  {!subjects.length ? <Text style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.md }]}>
-                    {snapshot ? '还没有已保存的学科投入。' : '正在读取学科记录…'}
-                  </Text> : null}
-                </View>
-              ) : (
-                <View style={{ marginTop: YanjiSpacing.md }}>
-                  {DAY_PARTS.map(part => {
-                    const startDate = new Date(`${date}T00:00:00`);
-                    startDate.setHours(part.from);
-                    const endDate = new Date(`${date}T00:00:00`);
-                    endDate.setHours(part.to);
-                    const start = startDate.getTime();
-                    const end = endDate.getTime();
-                    const segments = sessions?.filter(session => {
+              {DAY_PARTS.map(part => {
+                const startDate = new Date(`${date}T00:00:00`);
+                startDate.setHours(part.from);
+                const endDate = new Date(`${date}T00:00:00`);
+                endDate.setHours(part.to);
+                const start = startDate.getTime();
+                const end = endDate.getTime();
+                const segments = sessions?.filter(session => {
+                  const sStart = session.startTime;
+                  const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                  return session.durationSeconds > 0 && sEnd > start && sStart < end;
+                }) ?? [];
+                // The detail belongs under the bar it was read from, so a tap
+                // on a highlight explains itself in place instead of in a
+                // footer somewhere below four day parts.
+                const detail = selection?.kind === 'session' && selection.partName === part.name
+                  ? selection
+                  : null;
+                return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
+                    <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
+                    <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
+                  </View>
+                  <View
+                    style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
+                    {segments.map(session => {
                       const sStart = session.startTime;
                       const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
-                      return session.durationSeconds > 0 && sEnd > start && sStart < end;
-                    }) ?? [];
-                    return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
-                        <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
-                        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
-                      </View>
-                      <View accessible accessibilityLabel={`${part.name}，${segments.length} 段专注记录`}
-                        style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
-                        {segments.map(session => {
-                          const sStart = session.startTime;
-                          const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
-                          const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
-                          const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
-                          return (
-                            <View key={session.id} style={{
-                              position: 'absolute', top: 0, bottom: 0,
-                              left: `${segLeft}%`,
-                              width: `${segWidth}%`,
-                              backgroundColor: session.subjectColor || colors.secondary,
-                            }} />
-                          );
-                        })}
-                      </View>
-                    </View>;
-                  })}
-                  {sessions?.map(session => <Pressable key={session.id}
-                    onPress={() => selectSegment({ key: `session:${session.id}`, subjectId: session.subjectId, subjectName: session.subjectName, seconds: session.durationSeconds })}
-                    accessibilityRole="button" accessibilityLabel={`${session.subjectName}，本次${duration(session.durationSeconds)}`}
-                    style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline, opacity: pressed ? 0.65 : 1 })}>
-                    <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                      const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
+                      const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
+                      const selected = selection?.kind === 'session' && selection.key === `session:${session.id}`;
+                      return (
+                        <Pressable
+                          key={session.id}
+                          onPress={() => selectSegment({
+                            kind: 'session',
+                            key: `session:${session.id}`,
+                            subjectId: session.subjectId,
+                            subjectName: session.subjectName,
+                            seconds: session.durationSeconds,
+                            startTime: sStart,
+                            endTime: sEnd,
+                            partName: part.name,
+                          })}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`${session.subjectName}，${timeLabel(sStart)} 至 ${timeLabel(sEnd)}，${duration(session.durationSeconds)}`}
+                          hitSlop={{ top: 14, bottom: 14, left: 2, right: 2 }}
+                          style={({ pressed }) => ({
+                            position: 'absolute', top: 0, bottom: 0,
+                            left: `${segLeft}%`,
+                            width: `${segWidth}%`,
+                            backgroundColor: session.subjectColor || colors.secondary,
+                            // Once one highlight is selected the others recede,
+                            // so the detail has an obvious source on the strip.
+                            opacity: pressed ? 0.7 : selection && !selected ? 0.35 : 1,
+                          })}
+                        />
+                      );
+                    })}
+                  </View>
+                  {detail ? (
+                    <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>
+                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)} · {detail.subjectName} · {duration(detail.seconds)}
+                    </Text>
+                  ) : null}
+                </View>;
+              })}
+              {sessions?.length ? (
+                <View style={{ marginTop: YanjiSpacing.xs }}>
+                  {sessions.map(session => (
+                    <Text key={session.id} style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.sm, borderBottomWidth: layout.hairlineWidth, borderColor: colors.hairline }]}>
                       {timeLabel(session.startTime)} 起 · {session.subjectName} · {duration(session.durationSeconds)}
                     </Text>
-                  </Pressable>)}
+                  ))}
                 </View>
-              )}
+              ) : null}
               <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                柱高按小时汇总专注投入，以当小时投入最多的学科着色。06:00 前的记录可在专注时段查看。
+                柱高按小时汇总专注投入，以当小时投入最多的学科着色；点按下方色块可查看每段专注的具体时间与学科。
               </Text>
-              {selection?.key.startsWith('session:') ? <Text accessibilityLiveRegion="polite" style={[typography.bodyPrimary, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-                {selection.subjectName} · {duration(selection.seconds)}
-              </Text> : null}
             </View>
           ) : null}
         </View>

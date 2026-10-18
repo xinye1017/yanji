@@ -257,7 +257,9 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   const toggle = () => nodes(heading().props.right, node => node.type === 'Pressable')[0];
   toggle().props.onPress();
   tree = harness.render();
-  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 1);
+  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 0,
+    'expanding reveals the day parts directly, with no view switcher');
+  assert.match(text(tree), /上午/, 'the expanded area is the 专注时段 strip');
   assert.equal(toggle().props.accessibilityState.expanded, true);
 });
 
@@ -498,16 +500,26 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   const toggle = nodes(heading.props.right, node => node.type === 'Pressable')[0];
   toggle.props.onPress();
   const expandedTree = harness.render();
-  const segmented = nodes(expandedTree, node => node.type === 'YanjiPaperSegmentedControl')[0];
-  segmented.props.onChange('dayParts');
-  const dayPartsTree = harness.render();
+
+  // The view switcher is gone: the expanded area is 专注时段 only.
+  assert.equal(nodes(expandedTree, node => node.type === 'YanjiPaperSegmentedControl').length, 0,
+    'the 学科投入 / 专注时段 switcher no longer exists');
+  assert.doesNotMatch(text(expandedTree), /学科投入/);
 
   // Morning spectrum has the segment
-  assert.match(text(dayPartsTree), /上午/);
-  assert.match(text(dayPartsTree), /06:00—12:00/);
-  assert.match(text(dayPartsTree), /10:45 起 · 数据结构 · 30分钟/);
+  assert.match(text(expandedTree), /上午/);
+  assert.match(text(expandedTree), /06:00—12:00/);
+  assert.match(text(expandedTree), /10:45 起 · 数据结构 · 30分钟/);
   // Must NOT display "未绘连续区段"
-  assert.doesNotMatch(text(dayPartsTree), /未绘连续区段/);
+  assert.doesNotMatch(text(expandedTree), /未绘连续区段/);
+
+  // Tapping the highlighted span prints its exact interval and subject.
+  const highlight = nodes(expandedTree, node => node.type === 'Pressable'
+    && node.props.accessibilityLabel === '数据结构，10:45 至 11:15，30分钟')[0];
+  assert.ok(highlight, 'each coloured span is its own press target');
+  highlight.props.onPress();
+  const detailTree = harness.render();
+  assert.match(text(detailTree), /10:45—11:15 · 数据结构 · 30分钟/);
 });
 
 
