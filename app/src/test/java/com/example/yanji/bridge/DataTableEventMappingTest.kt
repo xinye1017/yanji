@@ -9,9 +9,9 @@ class DataTableEventMappingTest {
     @Test
     fun roomTablesMapToTheirDataChangedTypes() {
         assertEquals(
-            setOf("tasks", "notes", "sessions", "settings"),
+            setOf("tasks", "notes", "sessions", "settings", "subjects"),
             dataEventTypesForTables(
-                setOf("study_tasks", "journal_entries", "focus_sessions", "exam_sessions", "user_settings")
+                setOf("study_tasks", "journal_entries", "focus_sessions", "exam_sessions", "user_settings", "subjects")
             )
         )
     }
@@ -24,7 +24,7 @@ class DataTableEventMappingTest {
 
     @Test
     fun unknownTablesProduceNoDataChangedEvents() {
-        assertTrue(dataEventTypesForTables(setOf("subjects", "chat_messages")).isEmpty())
+        assertTrue(dataEventTypesForTables(setOf("unknown_table", "chat_messages")).isEmpty())
         assertTrue(dataEventTypesForTables(emptySet()).isEmpty())
     }
 }
