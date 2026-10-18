@@ -89,8 +89,13 @@ test('App shell reconciles a foreground transition that happened before its list
   while (element.type.name !== 'AppShell') element = element.props.children;
   element.type();
   effects[0]();
+  // The coordinator is told the truth about the foreground…
   assert.equal(gates.at(-1), true);
-  assert.equal(states[0].at(-1), true);
+  // …and the shell reconciled the transition that happened before its listener
+  // attached into its own `foreground` state, which is what re-renders the panes.
+  // `states[0]` is the root's one-shot seed slot; AppShell's `foreground` flag
+  // is the next state registered.
+  assert.equal(states[1].at(-1), true);
 });
 
 test('App shell keeps one dock mounted and gates its visibility using native session transitions', () => {
@@ -379,6 +384,61 @@ test('a second launch payload cannot roll back an already refreshed snapshot', a
   assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
 });
 
+test('a remounted root can seed the same launch payload again after the cache was released', async () => {
+  // Activity exit and re-entry in one process: the React tree remounts and hands
+  // the same host payload to a cache that a previous unmount already released.
+  // A once-only latch would leave that mount with neither the preheated snapshot
+  // nor a read, which is exactly the stuck 「正在读取」 state on device.
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+
+  // The reader goes away and its retained date is pruned, emptying the cache.
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  coordinator.setDailyReader('today', null);
+  assert.equal(coordinator.getDailySnapshot('2026-10-10'), null);
+
+  // The remounted root re-seeds the same payload and paints real data again.
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+  assert.equal(reads.settings, 0, 'the settings slot was never released, so it is not re-seeded');
+});
+
+test('a re-seed is confirmed against Room before it is trusted', async () => {
+  // The host payload is read once at `Application.onCreate`, so by the time a
+  // remount re-seeds it, it may already be older than Room. The first frame may
+  // paint it, but a real read must follow — otherwise the page shows a stale
+  // total until some unrelated event happens to arrive. Deleting the stale flag
+  // would leave every other assertion here green.
+  const { coordinator, reads } = fixture();
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.deepEqual(reads.daily, [], 'the cold-start payload is trusted and costs no read');
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
+  coordinator.setDailyReader('today', null);
+
+  // The remount: same payload, but any amount of time may have passed.
+  coordinator.seed(launchProperties('2026-10-10'));
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10'],
+    'a re-seeded payload must be confirmed against Room before it is trusted');
+  // The fixture's own read reports 0s, so the correction is observable.
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 0);
+});
+
+test('a re-seed never overwrites a snapshot a bridged read already refreshed', async () => {
+  const { coordinator } = fixture();
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  const fresh = coordinator.getDailySnapshot('2026-10-10');
+  coordinator.seed(launchProperties('2026-10-10'));
+  assert.equal(coordinator.getDailySnapshot('2026-10-10'), fresh,
+    'the launch payload is older than the read that already landed');
+});
+
 test('same-date readers share one request and one native write batch causes one reread', async () => {
   const { coordinator, reads } = fixture();
   coordinator.setDailyReader('today', '2026-10-10');
@@ -399,7 +459,10 @@ test('hidden pages and background readers issue no reads; activation repairs the
   coordinator.setDailyReader('review', null);
   coordinator.enqueueDataChanged('sessions');
   coordinator.enqueueDataChanged('tasks');
-  coordinator.handleForeground();
+  // A resume is the only public way to ask for the repair; `handleForeground`
+  // is private so nothing can re-read without the transition that justifies it.
+  coordinator.setForeground(false);
+  coordinator.setForeground(true);
   await settle();
   assert.equal(reads.daily.length, 1);
   coordinator.setDailyReader('review', '2026-10-09');
@@ -416,10 +479,72 @@ test('foreground gating stops native reads immediately even before React effects
   coordinator.enqueueDataChanged('sessions');
   await settle();
   assert.equal(reads.daily.length, 1);
+  // Returning to the foreground is the one thing that has to re-read: it is the
+  // only place that can repair a reader whose registration was gated while the
+  // shell believed it was backgrounded. It must do so exactly once.
   coordinator.setForeground(true);
-  coordinator.handleForeground();
   await settle();
   assert.equal(reads.daily.length, 2);
+});
+
+test('a reader registered while backgrounded is repaired by the foreground transition', async () => {
+  // The Activity-exit-and-re-entry path: the React tree remounts, its child
+  // effects register readers while `foreground` still holds the previous
+  // `false`, and nothing re-registers afterwards because the date did not
+  // change. Only the `false → true` transition can rescue that read.
+  const { coordinator, reads } = fixture();
+  coordinator.setForeground(false);
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.deepEqual(reads.daily, [], 'a backgrounded registration issues no read');
+  assert.equal(reads.settings, 0);
+
+  coordinator.setForeground(true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10'], 'the transition reads the gated date');
+  assert.equal(reads.settings, 1);
+
+  // A repeated foreground signal is not a second read.
+  coordinator.setForeground(true);
+  await settle();
+  assert.deepEqual(reads.daily, ['2026-10-10']);
+  assert.equal(reads.settings, 1);
+});
+
+test('a remount that finds the coordinator already foregrounded issues no extra read', async () => {
+  // AppShell calls `setForeground(currentForeground)` unconditionally on mount.
+  // If the coordinator already agrees it is foregrounded, that call must be a
+  // no-op: a remount is not a resume, and treating it as one would issue a full
+  // re-read of every visible date on every remount (font scale, locale, split
+  // screen — all rebuild the Activity).
+  const { coordinator, reads } = fixture();
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  await settle();
+  assert.equal(reads.daily.length, 1);
+  assert.equal(reads.settings, 1);
+
+  // The remount: the readers re-register with the same date, then AppShell
+  // re-asserts the foreground state it already had.
+  coordinator.setDailyReader('today', '2026-10-10');
+  coordinator.setSettingsReader('today', true);
+  coordinator.setForeground(true);
+  await settle();
+  assert.equal(reads.daily.length, 1, 'a remount is not a resume, so it must not re-read');
+  assert.equal(reads.settings, 1);
+});
+
+test('a repeated foreground signal is not a second read', async () => {
+  const { coordinator, reads } = fixture();
+  coordinator.setForeground(true);
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.equal(reads.daily.length, 1);
+  coordinator.setForeground(true);
+  coordinator.setForeground(true);
+  await settle();
+  assert.equal(reads.daily.length, 1, 'only a false → true transition may trigger the repair');
 });
 
 test('event types refresh only their dependent reads', async () => {
