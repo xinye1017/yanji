@@ -451,6 +451,7 @@ class YanjiRepository private constructor() {
             "focus_sessions",
             "exam_sessions",
             "user_settings",
+            "subjects",
             emitInitialState = false
         )
 

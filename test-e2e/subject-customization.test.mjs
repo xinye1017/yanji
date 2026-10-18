@@ -257,3 +257,90 @@ test('SubjectsSheet renders edit and delete options for categories with compact 
   assert.equal(deleteChildBtn.size, 22, 'Child delete button size should be 22');
   assert.equal(deleteChildBtn.iconSize, 13, 'Child delete button iconSize should be 13');
 });
+
+test('FocusScreen reloads subjects when onDataChanged receives event.type subjects', async () => {
+  const paper = {
+    colors: tokens.YanjiPaperColors.light,
+    radius: tokens.YanjiPaperRadius,
+    layout: tokens.YanjiPaperLayout,
+    typography: tokens.YanjiPaperTypography,
+  };
+
+  const sampleSubjects = [
+    { id: 'math', name: '数学一', colorHex: '#356AE6', sortOrder: 1, enabled: true, parentId: null, isCategory: true },
+  ];
+  let getSubjectsCallCount = 0;
+  let dataChangedCallback = null;
+
+  const effects = [];
+  const react = {
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useMemo: fn => fn(),
+    useCallback: fn => fn,
+    useEffect: (fn, deps) => { effects.push({ fn, deps }); },
+    useRef: val => ({ current: val }),
+  };
+
+  const focusModule = loadTypeScript('src/screens/FocusScreen.tsx', {
+    react,
+    'react-native': {
+      View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      TextInput: 'TextInput', AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+      useWindowDimensions: () => ({ width: 375, height: 812 }),
+    },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) },
+    'react-native-svg': { default: 'Svg', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' },
+    '../bridge': {
+      YanjiDataNative: {
+        getSubjects: async () => {
+          getSubjectsCallCount++;
+          return sampleSubjects;
+        },
+      },
+      YanjiTimerNative: {},
+      onDataChanged: cb => {
+        dataChangedCallback = cb;
+        return () => {};
+      },
+    },
+    '../components/YanjiUI': {
+      YanjiIcon: 'YanjiIcon',
+      YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
+    },
+    '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
+    '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
+    '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../navigation/NavigationShell': {
+      useNavigationActions: () => ({ clearFocusPreset: () => {} }),
+      useNavigationState: () => ({ focusPreset: null }),
+    },
+    '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ totalBottomOffset: 60 }) },
+    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
+    '../theme/tokens': tokens,
+    '../state/dataRefresh': {
+      useDailySnapshot: () => ({ date: '2026-10-18', sessions: [], tasks: [] }),
+    },
+    '../state/timerStore': {
+      syncActiveSession: () => {},
+      useActiveSession: () => null,
+      useTimerTick: () => ({ elapsedSeconds: 0, remainingSeconds: 0 }),
+    },
+  });
+
+  // Render FocusScreen with visible = true
+  focusModule.FocusScreen({ visible: true });
+
+  // Run initial effects
+  for (const eff of effects) {
+    eff.fn();
+  }
+
+  assert.ok(getSubjectsCallCount > 0, 'Should have loaded subjects on mount / visible');
+  const countBefore = getSubjectsCallCount;
+
+  // Simulate onDataChanged event for subjects
+  assert.ok(dataChangedCallback, 'onDataChanged callback should be registered');
+  dataChangedCallback({ type: 'subjects' });
+
+  assert.equal(getSubjectsCallCount, countBefore + 1, 'Should reload subjects when subjects changed event arrives');
+});

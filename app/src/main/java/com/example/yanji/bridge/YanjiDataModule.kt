@@ -267,6 +267,7 @@ class YanjiDataModule(
         scope.launch {
             try {
                 repository.renameSubject(subjectId, clean)
+                emitDataChanged("subjects")
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_RENAME_SUBJECT", e.message)
@@ -285,6 +286,7 @@ class YanjiDataModule(
             try {
                 val created = repository.addSubSubject(parentId, clean)
                 if (created != null) {
+                    emitDataChanged("subjects")
                     val map = Arguments.createMap().apply {
                         putString("id", created.id)
                         putString("name", created.name)
@@ -314,6 +316,7 @@ class YanjiDataModule(
         scope.launch {
             try {
                 val created = repository.addSubjectCategory(clean)
+                emitDataChanged("subjects")
                 val map = Arguments.createMap().apply {
                     putString("id", created.id)
                     putString("name", created.name)
@@ -335,6 +338,7 @@ class YanjiDataModule(
         scope.launch {
             try {
                 repository.deleteSubject(subjectId)
+                emitDataChanged("subjects")
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_DELETE_SUBJECT", e.message)
@@ -347,6 +351,7 @@ class YanjiDataModule(
         scope.launch {
             try {
                 repository.restoreDefaultSubjects()
+                emitDataChanged("subjects")
                 promise.resolve(true)
             } catch (e: Exception) {
                 promise.reject("E_RESTORE_SUBJECTS", e.message)

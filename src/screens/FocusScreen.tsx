@@ -125,7 +125,11 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       });
   }, []);
 
-  useEffect(() => { loadSubjects(); }, [loadSubjects]);
+  useEffect(() => {
+    if (visible) {
+      loadSubjects();
+    }
+  }, [visible, loadSubjects]);
   useEffect(() => {
     return onDataChanged(event => {
       if (event.type === 'subjects') {
