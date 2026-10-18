@@ -12,7 +12,7 @@ test('BottomTabBar source imports PanResponder and binds panHandlers', () => {
   assert.match(dock, /calculatePillDeformation/, 'BottomTabBar must export calculatePillDeformation');
 });
 
-test('calculatePillDeformation produces stretch-and-squish physical motion', () => {
+test('calculatePillDeformation produces wall collision squash without overflowing bounds', () => {
   const { calculatePillDeformation } = loadTypeScript('src/navigation/BottomTabBar.tsx', {
     react: {
       useState: initial => [initial, () => {}],
@@ -50,7 +50,7 @@ test('calculatePillDeformation produces stretch-and-squish physical motion', () 
         paper: { layout: { hairlineWidth: 1 }, colors: { brandInk: '#000', brand: '#f00', ink: '#333' } },
         spacing: { lg: 16 },
         shadow: { floating: () => ({}) },
-        motion: { spring: { snappy: {} } },
+        motion: { spring: { snappy: { damping: 14, stiffness: 240, mass: 0.8 } } },
         isDark: false,
       }),
     },
@@ -72,29 +72,37 @@ test('calculatePillDeformation produces stretch-and-squish physical motion', () 
   });
 
   const slotWidth = 100;
+  const tabsCount = 3;
+  const wallRight = tabsCount * slotWidth;
 
   // 1. At rest at slot 1
-  const rest = calculatePillDeformation(1, 1, slotWidth);
+  const rest = calculatePillDeformation(1, 1, slotWidth, tabsCount);
   assert.equal(rest.translateX, 100, 'translateX is slot 1 position at rest');
   assert.equal(rest.scaleX, 1, 'scaleX is 1 at rest');
   assert.equal(rest.scaleY, 1, 'scaleY is 1 at rest');
 
-  // 2. Dragging right (lead ahead of trail: lead = 1.5, trail = 1.1)
-  const draggingRight = calculatePillDeformation(1.5, 1.1, slotWidth);
-  assert.ok(draggingRight.scaleX > 1, 'scaleX must stretch horizontally when dragging right');
-  assert.ok(draggingRight.scaleY < 1, 'scaleY must compress vertically to simulate jelly volume conservation');
-  assert.ok(draggingRight.translateX > 100, 'translateX must move along the drag direction');
+  // 2. Dragging right in interior (lead ahead of trail: lead = 1.5, trail = 1.1)
+  const draggingRight = calculatePillDeformation(1.5, 1.1, slotWidth, tabsCount);
+  assert.ok(draggingRight.scaleX > 1, 'scaleX stretches in open interior');
+  assert.ok(draggingRight.scaleY < 1, 'scaleY compresses in open interior');
 
-  // 3. Dragging left (lead moved left of trail: lead = 0.5, trail = 0.9)
-  const draggingLeft = calculatePillDeformation(0.5, 0.9, slotWidth);
-  assert.ok(draggingLeft.scaleX > 1, 'scaleX must stretch horizontally when dragging left');
-  assert.ok(draggingLeft.scaleY < 1, 'scaleY must compress vertically when dragging left');
-  assert.ok(draggingLeft.translateX < 90, 'translateX must shift towards left with lead');
+  // 3. Wall collision on Left Wall: lead pulled negative (e.g. -0.4)
+  const leftCollision = calculatePillDeformation(-0.4, 0, slotWidth, tabsCount);
+  const leftVisualLeft = leftCollision.translateX + slotWidth / 2 - (slotWidth * leftCollision.scaleX) / 2;
+  const leftVisualRight = leftCollision.translateX + slotWidth / 2 + (slotWidth * leftCollision.scaleX) / 2;
+  assert.ok(Math.abs(leftVisualLeft) < 0.001, `visual left must be pinned to 0 on wall impact (saw ${leftVisualLeft})`);
+  assert.ok(leftVisualRight <= wallRight, 'visual right must not exceed right boundary');
+  assert.ok(leftCollision.scaleX < 1, 'pill must squash horizontally against left wall');
+  assert.ok(leftCollision.scaleY > 1, 'pill must bulge vertically against left wall');
 
-  // 4. Clamping maximum stretch to avoid exaggerated distortion
-  const extremeDrag = calculatePillDeformation(3, 0, slotWidth);
-  assert.ok(extremeDrag.scaleX <= 1.35, 'scaleX must be clamped within realistic physical bounds (<= 1.35)');
-  assert.ok(extremeDrag.scaleY >= 0.85, 'scaleY must stay visually pleasant (>= 0.85)');
+  // 4. Wall collision on Right Wall: lead pushed beyond tab 2 (e.g. 2.5)
+  const rightCollision = calculatePillDeformation(2.5, 2.0, slotWidth, tabsCount);
+  const rightVisualLeft = rightCollision.translateX + slotWidth / 2 - (slotWidth * rightCollision.scaleX) / 2;
+  const rightVisualRight = rightCollision.translateX + slotWidth / 2 + (slotWidth * rightCollision.scaleX) / 2;
+  assert.ok(Math.abs(rightVisualRight - wallRight) < 0.001, `visual right must be pinned to wallRight on wall impact (saw ${rightVisualRight})`);
+  assert.ok(rightVisualLeft >= 0, 'visual left must not exceed left boundary');
+  assert.ok(rightCollision.scaleX < 1, 'pill must squash horizontally against right wall');
+  assert.ok(rightCollision.scaleY > 1, 'pill must bulge vertically against right wall');
 });
 
 test('calculateTabDragOffset centers pill on finger and clamps within tab bounds', () => {
@@ -135,7 +143,7 @@ test('calculateTabDragOffset centers pill on finger and clamps within tab bounds
         paper: { layout: { hairlineWidth: 1 }, colors: { brandInk: '#000', brand: '#f00', ink: '#333' } },
         spacing: { lg: 16 },
         shadow: { floating: () => ({}) },
-        motion: { spring: { snappy: {} } },
+        motion: { spring: { snappy: { damping: 14, stiffness: 240, mass: 0.8 } } },
         isDark: false,
       }),
     },
@@ -219,7 +227,7 @@ test('calculateTargetSlotIndex maps horizontal touch coordinates to valid tab sl
         paper: { layout: { hairlineWidth: 1 }, colors: { brandInk: '#000', brand: '#f00', ink: '#333' } },
         spacing: { lg: 16 },
         shadow: { floating: () => ({}) },
-        motion: { spring: { snappy: {} } },
+        motion: { spring: { snappy: { damping: 14, stiffness: 240, mass: 0.8 } } },
         isDark: false,
       }),
     },

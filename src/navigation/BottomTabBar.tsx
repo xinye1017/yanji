@@ -63,39 +63,87 @@ export interface PillDeformation {
 
 /**
  * Calculates physical deformation (trailing stretch & vertical squish) based on
- * leading and trailing positions.
+ * leading and trailing positions, with hard wall collision squash on the outer bounds.
  *
- * When moving right (lead > trail):
- *   The leading edge pulls forward, while the trailing edge lags behind,
- *   stretching the pill along the horizontal direction and compressing vertically.
- * When moving left (lead < trail):
- *   The leading edge pushes left, trailing edge lags right, stretching leftward.
- * When at rest (lead === trail):
+ * When inside the interior:
+ *   The leading edge pulls forward and trailing edge lags behind, stretching the pill
+ *   along the horizontal direction and slightly squishing vertically.
+ * When colliding with the outer walls (left wall at 0 or right wall at tabsCount * slotWidth):
+ *   The visual edge is strictly pinned flush against the wall (0px overflow), while the
+ *   momentum squashes the pill horizontally (scaleX < 1) and bulges it vertically (scaleY > 1).
+ * When at rest:
  *   scaleX = 1, scaleY = 1, translateX = lead * slotWidth.
  */
 export function calculatePillDeformation(
   lead: number,
   trail: number,
   slotWidth: number,
-  maxSpan: number = 1.35
+  tabsCount: number = 3
 ): PillDeformation {
   'worklet';
-  if (slotWidth <= 0) {
+  if (slotWidth <= 0 || tabsCount <= 0) {
     return { translateX: 0, scaleX: 1, scaleY: 1 };
   }
 
+  const wallRight = tabsCount * slotWidth;
+
+  // 1. Unconstrained fluid motion & trailing stretch
   const diff = lead - trail;
   const rawSpan = 1 + Math.abs(diff);
-  const clampedSpan = Math.max(0.9, Math.min(maxSpan, rawSpan));
+  const clampedSpan = Math.max(0.85, Math.min(1.35, rawSpan));
+  const centerSlot = (lead + trail) / 2;
 
-  const center = (lead + trail) / 2;
-  const scaleX = clampedSpan;
-  const scaleY = Math.max(0.85, 1 - (clampedSpan - 1) * 0.42);
+  const rawScaleX = clampedSpan;
+  const rawScaleY = Math.max(0.85, 1 - (clampedSpan - 1) * 0.42);
+  const rawTranslateX = centerSlot * slotWidth;
 
+  // 2. Measure visual edges against physical boundaries [0, wallRight]
+  const halfScaledWidth = (slotWidth * rawScaleX) / 2;
+  const visualLeft = rawTranslateX + slotWidth / 2 - halfScaledWidth;
+  const visualRight = rawTranslateX + slotWidth / 2 + halfScaledWidth;
+
+  // 3. Wall Collision & Squash on Impact
+  if (visualLeft < 0) {
+    // Colliding with Left Wall
+    const overshoot = -visualLeft;
+    const compression = Math.min(0.22, overshoot / slotWidth);
+    const squashedScaleX = Math.max(0.78, 1 - compression);
+    const squashedScaleY = Math.min(1.20, 1 + compression * 0.75);
+
+    // Pin visual left edge to 0 (hard boundary, 0px overflow)
+    const newHalfWidth = (slotWidth * squashedScaleX) / 2;
+    const clampedTranslateX = newHalfWidth - slotWidth / 2;
+
+    return {
+      translateX: clampedTranslateX,
+      scaleX: squashedScaleX,
+      scaleY: squashedScaleY,
+    };
+  }
+
+  if (visualRight > wallRight) {
+    // Colliding with Right Wall
+    const overshoot = visualRight - wallRight;
+    const compression = Math.min(0.22, overshoot / slotWidth);
+    const squashedScaleX = Math.max(0.78, 1 - compression);
+    const squashedScaleY = Math.min(1.20, 1 + compression * 0.75);
+
+    // Pin visual right edge to wallRight (hard boundary, 0px overflow)
+    const newHalfWidth = (slotWidth * squashedScaleX) / 2;
+    const clampedTranslateX = wallRight - slotWidth / 2 - newHalfWidth;
+
+    return {
+      translateX: clampedTranslateX,
+      scaleX: squashedScaleX,
+      scaleY: squashedScaleY,
+    };
+  }
+
+  // Completely within boundaries
   return {
-    translateX: center * slotWidth,
-    scaleX,
-    scaleY,
+    translateX: rawTranslateX,
+    scaleX: rawScaleX,
+    scaleY: rawScaleY,
   };
 }
 
@@ -275,14 +323,10 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
 
   const pillStyle = useAnimatedStyle(() => {
     'worklet';
-    const deformation = calculatePillDeformation(lead.value, trail.value, slotWidth);
-    const minCenter = -0.06 * slotWidth;
-    const maxCenter = (TABS.length - 1 + 0.06) * slotWidth;
-    const clampedTranslateX = Math.max(minCenter, Math.min(maxCenter, deformation.translateX));
-
+    const deformation = calculatePillDeformation(lead.value, trail.value, slotWidth, TABS.length);
     return {
       transform: [
-        { translateX: clampedTranslateX },
+        { translateX: deformation.translateX },
         { scaleX: deformation.scaleX },
         { scaleY: deformation.scaleY },
       ],
