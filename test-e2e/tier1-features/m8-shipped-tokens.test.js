@@ -30,6 +30,16 @@ function contrastRatio(a, b) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+function compositeOn(tint, background) {
+  const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/.exec(tint);
+  assert(rgba, `Expected an rgba tint, got ${tint}`);
+  const [r, g, b, alpha] = rgba.slice(1).map(Number);
+  const base = background.slice(1).match(/../g).map(c => parseInt(c, 16));
+  return '#' + [r, g, b].map((c, i) =>
+    Math.round(c * alpha + base[i] * (1 - alpha)).toString(16).padStart(2, '0')
+  ).join('');
+}
+
 export function registerShippedTokenTests() {
   let tokens = null;
 
@@ -86,6 +96,28 @@ export function registerShippedTokenTests() {
       }
     });
 
+    it('status labels stay readable on their tints across all paper surfaces', () => {
+      for (const [mode, colors] of Object.entries(tokens.YanjiPaperColors)) {
+        for (const [foreground, tint] of [
+          ['brandInk', 'brandSubtle'], ['amber', 'amberSubtle'],
+          ['positive', 'positiveSubtle'], ['danger', 'dangerSubtle'],
+        ]) {
+          for (const surface of ['canvas', 'elevated', 'surface', 'subtle']) {
+            const background = compositeOn(colors[tint], colors[surface]);
+            const ratio = contrastRatio(colors[foreground], background);
+            assert(ratio >= 4.5, `${mode} ${foreground} on ${tint}/${surface}: ${ratio.toFixed(2)}:1`);
+          }
+        }
+      }
+    });
+
+    it('light shadows share the paper ink while dark shadows keep their depth', () => {
+      for (const [name, shadow] of Object.entries(tokens.YanjiShadow)) {
+        assertEqual(shadow(false).shadowColor, tokens.YanjiPaperColors.light.ink, `${name} light shadow`);
+        assertEqual(shadow(true).shadowColor, '#000000', `${name} dark shadow`);
+      }
+    });
+
     it('danger carries the retired-replacement value in light mode', () => {
       // #D64545 was retired on a measured WCAG failure.
       assertEqual(tokens.YanjiPaperColors.light.danger, '#BE3232', 'Light danger must be #BE3232');
@@ -104,11 +136,9 @@ export function registerShippedTokenTests() {
       assertEqual(tokens.YanjiRadius.full, 9999, 'full radius step must be 9999');
     });
 
-    it('cards distinguish raised controls from borderless journal groups', () => {
-      assertEqual(tokens.YanjiCardRules.borderWidth, 1, 'Card borderWidth must be 1');
-      assertEqual(tokens.YanjiCardRules.hasBorderStroke, true, 'Raised card may have a hairline');
-      assertEqual(tokens.YanjiCardRules.plainBorderWidth, 0, 'Journal group is borderless');
-      assert(tokens.YanjiLayout.sectionGap >= tokens.YanjiSpacing.xl, 'Page sections need a legible rhythm');
+    it('paper layout keeps a shared hairline and legible section rhythm', () => {
+      assertEqual(tokens.YanjiPaperLayout.hairlineWidth, 1, 'Shared hairline width must be 1');
+      assert(tokens.YanjiPaperLayout.sectionGap >= tokens.YanjiSpacing.xl, 'Page sections need a legible rhythm');
       assert(
         tokens.YanjiPaperTypography.displayTimer.fontSize > tokens.YanjiPaperTypography.titleEditorial.fontSize,
         'Timer must dominate heading'

@@ -58,10 +58,13 @@ function fixtureTree(overrides = {}) {
   };
 }
 
+const lightDangerTint = "dangerSubtle: 'rgba(190,50,50,0.03)', ";
+const darkDangerTint = "dangerSubtle: 'rgba(248,113,113,0.10)', ";
+
 const paperDarkPalette = `  dark: { canvas: '#111315', surface: '#1a1d21', subtle: '#23272d', ink: '#eae6df',
     secondary: '#9ba0a8', muted: '#636870', hairline: 'rgba(234,230,223,0.08)',
     brand: '#e06d53', brandInk: '#e06d53', onBrand: '#111315', amber: '#dda059',
-    scrim: 'rgba(0,0,0,0.56)', danger: '#f87171' },
+    scrim: 'rgba(0,0,0,0.56)', ${darkDangerTint}danger: '#f87171' },
 `;
 
 const pausedImmersivePalette = `  paused: { canvas: '#1c1917', ink: '#f6f4ef', secondary: '#9ba0a8', accent: '#dda059' },
@@ -82,7 +85,7 @@ export const YanjiPaperColors = {
   light: { canvas: '#f6f4ef', surface: '#ffffff', subtle: '#edeae2', ink: '#1c1e21',
     secondary: '#5c5f66', muted: '#94969c', hairline: 'rgba(28,30,33,0.08)',
     brand: '#c84b31', brandInk: '#b23a22', onBrand: '#ffffff', amber: '#9a6100',
-    scrim: 'rgba(28,30,33,0.32)', danger: '#be3232' },
+    scrim: 'rgba(28,30,33,0.32)', ${lightDangerTint}danger: '#be3232' },
 ${paperDarkPalette}};
 export const YanjiPaperImmersive = {
   running: { canvas: '#15181c', ink: '#f6f4ef', secondary: '#9ba0a8', accent: '#e06d53' },
@@ -98,7 +101,7 @@ ${providerImport}export function YanjiThemeProvider() { return null; }
 export function useYanjiTheme() {
   return { isDark: false, mode: 'SYSTEM',
     radius: YanjiRadius, spacing: YanjiSpacing,
-    layout: {}, touch: YanjiTouch, motion: YanjiMotion,
+    touch: YanjiTouch, motion: YanjiMotion,
     shadow: YanjiShadow,
     paper: { colors: YanjiPaperColors.light, immersive: YanjiPaperImmersive,
       typography: YanjiPaperTypography, layout: YanjiPaperLayout,
@@ -204,6 +207,20 @@ test('light and dark paper palettes must expose the same roles', async () => {
   const { errors } = await runGuard(tree.root);
   assert.ok(errors.some(e => e.includes('same semantic color roles')), errors.join('\n'));
   tree.cleanup();
+});
+
+test('dangerSubtle is required even when both palettes omit it', async () => {
+  const tree = fixtureTree({
+    'src/theme/tokens.ts': tokensSource
+      .replace(lightDangerTint, '')
+      .replace(darkDangerTint, ''),
+  });
+  try {
+    const { errors } = await runGuard(tree.root);
+    assert.ok(errors.some(e => e.includes('Both paper palettes must define the dangerSubtle semantic role.')), errors.join('\n'));
+  } finally {
+    tree.cleanup();
+  }
 });
 
 test('a hardcoded hex colour in a consumer fails with a file:line anchor', async () => {

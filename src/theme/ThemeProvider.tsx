@@ -17,16 +17,14 @@
  * native promise is in flight.
  *
  * The 素笺与寸阴 paper domain is the single colour and type vocabulary, for the
- * navigation dock as much as for the body. The remaining scales — radius,
- * spacing, layout, touch, motion, shadow — are neutral measurements that carry
- * no colour of their own.
+ * navigation dock as much as for the body. The remaining scales provide
+ * neutral geometry, touch targets, motion and shared elevation styles.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
 import {
-  YanjiLayout,
   YanjiMotion,
   YanjiPaperColors,
   YanjiPaperImmersive,
@@ -46,7 +44,6 @@ export interface YanjiTheme {
   mode: ThemeMode;
   radius: typeof YanjiRadius;
   spacing: typeof YanjiSpacing;
-  layout: typeof YanjiLayout;
   touch: typeof YanjiTouch;
   motion: typeof YanjiMotion;
   shadow: typeof YanjiShadow;
@@ -101,7 +98,6 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
     mode,
     radius: YanjiRadius,
     spacing: YanjiSpacing,
-    layout: YanjiLayout,
     touch: YanjiTouch,
     motion: YanjiMotion,
     shadow: YanjiShadow,

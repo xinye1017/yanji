@@ -6,8 +6,7 @@
  * The 素笺与寸阴 paper domain (`YanjiPaper*`) is the only colour and type
  * vocabulary: every body surface and every shared component in `YanjiUI.tsx`
  * renders with it, and so does the navigation dock. The remaining `Yanji*`
- * scales are neutral measurements — radius, spacing, layout, touch, shadow,
- * motion — with no colour of their own.
+ * scales provide neutral geometry, touch targets, motion and shared shadows.
  */
 
 import type { ViewStyle } from 'react-native';
@@ -31,24 +30,6 @@ export const YanjiSpacing = {
   lg: 16,
   xl: 24,
   xxl: 32,
-  /** Horizontal page gutter — every screen's outermost inset. */
-  page: 20,
-} as const;
-
-/** Shared composition rhythm for the three main screens. */
-export const YanjiLayout = {
-  sectionGap: 28,
-  titleGap: 10,
-  heroInset: 22,
-  listRowMinHeight: 56,
-  timerTopGap: 36,
-} as const;
-
-/** Card rule: subtle 1px hairline border (cardBorder) per modern refined minimal design. */
-export const YanjiCardRules = {
-  borderWidth: 1,
-  hasBorderStroke: true,
-  plainBorderWidth: 0,
 } as const;
 
 /**
@@ -97,11 +78,10 @@ function PlatformShadow(
   isDark: boolean,
   spec: { radius: number; offsetY: number; opacity: number; elevation: number },
 ): ViewStyle {
-  // Dark mode needs a deeper shadow colour to read at all; pure black is fine
-  // as a *shadow* (the §三.6 ban is on background tokens), but a Midnight-Blue
-  // tint keeps it in family.
+  // Dark surfaces need black for shadow depth; light elevation shares the
+  // paper palette's ink so it cannot drift into a separate colour family.
   return {
-    shadowColor: isDark ? '#000000' : '#172033',
+    shadowColor: isDark ? '#000000' : YanjiPaperColors.light.ink,
     shadowOffset: { width: 0, height: spec.offsetY },
     shadowOpacity: spec.opacity,
     shadowRadius: spec.radius,
@@ -191,6 +171,8 @@ export const YanjiPaperColors = {
     scrim: 'rgba(28,30,33,0.32)',
     /** Destructive actions. Measured 5.69:1 on `surface`, 5.18:1 on `canvas`. */
     danger: '#BE3232',
+    /** At 3%, `danger` keeps at least 4.5:1 even over the `subtle` surface. */
+    dangerSubtle: 'rgba(190,50,50,0.03)',
     /**
      * A period that improved on the one before it. Measured worst case 5.49:1
      * across the four paper steps, and 5.00:1 on its own tint below — the same
@@ -218,8 +200,8 @@ export const YanjiPaperColors = {
     brand: '#E06D53',
     /** Dark `brand` already clears 4.5:1 on canvas, so the ink tier is itself. */
     brandInk: '#E06D53',
-    /** See the light-mode note: alpha is capped by the 4.5:1 label contrast. */
-    brandSubtle: 'rgba(224,109,83,0.10)',
+    /** At 2%, `brandInk` keeps at least 4.5:1 even over the `subtle` surface. */
+    brandSubtle: 'rgba(224,109,83,0.02)',
     onBrand: '#111315',
     amber: '#DDA059',
     amberSubtle: 'rgba(221,160,89,0.10)',
@@ -227,6 +209,8 @@ export const YanjiPaperColors = {
     scrim: 'rgba(0,0,0,0.56)',
     /** Destructive actions. Measured 6.11:1 on `surface`, 6.73:1 on `canvas`. */
     danger: '#F87171',
+    /** See the light-mode tint note: keep the destructive label above 4.5:1. */
+    dangerSubtle: 'rgba(248,113,113,0.10)',
     /**
      * See the light-mode note. Dark needs its own value rather than a reuse of
      * light's: `#27684F` would be unreadable here, and the board's 竹青
@@ -238,6 +222,33 @@ export const YanjiPaperColors = {
   },
 } as const;
 
+const paperImmersiveBase = {
+  canvas: '#15181C',
+  ink: '#F6F4EF',
+  secondary: '#C4C7CE',
+  subtitle: '#8A8F99',
+  muted: '#6E737D',
+  /** Footage line. Decorative reassurance, so it sits under the 4.5:1 text bar. */
+  footnote: '#52565E',
+  subtle: 'rgba(255,255,255,0.08)',
+  pillBg: 'rgba(255,255,255,0.05)',
+  pillBorder: 'rgba(255,255,255,0.08)',
+  /**
+   * Horizon tide — the wash that rises from the bottom edge.
+   *
+   * Colour and peak opacity are separate roles because `react-native-svg`
+   * reads a gradient stop's alpha from `stopOpacity` alone: `extractGradient`
+   * masks any alpha embedded in `stopColor` back out, and a missing
+   * `stopOpacity` resolves to fully opaque. An `rgba(...)` string in `tideColor`
+   * would therefore paint a solid slab instead of a wash.
+   */
+  tideOpacity: 0.14,
+  secondaryActionBg: 'rgba(255,255,255,0.06)',
+  secondaryActionBorder: 'rgba(255,255,255,0.10)',
+  secondaryActionText: '#D5D8DF',
+  primaryActionText: '#F6F4EF',
+} as const;
+
 /**
  * The immersion field for a running / paused focus session. The navigation is
  * hidden there, so this palette owns the whole screen — including the area
@@ -245,55 +256,18 @@ export const YanjiPaperColors = {
  */
 export const YanjiPaperImmersive = {
   running: {
-    canvas: '#15181C',
-    ink: '#F6F4EF',
-    secondary: '#C4C7CE',
-    subtitle: '#8A8F99',
-    muted: '#6E737D',
-    /** Footage line. Decorative reassurance, so it sits under the 4.5:1 text bar. */
-    footnote: '#52565E',
+    ...paperImmersiveBase,
     accent: '#3A9B78',
-    subtle: 'rgba(255,255,255,0.08)',
-    pillBg: 'rgba(255,255,255,0.05)',
-    pillBorder: 'rgba(255,255,255,0.08)',
-    /**
-     * Horizon tide — the wash that rises from the bottom edge.
-     *
-     * Colour and peak opacity are separate roles because `react-native-svg`
-     * reads a gradient stop's alpha from `stopOpacity` alone: `extractGradient`
-     * masks any alpha embedded in `stopColor` back out, and a missing
-     * `stopOpacity` resolves to fully opaque. An `rgba(...)` string here would
-     * therefore paint a solid slab instead of a wash.
-     */
     tideColor: '#2D7A5E',
-    tideOpacity: 0.14,
-    secondaryActionBg: 'rgba(255,255,255,0.06)',
-    secondaryActionBorder: 'rgba(255,255,255,0.10)',
-    secondaryActionText: '#D5D8DF',
     primaryActionBg: 'rgba(246,244,239,0.12)',
     primaryActionBorder: 'rgba(246,244,239,0.22)',
-    primaryActionText: '#F6F4EF',
   },
   paused: {
-    canvas: '#15181C',
-    ink: '#F6F4EF',
-    secondary: '#C4C7CE',
-    subtitle: '#8A8F99',
-    muted: '#6E737D',
-    footnote: '#52565E',
+    ...paperImmersiveBase,
     accent: '#DDA059',
-    subtle: 'rgba(255,255,255,0.08)',
-    pillBg: 'rgba(255,255,255,0.05)',
-    pillBorder: 'rgba(255,255,255,0.08)',
-    /** See the running-state note: alpha must travel via `tideOpacity`. */
     tideColor: '#DDA059',
-    tideOpacity: 0.14,
-    secondaryActionBg: 'rgba(255,255,255,0.06)',
-    secondaryActionBorder: 'rgba(255,255,255,0.10)',
-    secondaryActionText: '#D5D8DF',
     primaryActionBg: 'rgba(221,160,89,0.18)',
     primaryActionBorder: 'rgba(221,160,89,0.34)',
-    primaryActionText: '#F6F4EF',
   },
 } as const;
 
@@ -512,7 +486,6 @@ export const YanjiPaperLayout = {
   timelineEdgeBleed: 12,
   /** A dated cell in the review filmstrip — day number above its subject dot. */
   filmstripCellMinHeight: 58,
-  sheetTopRadius: 26,
   gridGap: 8,
 } as const;
 

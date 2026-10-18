@@ -154,7 +154,7 @@ if (tokens) {
     }
     for (const role of [
       'canvas', 'surface', 'subtle', 'ink', 'secondary', 'muted', 'hairline',
-      'brand', 'brandInk', 'onBrand', 'amber', 'scrim', 'danger',
+      'brand', 'brandInk', 'onBrand', 'amber', 'scrim', 'danger', 'dangerSubtle',
     ]) {
       if (typeof paperLight[role] !== 'string' || typeof paperDark[role] !== 'string') {
         fail(`Both paper palettes must define the ${role} semantic role.`);
