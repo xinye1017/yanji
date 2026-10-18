@@ -288,7 +288,7 @@ test('the rhythm section states its own window so the summary cannot overclaim',
   assert.match(chart.props.accessibilityLabel ?? '', /06:00/);
   assert.match(chart.props.accessibilityLabel ?? '', /24:00/);
   // An honest empty day says so rather than drawing an unexplained strip.
-  assert.match(text(tree), /今天还没有可确认的连续专注/);
+  assert.match(text(tree), /暂无连续专注记录/);
 });
 
 test('the rhythm summary names the busiest hour and the measured total', () => {
@@ -413,5 +413,8 @@ test('the journal section renders notes in timeline style with timestamps and ac
   assert.match(text(tree), /10:30/);
   assert.match(text(tree), /长难句核心词汇总结完毕/);
   assert.match(text(tree), /已收藏/);
+  const deleteBtn = nodes(tree, node => node.type === 'YanjiIconButton' && node.props.icon === 'delete');
+  assert.ok(deleteBtn.length > 0, 'the note item has a delete action');
 });
+
 

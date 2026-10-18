@@ -116,10 +116,16 @@ internal class NoteStore(
         return count > 0
     }
 
+    suspend fun deleteAndAwait(id: String): Boolean {
+        val db = dbProvider() ?: return false
+        db.noteEntryDao().deleteById(id)
+        return true
+    }
+
     fun delete(id: String) {
         scope.launch {
-            val db = dbProvider() ?: return@launch
-            db.noteEntryDao().deleteById(id)
+            deleteAndAwait(id)
         }
     }
 }
+

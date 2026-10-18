@@ -38,6 +38,8 @@ export interface RecordMomentModalProps {
    * session binding and favorite state are left untouched.
    */
   editingNote?: { id: string; content: string } | null;
+  /** When true, the sheet immediately reveals the delete confirmation buttons. */
+  initialConfirmDelete?: boolean;
 }
 
 export function RecordMomentModal({
@@ -46,11 +48,13 @@ export function RecordMomentModal({
   onClose,
   onSaved,
   editingNote = null,
+  initialConfirmDelete = false,
 }: RecordMomentModalProps): React.JSX.Element {
   const theme = useYanjiTheme();
   const reduceMotion = useReducedMotion();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const captureDraft = useRef('');
 
@@ -60,7 +64,8 @@ export function RecordMomentModal({
     if (!visible) return;
     setText(editingNote?.content ?? captureDraft.current);
     setError(null);
-  }, [visible, editingNote]);
+    setConfirmDelete(initialConfirmDelete);
+  }, [visible, editingNote, initialConfirmDelete]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
@@ -104,8 +109,25 @@ export function RecordMomentModal({
     }
   }, [saving, text, date, onClose, onSaved, editingNote]);
 
+  const handleDelete = useCallback(async () => {
+    if (saving || !editingNote) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await YanjiDataNative.deleteNote(editingNote.id);
+      setText('');
+      onSaved?.();
+      onClose();
+    } catch {
+      setError('删除失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, editingNote, onSaved, onClose]);
+
   const handleClose = useCallback(() => {
     setError(null);
+    setConfirmDelete(false);
     onClose();
   }, [onClose]);
 
@@ -197,6 +219,69 @@ export function RecordMomentModal({
               disabled={saving}
             />
           </View>
+
+          {editingNote ? (
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              {!confirmDelete ? (
+                <Pressable
+                  onPress={() => setConfirmDelete(true)}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="删除这条记录"
+                  style={({ pressed }) => ({
+                    minHeight: paper.layout.rowMinHeight,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.danger }]}>
+                    删除这条记录
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
+                  <Pressable
+                    onPress={() => setConfirmDelete(false)}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel="取消删除"
+                    style={({ pressed }) => ({
+                      minHeight: paper.layout.rowMinHeight,
+                      justifyContent: 'center',
+                      paddingHorizontal: YanjiSpacing.md,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+                      取消删除
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleDelete}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel="确认删除这条记录"
+                    style={({ pressed }) => ({
+                      minHeight: paper.layout.rowMinHeight,
+                      justifyContent: 'center',
+                      paddingHorizontal: YanjiSpacing.md,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Text
+                      style={[
+                        paper.typography.bodyPrimary,
+                        { color: paper.colors.danger, fontWeight: '600' },
+                      ]}
+                    >
+                      {saving ? '删除中…' : '确认删除'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>

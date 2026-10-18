@@ -31,7 +31,7 @@ const theme = {
 };
 
 function modalHarness({ save, activeSession = null } = {}) {
-  const calls = { saveQuickNote: [], updateNote: [], activeSessionReads: 0 };
+  const calls = { saveQuickNote: [], updateNote: [], deleteNote: [], activeSessionReads: 0 };
   const states = [];
   const refs = [];
   const effectSlots = [];
@@ -75,6 +75,10 @@ function modalHarness({ save, activeSession = null } = {}) {
       },
       updateNote: (...args) => {
         calls.updateNote.push(args);
+        return Promise.resolve(true);
+      },
+      deleteNote: (...args) => {
+        calls.deleteNote.push(args);
         return Promise.resolve(true);
       },
       getUserSettings: () => Promise.resolve({}),
@@ -128,6 +132,7 @@ function modalHarness({ save, activeSession = null } = {}) {
       save: walk(tree, node => node.type === 'YanjiPrimaryButton')[0],
       heading: walk(tree, node => node.type === 'YanjiPaperSheetHeading')[0],
       error: walk(tree, node => node.type === 'Text' && carriesDanger(node))[0],
+      pressables: walk(tree, node => node.type === 'Pressable'),
     };
   }
 
@@ -252,3 +257,55 @@ test('editing an existing note routes through updateNote and leaves the capture 
   assert.equal(modal.calls.saveQuickNote.length, 0, 'editing must not create a second note');
   assert.equal(modal.refs[0].current, 'pending capture', 'editing must leave the capture draft intact');
 });
+
+test('deleting an existing note routes through deleteNote, clears input, and calls onSaved and onClose', async () => {
+  const modal = modalHarness();
+  modal.typeInto(modal.render({ visible: true }), 'draft before delete');
+
+  let savedCalled = false;
+  let closedCalled = false;
+  const editor = modal.render({
+    visible: true,
+    editingNote: { id: 'note-del-1', content: 'to delete' },
+    initialConfirmDelete: true,
+    onSaved: () => { savedCalled = true; },
+    onClose: () => { closedCalled = true; },
+  });
+
+  const confirmDeleteBtn = editor.pressables.find(p => p.props.accessibilityLabel === '确认删除这条记录');
+  assert.ok(confirmDeleteBtn, 'initialConfirmDelete renders the confirmation button');
+
+  await confirmDeleteBtn.props.onPress();
+
+  assert.deepEqual(modal.calls.deleteNote, [['note-del-1']]);
+  assert.equal(savedCalled, true, 'onSaved must be called upon deletion');
+  assert.equal(closedCalled, true, 'onClose must be called upon deletion');
+  assert.equal(modal.refs[0].current, 'draft before delete', 'deleting an existing note must leave capture draft intact');
+});
+
+test('inline delete toggles between initial delete prompt and confirmation buttons', async () => {
+  const modal = modalHarness();
+  const editor = modal.render({
+    visible: true,
+    editingNote: { id: 'note-del-2', content: 'prompt test' },
+    initialConfirmDelete: false,
+  });
+
+  const deleteBtn = editor.pressables.find(p => p.props.accessibilityLabel === '删除这条记录');
+  assert.ok(deleteBtn, 'regular editor renders initial delete button');
+
+  // Trigger delete prompt
+  deleteBtn.props.onPress();
+  const confirming = modal.render({ visible: true });
+
+  const cancelBtn = confirming.pressables.find(p => p.props.accessibilityLabel === '取消删除');
+  const confirmBtn = confirming.pressables.find(p => p.props.accessibilityLabel === '确认删除这条记录');
+  assert.ok(cancelBtn, 'reveals cancel button');
+  assert.ok(confirmBtn, 'reveals confirm delete button');
+
+  // Cancel returns to prompt
+  cancelBtn.props.onPress();
+  const cancelled = modal.render({ visible: true });
+  assert.ok(cancelled.pressables.find(p => p.props.accessibilityLabel === '删除这条记录'));
+});
+

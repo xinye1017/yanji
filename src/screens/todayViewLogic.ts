@@ -153,7 +153,7 @@ export function rhythmSummary(
 ): string {
   if (!loaded) return '正在读取今日节奏…';
   const measured = buckets.filter(bucket => bucket.seconds > 0);
-  if (measured.length === 0) return '今天还没有可确认的连续专注，柱形只画出时间轴。';
+  if (measured.length === 0) return '暂无连续专注记录，开启一轮专注点亮今日节奏。';
   const total = measured.reduce((sum, bucket) => sum + bucket.seconds, 0);
   // Ties resolve to the earlier hour: the first time the day reached its peak
   // is the more useful statement than an arbitrary pick among equals.

@@ -79,6 +79,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [selection, setSelection] = useState<Selection>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [taskInfo, setTaskInfo] = useState<StudyTask | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
@@ -166,7 +167,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
     // means Today can never save a goal the settings row does not show.
     openSettings();
   };
-  const newNote = () => { setEditingNote(null); setRecordOpen(true); };
+  const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
   // Share the settings page's formatter rather than reading the native countdown
   // directly: the native value is clamped at 0, so `daysRemaining === 0` cannot
   // tell "today is the exam" from "the date passed weeks ago". Settings already
@@ -431,7 +432,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     </View>
                     <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.sm, minHeight: 56 }}>
                       <Pressable
-                        onPress={() => { setEditingNote(note); setRecordOpen(true); }}
+                        onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
                         accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
                         style={({ pressed }) => ({
                           backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
@@ -466,7 +467,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                             <YanjiIconButton
                               icon="compose"
                               accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                              onPress={() => { setEditingNote(note); setRecordOpen(true); }}
+                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
                               size={layout.timelineHeadBand}
                               iconSize={ENTRY_ICON_SIZE}
                             />
@@ -476,6 +477,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
                               onPress={() => void toggleFavorite(note)}
                               disabled={busyNote !== null}
                               selected={note.isFavorite}
+                              size={layout.timelineHeadBand}
+                              iconSize={ENTRY_ICON_SIZE}
+                            />
+                            <YanjiIconButton
+                              icon="delete"
+                              accessibilityLabel={`删除记录：${noteTitle(note)}`}
+                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(true); setRecordOpen(true); }}
+                              disabled={busyNote !== null}
                               size={layout.timelineHeadBand}
                               iconSize={ENTRY_ICON_SIZE}
                             />
@@ -627,7 +636,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       </ScrollView>
 
-      <RecordMomentModal visible={recordOpen} date={date} editingNote={editingNote} onClose={() => { setRecordOpen(false); setEditingNote(null); }} />
+      <RecordMomentModal
+        visible={recordOpen}
+        date={date}
+        editingNote={editingNote}
+        initialConfirmDelete={confirmDeleteNote}
+        onClose={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+        onSaved={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+      />
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
     </View>
   );
