@@ -27,6 +27,7 @@ import {
   Circle,
   CircleCheck,
   CircleQuestionMark,
+  Ellipsis,
   Key,
   Lightbulb,
   ListChecks,
@@ -58,6 +59,7 @@ export type YanjiIconName =
   | 'check'
   | 'close'
   | 'compose'
+  | 'more'
   | 'target'
   | 'add'
   | 'remove'
@@ -90,6 +92,7 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   check: Check,
   close: X,
   compose: PenLine,
+  more: Ellipsis,
   target: Target,
   add: Plus,
   remove: Minus,

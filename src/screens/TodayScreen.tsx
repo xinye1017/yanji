@@ -11,6 +11,8 @@ import {
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { MomentTimelineItem } from '../components/MomentTimelineItem';
+import { MomentActionSheet } from '../components/MomentActionSheet';
 import { TaskEditorModal } from '../components/TaskEditorModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
@@ -80,6 +82,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
+  const [actionNote, setActionNote] = useState<NoteEntry | null>(null);
   const [taskInfo, setTaskInfo] = useState<StudyTask | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [busyTask, setBusyTask] = useState<string | null>(null);
@@ -92,6 +95,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
       previousDate.current = date;
       if (visible) void refreshSettingsSnapshot();
       setSelection(null);
+      setActionNote(null);
     }
   }, [date, visible]);
   useEffect(() => {
@@ -100,6 +104,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
   }, [visible, foregroundRevision]);
+  useEffect(() => { if (!visible) setActionNote(null); }, [visible]);
 
   const retryRead = useCallback(async () => {
     setRetrying(true);
@@ -168,6 +173,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
     openSettings();
   };
   const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
+  const openNote = (note: NoteEntry, confirmDelete = false) => {
+    setActionNote(null);
+    setEditingNote(note);
+    setConfirmDeleteNote(confirmDelete);
+    setRecordOpen(true);
+  };
   // Share the settings page's formatter rather than reading the native countdown
   // directly: the native value is clamped at 0, so `daysRemaining === 0` cannot
   // tell "today is the exam" from "the date passed weeks ago". Settings already
@@ -370,7 +381,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           </View>
         ) : null}
 
-        {/* 记录此刻：采用回顾页时间线语法，去外层白卡化，无随笔时展示极简紧凑单行插槽 */}
+        {/* The clock lives with its note; only the quiet spine sits outside. */}
         <View style={{ marginTop: YanjiSpacing.sm }}>
           <YanjiPaperSectionHeading
             title="记录此刻"
@@ -385,123 +396,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
           />
           {latestNotes.length > 0 ? (
             <View style={{ marginTop: YanjiSpacing.xs }}>
-              {latestNotes.map((note, index) => {
-                const isFirst = index === 0;
-                const isLast = index === latestNotes.length - 1;
-                const isDoubt = note.category === 'DOUBT';
-                const isResolved = !!note.isResolved;
-                const nodeColor = isDoubt
-                  ? (isResolved ? colors.positive : colors.brand)
-                  : colors.brand;
-                const dotCenterY = layout.timelineNodeSize / 2 + 2;
-                const nodeRadius = layout.timelineNodeSize / 2;
-                const dotGap = YanjiSpacing.xs;
-                const clearance = nodeRadius + dotGap;
-                const topSegmentHeight = dotCenterY - clearance;
-
-                return (
-                  <View key={note.id} style={{ flexDirection: 'row', marginHorizontal: -layout.timelineEdgeBleed }}>
-                    <View style={{
-                      width: layout.timelineTimeColumn,
-                      height: 16,
-                      justifyContent: 'center',
-                      marginTop: Math.max(0, dotCenterY - 8),
-                    }}>
-                      <Text style={[typography.captionMeta, { color: colors.secondary, textAlign: 'right' }]}>
-                        {timeLabel(note.timestamp)}
-                      </Text>
-                    </View>
-                    <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
-                      {!isFirst && topSegmentHeight > 0 ? (
-                        <View style={{
-                          position: 'absolute', top: 0, height: topSegmentHeight,
-                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
-                        }} />
-                      ) : null}
-                      <View style={{
-                        position: 'absolute', top: dotCenterY - nodeRadius,
-                        width: layout.timelineNodeSize, height: layout.timelineNodeSize,
-                        borderRadius: nodeRadius, backgroundColor: nodeColor,
-                      }} />
-                      {!isLast ? (
-                        <View style={{
-                          position: 'absolute', top: dotCenterY + clearance, bottom: 0,
-                          width: layout.hairlineWidth, backgroundColor: colors.hairline,
-                        }} />
-                      ) : null}
-                    </View>
-                    <View style={{ flex: 1, paddingBottom: isLast ? 0 : YanjiSpacing.sm, minHeight: 56 }}>
-                      <Pressable
-                        onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
-                        accessibilityRole="button" accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                        style={({ pressed }) => ({
-                          backgroundColor: colors.elevated, borderWidth: layout.hairlineWidth, borderColor: colors.hairline,
-                          borderLeftWidth: 3, borderLeftColor: nodeColor,
-                          borderRadius: radius.tag,
-                          paddingVertical: YanjiSpacing.sm, paddingHorizontal: YanjiSpacing.md,
-                          opacity: pressed ? 0.7 : 1,
-                        })}>
-                        <View style={{ height: layout.timelineHeadBand, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flex: 1 }}>
-                            <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '700' }]}>
-                              记录此刻
-                            </Text>
-                            {isDoubt ? (
-                              <Pressable
-                                onPress={() => void toggleResolved(note)}
-                                disabled={busyNote !== null}
-                                accessibilityRole="button"
-                                accessibilityLabel={isResolved ? '疑点已解决，点击标记为待解决' : '疑点待解决，点击标记为已解决'}
-                                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-                                <YanjiBadge tone={isResolved ? 'positive' : 'brand'} label={isResolved ? '疑点 · 已解决' : '疑点 · 待解决'} />
-                              </Pressable>
-                            ) : (
-                              <YanjiBadge tone="neutral" label="灵感" />
-                            )}
-                            {note.isFavorite ? (
-                              <Text style={[typography.captionMeta, { color: colors.secondary }]}>· 已收藏</Text>
-                            ) : null}
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <YanjiIconButton
-                              icon="compose"
-                              accessibilityLabel={`编辑记录：${noteTitle(note)}`}
-                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(false); setRecordOpen(true); }}
-                              size={layout.timelineHeadBand}
-                              iconSize={ENTRY_ICON_SIZE}
-                            />
-                            <YanjiIconButton
-                              icon={note.isFavorite ? 'star' : 'starOutline'}
-                              accessibilityLabel={`${note.isFavorite ? '取消收藏' : '收藏'}记录：${noteTitle(note)}`}
-                              onPress={() => void toggleFavorite(note)}
-                              disabled={busyNote !== null}
-                              selected={note.isFavorite}
-                              size={layout.timelineHeadBand}
-                              iconSize={ENTRY_ICON_SIZE}
-                            />
-                            <YanjiIconButton
-                              icon="delete"
-                              accessibilityLabel={`删除记录：${noteTitle(note)}`}
-                              onPress={() => { setEditingNote(note); setConfirmDeleteNote(true); setRecordOpen(true); }}
-                              disabled={busyNote !== null}
-                              size={layout.timelineHeadBand}
-                              iconSize={ENTRY_ICON_SIZE}
-                            />
-                          </View>
-                        </View>
-                        <Text style={[
-                          typography.bodyExcerpt,
-                          {
-                            color: isDoubt && isResolved ? colors.secondary : colors.ink,
-                            textDecorationLine: isDoubt && isResolved ? 'line-through' : 'none',
-                          },
-                        ]} numberOfLines={4}>“{note.content}”</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
+              {latestNotes.map((note, index) => (
+                <MomentTimelineItem key={note.id}
+                  timeLabel={timeLabel(note.timestamp)}
+                  categoryLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
+                    : note.category === 'INSPIRATION' ? '灵感' : null}
+                  content={note.content} isFavorite={note.isFavorite} isResolved={note.isResolved}
+                  isFirst={index === 0} isLast={index === latestNotes.length - 1}
+                  disabled={busyNote !== null}
+                  onPressContent={() => openNote(note)}
+                  onToggleFavorite={() => void toggleFavorite(note)}
+                  onToggleResolved={note.category === 'DOUBT' ? () => void toggleResolved(note) : undefined}
+                  onMore={() => setActionNote(note)} />
+              ))}
               {(notes?.length ?? 0) > 2 ? (
                 <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
                   <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} />
@@ -647,9 +554,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       </ScrollView>
 
+      <MomentActionSheet visible={actionNote !== null} disabled={busyNote !== null}
+        onClose={() => setActionNote(null)}
+        onEdit={() => { if (actionNote) openNote(actionNote); }}
+        onDelete={() => { if (actionNote) openNote(actionNote, true); }} />
       <RecordMomentModal
         visible={recordOpen}
-        date={date}
+        date={editingNote?.date ?? date}
         editingNote={editingNote}
         initialConfirmDelete={confirmDeleteNote}
         onClose={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}

@@ -49,11 +49,13 @@ export function YanjiIcon({
   size = 20,
   color,
   strokeWidth = YANJI_ICON_STROKE,
+  filled = false,
 }: {
   name: YanjiIconName;
   size?: number;
   color?: string;
   strokeWidth?: number;
+  filled?: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const Glyph = getYanjiIcon(name);
@@ -62,6 +64,7 @@ export function YanjiIcon({
       size={size}
       color={color ?? paper.colors.ink}
       strokeWidth={strokeWidth}
+      fill={filled ? (color ?? paper.colors.ink) : 'none'}
     />
   );
 }

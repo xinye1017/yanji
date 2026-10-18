@@ -174,7 +174,7 @@ test('task subject labels use readable theme text rather than the decorative sub
   }
 });
 
-function screenHarness(snapshot) {
+function screenHarness(snapshot, bridge = {}) {
   const states = [];
   const calls = [];
   let index = 0;
@@ -197,9 +197,11 @@ function screenHarness(snapshot) {
     'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal', RefreshControl: 'RefreshControl' },
     'react-native-reanimated': { useReducedMotion: () => true },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
-    '../bridge': { YanjiDataNative: {} },
+    '../bridge': { YanjiDataNative: bridge },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/MomentTimelineItem': { MomentTimelineItem: 'MomentTimelineItem' },
+    '../components/MomentActionSheet': { MomentActionSheet: 'MomentActionSheet' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
@@ -412,11 +414,54 @@ test('the journal section renders notes in timeline style with timestamps and ac
     isResolved: false,
   };
   const tree = screenHarness(snapshot({ notes: [note] })).render();
-  assert.match(text(tree), /10:30/);
-  assert.match(text(tree), /长难句核心词汇总结完毕/);
-  assert.match(text(tree), /已收藏/);
-  const deleteBtn = nodes(tree, node => node.type === 'YanjiIconButton' && node.props.icon === 'delete');
-  assert.ok(deleteBtn.length > 0, 'the note item has a delete action');
+  const item = nodes(tree, node => node.type === 'MomentTimelineItem')[0];
+  assert.equal(item.props.timeLabel, '10:30');
+  assert.equal(item.props.content, note.content);
+  assert.equal(item.props.isFavorite, true);
+  assert.equal(item.props.categoryLabel, '灵感');
+  assert.equal(item.props.isFirst, true);
+  assert.equal(item.props.isLast, true);
+  assert.equal(typeof item.props.onMore, 'function');
+});
+
+test('moment actions retain note identity, original date, persisted favorite and delete confirmation', async () => {
+  const calls = [];
+  const older = { id: 'older', date, timestamp: at('10:30'), content: '旧记录', category: 'INSPIRATION' };
+  const latest = { ...older, id: 'latest', timestamp: at('17:56'), content: '最新记录', isFavorite: true };
+  const hidden = { ...older, id: 'hidden', timestamp: at('09:00') };
+  const h = screenHarness(snapshot({ notes: [older, hidden, latest] }), {
+    toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
+    deleteNote: async id => { calls.push(['delete', id]); return true; },
+  });
+  let tree = h.render();
+  let items = nodes(tree, n => n.type === 'MomentTimelineItem');
+  assert.deepEqual(items.map(n => n.props.content), ['最新记录', '旧记录']);
+  assert.equal(items[0].props.isLast, false);
+  assert.equal(items[1].props.isFirst, false);
+  assert.equal(items[1].props.isLast, true);
+  await items[1].props.onToggleFavorite();
+  assert.deepEqual(calls, [['favorite', 'older']]);
+  items[1].props.onMore();
+  tree = h.render();
+  let sheet = nodes(tree, n => n.type === 'MomentActionSheet')[0];
+  assert.equal(sheet.props.visible, true);
+  sheet.props.onEdit();
+  tree = h.render();
+  let editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
+  assert.equal(editor.props.editingNote.id, 'older');
+  assert.equal(editor.props.date, older.date);
+  assert.equal(editor.props.initialConfirmDelete, false);
+  editor.props.onClose();
+  items = nodes(h.render(), n => n.type === 'MomentTimelineItem');
+  items[0].props.onMore();
+  sheet = nodes(h.render(), n => n.type === 'MomentActionSheet')[0];
+  sheet.props.onDelete();
+  tree = h.render();
+  editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
+  assert.equal(editor.props.editingNote.id, 'latest');
+  assert.equal(editor.props.initialConfirmDelete, true);
+  assert.equal(nodes(tree, n => n.type === 'MomentActionSheet')[0].props.visible, false);
+  assert.deepEqual(calls, [['favorite', 'older']], 'menu delete only opens confirmation');
 });
 
 test('a morning focus session with pauses is properly displayed on the rhythm chart and day parts spectrum', () => {

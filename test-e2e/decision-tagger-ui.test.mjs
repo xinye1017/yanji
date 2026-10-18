@@ -75,6 +75,8 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/MomentTimelineItem': { MomentTimelineItem: 'MomentTimelineItem' },
+    '../components/MomentActionSheet': { MomentActionSheet: 'MomentActionSheet' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
