@@ -549,7 +549,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
             Collapsed, this used to be a caption, a row of 18 fixed-width ticks
             and a chevron — a title with no subject, and a strip that read as a
             pagination indicator. The section now shows the day's shape on a
-            labelled clock and states it in one sentence, so the collapsed state
+            labelled clock, so the collapsed state
             already answers "what is this?" without repeating the 06:00–24:00
             range that the axis labels already carry. Expanding is a named
             control, not just an arrow. */}
@@ -574,9 +574,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
           <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
             startLabel="06:00" endLabel="24:00"
             accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
-          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-            {rhythmSummaryText}
-          </Text>
           {rhythmExpanded ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               <YanjiPaperSegmentedControl value={chart} options={CHART_MODES} accessibilityLabel="今日节奏视图"

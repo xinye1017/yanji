@@ -287,15 +287,17 @@ test('the rhythm section states its own window so the summary cannot overclaim',
   // screen-reader user cannot learn it at all.
   assert.match(chart.props.accessibilityLabel ?? '', /06:00/);
   assert.match(chart.props.accessibilityLabel ?? '', /24:00/);
-  // An honest empty day says so rather than drawing an unexplained strip.
-  assert.match(text(tree), /暂无连续专注记录/);
+  assert.match(chart.props.accessibilityLabel, /暂无连续专注记录/);
+  assert.doesNotMatch(text(tree), /暂无连续专注记录/);
 });
 
-test('the rhythm summary names the busiest hour and the measured total', () => {
+test('the rhythm summary is spoken without displaying text below the chart', () => {
   const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
-  assert.match(text(tree), /06:00 之后已确认 50m 连续专注/);
-  assert.match(text(tree), /最集中的是 09:00–10:00/);
+  const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /最集中的是 09:00–10:00/);
+  assert.doesNotMatch(text(tree), /已确认.*连续专注|最集中的是/);
 });
 
 test('a pre-dawn session is excluded from the strip and the summary says so', () => {
@@ -303,7 +305,7 @@ test('a pre-dawn session is excluded from the strip and the summary says so', ()
   // not in the strip, so the sentence must not read as if it covered the day.
   const sessions = [session('dawn', '05:00', '05:40'), session('morning', '09:00', '09:30')];
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 4200, focusCount: 2 })).render();
-  const summary = text(tree).match(/[^。]*连续专注[^。]*/)[0];
+  const summary = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0].props.accessibilityLabel;
   assert.match(summary, /06:00 之后/, 'the summary must name its window');
   assert.match(summary, /30m/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
 });
@@ -443,8 +445,8 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   assert.equal(h10.color, '#2D7A5E', 'hour 10 takes the session subject color');
   assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
 
-  // Summary states the focus time rather than empty prompt
-  assert.match(text(tree), /06:00 之后已确认 30m 连续专注/);
+  // The chart's spoken summary retains the measured focus time.
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30m 连续专注/);
 
   // Expanding rhythm details reveals the session in the morning spectrum
   const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
