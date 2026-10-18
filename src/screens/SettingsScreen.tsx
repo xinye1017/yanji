@@ -215,7 +215,11 @@ export function SettingsScreen(): React.JSX.Element {
         ) : null}
 
         <View>
-          <YanjiPaperSectionHeading title="备考" spaceBefore={layout.sectionGap} />
+          <YanjiPaperSectionHeading
+            title="备考"
+            spaceBefore={layout.sectionGap}
+            titleStyle={typography.titleGroup}
+          />
           <YanjiSettingRow
             label="考试日期"
             value={examDate ? formatExamDate(examDate) : '未设置'}
@@ -236,18 +240,28 @@ export function SettingsScreen(): React.JSX.Element {
           />
         </View>
 
-        <View>
-          <YanjiPaperSectionHeading title="外观" spaceBefore={layout.sectionGap} />
-          <YanjiPaperSegmentedControl
-            accessibilityLabel="主题外观"
-            value={mode}
-            options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
-            onChange={next => void handleThemeChange(next)}
-          />
-        </View>
+        <YanjiPaperSectionHeading
+          title="外观"
+          spaceBefore={layout.sectionGap}
+          titleStyle={typography.titleGroup}
+          align="center"
+          right={(
+            <YanjiPaperSegmentedControl
+              compact
+              accessibilityLabel="主题外观"
+              value={mode}
+              options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
+              onChange={next => void handleThemeChange(next)}
+            />
+          )}
+        />
 
         <View>
-          <YanjiPaperSectionHeading title="高级" spaceBefore={layout.sectionGap} />
+          <YanjiPaperSectionHeading
+            title="高级"
+            spaceBefore={layout.sectionGap}
+            titleStyle={typography.titleGroup}
+          />
           <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} />
         </View>
 

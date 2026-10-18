@@ -379,6 +379,16 @@ export const YanjiPaperTypography = {
      */
     fontWeight: '900' as const,
   },
+  /**
+   * A settings group's heading. There the group title is the page's primary
+   * structure rather than a caption inside a content block, so it sits one step
+   * above `titleSection` at the same 900 cut.
+   */
+  titleGroup: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '900' as const,
+  },
   bodyPrimary: {
     fontSize: 14,
     lineHeight: 23,

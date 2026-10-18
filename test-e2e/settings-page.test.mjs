@@ -324,6 +324,30 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   assert.equal(rows[1].props.value, '6 小时 30 分钟');
 });
 
+test('every settings group title uses the group scale', () => {
+  const tree = settingsHarness({ settings: stored() }).render();
+  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
+  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '外观', '高级']);
+  for (const heading of headings) {
+    assert.deepEqual(
+      plain(heading.props.titleStyle),
+      plain(theme.paper.typography.titleGroup),
+      `${heading.props.title} must use the settings group scale`
+    );
+  }
+});
+
+test('the theme switch shares the 外观 heading row as a compact control', () => {
+  const tree = settingsHarness({ settings: stored() }).render();
+  const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props?.title === '外观')[0];
+  assert.ok(heading, 'the page keeps an 外观 group');
+  assert.equal(heading.props.align, 'center', 'the title centres against the control');
+  const control = heading.props.right;
+  assert.equal(control.type, 'YanjiPaperSegmentedControl', 'the control is the heading accessory');
+  assert.equal(control.props.compact, true, 'a settings group uses the compact segment');
+  assert.equal(control.props.value, 'SYSTEM');
+});
+
 test('an unset goal and exam date read as 未设置 rather than as a zero', () => {
   const tree = settingsHarness({
     settings: stored({ examDate: '', dailyGoalHours: 0 }),

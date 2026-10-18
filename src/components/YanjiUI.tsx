@@ -238,6 +238,8 @@ export function YanjiPaperSectionHeading({
   countText,
   right,
   spaceBefore = YanjiSpacing.lg,
+  titleStyle,
+  align = 'baseline',
 }: {
   title: string;
   countText?: string;
@@ -247,6 +249,13 @@ export function YanjiPaperSectionHeading({
    * its own value; the default keeps the three primary screens' rhythm.
    */
   spaceBefore?: number;
+  /** Overrides the title scale where the group title is the page's structure. */
+  titleStyle?: TextStyle;
+  /**
+   * `baseline` keeps text accessories on the title's baseline; `center` is for
+   * accessories that are a full-height control row of their own.
+   */
+  align?: 'baseline' | 'center';
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -255,7 +264,7 @@ export function YanjiPaperSectionHeading({
       style={{
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'baseline',
+        alignItems: align,
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
         marginBottom: 4,
@@ -265,7 +274,7 @@ export function YanjiPaperSectionHeading({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
         <Text
           accessibilityRole="header"
-          style={[paper.typography.titleSection, { color: paper.colors.ink }]}
+          style={[paper.typography.titleSection, titleStyle, { color: paper.colors.ink }]}
         >
           {title}
         </Text>
