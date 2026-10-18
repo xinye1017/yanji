@@ -87,19 +87,19 @@ export function MomentTimelineItem({
                 paddingHorizontal: YanjiSpacing.sm, paddingVertical: YanjiSpacing.xs }}>{categoryText}</View>
             ) : null}
           </View>
-          <View style={{ flexDirection: 'row', flexShrink: 0 }}>
+          <View style={{ flexDirection: 'row', flexShrink: 0, marginRight: -YanjiSpacing.sm }}>
             <Pressable onPress={onToggleFavorite} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`${isFavorite ? '取消收藏' : '收藏'}记录：${title}`}
               accessibilityState={{ selected: isFavorite, disabled }} style={({ pressed }) => iconButton(pressed, false)}>
               <Animated.View style={starStyle}>
-                <YanjiIcon name={isFavorite ? 'star' : 'starOutline'} size={layout.momentIconSize}
+                <YanjiIcon name={isFavorite ? 'star' : 'starOutline'} size={layout.momentPreviewIconSize}
                   color={isFavorite ? colors.brandInk : colors.secondary} filled={isFavorite} />
               </Animated.View>
             </Pressable>
             <Pressable onPress={onMore} disabled={disabled} accessibilityRole="button"
               accessibilityLabel={`更多记录操作：${title}`} accessibilityState={{ disabled }}
               style={({ pressed }) => iconButton(pressed, true)}>
-              <YanjiIcon name="more" size={layout.momentIconSize} color={colors.secondary} />
+              <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
             </Pressable>
           </View>
         </View>
