@@ -466,12 +466,6 @@ export const YanjiPaperLayout = {
   /** Fixed slot for the category glyph so every tag label starts on one line. */
   momentTagIconSlot: 14,
   /**
-   * The inline 「记录此刻」writer on Today grows with its text up to this
-   * height, then scrolls internally. Kept around six writing lines so a long
-   * capture still leaves the timeline in view.
-   */
-  composerMaxHeight: 168,
-  /**
    * Pre-layout estimate for the anchored action menu: the panel then
    * shrink-wraps its widest row, so this is only used for the first frame's
    * edge math (and as the test-visible width before layout).

@@ -143,7 +143,6 @@ function screenHarness(daySnapshot) {
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
-    '../components/RecordComposer': { RecordComposer: 'RecordComposer' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },

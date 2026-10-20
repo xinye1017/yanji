@@ -1,7 +1,6 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import type { ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
@@ -12,7 +11,6 @@ import {
   YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
-import { RecordComposer } from '../components/RecordComposer';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
@@ -94,6 +92,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const active = useActiveSession(visible);
   const [rhythmExpanded, setRhythmExpanded] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
+  const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   /** Anchored 「···」 menu: the note it acts on plus the button's window rect. */
@@ -104,11 +103,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const previousDate = useRef(date);
-  // The inline writer keeps itself above the IME by scrolling this page; it
-  // needs both the scroller and the current offset, which the page already
-  // tracks for the anchored menu.
-  const scrollRef = useRef<ScrollViewInstance>(null);
-  const scrollOffsetRef = useRef(0);
 
   useEffect(() => {
     if (previousDate.current !== date) {
@@ -194,11 +188,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
     // means Today can never save a goal the settings row does not show.
     openSettings();
   };
-  /** The sheet is now only the *editor* for a saved note; new captures happen inline. */
+  const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
   const openNote = (note: NoteEntry, confirmDelete = false) => {
     setMomentMenu(null);
     setEditingNote(note);
     setConfirmDeleteNote(confirmDelete);
+    setRecordOpen(true);
   };
   /** The anchored menu is the only management surface a moment row has. */
   const noteMenuActions = (note: NoteEntry): TimelineAction[] => [
@@ -239,11 +234,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
-      <ScrollView ref={scrollRef} testID="scroll-today" style={{ flex: 1 }}
+      <ScrollView testID="scroll-today" style={{ flex: 1 }}
         showsVerticalScrollIndicator={false} overScrollMode="never"
-        keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={32}
-        onScroll={event => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }}
         onScrollBeginDrag={() => setMomentMenu(null)}
         onMomentumScrollBegin={() => setMomentMenu(null)}
         // While the menu is up its backdrop owns every touch; hide the list from
@@ -389,7 +381,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                       />
                     </Pressable>
                     <Pressable
-                      onPress={() => openNote(doubt)}
+                      onPress={() => { setEditingNote(doubt); setRecordOpen(true); }}
                       accessibilityRole="button"
                       accessibilityLabel={`编辑疑点：${noteTitle(doubt)}`}
                       style={({ pressed }) => ({
@@ -430,15 +422,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
 
         {/* The clock lives with its note; only the quiet spine sits outside. */}
         <View style={{ marginTop: YanjiSpacing.sm }}>
-          {/* The writing surface is the section itself: one comment-style bar,
-              always present, with the older entries listed beneath it. */}
-          <YanjiPaperSectionHeading title="记录此刻" />
-          {/* One writing bar, always in place. Saving flows through the same
-              bridge call as the sheet, and the saved note appears below from
-              Room's own invalidation event — no local echo. */}
-          <RecordComposer date={date} scrollRef={scrollRef} scrollOffsetRef={scrollOffsetRef} />
+          <YanjiPaperSectionHeading
+            title="记录此刻"
+            right={
+              <YanjiTextAction
+                label="＋ 写此刻"
+                accessibilityLabel="新建今日记录"
+                onPress={newNote}
+                tone="quiet"
+              />
+            }
+          />
           {latestNotes.length > 0 ? (
-            <View style={{ marginTop: YanjiSpacing.sm }}>
+            <View style={{ marginTop: YanjiSpacing.xs }}>
               {latestNotes.map((note, index) => (
                 <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
@@ -460,7 +456,41 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 </View>
               ) : null}
             </View>
-          ) : null}
+          ) : (
+            <Pressable
+              onPress={newNote}
+              accessibilityRole="button"
+              accessibilityLabel="写下今日随笔"
+              style={({ pressed }) => ({
+                minHeight: layout.rowMinHeight,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: YanjiSpacing.sm,
+                backgroundColor: colors.elevated,
+                borderWidth: layout.hairlineWidth,
+                borderColor: colors.hairline,
+                borderStyle: 'dashed',
+                borderRadius: radius.tag,
+                paddingHorizontal: YanjiSpacing.md,
+                paddingVertical: YanjiSpacing.sm,
+                marginTop: YanjiSpacing.xs,
+                opacity: pressed ? 0.65 : 1,
+              })}>
+              <View style={{
+                width: layout.timelineNodeSize,
+                height: layout.timelineNodeSize,
+                borderRadius: layout.timelineNodeSize / 2,
+                borderWidth: layout.hairlineWidth * 1.5,
+                borderColor: colors.secondary,
+              }} />
+              <Text style={[typography.captionMeta, { color: colors.secondary, flex: 1 }]}>
+                {snapshot ? '留一句想法，让今天有自己的注脚…' : '正在读取今日随笔…'}
+              </Text>
+              <Text style={[typography.captionMeta, { color: colors.brandInk, fontWeight: '600' }]}>
+                点击速记 ›
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* 今日学习节奏.
@@ -580,12 +610,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
         />
       ) : null}
       <RecordMomentModal
-        visible={editingNote !== null}
+        visible={recordOpen}
         date={editingNote?.date ?? date}
         editingNote={editingNote}
         initialConfirmDelete={confirmDeleteNote}
-        onClose={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
-        onSaved={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
+        onClose={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+        onSaved={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
       />
       <TaskEditorModal visible={taskEditorOpen || !!taskInfo} date={date} editingTask={taskInfo} onClose={() => { setTaskInfo(null); closeTaskEditor(); }} />
     </View>
