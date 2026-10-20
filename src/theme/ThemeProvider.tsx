@@ -25,6 +25,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { YanjiThemeNative, onThemeChanged } from '../bridge';
 import {
+  YANJI_FONT_AVAILABILITY_FALLBACK,
+  resolveYanjiFontFamily,
   YanjiMotion,
   YanjiPaperColors,
   YanjiPaperImmersive,
@@ -37,7 +39,31 @@ import {
   YanjiSpacing,
   YanjiTouch,
 } from './tokens';
+import type { YanjiFontAvailability } from './tokens';
 import type { ThemeMode } from '../bridge';
+
+type YanjiPaperTypographyScale = typeof YanjiPaperTypography;
+type YanjiResolvedTypography = {
+  [K in keyof YanjiPaperTypographyScale]:
+    Omit<YanjiPaperTypographyScale[K], 'fontRole'> & { fontFamily?: string };
+};
+
+/**
+ * Replace each type role with a family this device can actually render.
+ *
+ * A role that resolves to no family contributes no `fontFamily` at all, so the
+ * Text keeps React Native's exact-weight system path — that is what preserves
+ * the 300 and 900 cuts `displayTimer` and `titleSection` depend on.
+ */
+function resolveTypography(availability: YanjiFontAvailability): YanjiResolvedTypography {
+  const resolved: Record<string, unknown> = {};
+  for (const [name, style] of Object.entries(YanjiPaperTypography)) {
+    const { fontRole, ...rest } = style as typeof style & { fontRole?: 'serif' | 'sans' };
+    const family = fontRole ? resolveYanjiFontFamily(fontRole, availability) : undefined;
+    resolved[name] = family ? { ...rest, fontFamily: family } : rest;
+  }
+  return resolved as YanjiResolvedTypography;
+}
 
 export interface YanjiTheme {
   isDark: boolean;
@@ -54,7 +80,12 @@ export interface YanjiTheme {
   paper: {
     colors: (typeof YanjiPaperColors)['light'] | (typeof YanjiPaperColors)['dark'];
     immersive: typeof YanjiPaperImmersive;
-    typography: typeof YanjiPaperTypography;
+    /**
+     * The scale with every `fontRole` resolved to this device's `fontFamily`, so
+     * a consumer spreads the style and gets the right face without knowing
+     * whether the phone has a serif CJK cut at all.
+     */
+    typography: YanjiResolvedTypography;
     layout: typeof YanjiPaperLayout;
     radius: typeof YanjiPaperRadius;
     motion: typeof YanjiPaperMotion;
@@ -93,6 +124,26 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
 
   const isDark = mode === 'DARK' || (mode === 'SYSTEM' && systemDark);
 
+  // Which families this device can actually draw. ColorOS ships no serif Han
+  // face, so the default is "none" and the serif role resolves to the system
+  // sans; a device that does have one (or a future ColorOS that adds it) only
+  // changes this probe, not every screen.
+  const [fonts, setFonts] = useState<YanjiFontAvailability>(YANJI_FONT_AVAILABILITY_FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    YanjiThemeNative.getFontAvailability()
+      .then(availability => {
+        if (cancelled) return;
+        setFonts(availability);
+      })
+      .catch(() => {
+        // Bridge unavailable (web/tests): the conservative answer is already set.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const typography = resolveTypography(fonts);
+
   const theme: YanjiTheme = {
     isDark,
     mode,
@@ -104,7 +155,7 @@ export function YanjiThemeProvider({ children }: { children: React.ReactNode }):
     paper: {
       colors: isDark ? YanjiPaperColors.dark : YanjiPaperColors.light,
       immersive: YanjiPaperImmersive,
-      typography: YanjiPaperTypography,
+      typography,
       layout: YanjiPaperLayout,
       radius: YanjiPaperRadius,
       motion: YanjiPaperMotion,

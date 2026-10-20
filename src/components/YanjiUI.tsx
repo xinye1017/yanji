@@ -625,6 +625,18 @@ export function rhythmSlots(
   });
 }
 
+/**
+ * The clock marks under the strip: the first hour, then one every three hours.
+ *
+ * Returned as data so the axis stays a function of the buckets (a two-hour strip
+ * would get two marks) rather than a hard-coded list of labels.
+ */
+export function axisHours(slots: readonly YanjiRhythmSlot[]): { hour: number; label: string }[] {
+  return slots
+    .filter((slot, index) => index === 0 || (slot.hour - slots[0].hour) % 3 === 0)
+    .map(slot => ({ hour: slot.hour, label: String(slot.hour).padStart(2, '0') }));
+}
+
 export function YanjiDayRhythmChart({
   buckets,
   currentHour,
@@ -671,15 +683,22 @@ export function YanjiDayRhythmChart({
       </View>
       <YanjiHairline />
       {/* The painted range is decorative text; the spoken range is the node
-          below, so the two can never disagree about the section's scope. */}
+          below, so the two can never disagree about the section's scope.
+
+          The axis names an hour every three slots rather than only its two
+          ends: with ends alone a bar had no x to read against, so "when was I
+          actually working" could not be answered without expanding the strip. */}
       <View
         accessible
         accessibilityRole="text"
         accessibilityLabel={accessibilityLabel ?? `时间范围 ${startLabel} 至 ${endLabel}`}
         style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}
       >
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{startLabel}</Text>
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{endLabel}</Text>
+        {axisHours(slots).map(mark => (
+          <Text key={mark.hour} style={[typography.captionMeta, { color: colors.secondary }]}>
+            {mark.label}
+          </Text>
+        ))}
       </View>
     </View>
   );
@@ -751,18 +770,14 @@ export function YanjiEmptyLedgerRow({
       accessibilityRole="button"
       accessibilityLabel={prompt}
       style={({ pressed }) => ({
+        // An empty ledger is a line, not a dashed box: the page already has one
+        // container grammar (a rule between rows), and a boxed invitation reads
+        // as a different kind of object sitting inside the list.
         minHeight: layout.rowMinHeight,
         flexDirection: 'row',
         alignItems: 'center',
         gap: YanjiSpacing.sm,
-        backgroundColor: colors.elevated,
-        borderWidth: layout.hairlineWidth,
-        borderColor: colors.hairline,
-        borderStyle: 'dashed',
-        borderRadius: radius.tag,
-        paddingHorizontal: YanjiSpacing.md,
         paddingVertical: YanjiSpacing.sm,
-        marginTop: YanjiSpacing.xs,
         opacity: pressed ? 0.65 : 1,
       })}
     >
@@ -1116,10 +1131,21 @@ export function YanjiTaskLedgerRow({
   onStartFocus: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
+  const { colors, typography, layout } = paper;
+  // The ledger's left margin is the day's time commitment: what this task asks
+  // for. It is the same 46dp column the timeline uses for a note's clock, so the
+  // plan and the record read as one page.
+  const commitment = meta.replace(/^预计\s*/, '').replace(/^实际专注\s*/, '');
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: layout.taskRowGap, paddingVertical: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.taskRowGap, paddingVertical: YanjiSpacing.sm }}>
+        {/* The left margin carries the task's own time commitment, so the column
+            reads as a schedule rather than an indent. */}
+        <View style={{ width: layout.ledgerTimeColumn, flexShrink: 0, paddingTop: 2 }}>
+          <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>
+            {commitment}
+          </Text>
+        </View>
         <Pressable
           onPress={onToggle}
           disabled={disabled}
@@ -1128,12 +1154,12 @@ export function YanjiTaskLedgerRow({
           accessibilityLabel={`${completed ? '恢复待办' : '完成任务'}：${title}`}
           hitSlop={8}
           style={({ pressed }) => ({
-            // AB-01's box is 18dp, but the touch target stays the full 48dp row
-            // height; `hitSlop` widens it horizontally so the 11dp gap to the
-            // title is not spent on padding.
+            // The box is 18dp; the touch target stays the full row height and
+            // `hitSlop` widens it horizontally so the gap to the title is not
+            // spent on padding.
             width: layout.taskCheckboxSize,
             minHeight: layout.rowMinHeight,
-            justifyContent: 'center',
+            paddingTop: YanjiSpacing.md,
             opacity: pressed ? 0.6 : 1,
           })}
         >
@@ -1143,7 +1169,7 @@ export function YanjiTaskLedgerRow({
             borderWidth: completed ? 0 : layout.taskCheckboxStroke,
             borderColor: completed ? colors.ink : accentColor,
             backgroundColor: completed ? colors.ink : 'transparent',
-            borderRadius: radius.tag,
+            borderRadius: paper.radius.tag,
             justifyContent: 'center',
             alignItems: 'center',
           }}>
@@ -1156,27 +1182,25 @@ export function YanjiTaskLedgerRow({
           accessibilityLabel={`编辑任务：${title}`}
           style={({ pressed }) => ({
             flex: 1,
+            minWidth: 0,
             minHeight: layout.rowMinHeight,
-            justifyContent: 'center',
+            paddingTop: 2,
             opacity: pressed ? 0.65 : 1,
           })}
         >
           <Text
-            numberOfLines={1}
+            numberOfLines={2}
             style={{
-              fontSize: 16,
-              lineHeight: 22,
-              fontWeight: '600',
-              // AB-01 greys a finished title into the muted tier, but this
-              // project's contrast policy bars `muted` from carrying a task
-              // title at all — struck-through included. `secondary` is the
-              // lowest tier a title may sit in, so the strike carries the
-              // "done" signal instead.
+              fontSize: 14,
+              lineHeight: 21,
+              fontWeight: '500',
+              // A finished title greys out, but `muted` is barred from carrying a
+              // task title — the strike is the signal, `secondary` is the floor.
               color: completed ? colors.secondary : colors.ink,
               textDecorationLine: completed ? 'line-through' : 'none',
             }}
           >{title}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: 2 }}>
             <View style={{
               flexShrink: 1,
               alignItems: 'center',
@@ -1186,9 +1210,8 @@ export function YanjiTaskLedgerRow({
               paddingHorizontal: 6,
               paddingVertical: 1,
             }}>
-              <Text numberOfLines={1} style={{ fontSize: 10, lineHeight: 14, fontWeight: '600', color: colors.secondary, flexShrink: 1 }}>{subjectName}</Text>
+              <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{subjectName}</Text>
             </View>
-            <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
           </View>
         </Pressable>
         {!completed ? (
@@ -1203,18 +1226,17 @@ export function YanjiTaskLedgerRow({
               opacity: pressed ? 0.68 : 1,
             })}
           >
+            {/* One shape for "start": the same ink disc the focus field uses, so
+                start never changes grammar between the plan and the session. */}
             <View style={{
-              minHeight: layout.compactActionHeight,
-              paddingHorizontal: layout.compactActionPadding,
-              borderRadius: radius.pill,
-              backgroundColor: colors.subtle,
-              flexDirection: 'row',
+              width: layout.compactActionHeight + 2,
+              height: layout.compactActionHeight + 2,
+              borderRadius: (layout.compactActionHeight + 2) / 2,
+              backgroundColor: colors.ink,
               alignItems: 'center',
               justifyContent: 'center',
-              gap: YanjiSpacing.xs,
             }}>
-              <YanjiIcon name="play" size={typography.captionMeta.fontSize - 1} color={colors.ink} />
-              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600' }]}>专注</Text>
+              <YanjiIcon name="play" size={typography.captionMeta.fontSize} color={colors.canvas} />
             </View>
           </Pressable>
         ) : null}

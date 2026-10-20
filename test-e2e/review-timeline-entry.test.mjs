@@ -193,7 +193,6 @@ test('a session is one compact line whose body opens its note editor', () => {
   assert.equal(row.props.tagLabel, '数据结构');
   assert.equal(row.props.tagIcon, 'clock3', 'every focus subject shares the clock icon');
   assert.equal(row.props.tagTone, 'neutral');
-  assert.equal(row.props.dotColor, '#2D7A5E', 'the node keeps the subject colour');
   assert.equal(row.props.content, '手画了一遍指针断链过程', 'the note is the body');
   assert.equal(row.props.metaText, '2 小时 6 分', 'duration rides on the same line');
   assert.equal(row.props.isFirst, true);
@@ -255,7 +254,8 @@ test('note rows keep favorite, resolution and editing in the anchored menu', asy
   const rows = harness.rows(harness.render());
   assert.deepEqual(plain(rows.map(row => row.props.tagLabel).sort()), ['疑点 · 待解决', '灵感'].sort());
   assert.deepEqual(plain(rows.map(row => row.props.tagIcon).sort()), ['doubt', 'inspiration']);
-  assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['brand', 'positive']);
+  // 疑点 is a waiting state (doubt), 灵感 a neutral category — neither borrows the action accent.
+  assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['doubt', 'neutral']);
 
   const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
   doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });

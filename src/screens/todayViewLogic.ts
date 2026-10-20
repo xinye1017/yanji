@@ -34,24 +34,48 @@ export function greeting(hour: number): string {
   return '灯火温润，归卷沉思。';
 }
 
-export function compactDuration(seconds: number): string {
-  const minutes = Math.max(0, Math.floor(seconds / 60));
-  if (minutes === 0) return seconds > 0 ? '<1m' : '0m';
+/**
+ * The one duration voice the app speaks.
+ *
+ * It used to be seven — `2h15m`, `08h 00m`, `1小时5分`, `1 小时 5 分`,
+ * `1 小时 5 分/天`, `6 小时 30 分钟` and `04:21` — all describing the same quantity,
+ * so the same goal read differently on Today and in Settings. Chinese units, a
+ * space around the numbers, and no unit that is zero.
+ */
+export function formatDuration(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(whole / 60);
+  if (minutes === 0) return whole > 0 ? '不足 1 分钟' : '0 分钟';
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return hours > 0 ? `${hours}h${remainder ? `${remainder}m` : ''}` : `${minutes}m`;
+  if (hours === 0) return `${minutes} 分钟`;
+  return remainder ? `${hours} 小时 ${remainder} 分` : `${hours} 小时`;
 }
 
+/**
+ * A duration where the space or the surrounding sentence already names the
+ * unit: the hero's two numbers, the ledger's left margin, a subject legend.
+ */
+export function compactDuration(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(whole / 60);
+  if (minutes === 0) return whole > 0 ? '<1 分' : '0 分';
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${minutes} 分`;
+  return remainder ? `${hours} 小时 ${remainder} 分` : `${hours} 小时`;
+}
+
+/** The goal, written the same way every other duration is. */
 export function goalClock(seconds: number): string {
-  const minutes = Math.max(0, Math.floor(seconds / 60));
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}h ${String(minutes % 60).padStart(2, '0')}m`;
+  return formatDuration(seconds);
 }
 
 export function taskMeta(task: StudyTask): string {
   const actual = compactDuration(task.actualMinutes * 60);
   if (task.completed) return `实际专注 ${actual}`;
   const planned = compactDuration(task.plannedMinutes * 60);
-  return task.actualMinutes > 0 ? `已投入 ${actual} / 预计 ${planned}` : `预计 ${planned}`;
+  return task.actualMinutes > 0 ? `已投入 ${actual} · 预计 ${planned}` : `预计 ${planned}`;
 }
 
 export function summarizeSubjects(

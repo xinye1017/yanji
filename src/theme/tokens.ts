@@ -167,6 +167,15 @@ export const YanjiPaperColors = {
     /** Paused / waiting accent. Measured >= 5.30:1 across the four paper steps, and 4.81:1 on its own tint. */
     amber: '#875400',
     amberSubtle: 'rgba(135,84,0,0.07)',
+    /**
+     * An open question — 疑点. It is a *waiting* state, so it takes the amber
+     * family rather than the brand accent: the accent means "act here", and a
+     * tag reporting a state must not look like a button. Same measured values
+     * as `amber`, kept as its own role so the two can diverge later without
+     * one silently redefining the other.
+     */
+    doubt: '#875400',
+    doubtSubtle: 'rgba(135,84,0,0.07)',
     /** Modal / sheet scrim, derived from `ink` so the veil shares the paper's warmth. */
     scrim: 'rgba(28,30,33,0.32)',
     /** Destructive actions. Measured 6.28:1 on `surface`, 5.71:1 on `canvas`, and 4.71:1 on its own tint. */
@@ -205,6 +214,9 @@ export const YanjiPaperColors = {
     onBrand: '#111315',
     amber: '#DDA059',
     amberSubtle: 'rgba(221,160,89,0.10)',
+    /** See the light-mode note: 疑点 is a waiting state, not the action accent. */
+    doubt: '#DDA059',
+    doubtSubtle: 'rgba(221,160,89,0.16)',
     /** Heavier veil than light mode, matching the dark surface stack. */
     scrim: 'rgba(0,0,0,0.56)',
     /** Destructive actions. Measured 6.11:1 on `surface`, 6.73:1 on `canvas`. */
@@ -272,9 +284,52 @@ export const YanjiPaperImmersive = {
 } as const;
 
 /**
- * Paper type scale. `fontFamily`/`fontVariant` are additive to the frozen
- * numeric scale: Android ships `serif` and `monospace` system faces, so the
- * editorial serif and tabular figures need no bundled font file. Letter
+ * The paper domain's type roles.
+ *
+ * A role is *intent*; the family is whatever this device can actually render.
+ * The distinction matters most on CJK: Android's `serif` family is a Latin
+ * serif (Noto Serif / Droid Serif) whose Han glyphs fall through to the sans
+ * CJK face, so `fontFamily: 'serif'` looks editorial in English and plain in
+ * Chinese — the same app, two personalities, depending on the sentence.
+ *
+ * ColorOS (OPPO Find X8 and every current OPPO/OnePlus build) ships exactly one
+ * Chinese family, OPPO Sans, plus its Latin companion; there is no OPPO serif
+ * and none is installed under a second name. So the serif role is resolved at
+ * runtime against what the device really has, and degrades to the system sans
+ * — heavier and tighter — rather than silently mixing two faces.
+ */
+export type YanjiFontRole = 'serif' | 'sans';
+
+/** What the device reports it can render. Filled by the native theme module. */
+export interface YanjiFontAvailability {
+  /**
+   * A system family that draws Han glyphs in a true serif cut, or `null` when
+   * the platform only has a sans CJK face (ColorOS).
+   */
+  serifHanFamily: string | null;
+}
+
+/** The conservative assumption: no serif, so nothing renders as fake-editorial. */
+export const YANJI_FONT_AVAILABILITY_FALLBACK: YanjiFontAvailability = { serifHanFamily: null };
+
+/**
+ * Resolve a role to a family name, or `undefined` for "use the system default".
+ *
+ * Returning `undefined` rather than a family name is deliberate: a family-less
+ * `Text` keeps React Native's exact-weight path (`Typeface.create(base, weight,
+ * italic)`), which is the only way a 300 or 900 cut survives on the system face.
+ */
+export function resolveYanjiFontFamily(
+  role: YanjiFontRole,
+  availability: YanjiFontAvailability,
+): string | undefined {
+  return role === 'serif' ? availability.serifHanFamily ?? undefined : undefined;
+}
+
+/**
+ * Paper type scale. `fontRole`/`fontVariant` are additive to the frozen numeric
+ * scale; the family itself is resolved per device (see `resolveYanjiFontFamily`),
+ * so the editorial face and tabular figures need no bundled font file. Letter
  * tracking from the HTML source is expressed in `em` and is deliberately NOT
  * ported — RN takes dp, and a negative dp track on CJK serif clips strokes.
  */
@@ -328,13 +383,13 @@ export const YanjiPaperTypography = {
     fontSize: 24,
     lineHeight: 33,
     fontWeight: '700' as const,
-    fontFamily: 'serif',
+    fontRole: 'serif' as const,
   },
   titleEditorial: {
     fontSize: 22,
     lineHeight: 31,
     fontWeight: '700' as const,
-    fontFamily: 'serif',
+    fontRole: 'serif' as const,
   },
   titleSection: {
     fontSize: 14,
@@ -372,7 +427,7 @@ export const YanjiPaperTypography = {
     fontSize: 14,
     lineHeight: 23,
     fontWeight: '400' as const,
-    fontFamily: 'serif',
+    fontRole: 'serif' as const,
   },
   /**
    * The capture page's writing face. One step larger than `bodyJournal` and
@@ -383,13 +438,13 @@ export const YanjiPaperTypography = {
     fontSize: 16,
     lineHeight: 27,
     fontWeight: '400' as const,
-    fontFamily: 'serif',
+    fontRole: 'serif' as const,
   },
   bodyExcerpt: {
     fontSize: 15,
     lineHeight: 24,
     fontWeight: '600' as const,
-    fontFamily: 'serif',
+    fontRole: 'serif' as const,
   },
   captionMeta: {
     fontSize: 12,
@@ -453,7 +508,18 @@ export const YanjiPaperLayout = {
    * dashed line.
    */
   rhythmEmptyHeight: 2,
-  timelineTimeColumn: 46,
+  /**
+   * The clock gutter on every timeline row — Today's journal and Review's
+   * timeline alike. One width for both screens is what keeps their entries
+   * collinear, so it lives here rather than in either component.
+   */
+  timelineTimeColumn: 40,
+  /**
+   * The plan ledger's own left margin: the task's time commitment. Deliberately
+   * the same step as `timelineTimeColumn` so the plan and the record read as
+   * one page rather than two lists in two columns.
+   */
+  ledgerTimeColumn: 40,
   /** The spine between the clock column and the entry — node plus its rule. */
   timelineAxisColumn: 16,
   timelineNodeSize: 8,

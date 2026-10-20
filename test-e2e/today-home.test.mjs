@@ -55,11 +55,11 @@ const shared = loadTypeScript('src/components/YanjiUI.tsx', {
 test('Chinese dates and durations retain truthful zero and subminute values', () => {
   assert.equal(logic.displayDate(date), '十月十六日 · 周五');
   assert.match(logic.displayDate('2026-12-31'), /^十二月三十一日/);
-  assert.equal(logic.goalClock(21600), '06h 00m');
-  assert.equal(logic.compactDuration(3599), '59m');
-  assert.equal(logic.compactDuration(10), '<1m');
-  assert.equal(logic.taskMeta(task({ completed: true })), '实际专注 0m');
-  assert.equal(logic.taskMeta(task({ actualMinutes: 45 })), '已投入 45m / 预计 1h30m');
+  assert.equal(logic.goalClock(21600), '6 小时');
+  assert.equal(logic.compactDuration(3599), '59 分');
+  assert.equal(logic.compactDuration(10), '<1 分');
+  assert.equal(logic.taskMeta(task({ completed: true })), '实际专注 0 分');
+  assert.equal(logic.taskMeta(task({ actualMinutes: 45 })), '已投入 45 分 · 预计 1 小时 30 分');
 });
 
 test('subject legend includes genuine planned subjects at zero and keeps their color', () => {
@@ -166,7 +166,11 @@ test('task subject labels use readable theme text rather than the decorative sub
           completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
         });
         const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
-        assert.equal(label.props.style.color, colors.secondary, 'subject colour belongs to the dot and tint, not small text');
+        // The label rides the caption token rather than a literal, so the colour
+        // is read from the resolved style array instead of one flat object.
+        const style = [].concat(label.props.style);
+        const color = style.map(entry => entry?.color).filter(Boolean).pop();
+        assert.equal(color, colors.secondary, 'subject colour belongs to the dot and tint, not small text');
       }
     }
   } finally {
@@ -250,7 +254,7 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   const rows = nodes(tree, node => node.type === 'YanjiTaskLedgerRow');
   assert.equal(rows[0].props.completed, false);
   assert.equal(rows[1].props.completed, true);
-  assert.equal(rows[1].props.meta, '实际专注 0m');
+  assert.equal(rows[1].props.meta, '实际专注 0 分');
   assert.equal(rows[0].props.accentColor, pending.subjectColor);
   rows[0].props.onStartFocus();
   assert.equal(harness.calls[0][1].taskId, pending.id);
@@ -303,7 +307,7 @@ test('the rhythm summary is spoken without displaying text below the chart', () 
   const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
   const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
-  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50 分 连续专注/);
   assert.match(chart.props.accessibilityLabel, /最集中的是 09:00–10:00/);
   assert.doesNotMatch(text(tree), /已确认.*连续专注|最集中的是/);
 });
@@ -315,7 +319,7 @@ test('a pre-dawn session is excluded from the strip and the summary says so', ()
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 4200, focusCount: 2 })).render();
   const summary = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0].props.accessibilityLabel;
   assert.match(summary, /06:00 之后/, 'the summary must name its window');
-  assert.match(summary, /30m/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
+  assert.match(summary, /30 分/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
 });
 
 test('an empty rhythm strip marks no hour at all', () => {
@@ -331,6 +335,16 @@ test('an empty rhythm strip marks no hour at all', () => {
     'no hour may draw a mark on an empty day');
   assert.deepEqual(slots.filter(slot => slot.isNow), [],
     'and the current hour is not singled out when there is nothing to relate it to');
+});
+
+test('the strip\'s axis names hours, not just its two ends', () => {
+  // Two end labels left every bar without an x to read against, so the section
+  // could not answer "when was I actually working" without expanding. The axis
+  // now names an hour every three slots, derived from the buckets themselves.
+  const slots = Array.from({ length: 18 }, (_, i) => ({ hour: i + 6, measured: true, isNow: false, height: 10 }));
+  const marks = shared.axisHours(slots);
+  assert.deepEqual(marks.map(mark => mark.label), ['06', '09', '12', '15', '18', '21']);
+  assert.deepEqual(marks.map(mark => mark.hour), [6, 9, 12, 15, 18, 21]);
 });
 
 test('the chart publishes the axis range as a spoken node, not just a prop', () => {
@@ -382,7 +396,7 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
     'the goal tap routes to the settings page and does nothing else');
   assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
     'Today must not render its own goal modal');
-  assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
+  assert.match(text(tree), /目标 6 小时/, 'the metric still reports the stored goal');
 });
 
 test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
@@ -425,7 +439,9 @@ test('the journal section renders one compact timeline row per note', () => {
   assert.equal(item.props.content, note.content);
   assert.equal(item.props.tagLabel, '灵感');
   assert.equal(item.props.tagIcon, 'inspiration');
-  assert.equal(item.props.tagTone, 'positive');
+  // 灵感 is a *category*, not a verdict: it takes the neutral tag family. Green
+  // is reserved for settled/completed state.
+  assert.equal(item.props.tagTone, 'neutral');
   assert.equal(item.props.isFirst, true);
   assert.equal(item.props.isLast, true);
   assert.equal(typeof item.props.onMore, 'function');
@@ -435,7 +451,7 @@ test('the journal section renders one compact timeline row per note', () => {
 
   const doubt = { ...note, id: 'note-doubt', category: 'DOUBT', isResolved: false };
   const doubtItem = nodes(screenHarness(snapshot({ notes: [doubt] })).render(), n => n.type === 'TimelineCompactRow')[0];
-  assert.equal(doubtItem.props.tagTone, 'brand');
+  assert.equal(doubtItem.props.tagTone, 'doubt');
   assert.equal(doubtItem.props.tagIcon, 'doubt');
   assert.match(doubtItem.props.tagLabel, /疑点/);
 });
@@ -568,7 +584,7 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
 
   // The chart's spoken summary retains the measured focus time.
-  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30 分 连续专注/);
 
   // Expanding rhythm details reveals the session in the morning spectrum
   const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
@@ -593,11 +609,11 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
 
   // Tapping the highlighted span prints its exact interval and subject.
   const highlight = nodes(expandedTree, node => node.type === 'Pressable'
-    && node.props.accessibilityLabel === '数据结构，10:45 至 11:15，30分钟')[0];
+    && node.props.accessibilityLabel === '数据结构，10:45 至 11:15，30 分钟')[0];
   assert.ok(highlight, 'each coloured span is its own press target');
   highlight.props.onPress();
   const detailTree = harness.render();
-  assert.match(text(detailTree), /10:45—11:15 · 数据结构 · 30分钟/);
+  assert.match(text(detailTree), /10:45—11:15 · 数据结构 · 30 分钟/);
 });
 
 

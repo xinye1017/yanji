@@ -186,10 +186,15 @@ test('every tag carries a fixed-width icon slot: bulb, question or clock', () =>
   // The chip keeps its old compact padding, so the icon can never grow the row.
   const chip = nodes(bulb, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positiveSubtle)[0];
   assert.equal(chip.props.style.paddingVertical, tokens.YanjiPaperLayout.taskTagPadding);
-  const card = nodes(bulb, n => n.type === 'View' && n.props.style?.minHeight === tokens.YanjiTouch.min && n.props.style?.backgroundColor === theme.paper.colors.elevated)[0];
-  assert.equal(card.props.style.minHeight, tokens.YanjiTouch.min, 'the one-line row keeps its 44dp floor');
+  // The body is text only: no wash, no border, no radius to read as a card.
+  const body = nodes(bulb, n => n.type === 'View' && n.props.style?.paddingLeft === tokens.YanjiSpacing.sm &&
+    n.props.style?.flexDirection === 'row')[0];
+  assert.ok(body, 'the entry sits in one plain inline row');
+  assert.equal(body.props.style.backgroundColor, undefined, 'no surface is painted behind the entry');
+  assert.equal(body.props.style.borderWidth, undefined, 'no border');
+  assert.equal(body.props.style.borderRadius, undefined, 'no radius');
 
-  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagIcon: 'doubt', tagTone: 'brand' });
+  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagIcon: 'doubt', tagTone: 'doubt' });
   assert.equal(tagIcon(doubt).props.name, 'doubt', '疑点 uses the circled question mark');
 
   const session = h.render({ tagLabel: '数据结构', tagIcon: 'clock3', tagTone: 'neutral', metaText: '30分钟' });
@@ -197,49 +202,74 @@ test('every tag carries a fixed-width icon slot: bulb, question or clock', () =>
   assert.match(text(session), /数据结构/, 'the actual subject name still follows the icon');
 });
 
-test('the clock sits on the page gutter, and the dot/chip follow the tag tone', () => {
+test('the clock holds a fixed gutter and only the day\'s latest row is live', () => {
   const h = rowHarness();
-  const positive = h.render();
-  const clockColumn = nodes(positive, n => n.type === 'View' &&
+  const clock = tree => nodes(tree, n => n.type === 'Text' && text(n) === '19:43')[0];
+  const clockColumn = tree => nodes(tree, n => n.type === 'View' &&
     n.props.children?.type === 'Text' && text(n.props.children) === '19:43')[0];
-  assert.ok(clockColumn);
-  assert.equal(clockColumn.props.style.alignItems, 'flex-start');
-  assert.equal(clockColumn.props.style.marginRight, tokens.YanjiSpacing.xs);
+
+  const positive = h.render();
+  assert.equal(clockColumn(positive).props.style.width, 40, 'every row reserves the same HH:MM gutter');
+  assert.equal(clockColumn(positive).props.style.alignItems, 'flex-start');
+  assert.equal(clock(positive).props.style[0], tokens.YanjiPaperTypography.captionMeta,
+    'the clock is meta type, not body copy');
+  assert.equal(clock(positive).props.style[1].color, theme.paper.colors.ink,
+    'the latest row is the live one: ink, not secondary');
+  assert.equal(clock(positive).props.style[1].fontWeight, '700');
+  assert.equal(clock(h.render({ isFirst: false })).props.style[1].color, theme.paper.colors.secondary);
+  assert.equal(clock(h.render({ isFirst: false })).props.style[1].fontWeight, undefined,
+    'an older row keeps the base caption weight');
+
   assert.ok(nodes(positive, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positiveSubtle)[0],
     '灵感 uses the green chip wash');
-  assert.ok(nodes(positive, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positive)[0],
-    '灵感 uses the green dot');
+  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagTone: 'doubt' });
+  assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.doubtSubtle)[0],
+    'a waiting doubt carries the amber doubt wash, not the action accent');
 
-  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagTone: 'brand' });
-  assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brandSubtle)[0]);
-  assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brand)[0]);
-
-  const session = h.render({ tagLabel: '数据结构', tagTone: 'neutral', dotColor: '#2D7A5E', metaText: '30分钟' });
-  assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === '#2D7A5E')[0],
-    'a session keeps its subject-coloured dot');
+  const session = h.render({ tagLabel: '数据结构', tagTone: 'neutral', metaText: '30分钟' });
   assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.subtle)[0],
     'the subject tag itself stays neutral');
   assert.match(text(session), /30分钟/, 'the duration meta rides on the same line');
 });
 
-test('the spine follows the measured row, crosses the gap, and stops at both ends', () => {
+test('the page-edge rule runs down the clock column as one unbroken line', () => {
+  const { TIMELINE_TIME_COLUMN } = loadTypeScript('src/components/TimelineCompactRow.tsx', {
+    react: { useState: value => [value, () => {}], useRef: value => ({ current: value }) },
+    'react-native': { Pressable: 'Pressable', Text: 'Text', View: 'View' },
+    '../theme/ThemeProvider': { useYanjiTheme: () => theme },
+    './YanjiUI': { YanjiIcon: 'YanjiIcon' },
+  });
   const h = rowHarness();
-  const lines = tree => nodes(tree, n => n.type === 'View' && n.props.style?.position === 'absolute' &&
-    n.props.style?.width === tokens.YanjiPaperLayout.hairlineWidth);
+  // The spine is the row's only absolutely positioned rule, sitting on the
+  // gutter's right edge — no node dot, no per-segment stub.
+  const spine = tree => nodes(tree, n => n.type === 'View' && n.props.style?.position === 'absolute');
 
-  let tree = h.render({ isFirst: true, isLast: false });
-  assert.equal(lines(tree).length, 1);
-  assert.equal(lines(tree)[0].props.style.bottom, -tokens.YanjiPaperLayout.momentItemGap);
+  const only = h.render({ isFirst: false, isLast: false });
+  assert.equal(spine(only).length, 1, 'one rule, and nothing else is taken out of flow');
+  assert.equal(spine(only)[0].props.style.left, TIMELINE_TIME_COLUMN,
+    'the rule rides the right edge of the fixed clock gutter');
+  assert.equal(spine(only)[0].props.style.width, tokens.YanjiPaperLayout.hairlineWidth);
+  assert.equal(spine(only)[0].props.style.backgroundColor, theme.paper.colors.hairline);
+  assert.equal(spine(only)[0].props.style.top, 0, 'a middle row touches the row above');
+  assert.equal(spine(only)[0].props.style.bottom, 0, '…and the row below');
 
-  const measured = nodes(tree, n => typeof n.props.onLayout === 'function')[0];
-  measured.props.onLayout({ nativeEvent: { layout: { height: 56 } } });
-  tree = h.render({ isFirst: false, isLast: true });
-  assert.equal(lines(tree).length, 1);
-  assert.equal(lines(tree)[0].props.style.bottom, undefined);
-  const dot = nodes(tree, n => n.props.style?.backgroundColor === theme.paper.colors.positive)[0];
-  assert.equal(dot.props.style.top + tokens.YanjiPaperLayout.timelineNodeSize / 2, 28);
+  // First and last rows stop at the content edge rather than the row edge.
+  assert.equal(spine(h.render({ isFirst: true, isLast: false }))[0].props.style.top, tokens.YanjiSpacing.xs);
+  const last = h.render({ isFirst: false, isLast: true });
+  assert.equal(spine(last)[0].props.style.bottom, tokens.YanjiSpacing.xs);
+  assert.equal(spine(last)[0].props.style.top, 0);
 
-  assert.equal(lines(h.render({ isFirst: true, isLast: true })).length, 0);
+  // A single event is both ends at once and still draws its own span.
+  const single = spine(h.render({ isFirst: true, isLast: true }));
+  assert.equal(single.length, 1);
+  assert.equal(single[0].props.style.top, tokens.YanjiSpacing.xs);
+  assert.equal(single[0].props.style.bottom, tokens.YanjiSpacing.xs);
+
+  // The old node dot is gone: the tone survives only on the tag chip.
+  assert.equal(nodes(only, n => n.props.style?.backgroundColor === theme.paper.colors.positive).length, 0,
+    'no subject/category dot is drawn on the spine any more');
+  assert.equal(nodes(only, n => n.props.style?.borderWidth !== undefined).length, 0,
+    'the event body is no longer a bordered card');
 });
 
 // ---------------------------------------------------------------------------
@@ -313,7 +343,13 @@ test('the row and the menu read their surfaces from the active theme', () => {
   try {
     theme.paper.colors = tokens.YanjiPaperColors.dark;
     const row = rowHarness().render();
-    assert.ok(nodes(row, n => n.props.style?.backgroundColor === tokens.YanjiPaperColors.dark.elevated).length);
+    const dark = tokens.YanjiPaperColors.dark;
+    assert.ok(nodes(row, n => n.props.style?.backgroundColor === dark.hairline).length,
+      'the page-edge rule and the row separator follow the dark hairline');
+    assert.ok(nodes(row, n => n.props.style?.backgroundColor === dark.positiveSubtle).length,
+      'the tag wash follows the dark palette');
+    assert.equal(nodes(row, n => n.props.style?.backgroundColor === dark.elevated).length, 0,
+      'the row paints no card surface in either theme');
     const menu = menuView(popoverHarness().render());
     assert.equal(menu.props.style[0].backgroundColor, tokens.YanjiPaperColors.dark.surface);
   } finally {

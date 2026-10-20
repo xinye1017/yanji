@@ -3,6 +3,7 @@ package com.example.yanji.bridge
 import android.content.ComponentCallbacks
 import android.content.res.Configuration
 import android.content.res.Resources
+import java.io.File
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -74,6 +75,27 @@ class YanjiThemeModule(
         })
     }
 
+    /**
+     * 本机能否渲染真正的**中文衬线**字面。
+     *
+     * Android 的 `serif` 家族是拉丁衬线（Noto Serif / Droid Serif），汉字会
+     * 回落到无衬线中文字体，于是 `fontFamily:'serif'` 在中英混排里一半有衬线、
+     * 一半没有。ColorOS（Find X8 及当前全部 OPPO / 一加）只内置 OPPO Sans 一套
+     * 中文无衬线，没有任何衬线中文字体，所以这里必须探测而不是假设。
+     *
+     * 探测口径：一个候选家族只有在 `hasGlyph('永')` 为真 **且** 它排出来确实
+     * 不是无衬线默认字体时才算数。第二个条件靠比较 Typeface 的 native 句柄：
+     * 平台对不存在的家族会静默回落到默认无衬线，句柄相同即“没有这个字体”。
+     *
+     * 只读，不改任何系统设置。
+     */
+    @ReactMethod
+    fun getFontAvailability(promise: Promise) {
+        val result = Arguments.createMap()
+        result.putString("serifHanFamily", detectSerifHanFamily())
+        promise.resolve(result)
+    }
+
     @ReactMethod
     fun setThemePreference(mode: String, promise: Promise) {
         val parsed = YanjiThemeMode.entries.firstOrNull { it.name.equals(mode.trim(), ignoreCase = true) }
@@ -126,6 +148,54 @@ class YanjiThemeModule(
 
     companion object {
         const val EVENT_THEME_CHANGED = "onThemeChanged"
+
+        /** 系统字体目录。厂商把可用字面以 ttc/otf 落在这里，名字即事实。 */
+        private const val SYSTEM_FONT_DIR = "/system/fonts"
+
+        /**
+         * 具备**汉字衬线**字面的系统字体文件名特征。
+         *
+         * 只认带 CJK 字段名（CJK / Hans / SC / Serif SC）的思源宋体族：Android
+         * 自带的 `NotoSerif-*.ttf` 是纯拉丁衬线，汉字会回落到无衬线，把它算作
+         * 命中正是要避免的那种“一半有衬线”；`NotoSerifCJK-Regular.ttc`（AOSP
+         * 与多数国产 ROM 之外的平台）才是真正带汉字衬线的那一个。
+         */
+        private val SERIF_HAN_FONT_FILES = listOf(
+            "NotoSerifCJK-Regular.ttc",
+            "NotoSerifCJKsc-Regular.otf",
+            "NotoSerifSC-Regular.otf",
+            "SourceHanSerifSC-Regular.otf",
+            "SourceHanSerifCN-Regular.otf",
+        )
+
+        /**
+         * 本机是否真的装有中文衬线字体；有则返回家族名，没有返回 null。
+         *
+         * 判定只依赖 `/system/fonts` 的实际文件，而不是 `Typeface.create` 的结果：
+         * 平台对不存在的家族不报错，只静默回落到默认无衬线，所以「能创建出
+         * Typeface」不能证明字体存在。字体文件是唯一可靠的事实来源。
+         *
+         * ColorOS（Find X8 及当前全部 OPPO / 一加）只内置 OPPO Sans 一套中文
+         * 无衬线，目录里没有任何宋体文件，因此这里必然返回 null，衬线角色回落
+         * 到系统无衬线，而不是一半衬线一半无衬线。
+         */
+        internal fun detectSerifHanFamily(): String? {
+            val installed = runCatching {
+                File(SYSTEM_FONT_DIR).list()?.toSet() ?: emptySet()
+            }.getOrNull() ?: return null
+            return SERIF_HAN_FONT_FILES.firstOrNull { installed.contains(it) }?.let { fileName ->
+                SERIF_HAN_FAMILY_BY_FILE[fileName]
+            }
+        }
+
+        /** 文件 → 平台家族名。文件在、名字对得上，才认为该家族可渲染。 */
+        private val SERIF_HAN_FAMILY_BY_FILE = mapOf(
+            "NotoSerifCJK-Regular.ttc" to "serif",
+            "NotoSerifCJKsc-Regular.otf" to "serif",
+            "NotoSerifSC-Regular.otf" to "Noto Serif SC",
+            "SourceHanSerifSC-Regular.otf" to "Source Han Serif SC",
+            "SourceHanSerifCN-Regular.otf" to "Source Han Serif SC",
+        )
     }
 }
 

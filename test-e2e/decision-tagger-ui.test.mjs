@@ -245,14 +245,17 @@ test('TodayScreen renders 今日疑点 and allows toggling resolution when doubt
   });
 
   const tree = harness.render();
-  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props?.title === '今日疑点');
-  assert.equal(headings.length, 1, 'When doubts exist, 今日疑点 section heading must appear');
-  assert.equal(headings[0].props.countText, '0/1', 'Count should display resolved/total');
+  // A doubt is a *state of an entry*, not a second list. It used to render twice
+  // — once inside 「今日疑点」 and once in the journal — so the section is gone and
+  // the entry itself carries the state instead.
+  const doubtHeadings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props?.title === '今日疑点');
+  assert.equal(doubtHeadings.length, 0, '疑点 is a tag on an entry, so the standalone section must not exist');
 
-  const checkboxes = nodes(tree, node => node.type === 'Pressable' && node.props?.accessibilityRole === 'checkbox');
-  assert.ok(checkboxes.length > 0, 'Checkbox for doubt resolution must exist');
-  await checkboxes[0].props.onPress();
-  assert.deepEqual(harness.calls, [['toggleNoteResolved', 'doubt-today-1']]);
+  const row = nodes(tree, node => node.type === 'TimelineCompactRow')[0];
+  assert.ok(row, 'the open doubt still appears, as a journal row');
+  assert.match(row.props.tagLabel, /疑点 · 待解决/);
+  assert.equal(row.props.tagTone, 'doubt', 'a waiting state uses the doubt family, not the action accent');
+  assert.equal(row.props.content, '为什么快速排序的最坏时间复杂度是O(n^2)？');
 });
 
 test('ReviewScreen tags doubts/inspirations and resolves them through the anchored menu', async () => {
@@ -293,7 +296,9 @@ test('ReviewScreen tags doubts/inspirations and resolves them through the anchor
   const tags = rows.map(row => row.props.tagLabel);
   assert.ok(tags.includes('疑点 · 待解决'), 'the doubt row carries its state tag');
   assert.ok(tags.includes('灵感'), 'the inspiration row carries its category tag');
-  assert.deepEqual(rows.map(row => row.props.tagTone).sort(), ['brand', 'positive']);
+  // 疑点 is a waiting state (doubt family); 灵感 is a category, so it takes the
+  // neutral family. The action accent is never used for a state tag.
+  assert.deepEqual(rows.map(row => row.props.tagTone).sort(), ['doubt', 'neutral']);
 
   // The row itself no longer toggles resolution: the anchored menu does.
   const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
