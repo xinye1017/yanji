@@ -111,7 +111,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
 4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
 5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 工程底线与设计自由**：品牌气质和页面信息架构参考 `DESIGN.md`，但不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。
+6. **UI 工程底线与设计自由**：设计权威只有运行代码与语义 Token（`src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、README「统一设计系统」），不存在需要遵循的独立设计文档；不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。
 7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
 8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
@@ -162,7 +162,7 @@ Level 0  机器执行守卫与代码现状（最高权威）
 Level 1  Agent 核心指南 —— AGENTS.md（本文）
 Level 2  架构决策记录 —— docs/adr/**（分歧时无条件服从 ADR）
 Level 3  项目门面与验证事实 —— README.md（受 check-project-facts.sh 保护的字段）
-Level 4  当前运行 UI 的设计 Token 与组件代码 —— `src/theme/**`、`src/components/**`、`src/screens/**`；`DESIGN.md` 提供可迭代的创作方向，历史 Compose 主题仅作迁移参考
+Level 4  当前运行 UI 的设计 Token 与组件代码 —— `src/theme/**`、`src/components/**`、`src/screens/**`（设计权威即此处，历史 Compose 主题仅作迁移参考）
 Level 5  长期沉淀事实 —— .workbuddy/memory/MEMORY.md（经验证的环境与平台坑）
 ```
 
@@ -271,23 +271,7 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 ---
 
-## 八、文档地图（权威层次）
-
-| 目录 / 文件 | 用途 | 优先级 |
-| :--- | :--- | :--- |
-| `AGENTS.md`（本文） | Agent 核心指南与工程规范总入口 | **开工必读** |
-| `ADB.md` | 真机无线调试、配对排错与 ADB 指令唯一权威指南 | **真机连接必读** |
-| `OPPO流体云适配.md` | ColorOS 17 / OPPO 流体云深度适配与避坑指南 | **实时活动与流体云必读** |
-| `README.md` | 产品 / 架构 / 构建门禁门面；`project-facts` 由 CI 校验 | 事实来源 |
-| `docs/adr/**` | 架构决策记录（ADR） | **决策分歧时以 ADR 为准** |
-| `DESIGN.md` | 当前 UI 设计方向与视觉创作依据 | **UI 改动前必读** |
-| `docs/IP_AS_LOGO_ASSETS.md` | 品牌图形资产说明 | 参考 |
-| `.workbuddy/memory/MEMORY.md` | 长期沉淀的环境与平台坑 | 经验事实（Level 5） |
-| `build/orca-reports/**` | 临时分析/设计报告（**不入库**） | 任务产物 |
-
----
-
-## 九、文档维护原则
+## 八、文档维护原则
 
 1. **唯一入口**：本文是仓库主要的 Agent 操作指南与工程规范；其他开发手册与本文冲突时以本文（除代码与 ADR 外）为准。
 2. **修订原则**：只保留清晰可落地的规范与原则，不堆砌冗余报告；易漂移的事实一律改为引用式（§四）。

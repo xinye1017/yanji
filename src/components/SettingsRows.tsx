@@ -7,7 +7,9 @@
  * module is what stops the page from growing a third and fourth row layout.
  *
  * Both rows are full-width, hairline-separated and read as one ledger — the
- * page deliberately has no card around them (see DESIGN.md §去卡片化).
+ * page deliberately has no card around them: hierarchy comes from type scale,
+ * whitespace and the 1dp hairline, not from stacked card outlines (see the
+ * Paper & Chrono domain in `src/theme/tokens.ts`).
  */
 
 import React from 'react';

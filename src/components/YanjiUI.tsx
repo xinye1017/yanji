@@ -1727,8 +1727,9 @@ export function YanjiLineChart({
 /**
  * Pressable with a single, finite "breath" on mount and a spring press-down.
  *
- * Deliberately NOT a looping animation: DESIGN.md rules out sustained motion,
- * and a CTA that never stops moving competes with the content it points at.
+ * Deliberately NOT a looping animation: the paper domain rules out sustained
+ * motion, and a CTA that never stops moving competes with the content it points
+ * at.
  * Reduced motion skips both the breath and the press spring.
  */
 export function YanjiBreathButton({
