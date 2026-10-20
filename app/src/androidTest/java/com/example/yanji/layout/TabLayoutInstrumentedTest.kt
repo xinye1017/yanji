@@ -28,6 +28,8 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.NoMatchingViewException
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -50,6 +52,7 @@ import android.os.ParcelFileDescriptor
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import org.hamcrest.Description
+import org.hamcrest.Matcher
 import org.hamcrest.TypeSafeMatcher
 import org.hamcrest.Matchers.allOf
 import org.junit.After
@@ -297,6 +300,7 @@ class TabLayoutInstrumentedTest {
         await("Today scrolled to footer") { !(required("scroll-today") as ScrollView).canScrollVertically(1) }
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
         await("draft note editor opened") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withContentDescription("记录内容"))
         val draft = "unsaved layout regression draft"
         onView(withContentDescription("记录内容")).inRoot(isDialog()).perform(replaceText(draft), closeSoftKeyboard())
         pressBack() // Exercise the modal's onRequestClose without a moving sheet target.
@@ -308,6 +312,7 @@ class TabLayoutInstrumentedTest {
         select("today")
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
         await("draft note editor reopened") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog()).check(matches(withText(draft)))
         pressBack()
         await("draft note editor closed again") { root?.hasWindowFocus() == true }
@@ -345,6 +350,7 @@ class TabLayoutInstrumentedTest {
         await("test session paused again") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
         onView(withContentDescription("放弃本轮")).perform(scrollTo(), click())
         await("discard confirmation dialog opened") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withText("确认放弃"))
         onView(withText("确认放弃")).inRoot(isDialog()).perform(click())
         await("test session discarded without saving a study record") { ActiveSessionCoordinator.active.value == null }
         val countsAfter = runBlocking {
@@ -368,6 +374,7 @@ class TabLayoutInstrumentedTest {
         }
         onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
         await("note editor opened") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText(ownedNoteText), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -381,6 +388,7 @@ class TabLayoutInstrumentedTest {
         // the row the way a reader does, on the label the row actually publishes.
         onView(withContentDescription("查看完整记录：$ownedNoteText")).perform(scrollTo(), click())
         await("note editor opened for edit") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText("$ownedNoteText edited"), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
@@ -415,6 +423,7 @@ class TabLayoutInstrumentedTest {
         // three-pending-task threshold that silently degrades the assertions.
         onView(withContentDescription("添加任务")).perform(scrollTo(), click())
         await("task editor opened") { root?.hasWindowFocus() == false }
+        awaitDialogChild(withContentDescription("任务名称"))
         onView(withContentDescription("任务名称")).inRoot(isDialog())
             .perform(replaceText(ownedTaskTitle), closeSoftKeyboard())
         val category = YanjiRepository.getInstance().subjects.value.first { it.enabled && it.parentId == null }
@@ -500,6 +509,36 @@ class TabLayoutInstrumentedTest {
      */
     private fun previewOf(content: String): String =
         content.replace(Regex("\\s*\\n+\\s*"), " ").trim().ifEmpty { "无标题记录" }
+
+    /**
+     * Waits until a child of the open modal dialog is actually mounted.
+     *
+     * A window losing focus is not the same event as the sheet's contents being
+     * mounted: an RN Modal attaches an empty dialog window first and fills it on
+     * a later frame, so an Espresso lookup fired straight after the focus wait
+     * can land in the gap and dump a hierarchy that already contains the view it
+     * says is missing. Waiting on a child of `isDialog()` closes that gap for
+     * every sheet interaction instead of relying on a fixed sleep.
+     */
+    private fun awaitDialogChild(matcher: Matcher<View>) {
+        // Deliberately not routed through [await]: that helper evaluates its
+        // condition inside scenario.onActivity, and Espresso may only be driven
+        // from the instrumentation thread. Poll here instead.
+        val deadline = SystemClock.elapsedRealtime() + 15_000
+        while (SystemClock.elapsedRealtime() < deadline) {
+            try {
+                onView(matcher).inRoot(isDialog()).check(matches(isDisplayed()))
+                return
+            } catch (_: NoMatchingViewException) {
+                // Not mounted yet.
+            } catch (_: AssertionError) {
+                // Matched, but not laid out/displayed yet.
+            }
+            SystemClock.sleep(100)
+        }
+        captureFailure("modal dialog content mounted")
+        fail("Timed out waiting for the modal dialog content to mount")
+    }
 
     private fun select(tab: String) {
         // RN Modal dismissal crosses the JS/native window boundary; Espresso
