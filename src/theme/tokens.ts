@@ -374,6 +374,17 @@ export const YanjiPaperTypography = {
     fontWeight: '400' as const,
     fontFamily: 'serif',
   },
+  /**
+   * The capture page's writing face. One step larger than `bodyJournal` and
+   * set on a looser line so a sentence typed in a hurry still reads as prose
+   * rather than a form field.
+   */
+  bodyWriting: {
+    fontSize: 16,
+    lineHeight: 27,
+    fontWeight: '400' as const,
+    fontFamily: 'serif',
+  },
   bodyExcerpt: {
     fontSize: 15,
     lineHeight: 24,

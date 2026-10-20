@@ -17,7 +17,6 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { YanjiDataNative, YanjiTimerNative } from '../bridge';
 import { classifyMoment } from '../services/decisionClient';
 import {
-  YanjiHairline,
   YanjiPaperSheetHeading,
   YanjiPrimaryButton,
   YanjiTextInput,
@@ -25,6 +24,14 @@ import {
 } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
+import { parseIsoDate, weekdayLabelOf } from '../state/settingsViewLogic';
+
+/** The sheet's date stamp: `2026-10-20` → `10月20日 · 周二`. */
+function dateLabel(iso: string): string {
+  const parts = parseIsoDate(iso);
+  const weekday = weekdayLabelOf(iso);
+  return parts && weekday ? `${parts.month}月${parts.day}日 · ${weekday}` : iso;
+}
 
 interface RecordMomentModalProps {
   visible: boolean;
@@ -152,7 +159,8 @@ export function RecordMomentModal({
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
 
-        {/* The sheet: a floating page with a grabber, the input well sunk into it */}
+        {/* The sheet: a floating page with a grabber; the capture is written
+            directly on the page instead of inside a boxed well. */}
         <View
           style={[
             {
@@ -179,23 +187,23 @@ export function RecordMomentModal({
 
           <YanjiPaperSheetHeading
             title={editingNote ? '编辑记录' : '记录此刻'}
-            subtitle={date}
+            subtitle={dateLabel(date)}
             onClose={handleClose}
           />
 
-          {/* The journal well: `multiline` is what makes `YanjiTextInput` pick
-              the serif body face, so the sheet no longer overrides the font per
-              call site. The 96–200 dp well height stays sheet-owned. */}
+          {/* The sheet is the page: the capture is written straight onto it,
+              with no tinted well or rule between the heading and the words. */}
           <YanjiTextInput
             value={text}
             onChangeText={next => {
               setText(next);
               if (!editingNote) captureDraft.current = next;
             }}
-            placeholder="现在的想法、卡点或收获…"
+            placeholder="一个想法、一处卡点、一点收获…"
             multiline
+            variant="page"
             accessibilityLabel="记录内容"
-            style={{ minHeight: 96, maxHeight: 200 }}
+            style={{ minHeight: 152, maxHeight: 232, marginTop: YanjiSpacing.md }}
           />
 
           {error ? (
@@ -209,20 +217,24 @@ export function RecordMomentModal({
             </Text>
           ) : null}
 
-          <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
-
-          <View style={{ marginTop: YanjiSpacing.lg }}>
-            <YanjiPrimaryButton
-              icon="check"
-              label={saving ? '保存中' : '保存'}
-              onPress={handleSave}
-              disabled={saving}
-            />
-          </View>
-
-          {editingNote ? (
-            <View style={{ marginTop: YanjiSpacing.md }}>
-              {!confirmDelete ? (
+          {/* One footer row carries every action: the quiet destructive text
+              on the left while editing, the save pill on the right. The old
+              hairline plus full-width button turned the page back into a form. */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: editingNote ? 'space-between' : 'flex-end',
+              gap: YanjiSpacing.md,
+              marginTop: YanjiSpacing.md,
+            }}
+          >
+            {editingNote ? (
+              confirmDelete ? (
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                  删除后无法恢复
+                </Text>
+              ) : (
                 <Pressable
                   onPress={() => setConfirmDelete(true)}
                   disabled={saving}
@@ -230,58 +242,67 @@ export function RecordMomentModal({
                   accessibilityLabel="删除这条记录"
                   style={({ pressed }) => ({
                     minHeight: paper.layout.rowMinHeight,
-                    alignItems: 'center',
+                    minWidth: paper.layout.rowMinHeight,
                     justifyContent: 'center',
                     opacity: pressed ? 0.6 : 1,
                   })}
                 >
                   <Text style={[paper.typography.bodyPrimary, { color: paper.colors.danger }]}>
-                    删除这条记录
+                    删除
                   </Text>
                 </Pressable>
-              ) : (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
-                  <Pressable
-                    onPress={() => setConfirmDelete(false)}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="取消删除"
-                    style={({ pressed }) => ({
-                      minHeight: paper.layout.rowMinHeight,
-                      justifyContent: 'center',
-                      paddingHorizontal: YanjiSpacing.md,
-                      opacity: pressed ? 0.6 : 1,
-                    })}
+              )
+            ) : null}
+
+            {confirmDelete ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
+                <Pressable
+                  onPress={() => setConfirmDelete(false)}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="取消删除"
+                  style={({ pressed }) => ({
+                    minHeight: paper.layout.rowMinHeight,
+                    justifyContent: 'center',
+                    paddingHorizontal: YanjiSpacing.md,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+                    取消
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleDelete}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="确认删除这条记录"
+                  style={({ pressed }) => ({
+                    minHeight: paper.layout.rowMinHeight,
+                    justifyContent: 'center',
+                    paddingHorizontal: YanjiSpacing.md,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    style={[
+                      paper.typography.bodyPrimary,
+                      { color: paper.colors.danger, fontWeight: '600' },
+                    ]}
                   >
-                    <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-                      取消删除
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleDelete}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="确认删除这条记录"
-                    style={({ pressed }) => ({
-                      minHeight: paper.layout.rowMinHeight,
-                      justifyContent: 'center',
-                      paddingHorizontal: YanjiSpacing.md,
-                      opacity: pressed ? 0.6 : 1,
-                    })}
-                  >
-                    <Text
-                      style={[
-                        paper.typography.bodyPrimary,
-                        { color: paper.colors.danger, fontWeight: '600' },
-                      ]}
-                    >
-                      {saving ? '删除中…' : '确认删除'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          ) : null}
+                    {saving ? '删除中…' : '确认删除'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <YanjiPrimaryButton
+                icon="check"
+                label={saving ? '保存中' : '保存'}
+                onPress={handleSave}
+                disabled={saving}
+              />
+            )}
+          </View>
         </View>
       </View>
     </Modal>

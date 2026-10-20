@@ -1885,6 +1885,7 @@ export function YanjiTextInput({
   secureTextEntry = false,
   autoCapitalize = 'sentences',
   accessibilityLabel,
+  variant = 'well',
   style,
 }: {
   value: string;
@@ -1894,13 +1895,24 @@ export function YanjiTextInput({
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   accessibilityLabel?: string;
+  /**
+   * `well` sinks the field into the sheet as a tinted box. `page` writes
+   * directly on the paper with no box, for a sheet whose whole body is the
+   * field (记录此刻).
+   */
+  variant?: 'well' | 'page';
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
+  const page = variant === 'page';
   // A multiline field in this product is always a journal capture (记录此刻 /
   // 专注随笔), so it takes the serif journal face rather than the sans body.
-  const type = multiline ? paper.typography.bodyJournal : paper.typography.bodyPrimary;
+  // The capture page gets the larger writing cut; a boxed field keeps the
+  // denser journal body so a long note still fits inside its well.
+  const type = multiline
+    ? (page ? paper.typography.bodyWriting : paper.typography.bodyJournal)
+    : paper.typography.bodyPrimary;
   return (
     <TextInput
       value={value}
@@ -1913,11 +1925,13 @@ export function YanjiTextInput({
       accessibilityLabel={accessibilityLabel ?? placeholder}
       style={[
         {
-          backgroundColor: paper.colors.subtle,
-          borderRadius: paper.radius.surface,
-          borderWidth: paper.layout.hairlineWidth,
-          borderColor: paper.colors.hairline,
-          padding: YanjiSpacing.md,
+          backgroundColor: page ? 'transparent' : paper.colors.subtle,
+          ...(page ? { padding: 0 } : {
+            borderRadius: paper.radius.surface,
+            borderWidth: paper.layout.hairlineWidth,
+            borderColor: paper.colors.hairline,
+            padding: YanjiSpacing.md,
+          }),
           color: paper.colors.ink,
           fontSize: type.fontSize,
           lineHeight: type.lineHeight,

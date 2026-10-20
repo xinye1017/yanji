@@ -220,7 +220,7 @@ test('a successful new save clears the draft and writes the selected target date
 
   const reopened = modal.render({ visible: true });
   assert.equal(reopened.input.props.value, '');
-  assert.equal(reopened.heading.props.subtitle, '2026-10-09', 'the visible subtitle stays the selected date');
+  assert.equal(reopened.heading.props.subtitle, '10月9日 · 周五', 'the visible subtitle stays the selected date');
 });
 
 test('whitespace-only input is rejected without touching the draft buffer', async () => {
