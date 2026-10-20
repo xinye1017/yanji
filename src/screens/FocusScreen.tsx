@@ -697,12 +697,14 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   label="记录此刻"
                   icon="compose"
                   variant="secondary"
+                  paused
                   onPress={() => setRecordOpen(true)}
                 />
                 <ImmersiveAction
                   label={busy ? '处理中…' : '继续专注'}
                   icon="play"
                   variant="primary"
+                  paused
                   disabled={busy}
                   onPress={() => { void handleTimerAction('resume'); }}
                 />
@@ -712,13 +714,15 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   label="提前结束"
                   icon="check"
                   variant="ghost"
+                  paused
                   disabled={busy}
                   onPress={() => { void handleTimerAction('complete'); }}
                 />
                 <ImmersiveAction
                   label="放弃本轮"
                   icon="delete"
-                  variant="ghost"
+                  variant="danger"
+                  paused
                   disabled={busy}
                   onPress={confirmDiscard}
                 />
@@ -751,7 +755,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             </Text>
           ) : null}
 
-          <Text style={[paper.typography.captionMeta, { color: immersed.footnote, textAlign: 'center' }]}>
+          <Text style={[paper.typography.captionMeta, { color: immersed.subtitle, textAlign: 'center' }]}>
             锁屏或切到其他应用后，本轮计时仍会继续
           </Text>
         </View>
@@ -866,42 +870,50 @@ function FocusTimerReadout({
   );
 }
 
-/** The immersive field's one action shape, in three weights. */
+/** The immersive field's one action shape, in four weights. */
 function ImmersiveAction({
   label,
   icon,
   onPress,
   variant,
+  paused = false,
   disabled = false,
   style,
 }: {
   label: string;
   icon: 'compose' | 'play' | 'pause' | 'check' | 'delete';
   onPress: () => void;
-  variant: 'primary' | 'secondary' | 'ghost';
+  variant: 'primary' | 'secondary' | 'ghost' | 'danger';
+  paused?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
-  const immersed = theme.paper.immersive.running;
+  const immersed = paused ? theme.paper.immersive.paused : theme.paper.immersive.running;
   const isPrimary = variant === 'primary';
   const isGhost = variant === 'ghost';
+  const isDanger = variant === 'danger';
+  const quiet = isGhost || isDanger;
 
-  const background = isGhost
+  const background = quiet
     ? 'transparent'
     : isPrimary
       ? immersed.primaryActionBg
       : immersed.secondaryActionBg;
-  const border = isGhost
-    ? immersed.secondaryActionBorder
-    : isPrimary
-      ? immersed.primaryActionBorder
-      : immersed.secondaryActionBorder;
-  const content = isGhost
-    ? immersed.secondary
-    : isPrimary
-      ? immersed.primaryActionText
-      : immersed.secondaryActionText;
+  const border = isDanger
+    ? 'transparent'
+    : isGhost
+      ? immersed.secondaryActionBorder
+      : isPrimary
+        ? immersed.primaryActionBorder
+        : immersed.secondaryActionBorder;
+  const content = isDanger
+    ? immersed.danger
+    : isGhost
+      ? immersed.secondary
+      : isPrimary
+        ? immersed.primaryActionText
+        : immersed.secondaryActionText;
 
   return (
     <Pressable
@@ -911,7 +923,7 @@ function ImmersiveAction({
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minHeight: isGhost ? YanjiTouch.min : 52,
+          minHeight: quiet ? YanjiTouch.min : 52,
           paddingHorizontal: YanjiSpacing.xl,
           borderRadius: theme.paper.radius.pill,
           backgroundColor: background,
@@ -926,11 +938,11 @@ function ImmersiveAction({
         style,
       ]}
     >
-      <YanjiIcon name={icon} size={isGhost ? 15 : 16} color={content} />
+      <YanjiIcon name={icon} size={quiet ? 15 : 16} color={content} />
       <Text
         style={
-          isGhost
-            ? [theme.paper.typography.captionMeta, { color: content }]
+          quiet
+            ? [theme.paper.typography.captionMeta, { color: content, fontWeight: isDanger ? '600' : '500' }]
             : [theme.paper.typography.bodyPrimary, { color: content, fontWeight: isPrimary ? '700' : '500' }]
         }
       >

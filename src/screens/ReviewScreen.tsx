@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader, YanjiIconButton,
   YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiSubjectProportionRow,
@@ -18,7 +18,7 @@ import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
-import { YanjiSpacing } from '../theme/tokens';
+import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import {
   useDailySnapshot,
   useReviewDataVisibility, useReviewOverview, useSettingsSnapshot,
@@ -256,7 +256,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           />
         }
       />
-      {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.brandInk, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
+      {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
       {view === 'timeline' ? (
         <>
@@ -349,8 +349,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         <ScrollView style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}
           contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}>
           <YanjiPaperSheetHeading title={`删除「${pendingDelete?.subjectName ?? ''}」记录？`} subtitle="该记录与它的学习时长会一并删除，无法恢复。" onClose={() => { if (!deleting) setPendingDelete(null); }} />
-          {deleteError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.brandInk, marginTop: YanjiSpacing.md }]}>{deleteError}</Text> : null}
-          <YanjiPrimaryButton label={deleting ? '删除中…' : '确认删除'} onPress={() => void removeSession()} disabled={deleting} style={{ marginTop: YanjiSpacing.lg }} />
+          {deleteError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{deleteError}</Text> : null}
+          <YanjiPrimaryButton variant="danger" label={deleting ? '删除中…' : '确认删除'} onPress={() => void removeSession()} disabled={deleting} style={{ marginTop: YanjiSpacing.lg }} />
           <Pressable onPress={() => setPendingDelete(null)} disabled={deleting} accessibilityRole="button" accessibilityLabel="取消删除记录" style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>取消</Text>
           </Pressable>
@@ -385,12 +385,13 @@ function WeekFilmstrip({ cells, onSelect }: {
         flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
         alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
         backgroundColor: cell.isSelected ? colors.ink : 'transparent',
-        opacity: cell.isFuture ? 0.45 : pressed ? 0.65 : 1,
+        opacity: pressed ? 0.65 : 1,
       })}>
       <Text style={[typography.captionMeta, { color: cell.isSelected ? colors.canvas : colors.secondary }]}>{cell.weekdayLabel}</Text>
       <Text style={[typography.bodyPrimary, {
         color: cell.isSelected ? colors.canvas : cell.isFuture ? colors.secondary : colors.ink,
-        fontWeight: '700', marginTop: YanjiSpacing.xs,
+        fontWeight: cell.isFuture ? '500' : '700',
+        marginTop: YanjiSpacing.xs,
       }]}>{cell.dayOfMonth}</Text>
       {/* The dot only exists where study time does — a zero day must not
           borrow the visual weight of a recorded one. */}
@@ -593,13 +594,7 @@ function PeriodSelectorBar({
   const rangeLabel = scopeDateRangeLabel(scope, anchorDate);
 
   return (
-    <View style={{
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 4,
-      marginBottom: 12,
-    }}>
+    <View style={{ marginTop: YanjiSpacing.xs, marginBottom: YanjiSpacing.md, gap: YanjiSpacing.sm }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>
         {SCOPES.map(opt => {
           const selected = opt.value === scope;
@@ -611,15 +606,16 @@ function PeriodSelectorBar({
               accessibilityState={{ selected }}
               accessibilityLabel={`切换范围至${opt.label}`}
               style={{
-                paddingVertical: 4,
+                minHeight: YanjiTouch.min,
                 paddingHorizontal: YanjiSpacing.md,
+                justifyContent: 'center',
                 borderRadius: radius.pill,
                 backgroundColor: selected ? colors.ink : colors.subtle,
               }}
             >
               <Text style={{
                 fontSize: 12,
-                fontWeight: selected ? '600' : '400',
+                fontWeight: selected ? '600' : '500',
                 color: selected ? colors.canvas : colors.secondary,
               }}>
                 {opt.label}
@@ -628,33 +624,35 @@ function PeriodSelectorBar({
           );
         })}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-        <Pressable
-          onPress={onPrevious}
-          accessibilityRole="button"
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <YanjiIconButton
+          icon="back"
           accessibilityLabel="上一周期"
-          hitSlop={8}
+          onPress={onPrevious}
+          size={YanjiTouch.min}
+          iconSize={18}
+        />
+        <Text
+          testID="review-date"
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+          numberOfLines={1}
+          style={[typography.captionMeta, {
+            flex: 1,
+            textAlign: 'center',
+            color: colors.secondary,
+          }]}
         >
-          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>‹</Text>
-        </Pressable>
-        <Text testID="review-date" style={[typography.captionMeta, {
-          color: colors.secondary,
-          fontVariant: ['tabular-nums'],
-          fontSize: 11,
-          paddingHorizontal: 4,
-        }]}>
           {rangeLabel}
         </Text>
-        <Pressable
+        <YanjiIconButton
+          icon="forward"
+          accessibilityLabel="下一周期"
           onPress={onNext}
           disabled={!canStepForward}
-          accessibilityRole="button"
-          accessibilityLabel="下一周期"
-          hitSlop={8}
-          style={{ opacity: canStepForward ? 1 : 0.3 }}
-        >
-          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>›</Text>
-        </Pressable>
+          size={YanjiTouch.min}
+          iconSize={18}
+        />
       </View>
     </View>
   );

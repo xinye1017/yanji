@@ -1240,21 +1240,34 @@ export function YanjiPrimaryButton({
   icon?: YanjiIconName;
   onPress: () => void;
   disabled?: boolean;
-  /** `primary` = the one accent action; `secondary` = a same-tier sibling. */
-  variant?: 'primary' | 'secondary';
+  /**
+   * `primary` = the one accent action; `secondary` = a same-tier sibling;
+   * `danger` = an irreversible confirmation. The three never share a fill, so
+   * a destructive action cannot borrow the accent of "start" or "save".
+   */
+  variant?: 'primary' | 'secondary' | 'danger';
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const reduceMotion = useReducedMotion();
   const secondary = variant === 'secondary';
+  const danger = variant === 'danger';
 
-  const backgroundColor = disabled || secondary ? paper.colors.subtle : paper.colors.brand;
+  const backgroundColor = disabled
+    ? paper.colors.subtle
+    : danger
+      ? paper.colors.danger
+      : secondary
+        ? paper.colors.subtle
+        : paper.colors.brand;
   const textColor = disabled
     ? paper.colors.muted
-    : secondary
-      ? paper.colors.ink
-      : paper.colors.onBrand;
+    : danger
+      ? paper.colors.onBrand
+      : secondary
+        ? paper.colors.ink
+        : paper.colors.onBrand;
 
   return (
     <Pressable
@@ -1276,7 +1289,7 @@ export function YanjiPrimaryButton({
           minHeight: YanjiTouch.comfortable + 4,
           opacity: pressed ? 0.88 : 1,
           transform: [{ scale: pressed && !reduceMotion ? 0.985 : 1 }],
-          ...(!disabled && !secondary ? theme.shadow.sheet(theme.isDark) : null),
+          ...(!disabled && !secondary && !danger ? theme.shadow.sheet(theme.isDark) : null),
         },
         style,
       ]}
@@ -1323,8 +1336,8 @@ export function YanjiIconButton({
   accessibilityLabel: string;
   size?: number;
   iconSize?: number;
-  /** `plain` = bare glyph; `filled` = glyph inside a soft tinted disc. */
-  tone?: 'plain' | 'filled';
+  /** `plain` = bare glyph; `filled` = glyph inside a soft tinted disc; `danger` = destructive glyph. */
+  tone?: 'plain' | 'filled' | 'danger';
   disabled?: boolean;
   /** Toggle buttons must say whether they are on — colour alone is not a state. */
   selected?: boolean;
@@ -1336,7 +1349,12 @@ export function YanjiIconButton({
     ? paper.colors.muted
     : selected
       ? paper.colors.brandInk
-      : paper.colors.secondary;
+      : tone === 'danger'
+        ? paper.colors.danger
+        : paper.colors.secondary;
+  // Small glyphs expand their touch area to the 44dp floor. Larger controls
+  // stay exact, so adjacent buttons cannot claim each other's taps.
+  const hitSlop = Math.max(0, Math.ceil((YanjiTouch.min - size) / 2));
 
   return (
     <Pressable
@@ -1345,7 +1363,7 @@ export function YanjiIconButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={selected === undefined ? undefined : { selected }}
-      hitSlop={8}
+      hitSlop={hitSlop}
       style={({ pressed }) => [
         {
           width: size,

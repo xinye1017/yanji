@@ -165,20 +165,27 @@ export function SubjectsSheet({
     }
   };
 
-  const confirmDeleteCategory = (category: Subject, childCount: number) => {
-    const message = childCount > 0
-      ? `确定要删除「${category.name}」及其下的 ${childCount} 个子学科吗？`
-      : `确定要删除学科分类「${category.name}」吗？`;
+  /**
+   * A subject disappears from the picker immediately, while its historical
+   * records survive and fall back to 「其他」. Both facts are stated before the
+   * destructive call, for a category and a child alike.
+   */
+  const confirmDeleteSubject = (subject: Subject, childCount = 0) => {
+    const scope = subject.isCategory
+      ? childCount > 0
+        ? `「${subject.name}」及其下的 ${childCount} 个子学科会从列表中移除。`
+        : `「${subject.name}」会从列表中移除。`
+      : `「${subject.name}」会从父分类中移除。`;
     Alert.alert(
-      '删除学科分类',
-      message,
+      subject.isCategory ? '删除学科分类' : '删除子学科',
+      `${scope}历史记录仍会保留，但统计中会归入「其他」。`,
       [
         { text: '取消', style: 'cancel' },
         {
           text: '删除',
           style: 'destructive',
           onPress: () => {
-            void handleDeleteSubject(category.id);
+            void handleDeleteSubject(subject.id);
           },
         },
       ],
@@ -195,6 +202,24 @@ export function SubjectsSheet({
     } catch {
       setError('恢复默认失败');
     }
+  };
+
+  const confirmRestoreDefaults = () => {
+    Alert.alert(
+      '恢复默认学科？',
+      '自定义分类和子学科会被移除，恢复为出厂列表。历史记录仍会保留，但统计中会归入「其他」。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '恢复默认',
+          style: 'destructive',
+          onPress: () => {
+            void handleRestoreDefaults();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
@@ -230,7 +255,7 @@ export function SubjectsSheet({
           />
           <YanjiPaperSheetHeading
             title="专注学科"
-            subtitle="自定义学科分类与子科目名称，修改后将同步历史记录"
+            subtitle="重命名会同步历史记录；删除后记录仍保留，统计归入「其他」"
             onClose={onClose}
           />
 
@@ -284,7 +309,7 @@ export function SubjectsSheet({
                           accessibilityLabel="保存分类名称修改"
                           onPress={() => void handleSaveRename(group.category.id)}
                           disabled={savingId === group.category.id}
-                          size={24}
+                          size={layout.rowMinHeight}
                           iconSize={14}
                           tone="filled"
                         />
@@ -292,7 +317,7 @@ export function SubjectsSheet({
                           icon="close"
                           accessibilityLabel="取消修改"
                           onPress={handleCancelEdit}
-                          size={24}
+                          size={layout.rowMinHeight}
                           iconSize={14}
                           tone="plain"
                         />
@@ -310,17 +335,17 @@ export function SubjectsSheet({
                             icon="compose"
                             accessibilityLabel={`修改${group.category.name}名称`}
                             onPress={() => handleStartEdit(group.category)}
-                            size={24}
+                            size={layout.rowMinHeight}
                             iconSize={14}
                             tone="plain"
                           />
                           <YanjiIconButton
                             icon="delete"
                             accessibilityLabel={`删除${group.category.name}`}
-                            onPress={() => confirmDeleteCategory(group.category, group.children.length)}
-                            size={24}
+                            onPress={() => confirmDeleteSubject(group.category, group.children.length)}
+                            size={layout.rowMinHeight}
                             iconSize={14}
-                            tone="plain"
+                            tone="danger"
                           />
                         </View>
                       </View>
@@ -360,7 +385,7 @@ export function SubjectsSheet({
                                 accessibilityLabel="保存子学科名称修改"
                                 onPress={() => void handleSaveRename(child.id)}
                                 disabled={savingId === child.id}
-                                size={22}
+                                size={layout.rowMinHeight}
                                 iconSize={13}
                                 tone="filled"
                               />
@@ -368,7 +393,7 @@ export function SubjectsSheet({
                                 icon="close"
                                 accessibilityLabel="取消修改"
                                 onPress={handleCancelEdit}
-                                size={22}
+                                size={layout.rowMinHeight}
                                 iconSize={13}
                                 tone="plain"
                               />
@@ -389,22 +414,22 @@ export function SubjectsSheet({
                                   {child.name}
                                 </Text>
                               </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
                                 <YanjiIconButton
                                   icon="compose"
                                   accessibilityLabel={`修改${child.name}名称`}
                                   onPress={() => handleStartEdit(child)}
-                                  size={22}
+                                  size={layout.rowMinHeight}
                                   iconSize={13}
                                   tone="plain"
                                 />
                                 <YanjiIconButton
                                   icon="delete"
                                   accessibilityLabel={`删除${child.name}`}
-                                  onPress={() => void handleDeleteSubject(child.id)}
-                                  size={22}
+                                  onPress={() => confirmDeleteSubject(child)}
+                                  size={layout.rowMinHeight}
                                   iconSize={13}
-                                  tone="plain"
+                                  tone="danger"
                                 />
                               </View>
                             </View>
@@ -441,7 +466,7 @@ export function SubjectsSheet({
                           accessibilityLabel="添加子学科"
                           onPress={() => void handleAddSub(group.category.id)}
                           disabled={addingSubSaving}
-                          size={22}
+                          size={layout.rowMinHeight}
                           iconSize={13}
                           tone="filled"
                         />
@@ -449,7 +474,7 @@ export function SubjectsSheet({
                           icon="close"
                           accessibilityLabel="取消添加"
                           onPress={() => { setAddingUnderParent(null); setNewSubName(''); }}
-                          size={22}
+                          size={layout.rowMinHeight}
                           iconSize={13}
                           tone="plain"
                         />
@@ -463,6 +488,7 @@ export function SubjectsSheet({
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 4,
+                          minHeight: layout.rowMinHeight,
                           marginTop: YanjiSpacing.sm,
                           paddingLeft: YanjiSpacing.md,
                           opacity: pressed ? 0.6 : 1,
@@ -504,7 +530,7 @@ export function SubjectsSheet({
                     accessibilityLabel="确认新建分类"
                     onPress={() => void handleAddCategory()}
                     disabled={addingCategorySaving}
-                    size={26}
+                    size={layout.rowMinHeight}
                     iconSize={14}
                     tone="filled"
                   />
@@ -512,7 +538,7 @@ export function SubjectsSheet({
                     icon="close"
                     accessibilityLabel="取消新建分类"
                     onPress={() => { setAddingCategory(false); setNewCategoryName(''); }}
-                    size={26}
+                    size={layout.rowMinHeight}
                     iconSize={14}
                     tone="plain"
                   />
@@ -527,6 +553,7 @@ export function SubjectsSheet({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: YanjiSpacing.xs,
+                    minHeight: layout.rowMinHeight,
                     paddingVertical: YanjiSpacing.md,
                     borderRadius: radius.surface,
                     borderWidth: 1,
@@ -555,17 +582,18 @@ export function SubjectsSheet({
               </Text>
 
               <Pressable
-                onPress={() => void handleRestoreDefaults()}
+                onPress={confirmRestoreDefaults}
                 accessibilityRole="button"
                 accessibilityLabel="恢复默认学科"
                 style={({ pressed }) => ({
                   alignSelf: 'center',
-                  paddingVertical: YanjiSpacing.xs,
+                  minHeight: layout.rowMinHeight,
+                  justifyContent: 'center',
                   paddingHorizontal: YanjiSpacing.md,
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                <Text style={[typography.captionMeta, { color: colors.danger, fontWeight: '600' }]}>
                   恢复默认学科
                 </Text>
               </Pressable>

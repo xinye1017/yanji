@@ -228,8 +228,8 @@ const paperImmersiveBase = {
   secondary: '#C4C7CE',
   subtitle: '#8A8F99',
   muted: '#6E737D',
-  /** Footage line. Decorative reassurance, so it sits under the 4.5:1 text bar. */
-  footnote: '#52565E',
+  /** Destructive text on the always-dark immersion field; paper `danger` is too dark here. */
+  danger: '#F87171',
   subtle: 'rgba(255,255,255,0.08)',
   pillBg: 'rgba(255,255,255,0.05)',
   pillBorder: 'rgba(255,255,255,0.08)',
@@ -468,9 +468,9 @@ export const YanjiPaperLayout = {
    * apart by a few dp.
    *
    * The trailing controls are sized to this band too, so they cannot grow the
-   * line past the alignment it exists to hold. `YanjiIconButton` carries 8dp of
-   * hit slop on each side, which is what lifts a 28dp control to the 44dp
-   * `YanjiTouch.min` floor without widening the visible glyph.
+   * line past the alignment it exists to hold. `YanjiIconButton` expands its
+   * touch area to the 44dp `YanjiTouch.min` floor — 8dp per side at this band —
+   * without widening the visible glyph.
    *
    * That slop deliberately reaches past the band, which the public `hitSlop`
    * docs read as impossible ("the touch area never extends past the parent view

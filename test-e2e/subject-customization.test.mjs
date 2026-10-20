@@ -172,7 +172,7 @@ test('FocusScreen category cards do not show 今日 xx duration text', () => {
   }
 });
 
-test('SubjectsSheet renders edit and delete options for categories with compact icon sizes', () => {
+test('SubjectsSheet renders edit and delete options with 48dp targets and confirms destructive actions', () => {
   const paper = {
     colors: tokens.YanjiPaperColors.light,
     radius: tokens.YanjiPaperRadius,
@@ -200,11 +200,13 @@ test('SubjectsSheet renders edit and delete options for categories with compact 
   };
 
   const YanjiIconButton = props => ({ type: 'YanjiIconButton', props });
+  const alerts = [];
+  const deleteCalls = [];
   const subjectsSheetModule = loadTypeScript('src/components/SubjectsSheet.tsx', {
     react,
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
-      TextInput: 'TextInput', Alert: { alert: () => {} },
+      TextInput: 'TextInput', Alert: { alert: (...args) => alerts.push(args) },
     },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) },
     'react-native-reanimated': { useReducedMotion: () => false },
@@ -219,7 +221,7 @@ test('SubjectsSheet renders edit and delete options for categories with compact 
       YanjiDataNative: {
         getSubjects: async () => sampleSubjects,
         renameSubject: async () => true,
-        deleteSubject: async () => true,
+        deleteSubject: async id => { deleteCalls.push(id); return true; },
       },
     },
   });
@@ -240,22 +242,41 @@ test('SubjectsSheet renders edit and delete options for categories with compact 
   const buttonNodes = findNodes(element, n => n.type === YanjiIconButton);
   const iconButtons = buttonNodes.map(b => b.props);
 
-  // Verify category has both edit and delete buttons
+  // Verify category has both edit and delete buttons, each on a full row target.
   const editCatBtn = iconButtons.find(b => b.accessibilityLabel === '修改数学一名称');
   assert.ok(editCatBtn, 'Category edit button must exist');
-  assert.equal(editCatBtn.size, 24, 'Category edit button size should be 24');
-  assert.equal(editCatBtn.iconSize, 14, 'Category edit button iconSize should be 14');
+  assert.equal(editCatBtn.size, tokens.YanjiPaperLayout.rowMinHeight, 'Category edit target must be 48dp');
+  assert.equal(editCatBtn.iconSize, 14, 'Category edit button iconSize should stay compact');
+  assert.equal(editCatBtn.tone, 'plain', 'Editing is not destructive');
 
   const deleteCatBtn = iconButtons.find(b => b.accessibilityLabel === '删除数学一');
   assert.ok(deleteCatBtn, 'Category delete button must exist');
-  assert.equal(deleteCatBtn.size, 24, 'Category delete button size should be 24');
-  assert.equal(deleteCatBtn.iconSize, 14, 'Category delete button iconSize should be 14');
+  assert.equal(deleteCatBtn.size, tokens.YanjiPaperLayout.rowMinHeight, 'Category delete target must be 48dp');
+  assert.equal(deleteCatBtn.iconSize, 14, 'Category delete iconSize should stay compact');
+  assert.equal(deleteCatBtn.tone, 'danger', 'Deleting must use the danger tone');
 
-  // Verify child subject has edit and delete buttons
+  // Verify child subject has edit and delete buttons on the same target size.
   const deleteChildBtn = iconButtons.find(b => b.accessibilityLabel === '删除高等数学');
   assert.ok(deleteChildBtn, 'Child delete button must exist');
-  assert.equal(deleteChildBtn.size, 22, 'Child delete button size should be 22');
-  assert.equal(deleteChildBtn.iconSize, 13, 'Child delete button iconSize should be 13');
+  assert.equal(deleteChildBtn.size, tokens.YanjiPaperLayout.rowMinHeight, 'Child delete target must be 48dp');
+  assert.equal(deleteChildBtn.iconSize, 13, 'Child delete iconSize should stay compact');
+  assert.equal(deleteChildBtn.tone, 'danger', 'Deleting must use the danger tone');
+
+  // A child deletion must ask first, and must not touch the bridge on the tap.
+  deleteChildBtn.onPress();
+  assert.equal(alerts.length, 1, 'Deleting a child opens a confirmation');
+  assert.match(alerts[0][0], /删除子学科/);
+  assert.equal(alerts[0][2][1].style, 'destructive');
+  assert.deepEqual(deleteCalls, [], 'The tap alone must not delete anything');
+
+  // Restoring defaults is the same class of action: confirm before wiping.
+  const restore = findNodes(element, n => n.type === 'Pressable' && n.props?.accessibilityLabel === '恢复默认学科')[0];
+  assert.ok(restore, 'Restore defaults must be reachable');
+  restore.props.onPress();
+  assert.equal(alerts.length, 2, 'Restore defaults opens a confirmation');
+  assert.match(alerts[1][0], /恢复默认/);
+  assert.equal(alerts[1][2][1].style, 'destructive');
+  assert.deepEqual(deleteCalls, [], 'Opening the confirmation must not delete anything');
 });
 
 test('FocusScreen reloads subjects when onDataChanged receives event.type subjects', async () => {
