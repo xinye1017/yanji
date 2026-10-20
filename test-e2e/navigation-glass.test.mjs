@@ -86,14 +86,9 @@ test('timeline entries share the compact spine and spacing contract', () => {
   assert.match(review, /<TimelineCompactRow/);
   assert.match(review, /isFirst=\{isFirst\}\s+isLast=\{isLast\}/);
   assert.match(review, /onMore=\{anchor => onOpenMenu\(entry, anchor\)\}/);
-  // The row owns the page-edge rule and the inter-row hairline, so Today and
-  // Review cannot drift into two different spines: one continuous 1px rule on
-  // the clock gutter's right edge, and a bottom hairline between events.
-  assert.equal(/TIMELINE_TIME_COLUMN/.test(row), true, 'the clock gutter is one shared width');
-  assert.match(row, /position: 'absolute',\s*\n\s*left: TIMELINE_TIME_COLUMN/);
-  assert.match(row, /width: layout\.hairlineWidth,\s*\n\s*backgroundColor: colors\.hairline/);
-  assert.match(row, /borderBottomWidth: isLast \? 0 : layout\.hairlineWidth/);
-  assert.equal(/timelineNodeSize|nodeRadius|momentItemGap/.test(row), false,
-    'the node dot and its per-segment stubs are gone');
+  // The row owns the clearance around the node and the inter-row gap, so Today
+  // and Review cannot drift into two different spines.
+  assert.match(row, /clearance|center - nodeRadius - YanjiSpacing\.xs/);
+  assert.match(row, /bottom: -layout\.momentItemGap/);
 });
 

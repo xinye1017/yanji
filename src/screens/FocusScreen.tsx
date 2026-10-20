@@ -16,7 +16,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl } from '../components/YanjiUI';
@@ -58,10 +58,16 @@ function splitClockParts(totalSeconds: number): { main: string; sub: string } {
   return hours > 0 ? { main: `${hours}:${minutes}`, sub: seconds } : { main: minutes, sub: seconds };
 }
 
+function formatClock(totalSeconds: number): string {
+  const { main, sub } = splitClockParts(totalSeconds);
+  return `${main}:${sub}`;
+}
+
 /** The dial reads as a duration, not a clock: 45 → `45:00`, 180 → `180:00`. */
 function formatDialMinutes(minutes: number): string {
   return `${String(Math.max(0, Math.floor(minutes))).padStart(2, '0')}:00`;
 }
+
 
 /** Projection only — it never writes a planned duration, it just reads the clock. */
 function formatEstimatedEndTime(durationMinutes: number): string {
@@ -619,46 +625,20 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       {/* Horizon tide: a wash that rises from the bottom edge and colours the
           whole field with the session's accent.
 
-          Two layers, because a single tall linear ramp still read as a cliff:
-          at 32% height the gradient's whole travel sat below the eye line, and
-          near its low end its alpha converged on the canvas's own value, so the
-          first opaque pixel of the field looked like a seam. A radial falloff
-          is what actually reads as "tide", and RN has no radial-gradient — but
-          `react-native-svg` ships RadialGradient, so the falloff is drawn as
-          one: a wide, flat ellipse rising 58% from the bottom, hottest at the
-          centre of the bottom edge and fully gone by its rim. The linear layer
-          under it ramps the full 58% at four stops (0 / 35 / 70 / 100%), which
-          keeps the middle band moving gradually instead of arriving in one
-          jump.
-
           The stop alpha rides on `stopOpacity`, never on an `rgba()` colour:
           `react-native-svg` masks the alpha back out of `stopColor` and reads
           opacity from `stopOpacity` alone, defaulting it to fully opaque. With
-          an rgba() colour every stop paints solid, so the wash rendered as a
+          an rgba() colour both stops paint solid, so the wash rendered as a
           hard-edged slab (see the `tideOpacity` note in tokens.ts). */}
-      <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '58%' }}>
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '32%' }}>
         <Svg width="100%" height="100%">
           <Defs>
-            {/* Centre below the bottom edge (106%), so the field never shows the
-                gradient's own centre or rim: the visible band is only the top
-                of the falloff, which is why there is no line to see. Radii are
-                in object-bounding-box units — 118% of the width and 66% of the
-                height — giving a wide, flat bloom. Android honours cx/cy/rx/ry
-                but ignores the focal point, so fx/fy are not passed. */}
-            <RadialGradient id="focus-horizon-bloom" cx="50%" cy="106%" rx="118%" ry="66%">
-              <Stop offset="0%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity} />
-              <Stop offset="42%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity * 0.35} />
-              <Stop offset="70%" stopColor={immersed.tideColor} stopOpacity={0} />
-            </RadialGradient>
             <LinearGradient id="focus-horizon-tide" x1="0%" y1="0%" x2="0%" y2="100%">
               <Stop offset="0%" stopColor={immersed.tideColor} stopOpacity={0} />
-              <Stop offset="35%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity * 0.25} />
-              <Stop offset="70%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity * 0.7} />
               <Stop offset="100%" stopColor={immersed.tideColor} stopOpacity={immersed.tideOpacity} />
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#focus-horizon-tide)" />
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#focus-horizon-bloom)" />
         </Svg>
       </View>
 
@@ -691,13 +671,9 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
               borderColor: immersed.pillBorder,
             }}
           >
-            {/* `immersed` is already the paused palette in this branch, so the dot
-                carries `immersive.paused.accent` while the session is held. The
-                pill is the field's only status line now that the readout no
-                longer prints 「已专注 / 剩余」 — a held session must say so. */}
             <View style={{ width: 7, height: 7, borderRadius: paper.radius.pill, backgroundColor: immersed.accent }} />
             <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: immersed.secondary }]}>
-              {session.subjectName} · {isPaused ? '已暂停' : session.isCountdown ? '倒计时' : '正计时'}
+              {session.subjectName} · {session.isCountdown ? '倒计时' : '正计时'}
             </Text>
           </View>
 
@@ -790,15 +766,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   );
 }
 
-/**
- * The clock, and nothing else.
- *
- * A session's progress is already legible from the countdown itself, so this
- * leaf deliberately renders no bar and no 「已专注 / 剩余」 legend: a second
- * readout of the same two numbers competed with the clock for the field's
- * single focal point. Pause state is stated once, on the context pill above,
- * which sits outside the tick boundary.
- */
+/** Isolated second-rate native tick subscriber, not an AppShell subscription. */
 function FocusTimerReadout({
   session,
   visible,
@@ -812,9 +780,16 @@ function FocusTimerReadout({
   const seconds = session.isCountdown
     ? Math.max(0, tick?.remainingSeconds ?? session.remainingSeconds)
     : (tick?.elapsedSeconds ?? session.elapsedSeconds);
+  const elapsed = tick?.elapsedSeconds ?? session.elapsedSeconds;
+  const remaining = Math.max(0, tick?.remainingSeconds ?? session.remainingSeconds);
+  const total = elapsed + remaining;
+  const progress = session.isCountdown && total > 0
+    ? Math.max(0, Math.min(1, elapsed / total))
+    : null;
   const paused = session.isPaused || tick?.isPaused === true;
   const immersed = paused ? theme.paper.immersive.paused : theme.paper.immersive.running;
   const { main, sub } = splitClockParts(seconds);
+  const percent = progress === null ? null : Math.round(progress * 100);
 
   return (
     <View style={{ alignItems: 'center', alignSelf: 'stretch' }}>
@@ -839,6 +814,57 @@ function FocusTimerReadout({
         {main}
         <Text style={{ opacity: 0.45 }}>:</Text>
         {sub}
+      </Text>
+
+      {progress === null ? (
+        <View
+          style={{
+            width: 80,
+            height: 3,
+            marginTop: 28,
+            marginBottom: 10,
+            borderRadius: theme.paper.radius.pill,
+            backgroundColor: immersed.accent,
+            opacity: 0.85,
+          }}
+        />
+      ) : (
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="倒计时进度"
+          accessibilityValue={{ min: 0, max: 100, now: percent ?? 0 }}
+          style={{
+            width: 220,
+            height: 3,
+            marginTop: 28,
+            marginBottom: 10,
+            backgroundColor: immersed.subtle,
+            overflow: 'hidden',
+            borderRadius: theme.paper.radius.pill,
+          }}
+        >
+          <View
+            style={{
+              height: 3,
+              width: `${progress * 100}%`,
+              backgroundColor: immersed.accent,
+              borderRadius: theme.paper.radius.pill,
+            }}
+          />
+        </View>
+      )}
+
+      <Text
+        style={[
+          theme.paper.typography.captionMeta,
+          { color: immersed.secondary, textAlign: 'center' },
+        ]}
+      >
+        {paused
+          ? `已专注 ${formatClock(elapsed)} · 已暂停`
+          : percent === null
+            ? `已专注 ${formatClock(elapsed)} · 正向计时中`
+            : `已专注 ${formatClock(elapsed)} · 进度 ${percent}%`}
       </Text>
     </View>
   );

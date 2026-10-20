@@ -369,13 +369,13 @@ function WeekFilmstrip({ cells, onSelect }: {
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  // No rule under the filmstrip: the summary band directly below draws its own
-  // top hairline, and two adjacent rules would read as a double border.
   return <View style={{
     flexDirection: 'row',
     gap: YanjiSpacing.xs,
     paddingTop: 8,
     paddingBottom: 12,
+    borderBottomWidth: layout.hairlineWidth,
+    borderColor: colors.hairline,
   }}>
     {cells.map(cell => <Pressable key={cell.date} disabled={cell.isFuture} onPress={() => onSelect(cell.date)}
       accessibilityRole="button"
@@ -460,23 +460,21 @@ function DaySummary({ snapshot }: {
       spoken: snapshot ? `专注次数 ${snapshot.focusParticipationCount} 次` : '正在读取专注次数',
     },
   ];
-  // Three facts on one ruled band: a hairline above and below, no vertical
-  // dividers, and every column left-aligned to the page gutter so the row reads
-  // as one sentence rather than three boxed cells.
   return <View style={{
     flexDirection: 'row',
     paddingVertical: YanjiSpacing.md,
-    borderTopWidth: layout.hairlineWidth,
     borderBottomWidth: layout.hairlineWidth,
     borderColor: colors.hairline,
   }}>
-    {cells.map(cell => <View key={cell.label} accessible accessibilityLabel={cell.spoken} style={{
-      flex: 1, alignItems: 'flex-start', paddingRight: YanjiSpacing.xs,
+    {cells.map((cell, index) => <View key={cell.label} accessible accessibilityLabel={cell.spoken} style={{
+      flex: 1, alignItems: 'center', paddingHorizontal: YanjiSpacing.xs,
+      borderLeftWidth: index > 0 ? layout.hairlineWidth : 0, borderColor: colors.hairline,
     }}>
       <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>{cell.label}</Text>
       <View style={{
         flexDirection: 'row',
         alignItems: 'baseline',
+        justifyContent: 'center',
         marginTop: YanjiSpacing.xs,
         minHeight: typography.metricHero.lineHeight,
       }}>
@@ -502,11 +500,16 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onEditNote, onOp
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
   onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
 }): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography } = paper;
   return <View style={{ marginTop: YanjiSpacing.lg }}>
     {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
       isFirst={index === 0} isLast={index === entries.length - 1}
       dayTasks={dayTasks} busyNote={busyNote}
       onEditSession={onEditSession} onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
+    {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
+      按真实发生时刻排列；完成计划不标记未提供的完成时刻。
+    </Text> : null}
   </View>;
 }
 
@@ -537,6 +540,7 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
       tagLabel={session.subjectName}
       tagIcon="clock3"
       tagTone="neutral"
+      dotColor={session.subjectColor || colors.secondary}
       metaText={formatDuration(session.durationSeconds)}
       content={body}
       isFirst={isFirst} isLast={isLast} disabled={busyNote}
@@ -555,7 +559,7 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
     tagLabel={tagLabel}
     tagIcon={entry.category === 'DOUBT' ? 'doubt'
       : entry.category === 'INSPIRATION' ? 'inspiration' : undefined}
-    tagTone={entry.category === 'DOUBT' ? 'doubt' : 'neutral'}
+    tagTone={entry.category === 'DOUBT' ? 'brand' : entry.category === 'INSPIRATION' ? 'positive' : 'neutral'}
     content={entry.content}
     isFirst={isFirst} isLast={isLast} disabled={busyNote}
     accessibilityLabel={`编辑随笔：${entry.content}`}

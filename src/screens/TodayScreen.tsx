@@ -24,7 +24,7 @@ import {
 } from '../state/dataRefresh';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
-  buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, formatDuration, goalClock,
+  buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
   greeting, hourRangeLabel, rhythmSummary, spectrumLegend,
   summarizeSubjects, taskMeta,
 } from './todayViewLogic';
@@ -52,7 +52,12 @@ type Selection =
 function localDay(day: Date): string {
   return [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')].join('-');
 }
-
+function duration(seconds: number): string {
+  const minutes = Math.max(0, Math.floor(seconds / 60));
+  if (minutes < 1 && seconds > 0) return '不足1分钟';
+  if (minutes < 60) return `${minutes}分钟`;
+  return `${Math.floor(minutes / 60)}小时${minutes % 60 ? `${minutes % 60}分` : ''}`;
+}
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(whole / 3600);
@@ -133,28 +138,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const effectiveSeconds = snapshot?.totalDurationSeconds ?? 0;
   const pending = tasks?.filter(task => !task.completed) ?? [];
   const completed = tasks?.filter(task => task.completed) ?? [];
-  /**
-   * What 「记录此刻」 lists: the two newest entries, plus every unresolved doubt.
-   *
-   * A doubt is a *state of an entry*, not a second list. It used to be rendered
-   * twice — once in the two-note journal and once in a 「今日疑点」 card that
-   * picked up the same note again — so an open question appeared as two rows on
-   * one screen. It is one list now, and an open doubt earns its place in it
-   * ahead of the recency cut because it is the thing still asking for action.
-   */
-  const journalNotes = useMemo(() => {
-    const all = [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp);
-    const recent = all.slice(0, 2);
-    const openDoubts = all.filter(note => note.category === 'DOUBT' && !note.isResolved);
-    const seen = new Set(recent.map(note => note.id));
-    const merged = [...recent];
-    for (const doubt of openDoubts) {
-      if (seen.has(doubt.id)) continue;
-      seen.add(doubt.id);
-      merged.push(doubt);
-    }
-    return merged.sort((a, b) => b.timestamp - a.timestamp);
-  }, [notes]);
+  const latestNotes = useMemo(() => [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
+  const todayDoubts = useMemo(() => (notes ?? []).filter(note => note.category === 'DOUBT'), [notes]);
+  const resolvedDoubts = useMemo(() => todayDoubts.filter(note => note.isResolved), [todayDoubts]);
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
@@ -257,47 +243,31 @@ export function TodayScreen({ visible, foregroundRevision }: {
         accessibilityElementsHidden={momentMenu !== null}
         importantForAccessibility={momentMenu ? 'no-hide-descendants' : 'auto'}
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
-        {/* The date and the countdown are context, not headline: they ride the
-            right edge in two short lines so the greeting keeps the page's open
-            position and the hero below owns the reading order. */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: YanjiSpacing.md }}>
-          <View style={{ flex: 1 }}>
-            <Text accessibilityRole="header"
-              style={[typography.titleGreeting, { color: colors.ink }]}>
-              {greeting(now.getHours())}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end', paddingTop: 2 }}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>{displayDate(date)}</Text>
-            {countdown && countdownLabel ? (
-              <Pressable onPress={openSettings} accessibilityRole="button"
-                accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
-                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
-                <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-                  距初试 <Text style={{ color: colors.ink, fontWeight: '700' }}>{Math.max(0, countdown.daysRemaining)}</Text> 天
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-        <YanjiHairline style={{ marginTop: YanjiSpacing.sm }} />
+        <YanjiEditorialHeader
+          eyebrow={displayDate(date)}
+          eyebrowBadge={countdown && countdownLabel ? (
+            <Pressable onPress={openSettings} accessibilityRole="button"
+              accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
+              <YanjiBadge tone={countdown.daysRemaining >= 0 ? 'brand' : 'neutral'} label={countdownLabel} />
+            </Pressable>
+          ) : undefined}
+          title={greeting(now.getHours())}
+          titleStyle={typography.titleGreeting}
+          trailing={<YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} />}
+        />
+        <YanjiHairline style={{ marginTop: 8 }} />
 
-        {/* One number answers "how is today going"; the goal, the rounds and the
-            remainder are one line of annotation under it. They used to repeat
-            the same fact four times at four sizes, which pushed the only action
-            the page is for below the fold. */}
-        <View style={{ paddingTop: YanjiSpacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: layout.gridGap }}>
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日专注</Text>
+        <View style={{ paddingVertical: YanjiSpacing.md }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
+            <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日累计专注</Text>
             <Pressable onPress={openGoal} accessibilityRole="button" accessibilityLabel="调整日常学习目标"
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
               {goalSeconds !== null && goalSeconds > 0 ? (
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  目标 <Text style={{ color: colors.ink, fontWeight: '700' }}>{goalClock(goalSeconds)}</Text>
-                  {snapshot ? <Text style={{ color: effectiveSeconds >= goalSeconds ? colors.positive : colors.secondary }}>
-                    {' · '}{effectiveSeconds >= goalSeconds ? '已达成' : `${Math.round(effectiveSeconds / goalSeconds * 100)}%`}
-                  </Text> : null}
+                  目标 {goalClock(goalSeconds)} ·{' '}
+                  <Text style={{ color: colors.ink, fontWeight: '700' }}>{snapshot ? `${Math.round(effectiveSeconds / goalSeconds * 100)}%` : '—'}</Text>
                 </Text>
               ) : (
                 <Text style={[typography.captionMeta, { color: colors.brandInk }]}>
@@ -306,22 +276,23 @@ export function TodayScreen({ visible, foregroundRevision }: {
               )}
             </Pressable>
           </View>
-          <View accessible
-            accessibilityLabel={snapshot ? `今日已保存专注 ${formatDuration(effectiveSeconds)}` : '正在读取今日专注'}
-            style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
-            {snapshot ? <>
-              <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600))}</Text>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, marginHorizontal: 7 }]}>小时</Text>
-              <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}</Text>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 7 }]}>分</Text>
-            </> : <Text style={[typography.metricDaily, { color: colors.ink }]}>—</Text>}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: layout.gridGap, marginBottom: YanjiSpacing.md }}>
+            <View accessible accessibilityLabel={snapshot ? `今日已保存专注 ${duration(effectiveSeconds)}` : '正在读取今日专注'}
+              style={{ flexDirection: 'row', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
+              {snapshot ? <>
+                <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600)).padStart(2, '0')}</Text>
+                <Text style={[typography.bodyPrimary, { color: colors.secondary, marginRight: YanjiSpacing.xs }]}>h</Text>
+                <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}</Text>
+                <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>m</Text>
+              </> : <Text style={[typography.metricDaily, { color: colors.ink }]}>—</Text>}
+            </View>
+            <View style={{ alignItems: 'flex-end', paddingBottom: YanjiSpacing.xs, flexShrink: 1 }}>
+              {snapshot ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                已完成 <Text style={{ color: colors.ink, fontWeight: '700' }}>{snapshot.focusCount}</Text> 轮专注
+              </Text> : null}
+              {savedStatus ? <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>{savedStatus}</Text> : null}
+            </View>
           </View>
-          {snapshot ? (
-            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-              {savedStatus ? <>{savedStatus}{' · '}</> : null}
-              已完整结束 <Text style={{ color: colors.ink, fontWeight: '700' }}>{snapshot.focusCount}</Text> 轮
-            </Text>
-          ) : null}
           <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
             accessibilityLabel={snapshot ? undefined : '正在读取今日专注'} />
           {legendItems.length > 0 ? (
@@ -330,7 +301,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 <Pressable key={item.id}
                   onPress={() => selectSegment({ kind: 'subject', key: `subject:${item.id}`, subjectId: item.id, subjectName: item.label, seconds: item.seconds })}
                   accessibilityRole="button" accessibilityState={{ selected: selection?.kind === 'subject' && selection.subjectId === item.id }}
-                  accessibilityLabel={`${item.label}，今日专注 ${formatDuration(item.seconds)}`}
+                  accessibilityLabel={`${item.label}，今日专注 ${duration(item.seconds)}`}
                   style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
                   <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: item.color }} />
                   <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.kind === 'subject' && selection.subjectId === item.id ? '700' : '500' }]}>
@@ -344,31 +315,24 @@ export function TodayScreen({ visible, foregroundRevision }: {
           </Text>}
           {selection?.kind === 'subject' ? (
             <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-              {selection.subjectName} · {formatDuration(selection.seconds)}
+              {selection.subjectName} · {duration(selection.seconds)}
             </Text>
           ) : null}
           {!snapshot ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}
-          {/* The running session is stated as a line, not a boxed card: it is one
-              more event on the page, and a second container grammar here is what
-              used to make the plan look like a different kind of object. */}
           {active ? (
-            <View style={{ marginTop: YanjiSpacing.md, paddingTop: YanjiSpacing.sm, borderTopWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-                <View style={{ width: layout.timelineNodeSize, height: layout.timelineNodeSize, borderRadius: layout.timelineNodeSize / 2, backgroundColor: colors.positive }} />
-                <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '600', flex: 1 }]}>{active.subjectName}</Text>
-                <Text style={[typography.captionMeta, { color: colors.secondary }]}>{active.isPaused ? '已暂停' : '进行中'}</Text>
+            <View style={{ marginTop: YanjiSpacing.md, padding: YanjiSpacing.md, backgroundColor: colors.elevated, borderRadius: radius.surface, borderWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>
+                <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700', flex: 1 }]}>{active.subjectName}</Text>
+                <YanjiBadge tone={active.isPaused ? 'amber' : 'brand'} label={active.isPaused ? '已暂停' : '正在专注'} />
               </View>
               <LiveSessionReadout session={active} visible={visible} />
               <YanjiPrimaryButton label="返回专注工作台" icon={active.isPaused ? 'play' : 'focus'} onPress={() => selectTab('focus')} />
             </View>
-          ) : (
-            /* The page's one start action stays put whatever the plan holds: it
-               used to disappear the moment a task existed, so the button people
-               came for depended on data. */
+          ) : pending.length === 0 ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               <YanjiPrimaryButton label="开始一轮专注" icon="play" onPress={() => selectTab('focus')} />
             </View>
-          )}
+          ) : null}
         </View>
         <YanjiHairline />
         {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
@@ -386,6 +350,76 @@ export function TodayScreen({ visible, foregroundRevision }: {
             onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)} onStartFocus={() => startTask(task)} />
         ))}
 
+        {todayDoubts.length > 0 ? (
+          <View style={{ marginTop: layout.sectionGap }}>
+            <YanjiPaperSectionHeading
+              title="今日疑点"
+              countText={`${resolvedDoubts.length}/${todayDoubts.length}`}
+            />
+            <YanjiCard variant="default">
+              {todayDoubts.map((doubt, index) => (
+                <View key={doubt.id}>
+                  {index > 0 ? <YanjiHairline style={{ marginVertical: YanjiSpacing.sm }} /> : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.gridGap }}>
+                    <Pressable
+                      onPress={() => void toggleResolved(doubt)}
+                      disabled={busyNote !== null}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: !!doubt.isResolved }}
+                      accessibilityLabel={`${doubt.isResolved ? '标记为未解决' : '标记为已解决'}：${noteTitle(doubt)}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={({ pressed }) => ({
+                        minHeight: layout.rowMinHeight,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.65 : 1,
+                      })}
+                    >
+                      <YanjiIcon
+                        name={doubt.isResolved ? 'doubtResolved' : 'doubtUnresolved'}
+                        size={20}
+                        color={doubt.isResolved ? colors.positive : colors.secondary}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setEditingNote(doubt); setRecordOpen(true); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`编辑疑点：${noteTitle(doubt)}`}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        minHeight: layout.rowMinHeight,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.65 : 1,
+                      })}
+                    >
+                      <Text
+                        style={[
+                          typography.bodyExcerpt,
+                          {
+                            color: doubt.isResolved ? colors.secondary : colors.ink,
+                            textDecorationLine: doubt.isResolved ? 'line-through' : 'none',
+                          },
+                        ]}
+                        numberOfLines={3}
+                      >
+                        {doubt.content}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginTop: 4 }}>
+                        <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                          {timeLabel(doubt.timestamp)}
+                        </Text>
+                        <YanjiBadge
+                          tone={doubt.isResolved ? 'positive' : 'brand'}
+                          label={doubt.isResolved ? '已解决' : '待解决'}
+                        />
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </YanjiCard>
+          </View>
+        ) : null}
+
         {/* The clock lives with its note; only the quiet spine sits outside. */}
         <View style={{ marginTop: YanjiSpacing.sm }}>
           <YanjiPaperSectionHeading
@@ -399,25 +433,26 @@ export function TodayScreen({ visible, foregroundRevision }: {
               />
             }
           />
-          {journalNotes.length > 0 ? (
+          {latestNotes.length > 0 ? (
             <View style={{ marginTop: YanjiSpacing.xs }}>
-              {journalNotes.map((note, index) => (
+              {latestNotes.map((note, index) => (
                 <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
                   tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
                     : note.category === 'INSPIRATION' ? '灵感' : null}
                   tagIcon={note.category === 'INSPIRATION' ? 'inspiration'
                     : note.category === 'DOUBT' ? 'doubt' : undefined}
-                  tagTone={note.category === 'DOUBT' ? 'doubt' : 'neutral'}
+                  tagTone={note.category === 'INSPIRATION' ? 'positive'
+                    : note.category === 'DOUBT' ? 'brand' : 'neutral'}
                   content={note.content}
-                  isFirst={index === 0} isLast={index === journalNotes.length - 1}
+                  isFirst={index === 0} isLast={index === latestNotes.length - 1}
                   disabled={busyNote !== null}
                   onPressContent={() => openNote(note)}
                   onMore={anchor => setMomentMenu({ note, anchor })} />
               ))}
-              {(notes?.length ?? 0) > journalNotes.length ? (
+              {(notes?.length ?? 0) > 2 ? (
                 <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
-                  <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} tone="quiet" />
+                  <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} />
                 </View>
               ) : null}
             </View>
@@ -431,7 +466,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: YanjiSpacing.sm,
+                backgroundColor: colors.elevated,
+                borderWidth: layout.hairlineWidth,
+                borderColor: colors.hairline,
+                borderStyle: 'dashed',
+                borderRadius: radius.tag,
+                paddingHorizontal: YanjiSpacing.md,
                 paddingVertical: YanjiSpacing.sm,
+                marginTop: YanjiSpacing.xs,
                 opacity: pressed ? 0.65 : 1,
               })}>
               <View style={{
@@ -528,7 +570,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                           })}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
-                          accessibilityLabel={`${session.subjectName}，${timeLabel(sStart)} 至 ${timeLabel(sEnd)}，${formatDuration(session.durationSeconds)}`}
+                          accessibilityLabel={`${session.subjectName}，${timeLabel(sStart)} 至 ${timeLabel(sEnd)}，${duration(session.durationSeconds)}`}
                           hitSlop={{ top: 14, bottom: 14, left: 2, right: 2 }}
                           style={({ pressed }) => ({
                             position: 'absolute', top: 0, bottom: 0,
@@ -545,7 +587,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   </View>
                   {detail ? (
                     <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>
-                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)} · {detail.subjectName} · {formatDuration(detail.seconds)}
+                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)} · {detail.subjectName} · {duration(detail.seconds)}
                     </Text>
                   ) : null}
                 </View>;

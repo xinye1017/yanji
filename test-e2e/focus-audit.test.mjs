@@ -423,35 +423,24 @@ test('the horizon tide carries its alpha in stopOpacity, never in the colour', (
   // shape that actually renders.
   const { root } = focusScreenHarness();
   const stops = findAll(root, n => n.type === 'Stop');
-  // The tide is a radial bloom plus a four-stop linear ramp, so the rule is
-  // asserted over *every* stop rather than the old two-stop pair: what must
-  // never regress is "alpha rides stopOpacity, colour carries none".
-  assert.ok(stops.length >= 2, 'the tide needs real stops to shape its falloff');
+  assert.equal(stops.length, 2, 'the tide gradient needs its two stops');
 
-  const alphas = stops.map(stop => stop.props.stopOpacity);
-  assert.ok(alphas.some(alpha => alpha === 0), 'the wash must reach full transparency somewhere');
+  const [start, end] = stops;
+  assert.equal(start.props.stopOpacity, 0, 'the top of the wash is fully transparent');
   assert.ok(
-    alphas.some(alpha => typeof alpha === 'number' && alpha > 0 && alpha < 1),
-    `the wash must carry a fractional alpha, saw ${JSON.stringify(alphas)}`,
+    typeof end.props.stopOpacity === 'number' && end.props.stopOpacity > 0 && end.props.stopOpacity < 1,
+    `the bottom stop must carry a fractional alpha, saw ${end.props.stopOpacity}`,
   );
   for (const stop of stops) {
-    assert.ok(
-      typeof stop.props.stopOpacity === 'number' && stop.props.stopOpacity >= 0 && stop.props.stopOpacity <= 1,
-      `every stop states its alpha explicitly in [0,1], saw ${stop.props.stopOpacity}`,
-    );
     assert.ok(
       !/^rgba\(/i.test(String(stop.props.stopColor)),
       `stop colour must not smuggle alpha: ${stop.props.stopColor}`,
     );
   }
 
-  // The linear ramp still has to span the box, not collapse to a single user
-  // unit: that was the failure that once painted a slab instead of a wash.
-  const linear = findAll(root, n => n.type === 'LinearGradient');
-  assert.ok(linear.length >= 1, 'the tide keeps its linear ramp');
-  for (const gradient of linear) {
-    assert.equal(gradient.props.y2, '100%');
-  }
+  // The gradient axis must span the box, not collapse to a single user unit.
+  const gradient = findAll(root, n => n.type === 'LinearGradient')[0];
+  assert.equal(gradient.props.y2, '100%');
 });
 
 test('paused discard opens native confirmation; cancellation never calls discardTimer', async () => {

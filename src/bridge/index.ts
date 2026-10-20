@@ -211,19 +211,6 @@ export interface ThemePreference {
   isDark: boolean;
 }
 
-/**
- * Which type families this device can actually render.
- *
- * `serifHanFamily` is `null` on every ColorOS build: OPPO ships one Chinese
- * family (OPPO Sans, sans-serif) and no serif Han face, so the editorial role
- * must fall back rather than render half-serif. The native probe inspects
- * `/system/fonts` before trusting a family name, because Android silently
- * substitutes the default sans for a family it does not have.
- */
-export interface FontAvailability {
-  serifHanFamily: string | null;
-}
-
 export interface Subject {
   id: string;
   name: string;
@@ -349,7 +336,6 @@ interface YanjiDataModuleNative {
 interface YanjiThemeModuleNative {
   getThemePreference(): Promise<ThemePreference>;
   setThemePreference(mode: ThemeMode): Promise<boolean>;
-  getFontAvailability(): Promise<FontAvailability>;
 }
 
 // ---------------------------------------------------------------------------
