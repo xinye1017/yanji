@@ -77,6 +77,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/RecordComposer': { RecordComposer: 'RecordComposer' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
@@ -165,6 +166,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/RecordComposer': { RecordComposer: 'RecordComposer' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },

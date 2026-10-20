@@ -32,6 +32,7 @@ import {
   Key,
   Lightbulb,
   ListChecks,
+  MessageSquareText,
   Minus,
   Pause,
   PenLine,
@@ -83,7 +84,8 @@ export type YanjiIconName =
   | 'inspiration'
   | 'sparkles'
   | 'key'
-  | 'clock3';
+  | 'clock3'
+  | 'comment';
 
 const ICONS: Record<YanjiIconName, LucideIcon> = {
   today: Sun,
@@ -118,6 +120,8 @@ const ICONS: Record<YanjiIconName, LucideIcon> = {
   sparkles: Sparkles,
   key: Key,
   clock3: Clock3,
+  /** The capture bar's own mark: a plain note, distinct from 灵感's bulb. */
+  comment: MessageSquareText,
 };
 
 /** Stroke width shared by every icon so the set reads as one family. */

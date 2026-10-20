@@ -205,6 +205,7 @@ function screenHarness(snapshot, bridge = {}) {
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
+    '../components/RecordComposer': { RecordComposer: 'RecordComposer' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
     '../navigation/NavigationShell': {
@@ -385,29 +386,46 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
   assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
 });
 
-test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
-  // The journal slip no longer wraps in a lifted white card.
-  // Instead, it is an unboxed timeline section with its own quiet action.
+test('the journal slip writes in place, so the plan keeps the reading order', () => {
+  // The journal no longer opens a sheet to capture a moment: one inline bar
+  // sits under the section heading and every management action stays on the
+  // saved rows below it.
   const tree = screenHarness(snapshot()).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
   const journalHeading = headings.find(node => node.props.title === '记录此刻');
   assert.ok(journalHeading, 'the journal section has its own section heading');
+  assert.equal(journalHeading.props.right, undefined,
+    'the section no longer needs a 写此刻 button beside the always-present writer');
 
-  // 写此刻 is a secondary invitation; 新建任务 keeps the section accent. The actions
-  // live in the headings' accessory slots, so they are read from that prop.
-  const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
-  assert.equal(writeNow.props.tone, 'quiet', '写此刻 must not compete with the primary action');
+  const composers = nodes(tree, node => node.type === 'RecordComposer');
+  assert.equal(composers.length, 1, 'exactly one inline writer belongs to the journal');
+  assert.equal(composers[0].props.date, date, 'the writer stamps the visible day');
+
+  // 新建任务 keeps the section accent; the journal has no competing action.
   const planHeading = headings.find(node => node.props.title === '今日计划');
   const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
   assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
 
-
-  // When empty, it renders an unboxed empty state prompt, not a lifted hero card.
+  // Nothing on the page may be lifted into a hero card.
   const cards = nodes(tree, node => node.type === 'YanjiCard');
   for (const card of cards) {
     assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
   }
-  assert.match(text(tree), /留一句想法，让今天有自己的注脚/);
+});
+
+test('a saved note opens the sheet as an editor, and a new capture never does', () => {
+  const note = {
+    id: 'note-edit', date, timestamp: at('09:10'), content: '旧记录', category: 'INSPIRATION',
+    isResolved: false, isFavorite: false,
+  };
+  const tree = screenHarness(snapshot({ notes: [note] })).render();
+  assert.equal(nodes(tree, node => node.type === 'RecordMomentModal')[0].props.visible, false,
+    'nothing is open until a saved row asks for its editor');
+
+  // The writer owns new captures; the sheet is only ever opened with a note.
+  const modal = nodes(tree, node => node.type === 'RecordMomentModal')[0];
+  assert.equal(modal.props.editingNote, null);
+  assert.equal(modal.props.visible, false);
 });
 
 test('the journal section renders one compact timeline row per note', () => {
