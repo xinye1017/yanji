@@ -376,7 +376,10 @@ class TabLayoutInstrumentedTest {
         await("new note appears after Room invalidation") {
             findText(ownedNoteText, "today") != null
         }
-        onView(withContentDescription("编辑记录：$ownedNoteText")).perform(scrollTo(), click())
+        // A compact row has no standalone edit button: the row itself opens the
+        // record, and the anchored 「···」 menu holds the management actions. Tap
+        // the row the way a reader does, on the label the row actually publishes.
+        onView(withContentDescription("查看完整记录：$ownedNoteText")).perform(scrollTo(), click())
         await("note editor opened for edit") { root?.hasWindowFocus() == false }
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText("$ownedNoteText edited"), closeSoftKeyboard())
@@ -480,12 +483,23 @@ class TabLayoutInstrumentedTest {
     }
 
     // Fabric can flatten the pane wrapper; scope matches to the native page.
-    // Today frames saved note text with typographic quotes.
+    // A compact timeline row shows the stored text as ONE display line: the row
+    // collapses every whitespace run (including the newlines a seeded note
+    // carries) into single spaces before rendering. Compare against that same
+    // normalization, otherwise a multi-line seed can never match the TextView
+    // even though the note is on screen.
     private fun findText(text: String, tab: String): TextView? = find("scroll-$tab")?.let {
-        views(it).filterIsInstance<TextView>().firstOrNull { view ->
-            view.text.toString() in listOf(text, "“$text”")
-        }
+        val expected = previewOf(text)
+        views(it).filterIsInstance<TextView>().firstOrNull { previewOf(it.text.toString()) == expected }
     }
+
+    /**
+     * Mirrors TimelineCompactRow's one-line preview exactly — whitespace runs
+     * collapse to one space, and an empty note renders the row's placeholder —
+     * so a test asserts the text the user actually reads.
+     */
+    private fun previewOf(content: String): String =
+        content.replace(Regex("\\s*\\n+\\s*"), " ").trim().ifEmpty { "无标题记录" }
 
     private fun select(tab: String) {
         // RN Modal dismissal crosses the JS/native window boundary; Espresso
