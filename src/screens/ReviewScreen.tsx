@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader, YanjiIconButton,
+  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiSubjectProportionRow,
@@ -18,7 +18,7 @@ import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
-import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { YanjiSpacing } from '../theme/tokens';
 import {
   useDailySnapshot,
   useReviewDataVisibility, useReviewOverview, useSettingsSnapshot,
@@ -594,7 +594,13 @@ function PeriodSelectorBar({
   const rangeLabel = scopeDateRangeLabel(scope, anchorDate);
 
   return (
-    <View style={{ marginTop: YanjiSpacing.xs, marginBottom: YanjiSpacing.md, gap: YanjiSpacing.sm }}>
+    <View style={{
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 4,
+      marginBottom: 12,
+    }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>
         {SCOPES.map(opt => {
           const selected = opt.value === scope;
@@ -606,16 +612,15 @@ function PeriodSelectorBar({
               accessibilityState={{ selected }}
               accessibilityLabel={`切换范围至${opt.label}`}
               style={{
-                minHeight: YanjiTouch.min,
+                paddingVertical: 4,
                 paddingHorizontal: YanjiSpacing.md,
-                justifyContent: 'center',
                 borderRadius: radius.pill,
                 backgroundColor: selected ? colors.ink : colors.subtle,
               }}
             >
               <Text style={{
                 fontSize: 12,
-                fontWeight: selected ? '600' : '500',
+                fontWeight: selected ? '600' : '400',
                 color: selected ? colors.canvas : colors.secondary,
               }}>
                 {opt.label}
@@ -624,35 +629,33 @@ function PeriodSelectorBar({
           );
         })}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <YanjiIconButton
-          icon="back"
-          accessibilityLabel="上一周期"
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Pressable
           onPress={onPrevious}
-          size={YanjiTouch.min}
-          iconSize={18}
-        />
-        <Text
-          testID="review-date"
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}
-          numberOfLines={1}
-          style={[typography.captionMeta, {
-            flex: 1,
-            textAlign: 'center',
-            color: colors.secondary,
-          }]}
+          accessibilityRole="button"
+          accessibilityLabel="上一周期"
+          hitSlop={8}
         >
+          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>‹</Text>
+        </Pressable>
+        <Text testID="review-date" style={[typography.captionMeta, {
+          color: colors.secondary,
+          fontVariant: ['tabular-nums'],
+          fontSize: 11,
+          paddingHorizontal: 4,
+        }]}>
           {rangeLabel}
         </Text>
-        <YanjiIconButton
-          icon="forward"
-          accessibilityLabel="下一周期"
+        <Pressable
           onPress={onNext}
           disabled={!canStepForward}
-          size={YanjiTouch.min}
-          iconSize={18}
-        />
+          accessibilityRole="button"
+          accessibilityLabel="下一周期"
+          hitSlop={8}
+          style={{ opacity: canStepForward ? 1 : 0.3 }}
+        >
+          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>›</Text>
+        </Pressable>
       </View>
     </View>
   );

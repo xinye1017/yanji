@@ -104,7 +104,7 @@ function text(tree) {
 }
 
 const UI_NAMES = [
-  'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiIconButton',
+  'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
   'YanjiLineChart', 'YanjiPaperSectionHeading',
   'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
   'YanjiStackedBarChart', 'YanjiSubjectProportionRow',
