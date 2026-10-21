@@ -1,5 +1,5 @@
 /** Paper journal: event times are native facts; completed tasks have no time. */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -94,6 +94,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
@@ -131,14 +132,18 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     finally { setBusyNote(null); }
   };
   const removeSession = async () => {
-    if (!pendingDelete || deleting) return;
+    if (!pendingDelete || deletingRef.current) return;
+    deletingRef.current = true;
     setDeleting(true);
     setDeleteError(null);
     try {
       if (!await YanjiDataNative.deleteSessionRecord(pendingDelete.sessionId, pendingDelete.isExam)) throw new Error('refused');
       setPendingDelete(null);
     } catch { setDeleteError('删除失败，记录已保留。请重试或取消。'); }
-    finally { setDeleting(false); }
+    finally {
+      deletingRef.current = false;
+      setDeleting(false);
+    }
   };
   /** Every management action of a timeline row lives in its anchored menu. */
   const timelineActions = (entry: TimelineEntry): TimelineAction[] => {
@@ -344,14 +349,14 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       onClose={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
       onSaved={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
     />
-    <Modal visible={pendingDelete !== null} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (!deleting) setPendingDelete(null); }}>
+    <Modal visible={pendingDelete !== null} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (!deletingRef.current) setPendingDelete(null); }}>
       <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>
         <ScrollView style={{ flexGrow: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet }}
           contentContainerStyle={{ padding: layout.pageGutter, paddingBottom: insets.bottom + YanjiSpacing.lg }}>
-          <YanjiPaperSheetHeading title={`删除「${pendingDelete?.subjectName ?? ''}」记录？`} subtitle="该记录与它的学习时长会一并删除，无法恢复。" onClose={() => { if (!deleting) setPendingDelete(null); }} />
+          <YanjiPaperSheetHeading title={`删除「${pendingDelete?.subjectName ?? ''}」记录？`} subtitle="该记录与它的学习时长会一并删除，无法恢复。" onClose={() => { if (!deletingRef.current) setPendingDelete(null); }} disabled={deleting} />
           {deleteError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{deleteError}</Text> : null}
           <YanjiPrimaryButton variant="danger" label={deleting ? '删除中…' : '确认删除'} onPress={() => void removeSession()} disabled={deleting} style={{ marginTop: YanjiSpacing.lg }} />
-          <Pressable onPress={() => setPendingDelete(null)} disabled={deleting} accessibilityRole="button" accessibilityLabel="取消删除记录" style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={() => { if (!deletingRef.current) setPendingDelete(null); }} disabled={deleting} accessibilityRole="button" accessibilityLabel="取消删除记录" accessibilityState={{ disabled: deleting }} style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>取消</Text>
           </Pressable>
         </ScrollView>

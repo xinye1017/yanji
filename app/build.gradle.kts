@@ -173,6 +173,10 @@ configurations.configureEach {
                 .using(module("androidx.room:room-runtime-jvm:${libs.versions.room.get()}"))
             substitute(module("androidx.room:room-migration"))
                 .using(module("androidx.room:room-migration-jvm:${libs.versions.room.get()}"))
+            // The JVM Room connection pool catches SQLiteException; Android's artifact
+            // aliases it to android.database.SQLException and has no JVM exception class.
+            substitute(module("androidx.sqlite:sqlite"))
+                .using(module("androidx.sqlite:sqlite-jvm:${libs.versions.sqlite.get()}"))
         }
     }
 }

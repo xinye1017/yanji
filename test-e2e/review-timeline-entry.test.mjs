@@ -110,17 +110,24 @@ const UI_NAMES = [
   'YanjiStackedBarChart', 'YanjiSubjectProportionRow',
 ];
 
-function screenHarness(daySnapshot) {
+function screenHarness(daySnapshot, { deleteSessionRecord = async () => true } = {}) {
   const ui = Object.fromEntries(UI_NAMES.map(name => [name, name]));
   const calls = [];
   const states = [];
+  const refs = {};
   let index = 0;
+  let refIndex = 0;
   const { ReviewScreen } = loadTypeScript('src/screens/ReviewScreen.tsx', {
     react: {
       useState: initial => {
         const i = index++;
         if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
         return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+      },
+      useRef: initial => {
+        const i = refIndex++;
+        if (!(i in refs)) refs[i] = { current: initial };
+        return refs[i];
       },
       useMemo: fn => fn(),
       useCallback: fn => fn,
@@ -136,7 +143,10 @@ function screenHarness(daySnapshot) {
       YanjiDataNative: {
         toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
         toggleNoteResolved: async id => { calls.push(['resolve', id]); return true; },
-        deleteSessionRecord: async (...args) => { calls.push(['delete', ...args]); return true; },
+        deleteSessionRecord: async (...args) => {
+          calls.push(['delete', ...args]);
+          return deleteSessionRecord(...args);
+        },
       },
     },
     '../components/YanjiUI': ui,
@@ -157,7 +167,11 @@ function screenHarness(daySnapshot) {
   }, { Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T18:00:00`])); } } });
   return {
     calls,
-    render: () => { index = 0; return ReviewScreen({ visible: true }); },
+    render: () => {
+      index = 0;
+      refIndex = 0;
+      return ReviewScreen({ visible: true });
+    },
     rows: tree => nodes(tree, node => node.type === 'TimelineCompactRow'),
     menu: tree => nodes(tree, node => node.type === 'TimelineActionPopover')[0],
     noteModal: tree => nodes(tree, node => node.type === 'SessionNoteModal')[0],
@@ -176,6 +190,18 @@ const pressMenuAction = (menu, label) => {
 
 /** Call arguments cross the VM boundary, so compare payloads, not realm objects. */
 const plain = value => JSON.parse(JSON.stringify(value));
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
 
 test('a session is one compact line whose body opens its note editor', () => {
   const harness = screenHarness(snapshot({
@@ -243,6 +269,85 @@ test('the session menu keeps edit/delete behind the existing confirmation', asyn
   exam.rows(exam.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   assert.deepEqual(plain(exam.menu(exam.render()).props.actions.map(action => action.label)), ['删除记录'],
     'an exam has no editable note');
+});
+
+function openSessionDelete(harness) {
+  harness.rows(harness.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  pressMenuAction(harness.menu(harness.render()), '删除记录');
+  return {
+    confirmation: () => harness.confirmation(harness.render()),
+    confirm: () => nodes(harness.confirmation(harness.render()), node =>
+      node.type === 'YanjiPrimaryButton' &&
+      ['确认删除', '删除中…'].includes(node.props.label))[0],
+    cancel: () => nodes(harness.confirmation(harness.render()), node =>
+      node.type === 'Pressable' && node.props.accessibilityLabel === '取消删除记录')[0],
+  };
+}
+
+test('session delete keeps confirmation and context pending with one same-tick request', async () => {
+  const write = deferred();
+  const harness = screenHarness(
+    snapshot({ sessions: [session({ note: '待删除记录' })] }),
+    { deleteSessionRecord: () => write.promise },
+  );
+  const confirmation = openSessionDelete(harness);
+
+  const first = confirmation.confirm().props.onPress();
+  const second = confirmation.confirm().props.onPress();
+  await flush();
+
+  assert.equal(confirmation.confirmation().props.visible, true,
+    'pending must not close the confirmation');
+  assert.equal(harness.calls.filter(call => call[0] === 'delete').length, 1,
+    'same-tick confirmation taps produce one bridge request');
+  const pendingButton = confirmation.confirm();
+  assert.equal(pendingButton.props.label, '删除中…');
+  assert.equal(pendingButton.props.disabled, true);
+  assert.equal(confirmation.cancel().props.disabled, true,
+    'the deletion target cannot be abandoned while its write is pending');
+
+  write.resolve(true);
+  await Promise.all([first, second]);
+  await flush();
+  assert.equal(confirmation.confirmation().props.visible, false,
+    'only a resolved true removes the confirmation');
+});
+
+test('session delete false or rejection preserves the record and a retry succeeds', async () => {
+  for (const failure of [false, new Error('room delete failed')]) {
+    const write = deferred();
+    let attemptNumber = 0;
+    const harness = screenHarness(
+      snapshot({ sessions: [session({ note: '失败后仍保留' })] }),
+      {
+        deleteSessionRecord: () => {
+          attemptNumber++;
+          return attemptNumber === 1 ? write.promise : Promise.resolve(true);
+        },
+      },
+    );
+    const confirmation = openSessionDelete(harness);
+
+    const attempt = confirmation.confirm().props.onPress();
+    await flush();
+    if (failure instanceof Error) write.reject(failure);
+    else write.resolve(failure);
+    await attempt;
+    await flush();
+
+    assert.equal(confirmation.confirmation().props.visible, true,
+      'failure keeps the record and its confirmation');
+    assert.equal(harness.rows(harness.render()).length, 1,
+      'the failed record remains in the timeline');
+    assert.match(text(harness.render()), /删除失败，记录已保留/);
+    assert.equal(confirmation.confirm().props.disabled, false, 'retry is available');
+    assert.equal(confirmation.cancel().props.disabled, false);
+
+    await confirmation.confirm().props.onPress();
+    await flush();
+    assert.equal(confirmation.confirmation().props.visible, false,
+      'the retried true removes the confirmation');
+  }
 });
 
 test('note rows keep favorite, resolution and editing in the anchored menu', async () => {

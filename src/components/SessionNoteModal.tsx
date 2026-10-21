@@ -10,7 +10,7 @@
  * that was never written are different facts, and only the second is real here.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -60,17 +60,21 @@ export function SessionNoteModal({
   const [note, setNote] = useState(initialNote);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savingRef = useRef(false);
 
   // Re-seed whenever the sheet opens on a different row, so a previous draft
   // never leaks into the next session.
   useEffect(() => {
     if (!visible) return;
+    if (savingRef.current) return;
     setNote(initialNote);
     setError(null);
     setSaving(false);
+    savingRef.current = false;
   }, [visible, initialNote, sessionId]);
 
   const handleSave = useCallback(async () => {
+    if (savingRef.current) return;
     const clean = note.trim();
     if (clean.length === 0) {
       setError('随笔不能为空');
@@ -80,22 +84,26 @@ export function SessionNoteModal({
       setError('找不到这条记录，请关闭后重试');
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
-      await YanjiDataNative.updateSessionNote(sessionId, examSession, clean);
+      const saved = await YanjiDataNative.updateSessionNote(sessionId, examSession, clean);
+      if (!saved) throw new Error('保存失败，请稍后再试');
       onSaved?.();
       onClose();
     } catch (err) {
       // Preserve the draft: losing typed text to a failed write is the one
       // outcome the user cannot recover from.
       setError(err instanceof Error && err.message ? err.message : '保存失败，请稍后再试');
+    } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [note, sessionId, examSession, onClose, onSaved]);
 
   const handleClose = useCallback(() => {
-    setSaving(false);
+    if (savingRef.current) return;
     onClose();
   }, [onClose]);
 
@@ -112,7 +120,13 @@ export function SessionNoteModal({
           paddingBottom: keyboardInset,
         }}
       >
-        <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={handleClose}
+          disabled={saving}
+          accessibilityState={{ disabled: saving }}
+          accessibilityLabel="关闭"
+        />
 
         {/* The sheet: a floating page with a grabber, the input well sunk into it */}
         <View
@@ -143,6 +157,7 @@ export function SessionNoteModal({
             title="专注随笔"
             subtitle={sessionTitle}
             onClose={handleClose}
+            disabled={saving}
           />
 
           {examSession ? (
@@ -158,6 +173,7 @@ export function SessionNoteModal({
             <YanjiTextInput
               value={note}
               onChangeText={setNote}
+              editable={!saving}
               placeholder="这段专注里做了什么、卡在哪里…"
               multiline
               accessibilityLabel="专注随笔"

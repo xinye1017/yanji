@@ -354,25 +354,19 @@ internal class TimerStore(
         }
     }
 
-    fun deleteFocusSession(id: String) {
-        _focusSessions.value = _focusSessions.value.filter { it.id != id }
-        scope.launch {
-            dbProvider()?.focusSessionDao()?.deleteById(id)
-        }
+    suspend fun deleteFocusSession(id: String): Boolean = withContext(Dispatchers.IO) {
+        val db = checkNotNull(dbProvider()) { "Database is not initialized" }
+        db.focusSessionDao().deleteById(id) > 0
     }
 
-    fun updateFocusSessionNote(id: String, note: String) {
-        _focusSessions.value = _focusSessions.value.map { if (it.id == id) it.copy(note = note) else it }
-        scope.launch {
-            dbProvider()?.focusSessionDao()?.updateNote(id, note)
-        }
+    suspend fun updateFocusSessionNote(id: String, note: String): Boolean = withContext(Dispatchers.IO) {
+        val db = checkNotNull(dbProvider()) { "Database is not initialized" }
+        db.focusSessionDao().updateNote(id, note) > 0
     }
 
-    fun deleteExamSession(id: String) {
-        _examSessions.value = _examSessions.value.filter { it.id != id }
-        scope.launch {
-            dbProvider()?.examSessionDao()?.deleteById(id)
-        }
+    suspend fun deleteExamSession(id: String): Boolean = withContext(Dispatchers.IO) {
+        val db = checkNotNull(dbProvider()) { "Database is not initialized" }
+        db.examSessionDao().deleteById(id) > 0
     }
 
     suspend fun getFocusSessionByIdFromDb(id: String): FocusSessionEntity? = withContext(Dispatchers.IO) {

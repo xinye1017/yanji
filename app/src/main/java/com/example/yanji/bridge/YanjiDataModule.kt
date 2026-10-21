@@ -501,18 +501,17 @@ class YanjiDataModule(
             promise.reject("E_EMPTY_NOTE", "Session note cannot be empty")
             return
         }
-        scope.launch {
+        scope.launchPersistedWrite(promise, "E_SESSION_NOTE_SAVE_FAILED") {
             // 模考不支持可编辑随笔：先于查库拒绝，免得为一条注定失败的调用去读一次库，
             // 也免得「模考 + 空白」报出 E_EMPTY_NOTE 这种与真实原因不符的错。
             if (isExam) {
                 promise.reject("E_UNSUPPORTED", "模考记录暂不支持编辑随笔")
-                return@launch
+                return@launchPersistedWrite
             }
-            if (StudyStatisticsRepository(repository).getFocusSessionDetail(sessionId) == null) {
+            if (!repository.updateFocusSessionNote(sessionId, cleanNote)) {
                 promise.reject("E_SESSION_NOT_FOUND", "No focus session with id $sessionId")
-                return@launch
+                return@launchPersistedWrite
             }
-            repository.updateFocusSessionNote(sessionId, cleanNote)
             promise.resolve(true)
         }
     }
@@ -520,26 +519,19 @@ class YanjiDataModule(
     /**
      * 删除一条专注 / 模考记录。
      *
-     * 先确认记录存在再删：删不存在的 id 也 resolve(true) 会让前端把「删掉了」当成事实，
-     * 而库里那条记录其实还在。
+     * 以 DELETE 的受影响行数判断记录是否存在，避免先查后删之间的竞态。
      */
     @ReactMethod
     fun deleteSessionRecord(sessionId: String, isExam: Boolean, promise: Promise) {
-        scope.launch {
-            val statistics = StudyStatisticsRepository(repository)
-            val detail = if (isExam) {
-                statistics.getExamSessionDetail(sessionId)
-            } else {
-                statistics.getFocusSessionDetail(sessionId)
-            }
-            if (detail == null) {
-                promise.reject("E_SESSION_NOT_FOUND", "No session with id $sessionId")
-                return@launch
-            }
-            if (isExam) {
+        scope.launchPersistedWrite(promise, "E_SESSION_DELETE_FAILED") {
+            val deleted = if (isExam) {
                 repository.deleteExamSession(sessionId)
             } else {
                 repository.deleteFocusSession(sessionId)
+            }
+            if (!deleted) {
+                promise.reject("E_SESSION_NOT_FOUND", "No session with id $sessionId")
+                return@launchPersistedWrite
             }
             promise.resolve(true)
         }
@@ -555,18 +547,22 @@ class YanjiDataModule(
 
     @ReactMethod
     fun updateUserSettings(settings: com.facebook.react.bridge.ReadableMap, promise: Promise) {
-        val current = repository.settings.value
-        val next = current.copy(
-            targetExamDate = if (settings.hasKey("examDate")) settings.getString("examDate") ?: current.targetExamDate else current.targetExamDate,
-            dailyGoalHours = if (settings.hasKey("dailyGoalHours")) settings.getDouble("dailyGoalHours").toFloat() else current.dailyGoalHours,
-            validStudyThresholdMinutes = if (settings.hasKey("validStudyThresholdMinutes")) settings.getInt("validStudyThresholdMinutes") else current.validStudyThresholdMinutes,
-            themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode,
-            decisionProvider = if (settings.hasKey("decisionProvider")) settings.getString("decisionProvider") ?: current.decisionProvider else current.decisionProvider,
-            decisionModel = if (settings.hasKey("decisionModel")) settings.getString("decisionModel") ?: current.decisionModel else current.decisionModel,
-            decisionEndpoint = if (settings.hasKey("decisionEndpoint")) settings.getString("decisionEndpoint") ?: current.decisionEndpoint else current.decisionEndpoint
-        )
-        val result = repository.updateSettings(next)
-        promise.resolve(result is com.example.yanji.data.SettingsUpdateResult.Saved)
+        scope.launchPersistedWrite(promise, "E_SETTINGS_SAVE_FAILED") {
+            val result = repository.updateSettings { current -> current.copy(
+                targetExamDate = if (settings.hasKey("examDate")) settings.getString("examDate") ?: current.targetExamDate else current.targetExamDate,
+                dailyGoalHours = if (settings.hasKey("dailyGoalHours")) settings.getDouble("dailyGoalHours").toFloat() else current.dailyGoalHours,
+                validStudyThresholdMinutes = if (settings.hasKey("validStudyThresholdMinutes")) settings.getInt("validStudyThresholdMinutes") else current.validStudyThresholdMinutes,
+                themeMode = if (settings.hasKey("themePreference")) settings.getString("themePreference") ?: current.themeMode else current.themeMode,
+                decisionProvider = if (settings.hasKey("decisionProvider")) settings.getString("decisionProvider") ?: current.decisionProvider else current.decisionProvider,
+                decisionModel = if (settings.hasKey("decisionModel")) settings.getString("decisionModel") ?: current.decisionModel else current.decisionModel,
+                decisionEndpoint = if (settings.hasKey("decisionEndpoint")) settings.getString("decisionEndpoint") ?: current.decisionEndpoint else current.decisionEndpoint
+            ) }
+            if (result !is com.example.yanji.data.SettingsUpdateResult.Saved) {
+                promise.reject("E_SETTINGS_SAVE_FAILED", "Failed to persist settings")
+                return@launchPersistedWrite
+            }
+            promise.resolve(true)
+        }
     }
 
     @ReactMethod

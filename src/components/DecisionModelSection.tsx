@@ -11,7 +11,7 @@
  * connection test and the save/report cycle for its own fields.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { YanjiPaperSegmentedControl, YanjiTextAction, YanjiTextInput } from './YanjiUI';
 import { YanjiSettingDisclosureRow } from './SettingsRows';
@@ -65,6 +65,7 @@ export function YanjiDecisionModelSection({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [savingAi, setSavingAi] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const savingAiRef = useRef(false);
 
   useEffect(() => {
     if (!settings) return;
@@ -123,6 +124,8 @@ export function YanjiDecisionModelSection({
   };
 
   const handleSaveAi = async () => {
+    if (savingAiRef.current) return;
+    savingAiRef.current = true;
     setSavingAi(true);
     setTestResult(null);
     setAiMessage(null);
@@ -140,11 +143,16 @@ export function YanjiDecisionModelSection({
         setApiKeyDraft('');
         setHasKey(true);
       }
-      await onSaved();
-      setAiMessage('AI 决策模型配置已保存');
+      try {
+        await onSaved();
+        setAiMessage('AI 决策模型配置已保存');
+      } catch {
+        setAiMessage('配置已保存，页面刷新失败。请稍后重新进入设置查看。');
+      }
     } catch (error) {
       setAiMessage((error as Error | null)?.message || '保存失败，请稍后再试');
     } finally {
+      savingAiRef.current = false;
       setSavingAi(false);
     }
   };
@@ -171,7 +179,7 @@ export function YanjiDecisionModelSection({
         icon="sparkles"
         expanded={advancedOpen}
         isLast
-        onPress={() => setAdvancedOpen(open => !open)}
+        onPress={() => { if (!savingAiRef.current) setAdvancedOpen(open => !open); }}
       />
 
       {advancedOpen ? (
@@ -183,6 +191,7 @@ export function YanjiDecisionModelSection({
           <YanjiPaperSegmentedControl
             accessibilityLabel="决策模型提供商"
             value={provider}
+            disabled={savingAi}
             options={DECISION_PROVIDERS}
             onChange={next => handleProviderChange(next as 'openrouter' | 'typesafe')}
           />
@@ -195,6 +204,7 @@ export function YanjiDecisionModelSection({
               <YanjiTextInput
                 value={model}
                 onChangeText={setModel}
+                editable={!savingAi}
                 placeholder={PROVIDER_DEFAULTS[provider].model}
                 autoCapitalize="none"
                 accessibilityLabel="模型标识"
@@ -208,6 +218,7 @@ export function YanjiDecisionModelSection({
               <YanjiTextInput
                 value={endpoint}
                 onChangeText={setEndpoint}
+                editable={!savingAi}
                 placeholder={PROVIDER_DEFAULTS[provider].endpoint}
                 autoCapitalize="none"
                 accessibilityLabel="API Base URL"
@@ -230,12 +241,13 @@ export function YanjiDecisionModelSection({
                   API Key{hasKey ? ' · 已保存' : ' · 未配置'}
                 </Text>
                 {hasKey ? (
-                  <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} />
+                  <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} disabled={savingAi} />
                 ) : null}
               </View>
               <YanjiTextInput
                 value={apiKeyDraft}
                 onChangeText={setApiKeyDraft}
+                editable={!savingAi}
                 placeholder={hasKey ? '已加密保存，输入新密钥以覆盖' : 'sk-...'}
                 secureTextEntry
                 autoCapitalize="none"
@@ -299,6 +311,7 @@ export function YanjiDecisionModelSection({
                   disabled={savingAi || testing}
                   accessibilityRole="button"
                   accessibilityLabel="保存 AI 决策配置"
+                  accessibilityState={{ busy: savingAi, disabled: savingAi || testing }}
                   style={({ pressed }) => ({
                     minHeight: layout.rowMinHeight,
                     alignItems: 'center',

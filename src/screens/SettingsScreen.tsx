@@ -15,7 +15,7 @@
  * disagree — but there is exactly one editor per value, on this page.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { YanjiDataNative, YanjiThemeNative, onThemeChanged } from '../bridge';
 import type { ThemeMode } from '../bridge';
@@ -67,7 +67,11 @@ export function SettingsScreen(): React.JSX.Element {
   const [mode, setMode] = useState<ThemeMode>(theme.mode);
   const [openSheet, setOpenSheet] = useState<Sheet>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const themeSavingRef = useRef(false);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
   /**
    * A failed settings read used to leave the page permanently on 「—」: every
    * row disables itself while `settings` is null, and nothing retried. Because
@@ -88,12 +92,18 @@ export function SettingsScreen(): React.JSX.Element {
   useEffect(() => onThemeChanged(pref => setMode(pref.mode)), []);
 
   const handleThemeChange = useCallback(async (next: ThemeMode) => {
-    setMode(next);
+    if (themeSavingRef.current) return;
+    themeSavingRef.current = true;
+    setThemeSaving(true);
+    setThemeError(null);
     try {
-      await YanjiThemeNative.setThemePreference(next);
+      if (!await YanjiThemeNative.setThemePreference(next)) throw new Error('refused');
+      setMode(next);
     } catch {
-      const pref = await YanjiThemeNative.getThemePreference();
-      setMode(pref.mode);
+      setThemeError('主题未保存，请重试。');
+    } finally {
+      themeSavingRef.current = false;
+      setThemeSaving(false);
     }
   }, []);
 
@@ -115,12 +125,14 @@ export function SettingsScreen(): React.JSX.Element {
   };
 
   const closeSheet = () => {
-    if (saving) return;
+    if (savingRef.current) return;
     setSheetError(null);
     setOpenSheet(null);
   };
 
   const saveExamDate = async (iso: string) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setSheetError(null);
     setReadFailed(false);
@@ -128,10 +140,11 @@ export function SettingsScreen(): React.JSX.Element {
       if (!await YanjiDataNative.updateUserSettings({ examDate: iso })) throw new Error('refused');
     } catch {
       setSheetError('考试日期未保存，请稍后再试。');
-      setSaving(false);
       return;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    setSaving(false);
     setOpenSheet(null);
     // The write already landed. A failed re-read must not be reported as a
     // failed save — it only means the row still shows the previous value, which
@@ -144,6 +157,8 @@ export function SettingsScreen(): React.JSX.Element {
   };
 
   const saveDailyGoal = async (minutes: number) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setSheetError(null);
     setReadFailed(false);
@@ -153,10 +168,11 @@ export function SettingsScreen(): React.JSX.Element {
       }
     } catch {
       setSheetError('每日学习时长未保存，请稍后再试。');
-      setSaving(false);
       return;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    setSaving(false);
     setOpenSheet(null);
     // See saveExamDate: the stored value changed either way.
     try {
@@ -266,11 +282,17 @@ export function SettingsScreen(): React.JSX.Element {
               compact
               accessibilityLabel="主题外观"
               value={mode}
+              disabled={themeSaving}
               options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
               onChange={next => void handleThemeChange(next)}
             />
           )}
         />
+        {themeError ? (
+          <Text accessibilityRole="alert" style={[typography.captionMeta, { color: colors.danger, marginTop: YanjiSpacing.xs }]}>
+            {themeError}
+          </Text>
+        ) : null}
 
         <View>
           <YanjiPaperSectionHeading

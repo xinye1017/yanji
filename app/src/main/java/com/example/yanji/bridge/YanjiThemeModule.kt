@@ -81,15 +81,16 @@ class YanjiThemeModule(
             promise.reject("E_INVALID_THEME", "Invalid theme mode: $mode")
             return
         }
-        val repository = YanjiRepository.getInstance()
-        val current = repository.settings.value
-        val result = repository.updateSettings(current.copy(themeMode = parsed.name))
-        if (result !is com.example.yanji.data.SettingsUpdateResult.Saved) {
-            promise.reject("E_SETTINGS_SAVE_FAILED", "Failed to persist theme preference")
-            return
+        scope.launchPersistedWrite(promise, "E_SETTINGS_SAVE_FAILED") {
+            val repository = YanjiRepository.getInstance()
+            val result = repository.updateSettings { it.copy(themeMode = parsed.name) }
+            if (result !is com.example.yanji.data.SettingsUpdateResult.Saved) {
+                promise.reject("E_SETTINGS_SAVE_FAILED", "Failed to persist theme preference")
+                return@launchPersistedWrite
+            }
+            emitThemeChanged()
+            promise.resolve(true)
         }
-        emitThemeChanged()
-        promise.resolve(true)
     }
 
     private fun resolveDark(mode: YanjiThemeMode): Boolean = when (mode) {

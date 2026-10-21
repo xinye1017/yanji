@@ -36,12 +36,14 @@ function SettingsSheet({
   visible,
   title,
   subtitle,
+  pending = false,
   onClose,
   children,
 }: {
   visible: boolean;
   title: string;
   subtitle: string;
+  pending?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }): React.JSX.Element {
@@ -52,7 +54,13 @@ function SettingsSheet({
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="关闭" />
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={onClose}
+          disabled={pending}
+          accessibilityState={{ disabled: pending }}
+          accessibilityLabel="关闭"
+        />
         <ScrollView
           showsVerticalScrollIndicator={false}
           overScrollMode="never"
@@ -80,7 +88,7 @@ function SettingsSheet({
               marginBottom: YanjiSpacing.lg,
             }}
           />
-          <YanjiPaperSheetHeading title={title} subtitle={subtitle} onClose={onClose} />
+          <YanjiPaperSheetHeading title={title} subtitle={subtitle} onClose={onClose} disabled={pending} />
           {children}
         </ScrollView>
       </View>
@@ -129,6 +137,7 @@ export function ExamDateSheet({
       visible={visible}
       title="考试日期"
       subtitle="初试当天按这个日期计算倒计时"
+      pending={saving}
       onClose={onClose}
     >
       <View style={{ marginTop: YanjiSpacing.lg }}>
@@ -140,14 +149,24 @@ export function ExamDateSheet({
             minHeight: layout.rowMinHeight,
           }}
         >
-          <YanjiIconButton icon="back" accessibilityLabel="上一个月" onPress={() => setMonth(shiftMonth(month, -1))} />
+          <YanjiIconButton
+            icon="back"
+            accessibilityLabel="上一个月"
+            onPress={() => setMonth(shiftMonth(month, -1))}
+            disabled={saving}
+          />
           <Text
             accessibilityRole="header"
             style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'] }]}
           >
             {formatMonthTitle(month)}
           </Text>
-          <YanjiIconButton icon="forward" accessibilityLabel="下一个月" onPress={() => setMonth(shiftMonth(month, 1))} />
+          <YanjiIconButton
+            icon="forward"
+            accessibilityLabel="下一个月"
+            onPress={() => setMonth(shiftMonth(month, 1))}
+            disabled={saving}
+          />
         </View>
 
         <View style={{ flexDirection: 'row', marginTop: YanjiSpacing.sm }}>
@@ -171,8 +190,9 @@ export function ExamDateSheet({
                 <Pressable
                   key={iso}
                   onPress={() => setSelected(iso)}
+                  disabled={saving}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityState={{ selected: isSelected, disabled: saving }}
                   accessibilityLabel={`${formatExamDate(iso)}${isToday ? '，今天' : ''}`}
                   style={({ pressed }) => ({
                     // The cell owns its column instead of shrinking inside a
@@ -297,6 +317,7 @@ export function DailyGoalSheet({
       visible={visible}
       title="每日学习时长"
       subtitle="只影响进度与达标，不改变已记录时长"
+      pending={saving}
       onClose={onClose}
     >
       <Text

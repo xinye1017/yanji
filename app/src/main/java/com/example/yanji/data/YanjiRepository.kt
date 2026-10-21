@@ -22,6 +22,8 @@ import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 class YanjiRepository private constructor() {
@@ -234,6 +236,7 @@ class YanjiRepository private constructor() {
 
     private val _settings = MutableStateFlow(UserSettings())
     val settings: StateFlow<UserSettings> = _settings.asStateFlow()
+    private val settingsWriteMutex = Mutex()
 
     val checkIns: StateFlow<List<CheckIn>> get() = checkInStore.checkIns
 
@@ -437,11 +440,11 @@ class YanjiRepository private constructor() {
 
     fun addExamSession(session: ExamSession) = timerStore.addExamSession(session)
 
-    fun deleteFocusSession(id: String) = timerStore.deleteFocusSession(id)
+    suspend fun deleteFocusSession(id: String) = timerStore.deleteFocusSession(id)
 
-    fun updateFocusSessionNote(id: String, note: String) = timerStore.updateFocusSessionNote(id, note)
+    suspend fun updateFocusSessionNote(id: String, note: String) = timerStore.updateFocusSessionNote(id, note)
 
-    fun deleteExamSession(id: String) = timerStore.deleteExamSession(id)
+    suspend fun deleteExamSession(id: String) = timerStore.deleteExamSession(id)
 
     suspend fun getFocusSessionByIdFromDb(id: String): FocusSessionEntity? = timerStore.getFocusSessionByIdFromDb(id)
 
@@ -553,23 +556,28 @@ class YanjiRepository private constructor() {
      * AI API Key 与其余字段**分离持久化**：Key 走 [SecretStore]（Keystore 加密 + no-backup 目录），
      * 其余字段走 Room。凭据因此不会随可云备份的学习数据库一起离开设备。
      */
-    fun updateSettings(newSettings: UserSettings): SettingsUpdateResult {
-        val apiKey = newSettings.aiApiKey.trim()
-        if (apiKey != cachedAiApiKey) {
-            // 先同步落盘凭据，再广播新状态，避免出现"UI 显示已保存、读回却为空"的中间态。
-            val store = secretStore
-                ?: return SettingsUpdateResult.SecretUnavailable
-            when (store.saveAiApiKey(apiKey)) {
-                SecretWriteResult.Saved,
-                SecretWriteResult.Cleared -> cachedAiApiKey = apiKey
-                is SecretWriteResult.Failure -> return SettingsUpdateResult.SecretUnavailable
+    suspend fun updateSettings(update: (UserSettings) -> UserSettings): SettingsUpdateResult = withContext(Dispatchers.IO) {
+        // Build each patch from the last committed state, including concurrent theme/settings writes.
+        settingsWriteMutex.withLock {
+            val db = requireDatabase()
+            val current = db.userSettingsDao().getSettings().first()?.toDomainModel()
+                ?.copy(aiApiKey = cachedAiApiKey) ?: _settings.value
+            val newSettings = update(current)
+            val apiKey = newSettings.aiApiKey.trim()
+            if (apiKey != cachedAiApiKey) {
+                // 先同步落盘凭据，再广播新状态，避免出现"UI 显示已保存、读回却为空"的中间态。
+                val store = secretStore
+                    ?: return@withLock SettingsUpdateResult.SecretUnavailable
+                when (store.saveAiApiKey(apiKey)) {
+                    SecretWriteResult.Saved,
+                    SecretWriteResult.Cleared -> cachedAiApiKey = apiKey
+                    is SecretWriteResult.Failure -> return@withLock SettingsUpdateResult.SecretUnavailable
+                }
             }
+            db.userSettingsDao().saveSettings(UserSettingsEntity.fromDomainModel(newSettings))
+            _settings.value = newSettings.copy(aiApiKey = apiKey)
+            SettingsUpdateResult.Saved
         }
-        _settings.value = newSettings.copy(aiApiKey = apiKey)
-        repoScope.launch {
-            database?.userSettingsDao()?.saveSettings(UserSettingsEntity.fromDomainModel(newSettings))
-        }
-        return SettingsUpdateResult.Saved
     }
 
     // ==================================================================

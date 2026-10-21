@@ -113,10 +113,12 @@ export function YanjiPaperSheetHeading({
   title,
   subtitle,
   onClose,
+  disabled = false,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
+  disabled?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -151,6 +153,7 @@ export function YanjiPaperSheetHeading({
         icon="close"
         accessibilityLabel="关闭"
         onPress={onClose}
+        disabled={disabled}
         size={paper.layout.rowMinHeight}
         iconSize={17}
         tone="filled"
@@ -310,12 +313,14 @@ export function YanjiPaperSegmentedControl<T extends string>({
   onChange,
   accessibilityLabel,
   compact = false,
+  disabled = false,
 }: {
   value: T;
   options: readonly YanjiPaperSegmentedOption<T>[];
   onChange: (value: T) => void;
   accessibilityLabel: string;
   compact?: boolean;
+  disabled?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -365,6 +370,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
           compact={compact}
           segmentInset={segmentInset}
           reduceMotion={reduceMotion}
+          disabled={disabled}
           onPress={() => onChange(option.value)}
         />
       ))}
@@ -378,6 +384,7 @@ function PaperSegment({
   compact,
   segmentInset,
   reduceMotion,
+  disabled,
   onPress,
 }: {
   label: string;
@@ -385,6 +392,7 @@ function PaperSegment({
   compact: boolean;
   segmentInset: number;
   reduceMotion: boolean;
+  disabled: boolean;
   onPress: () => void;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -405,8 +413,9 @@ function PaperSegment({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
       style={({ pressed }) => ({
         minHeight: compact ? paper.layout.rowMinHeight : paper.layout.rowMinHeight - YanjiSpacing.xs,
         minWidth: paper.layout.rowMinHeight,
@@ -417,7 +426,7 @@ function PaperSegment({
         borderRadius: paper.radius.pill,
         // Press feedback is an instant state change, not an animation, so
         // reduced motion keeps it — only the fill crossfade above is gated.
-        opacity: pressed ? 0.7 : 1,
+        opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
       })}
     >
       <Animated.View
@@ -1886,6 +1895,7 @@ export function YanjiTextInput({
   secureTextEntry = false,
   autoCapitalize = 'sentences',
   accessibilityLabel,
+  editable = true,
   variant = 'well',
   style,
 }: {
@@ -1896,6 +1906,7 @@ export function YanjiTextInput({
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   accessibilityLabel?: string;
+  editable?: boolean;
   /**
    * `well` sinks the field into the sheet as a tinted box. `page` writes
    * directly on the paper with no box, for a sheet whose whole body is the
@@ -1924,6 +1935,7 @@ export function YanjiTextInput({
       secureTextEntry={secureTextEntry}
       autoCapitalize={autoCapitalize}
       accessibilityLabel={accessibilityLabel ?? placeholder}
+      editable={editable}
       style={[
         {
           backgroundColor: page ? 'transparent' : paper.colors.subtle,

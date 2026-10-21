@@ -526,7 +526,7 @@ class StudyStatisticsRepository(
         return entity?.toDomainModel()?.let { examToSessionItem(it) }
     }
 
-    fun updateSessionNote(sessionId: String, isExam: Boolean, note: String) {
+    suspend fun updateSessionNote(sessionId: String, isExam: Boolean, note: String) {
         if (!isExam) {
             repo.updateFocusSessionNote(sessionId, note)
         }

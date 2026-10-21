@@ -142,6 +142,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
       },
       useMemo: fn => fn(),
       useCallback: fn => fn,
+      useRef: value => ({ current: value }),
       useEffect: () => {},
     },
     'react-native': {

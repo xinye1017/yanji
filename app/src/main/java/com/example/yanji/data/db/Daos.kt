@@ -116,13 +116,13 @@ interface FocusSessionDao {
     suspend fun insertAll(sessions: List<FocusSessionEntity>)
 
     @Query("UPDATE focus_sessions SET note = :note WHERE id = :id")
-    suspend fun updateNote(id: String, note: String)
+    suspend fun updateNote(id: String, note: String): Int
 
     @Query("UPDATE focus_sessions SET subjectName = :newName WHERE subjectId = :subjectId")
     suspend fun updateSubjectName(subjectId: String, newName: String)
 
     @Query("DELETE FROM focus_sessions WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: String): Int
 
     /** 仅用于备份恢复：清空后按备份内容整表重建。 */
     @Query("DELETE FROM focus_sessions")
@@ -192,7 +192,7 @@ interface ExamSessionDao {
     suspend fun updateSubjectName(subjectId: String, newName: String)
 
     @Query("DELETE FROM exam_sessions WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: String): Int
 
     /** 仅用于备份恢复：清空后按备份内容整表重建。 */
     @Query("DELETE FROM exam_sessions")

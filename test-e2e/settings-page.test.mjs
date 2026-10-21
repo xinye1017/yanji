@@ -69,12 +69,34 @@ function nodes(tree, predicate) {
 }
 const byComponent = name => node => typeof node.type === 'function' && node.type.name === name;
 
+function text(tree) {
+  if (Array.isArray(tree)) return tree.map(text).join('');
+  if (tree && typeof tree === 'object' && 'type' in tree) {
+    if (typeof tree.type === 'function') return text(tree.type(tree.props));
+    return text(tree.props?.children);
+  }
+  if (tree && typeof tree === 'object') return text(tree.props?.children);
+  return typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
+}
+
 /**
  * Call arguments and returned values cross the VM boundary the shipped screen
  * runs in, so their objects carry that realm's prototype. Compare the payload,
  * not the identity.
  */
 const plain = value => JSON.parse(JSON.stringify(value));
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
 
 /**
  * Everything the page's own scroll body renders, excluding the two sheets.
@@ -163,11 +185,23 @@ test('month paging crosses year boundaries in both directions', () => {
 // Rendered screen
 // ---------------------------------------------------------------------------
 
-function settingsHarness({ settings, calls = [] } = {}) {
+function settingsHarness({
+  settings,
+  calls = [],
+  updateUserSettings = async () => true,
+  setThemePreference = async () => true,
+  getThemePreference = async () => ({ mode: 'SYSTEM', isDark: false }),
+  refreshSettingsSnapshot = async () => {},
+} = {}) {
   const states = {};
+  const refs = {};
+  let updateUserSettingsImpl = updateUserSettings;
+  let setThemePreferenceImpl = setThemePreference;
   let index = 0;
+  let refIndex = 0;
   /** The advanced section's own slot counter; see the note where it is loaded. */
   let sectionIndex = 0;
+  let sectionRefIndex = 0;
   const names = [
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiHairline',
     'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading', 'YanjiPaperSegmentedControl',
@@ -194,6 +228,11 @@ function settingsHarness({ settings, calls = [] } = {}) {
         if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
         return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
       },
+      useRef: initial => {
+        const i = refIndex++;
+        if (!(i in refs)) refs[i] = { current: initial };
+        return refs[i];
+      },
       useMemo: fn => fn(),
       useCallback: fn => fn,
       useEffect: () => {},
@@ -205,14 +244,20 @@ function settingsHarness({ settings, calls = [] } = {}) {
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
     '../bridge': {
       YanjiDataNative: {
-        updateUserSettings: async patch => { calls.push(['updateUserSettings', patch]); return true; },
+        updateUserSettings: async patch => {
+          calls.push(['updateUserSettings', patch]);
+          return updateUserSettingsImpl(patch);
+        },
         saveDecisionApiKey: async () => true,
         clearDecisionApiKey: async () => true,
         getDecisionApiKey: async () => '',
       },
       YanjiThemeNative: {
-        getThemePreference: async () => ({ mode: 'SYSTEM', isDark: false }),
-        setThemePreference: async mode => { calls.push(['setThemePreference', mode]); return true; },
+        getThemePreference,
+        setThemePreference: async mode => {
+          calls.push(['setThemePreference', mode]);
+          return setThemePreferenceImpl(mode);
+        },
       },
       onThemeChanged: () => () => {},
     },
@@ -249,6 +294,11 @@ function settingsHarness({ settings, calls = [] } = {}) {
           if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
           return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
         },
+        useRef: initial => {
+          const i = 3000 + sectionRefIndex++;
+          if (!(i in refs)) refs[i] = { current: initial };
+          return refs[i];
+        },
         useEffect: () => {},
       },
       'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
@@ -256,7 +306,10 @@ function settingsHarness({ settings, calls = [] } = {}) {
       './SettingsRows': rows,
       '../bridge': {
         YanjiDataNative: {
-          updateUserSettings: async patch => { calls.push(['updateUserSettings', patch]); return true; },
+          updateUserSettings: async patch => {
+            calls.push(['updateUserSettings', patch]);
+            return updateUserSettingsImpl(patch);
+          },
           saveDecisionApiKey: async () => true,
           clearDecisionApiKey: async () => true,
           getDecisionApiKey: async () => '',
@@ -283,7 +336,10 @@ function settingsHarness({ settings, calls = [] } = {}) {
         settings,
         examCountdown: { examDate: settings.examDate, daysRemaining: 0 },
       }),
-      refreshSettingsSnapshot: async () => {},
+      refreshSettingsSnapshot: async () => {
+        calls.push(['refreshSettingsSnapshot']);
+        return refreshSettingsSnapshot();
+      },
     },
     '../services/decisionClient': { testDecisionConnection: async () => ({ success: true, message: 'ok' }) },
     '../state/settingsViewLogic': logic,
@@ -293,10 +349,14 @@ function settingsHarness({ settings, calls = [] } = {}) {
 
   return {
     calls,
+    setUpdateUserSettings: next => { updateUserSettingsImpl = next; },
+    setSetThemePreference: next => { setThemePreferenceImpl = next; },
     setState: (slot, value) => { states[slot] = value; },
     render: () => {
       index = 0;
+      refIndex = 0;
       sectionIndex = 0;
+      sectionRefIndex = 0;
       return SettingsScreen();
     },
   };
@@ -349,6 +409,72 @@ test('the theme switch shares the 外观 heading row as a compact control', () =
   assert.equal(control.type, 'YanjiPaperSegmentedControl', 'the control is the heading accessory');
   assert.equal(control.props.compact, true, 'a settings group uses the compact segment');
   assert.equal(control.props.value, 'SYSTEM');
+});
+
+test('theme save disables the control while one Room-backed preference is pending', async () => {
+  const write = deferred();
+  const harness = settingsHarness({
+    settings: stored(),
+    setThemePreference: () => write.promise,
+  });
+  const control = () => nodes(harness.render(), node =>
+    node.type === 'YanjiPaperSectionHeading' && node.props.title === '外观')[0].props.right;
+
+  const first = control().props.onChange('DARK');
+  const second = control().props.onChange('LIGHT');
+  await flush();
+
+  assert.equal(harness.calls.filter(call => call[0] === 'setThemePreference').length, 1,
+    'same-tick theme changes produce one bridge request');
+  assert.equal(control().props.value, 'SYSTEM',
+    'a pending choice does not look committed before the bridge confirms it');
+  assert.equal(control().props.disabled, true);
+
+  write.resolve(true);
+  await Promise.all([first, second]);
+  await flush();
+  assert.equal(control().props.value, 'DARK');
+  assert.equal(control().props.disabled, false);
+});
+
+test('theme false or rejection restores the stored preference and a retry succeeds', async () => {
+  for (const failure of [false, new Error('room write failed')]) {
+    const write = deferred();
+    const harness = settingsHarness({
+      settings: stored(),
+      setThemePreference: () => write.promise,
+      getThemePreference: async () => ({ mode: 'SYSTEM', isDark: false }),
+    });
+    const control = () => nodes(harness.render(), node =>
+      node.type === 'YanjiPaperSectionHeading' && node.props.title === '外观')[0].props.right;
+
+    const attempt = control().props.onChange('DARK');
+    await flush();
+    assert.equal(control().props.disabled, true);
+    assert.equal(control().props.value, 'SYSTEM',
+      'failure keeps the last confirmed theme selected');
+    if (failure instanceof Error) write.reject(failure);
+    else write.resolve(failure);
+    await attempt;
+    await flush();
+
+    assert.equal(control().props.value, 'SYSTEM', 'failure restores the stored theme');
+    assert.equal(control().props.disabled, false);
+    assert.match(text(harness.render()), /主题未保存，请重试。/);
+
+    const retry = deferred();
+    harness.setSetThemePreference(() => retry.promise);
+    const retryAttempt = control().props.onChange('DARK');
+    await flush();
+    assert.equal(control().props.value, 'SYSTEM',
+      'a pending retry also keeps the last confirmed theme selected');
+    assert.equal(control().props.disabled, true);
+    retry.resolve(true);
+    await retryAttempt;
+    await flush();
+    assert.equal(control().props.value, 'DARK');
+    assert.equal(control().props.disabled, false);
+  }
 });
 
 test('an unset goal and exam date read as 未设置 rather than as a zero', () => {
@@ -447,6 +573,135 @@ test('the advanced block is collapsed until it is opened', () => {
   assert.ok(opened.inputs >= 3, 'model, endpoint and API key fields appear once expanded');
 });
 
+function openDecisionModel(harness) {
+  const disclosure = () => nodes(harness.render(), byComponent('YanjiSettingDisclosureRow'))[0];
+  disclosure().props.onPress();
+  const draft = {
+    model: '',
+    endpoint: '',
+    apiKey: '',
+  };
+  const input = label => {
+    const field = nodes(harness.render(), node =>
+      node.type === 'YanjiTextInput' && node.props.accessibilityLabel === label)[0];
+    if (!field) return field;
+    return {
+      ...field,
+      props: {
+        ...field.props,
+        value: draft[label === '模型标识' ? 'model'
+          : label === 'API Base URL' ? 'endpoint' : 'apiKey'],
+        onChangeText: next => {
+          draft[label === '模型标识' ? 'model'
+            : label === 'API Base URL' ? 'endpoint' : 'apiKey'] = next;
+          field.props.onChangeText(next);
+        },
+      },
+    };
+  };
+  return {
+    disclosure,
+    input,
+    save: () => nodes(harness.render(), node =>
+      node.type === 'Pressable' && node.props.accessibilityLabel === '保存 AI 决策配置')[0],
+  };
+}
+
+test('decision-model save keeps its draft pending and shares one same-tick write', async () => {
+  const write = deferred();
+  const harness = settingsHarness({
+    settings: stored(),
+    updateUserSettings: () => write.promise,
+  });
+  const model = openDecisionModel(harness);
+  model.input('模型标识').props.onChangeText('pending-model');
+  model.input('API Base URL').props.onChangeText('https://example.test/v1');
+  model.input('API Key').props.onChangeText('sk-pending');
+
+  const first = model.save().props.onPress();
+  const second = model.save().props.onPress();
+  await flush();
+
+  assert.equal(harness.calls.filter(call => call[0] === 'updateUserSettings').length, 1,
+    'same-tick saves share one pending bridge request');
+  assert.equal(model.input('模型标识').props.value, 'pending-model');
+  assert.equal(model.input('API Base URL').props.value, 'https://example.test/v1');
+  assert.equal(model.input('API Key').props.value, 'sk-pending');
+  assert.equal(model.input('模型标识').props.editable, false,
+    'the draft cannot drift away from the pending write');
+  assert.equal(model.input('API Base URL').props.editable, false);
+  assert.equal(model.input('API Key').props.editable, false);
+  assert.equal(model.save().props.disabled, true);
+  assert.equal(model.save().props.accessibilityState.busy, true);
+  assert.equal(model.disclosure().props.expanded, true,
+    'the editor stays open while the write is pending');
+
+  write.resolve(true);
+  await Promise.all([first, second]);
+  await flush();
+  assert.equal(model.save().props.accessibilityState.busy, false);
+  assert.match(text(harness.render()), /AI 决策模型配置已保存/);
+});
+
+test('decision-model false or rejection preserves every draft field and a retry saves', async () => {
+  for (const failure of [false, new Error('room write failed')]) {
+    const write = deferred();
+    const harness = settingsHarness({
+      settings: stored(),
+      updateUserSettings: () => write.promise,
+    });
+    const model = openDecisionModel(harness);
+    model.input('模型标识').props.onChangeText('draft-model');
+    model.input('API Base URL').props.onChangeText('https://draft.test/v1');
+    model.input('API Key').props.onChangeText('sk-draft');
+
+    const attempt = model.save().props.onPress();
+    await flush();
+    if (failure instanceof Error) write.reject(failure);
+    else write.resolve(failure);
+    await attempt;
+    await flush();
+
+    assert.equal(model.disclosure().props.expanded, true, 'failure keeps the form open');
+    assert.equal(model.input('模型标识').props.value, 'draft-model');
+    assert.equal(model.input('API Base URL').props.value, 'https://draft.test/v1');
+    assert.equal(model.input('API Key').props.value, 'sk-draft');
+    assert.equal(model.save().props.disabled, false, 'the failed save can be retried');
+    assert.match(text(harness.render()), /保存配置失败|room write failed/);
+
+    const retry = deferred();
+    harness.setUpdateUserSettings(() => retry.promise);
+    const retryAttempt = model.save().props.onPress();
+    await flush();
+    retry.resolve(true);
+    await retryAttempt;
+    await flush();
+    assert.match(text(harness.render()), /AI 决策模型配置已保存/);
+  }
+});
+
+test('decision-model distinguishes a committed save from a failed snapshot refresh', async () => {
+  const harness = settingsHarness({
+    settings: stored(),
+    refreshSettingsSnapshot: async () => { throw new Error('snapshot read failed'); },
+  });
+  const model = openDecisionModel(harness);
+  model.input('模型标识').props.onChangeText('committed-model');
+  model.input('API Base URL').props.onChangeText('https://committed.test/v1');
+
+  await model.save().props.onPress();
+  await flush();
+
+  assert.equal(harness.calls.filter(call => call[0] === 'updateUserSettings').length, 1,
+    'the Room-backed configuration write was confirmed before refresh');
+  assert.equal(model.input('模型标识').props.value, 'committed-model',
+    'a refresh failure retains the committed draft on screen');
+  assert.equal(model.input('API Base URL').props.value, 'https://committed.test/v1');
+  assert.match(text(harness.render()), /配置已保存.*页面刷新失败/);
+  assert.doesNotMatch(text(harness.render()), /保存配置失败/);
+  assert.equal(model.save().props.disabled, false);
+});
+
 test('saving the exam date writes the chosen ISO day and nothing else', async () => {
   const harness = settingsHarness({ settings: stored({ examDate: '' }) });
   const sheets = () => nodes(harness.render(), byComponent('ExamDateSheet'));
@@ -462,6 +717,92 @@ test('saving the exam date writes the chosen ISO day and nothing else', async ()
   await sheets()[0].props.onSave('2026-12-26');
   assert.deepEqual(plain(harness.calls.filter(call => call[0] === 'updateUserSettings')),
     [['updateUserSettings', { examDate: '2026-12-26' }]]);
+});
+
+test('a successful settings write followed by a failed re-read is not reported as a save failure', async () => {
+  const harness = settingsHarness({
+    settings: stored({ examDate: '' }),
+    refreshSettingsSnapshot: async () => { throw new Error('snapshot read failed'); },
+  });
+  const tree = harness.render();
+  nodes(tree, byComponent('YanjiSettingRow'))[0].props.onPress();
+
+  await nodes(harness.render(), byComponent('ExamDateSheet'))[0].props.onSave('2026-12-26');
+  await flush();
+  const after = harness.render();
+
+  assert.equal(nodes(after, byComponent('ExamDateSheet'))[0].props.visible, false,
+    'the confirmed Room write closes the editor before the re-read');
+  assert.equal(nodes(after, byComponent('ExamDateSheet'))[0].props.error, null,
+    'a re-read failure is not misreported as a failed write');
+  assert.match(text(after), /设置读取失败/);
+});
+
+test('exam-date save keeps the sheet open and disables its draft while Room is pending', async () => {
+  const write = deferred();
+  const harness = settingsHarness({
+    settings: stored({ examDate: '' }),
+    updateUserSettings: () => write.promise,
+  });
+  const examSheet = () => nodes(harness.render(), byComponent('ExamDateSheet'))[0];
+  nodes(harness.render(), byComponent('YanjiSettingRow'))[0].props.onPress();
+
+  const first = examSheet().props.onSave('2026-12-26');
+  const second = examSheet().props.onSave('2026-12-27');
+  await flush();
+
+  assert.equal(examSheet().props.visible, true, 'a pending save must not close the sheet');
+  assert.equal(examSheet().props.saving, true);
+  assert.equal(examSheet().props.error, null);
+  assert.equal(harness.calls.filter(call => call[0] === 'updateUserSettings').length, 1,
+    'same-tick duplicate saves share one pending bridge request');
+
+  const save = nodes(examSheet(), node => node.type === 'YanjiPrimaryButton')[0];
+  assert.equal(save.props.disabled, true);
+  assert.equal(save.props.label, '保存中…');
+  assert.equal(nodes(examSheet(), node =>
+    node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '下一个月')[0]
+    .props.disabled, true, 'changing the selected context is blocked while pending');
+
+  write.resolve(true);
+  await Promise.all([first, second]);
+  await flush();
+  assert.equal(examSheet().props.visible, false, 'only a resolved true closes the sheet');
+});
+
+test('exam-date false or rejection preserves the sheet and a retry closes only after true', async () => {
+  for (const failure of [false, new Error('room write failed')]) {
+    const write = deferred();
+    const harness = settingsHarness({
+      settings: stored({ examDate: '' }),
+      updateUserSettings: () => write.promise,
+    });
+    const examSheet = () => nodes(harness.render(), byComponent('ExamDateSheet'))[0];
+    nodes(harness.render(), byComponent('YanjiSettingRow'))[0].props.onPress();
+
+    const attempt = examSheet().props.onSave('2026-12-26');
+    await flush();
+    assert.equal(examSheet().props.saving, true);
+    if (failure instanceof Error) write.reject(failure);
+    else write.resolve(failure);
+    await attempt;
+    await flush();
+
+    assert.equal(examSheet().props.visible, true, 'a failed write keeps the editing context');
+    assert.equal(examSheet().props.saving, false);
+    assert.equal(examSheet().props.error, '考试日期未保存，请稍后再试。');
+
+    const retry = deferred();
+    harness.calls.length = 0;
+    harness.setUpdateUserSettings(() => retry.promise);
+    const retryAttempt = examSheet().props.onSave('2026-12-26');
+    await flush();
+    assert.equal(examSheet().props.visible, true, 'a pending retry still keeps the sheet open');
+    retry.resolve(true);
+    await retryAttempt;
+    await flush();
+    assert.equal(examSheet().props.visible, false, 'a retried true closes the sheet');
+  }
 });
 
 test('the goal stepper and presets are what actually decide the saved value', async () => {
@@ -520,6 +861,71 @@ test('saving the daily goal converts minutes back into the stored hours column',
   const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');
   assert.equal(writes.length, 1);
   assert.equal(writes[0][1].dailyGoalHours, 6.5, '390 minutes is stored as 6.5 hours');
+});
+
+test('daily-goal save keeps the sheet and its draft pending until one write resolves true', async () => {
+  const write = deferred();
+  const harness = settingsHarness({
+    settings: stored({ dailyGoalHours: 3 }),
+    updateUserSettings: () => write.promise,
+  });
+  const goalSheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+  nodes(harness.render(), byComponent('YanjiSettingRow'))[1].props.onPress();
+
+  const first = goalSheet().props.onSave(390);
+  const second = goalSheet().props.onSave(420);
+  await flush();
+
+  assert.equal(goalSheet().props.visible, true, 'pending must not close the sheet');
+  assert.equal(goalSheet().props.saving, true);
+  assert.equal(harness.calls.filter(call => call[0] === 'updateUserSettings').length, 1,
+    'same-tick duplicate saves produce one bridge request');
+  assert.equal(nodes(goalSheet(), node => node.type === 'YanjiIconButton' &&
+    node.props.accessibilityLabel === '增加 30 分钟')[0].props.disabled, true,
+  'the draft cannot change while its save context is pending');
+  assert.equal(nodes(goalSheet(), node => node.props?.accessibilityLabel === '设为 8 小时')[0]
+    .props.disabled, true);
+
+  write.resolve(true);
+  await Promise.all([first, second]);
+  await flush();
+  assert.equal(goalSheet().props.visible, false);
+});
+
+test('daily-goal false or rejection keeps the draft and a retry succeeds', async () => {
+  for (const failure of [false, new Error('room write failed')]) {
+    const write = deferred();
+    const harness = settingsHarness({
+      settings: stored({ dailyGoalHours: 3 }),
+      updateUserSettings: () => write.promise,
+    });
+    const goalSheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+    nodes(harness.render(), byComponent('YanjiSettingRow'))[1].props.onPress();
+    nodes(goalSheet(), node => node.props?.accessibilityLabel === '设为 8 小时')[0].props.onPress();
+
+    const attempt = goalSheet().props.onSave(480);
+    await flush();
+    if (failure instanceof Error) write.reject(failure);
+    else write.resolve(failure);
+    await attempt;
+    await flush();
+
+    assert.equal(goalSheet().props.visible, true, 'failure keeps the sheet open');
+    assert.equal(goalSheet().props.saving, false);
+    assert.equal(goalSheet().props.error, '每日学习时长未保存，请稍后再试。');
+    assert.equal(nodes(goalSheet(), node => node.type === 'Text' &&
+      node.props.children === '8 小时')[0]?.props.children, '8 小时',
+    'the selected goal survives a failed write');
+
+    const retry = deferred();
+    harness.setUpdateUserSettings(() => retry.promise);
+    const retryAttempt = goalSheet().props.onSave(480);
+    await flush();
+    retry.resolve(true);
+    await retryAttempt;
+    await flush();
+    assert.equal(goalSheet().props.visible, false);
+  }
 });
 
 test('a goal of zero means "no goal" and the sheet says so before saving it', async () => {
