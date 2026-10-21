@@ -174,17 +174,21 @@ test('task subject labels use readable theme text rather than the decorative sub
   }
 });
 
-function screenHarness(snapshot, bridge = {}) {
+function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   const states = [];
   const calls = [];
   let index = 0;
   const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
-    'YanjiTaskLedgerRow', 'YanjiTextAction'];
+    'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   let active = null;
   let tickReads = 0;
+  // Retry paths are asserted per test, so they start as no-ops that record
+  // nothing; `setRefreshDaily` installs the spy that a test cares about.
+  let refreshDaily = async () => {};
+  const refreshSettings = async () => {};
   const { TodayScreen } = loadTypeScript('src/screens/TodayScreen.tsx', {
     react: {
       useState: initial => {
@@ -218,12 +222,19 @@ function screenHarness(snapshot, bridge = {}) {
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
       useDailySnapshot: () => snapshot,
+      useDailyReadFailed: () => readFailed,
       useSettingsSnapshot: () => ({ settings: { dailyGoalHours: 6 }, examCountdown: { examDate: '2027-12-25', daysRemaining: 435 } }),
+      refreshDailySnapshot: async date => refreshDaily(date),
+      refreshSettingsSnapshot: async () => refreshSettings(),
     },
-    '../state/timerStore': { useActiveSession: () => active, useTimerTick: () => { tickReads++; } },
+    '../state/timerStore': {
+      useActiveSession: () => active, useTimerTick: () => { tickReads++; },
+      syncActiveSession: async () => {},
+    },
   }, { Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T15:00:00`])); } } });
   return {
     calls, setActive: value => { active = value; }, get tickReads() { return tickReads; },
+    setRefreshDaily: next => { refreshDaily = next; },
     render: () => { index = 0; return TodayScreen({ visible: true, foregroundRevision: 0 }); },
   };
 }
@@ -602,3 +613,61 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
 
 
 
+
+
+test('a page holding real content says when that content may be behind Room', () => {
+  // The gap this pins: `snapshot` was non-null so the only retry affordance
+  // (`{!snapshot ? <YanjiTextAction 重新读取/>}`) never rendered, and a failed
+  // background read left the day's numbers on screen looking current.
+  const stale = screenHarness(snapshot({ totalDurationSeconds: 3600, focusCount: 2 }), {}, { readFailed: true });
+  const tree = stale.render();
+  const notice = nodes(tree, node => node.type === 'YanjiStaleDataNotice')[0];
+  assert.ok(notice, 'a stale-but-present snapshot must offer a retry');
+  assert.match(notice.props.message, /可能不是最新/);
+  assert.equal(notice.props.actionLabel, '重新读取');
+  assert.equal(notice.props.busy, false);
+  // The numbers themselves stay on the page — a failure must not blank real data.
+  assert.match(text(tree), /已完成/);
+  assert.match(text(tree), /2/);
+});
+
+test('a healthy read shows no staleness notice at all', () => {
+  // The banner is a claim that something went wrong; on the normal path that
+  // claim must be absent, otherwise it becomes noise nobody reads.
+  const healthy = screenHarness(snapshot({ totalDurationSeconds: 3600, focusCount: 2 }));
+  assert.equal(nodes(healthy.render(), node => node.type === 'YanjiStaleDataNotice').length, 0);
+});
+
+test('a failed first read with nothing to show keeps the loading retry, not the banner', () => {
+  // Two different failures must not collapse into one message: no value at all
+  // is 「正在读取」 plus a retry; a value that may be stale is the notice. With no
+  // snapshot there is nothing to be stale about, so only the first may appear.
+  const loading = screenHarness(null, {}, { readFailed: true });
+  const tree = loading.render();
+  assert.equal(nodes(tree, node => node.type === 'YanjiStaleDataNotice').length, 0);
+  assert.match(text(tree), /正在读取今日记录/);
+  assert.ok(nodes(tree, node => node.type === 'YanjiTextAction' && node.props.label === '重新读取')[0]);
+});
+
+test('pressing the staleness retry re-reads the day and disables itself while running', async () => {
+  const retries = [];
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = screenHarness(snapshot(), {}, { readFailed: true });
+  h.setRefreshDaily(date => { retries.push(['daily', date]); return gate; });
+
+  const notice = nodes(h.render(), node => node.type === 'YanjiStaleDataNotice')[0];
+  notice.props.onAction();
+  assert.deepEqual(retries, [['daily', date]], "the banner uses the page's existing retry path");
+
+  // While the read is in flight the action must not invite a second press: the
+  // same double-tap that duplicates a save would here stack concurrent reads.
+  const busy = nodes(h.render(), node => node.type === 'YanjiStaleDataNotice')[0];
+  assert.equal(busy.props.busy, true);
+  assert.equal(busy.props.actionLabel, '读取中…');
+
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const done = nodes(h.render(), node => node.type === 'YanjiStaleDataNotice')[0];
+  assert.equal(done.props.busy, false, 'the action is available again once the read settles');
+});

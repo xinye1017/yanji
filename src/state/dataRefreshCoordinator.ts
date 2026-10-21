@@ -47,6 +47,16 @@ export class DataRefreshCoordinator {
   private readonly dailyDirty = new Set<string>();
   private readonly dailyVersions = new Map<string, number>();
   private readonly dailyInFlight = new Map<string, Promise<void>>();
+  /**
+   * Dates whose most recent *completed* read failed.
+   *
+   * `ensureDaily` keeps the previous value when a read rejects (losing the page's
+   * content to show a spinner would be worse than showing stale content), but
+   * nothing used to record that the value it kept is no longer trustworthy.
+   * This flag is exactly that record: pages read it to say 「数据可能不是最新」
+   * instead of quietly presenting yesterday's numbers as today's.
+   */
+  private readonly dailyReadFailed = new Set<string>();
 
   private readonly reviewValues = new Map<string, ReviewOverview>();
   private readonly reviewRequests = new Map<string, ReviewRequestKey>();
@@ -55,6 +65,8 @@ export class DataRefreshCoordinator {
   private readonly reviewDirty = new Set<string>();
   private readonly reviewVersions = new Map<string, number>();
   private readonly reviewInFlight = new Map<string, Promise<void>>();
+  /** Review windows whose most recent completed read failed (see `dailyReadFailed`). */
+  private readonly reviewReadFailed = new Set<string>();
 
   private readonly settingsListeners = new Set<Listener>();
   private readonly settingsReaders = new Set<string>();
@@ -142,6 +154,17 @@ export class DataRefreshCoordinator {
     return this.dailyValues.get(date) ?? null;
   }
 
+  /**
+   * Whether the last completed read for `date` failed.
+   *
+   * True means whatever `getDailySnapshot` returns is carried over from an
+   * earlier successful read and may be out of date. It is false both before any
+   * read (nothing has failed yet) and after a read succeeds.
+   */
+  getDailyReadFailed(date: string): boolean {
+    return this.dailyReadFailed.has(date);
+  }
+
   subscribeDailySnapshot(date: string, listener: Listener): () => void {
     return this.subscribe(this.dailyListeners, date, listener, () => this.pruneDaily(date));
   }
@@ -172,6 +195,11 @@ export class DataRefreshCoordinator {
 
   getReviewOverview(request: ReviewRequestKey): ReviewOverview | null {
     return this.reviewValues.get(reviewRequestId(request)) ?? null;
+  }
+
+  /** Whether the last completed read for this window failed (see `getDailyReadFailed`). */
+  getReviewReadFailed(request: ReviewRequestKey): boolean {
+    return this.reviewReadFailed.has(reviewRequestId(request));
   }
 
   subscribeReviewOverview(request: ReviewRequestKey, listener: Listener): () => void {
@@ -325,10 +353,18 @@ export class DataRefreshCoordinator {
         if ((this.dailyVersions.get(date) ?? 0) !== version) return;
         this.dailyValues.set(date, snapshot);
         this.dailyDirty.delete(date);
+        // A real read landed, so the value is trustworthy again — and pages that
+        // showed 「数据可能不是最新」 must be told to take the banner down.
+        this.dailyReadFailed.delete(date);
         this.notify(this.dailyListeners, date);
       })
       .catch(() => {
+        // Same version guard as the success path: an obsolete response must not
+        // describe the state of a read that was superseded while in flight.
+        if ((this.dailyVersions.get(date) ?? 0) !== version) return;
         this.dailyDirty.add(date);
+        this.dailyReadFailed.add(date);
+        this.notify(this.dailyListeners, date);
       })
       .finally(() => {
         if (this.dailyInFlight.get(date) === request) this.dailyInFlight.delete(date);
@@ -360,10 +396,14 @@ export class DataRefreshCoordinator {
         if ((this.reviewVersions.get(id) ?? 0) !== version) return;
         this.reviewValues.set(id, overview);
         this.reviewDirty.delete(id);
+        this.reviewReadFailed.delete(id);
         this.notify(this.reviewListeners, id);
       })
       .catch(() => {
+        if ((this.reviewVersions.get(id) ?? 0) !== version) return;
         this.reviewDirty.add(id);
+        this.reviewReadFailed.add(id);
+        this.notify(this.reviewListeners, id);
       })
       .finally(() => {
         if (this.reviewInFlight.get(id) === request) this.reviewInFlight.delete(id);
@@ -483,6 +523,9 @@ export class DataRefreshCoordinator {
     this.dailyValues.delete(date);
     this.dailyDirty.delete(date);
     this.dailyVersions.delete(date);
+    // The failure belongs to the released entry. Keeping it would let a later
+    // mount of the same date start out claiming its data is stale.
+    this.dailyReadFailed.delete(date);
   }
 
   private pruneReview(id: string): void {
@@ -493,6 +536,7 @@ export class DataRefreshCoordinator {
     this.reviewDirty.delete(id);
     this.reviewVersions.delete(id);
     this.reviewRequests.delete(id);
+    this.reviewReadFailed.delete(id);
   }
 
   private notify(listeners: Map<string, Set<Listener>>, key: string): void {

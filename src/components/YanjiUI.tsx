@@ -708,8 +708,12 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
   accessibilityLabel?: string;
   onPress: () => void;
   disabled?: boolean;
-  /** `brand` = the section's own in-place action; `quiet` = a secondary invitation. */
-  tone?: 'brand' | 'quiet';
+  /**
+   * `brand` = the section's own in-place action; `quiet` = a secondary
+   * invitation; `amber` = an action that belongs to a waiting notice, so it
+   * reads as part of that notice rather than competing with the page accent.
+   */
+  tone?: 'brand' | 'quiet' | 'amber';
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   return (
@@ -729,13 +733,75 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
       <Text style={[
         paper.typography.captionMeta,
         {
-          color: tone === 'quiet' ? paper.colors.secondary : paper.colors.brandInk,
-          fontWeight: tone === 'quiet' ? '600' : '700',
+          color: tone === 'quiet'
+            ? paper.colors.secondary
+            : tone === 'amber'
+              ? paper.colors.amber
+              : paper.colors.brandInk,
+          fontWeight: tone === 'brand' ? '700' : '600',
         },
       ]}>
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiStaleDataNotice — a page that is showing real but possibly old numbers
+//
+// The coordinator keeps the last good snapshot when a Room read fails, because
+// blanking a page that has content is worse than showing content that may lag.
+// That trade is only honest if the page says so. This is the one place that
+// says it: amber (the product's waiting accent) rather than danger red, since
+// nothing was lost — the numbers on screen are real, just not confirmed fresh.
+// ---------------------------------------------------------------------------
+
+export function YanjiStaleDataNotice({
+  message,
+  actionLabel,
+  onAction,
+  busy = false,
+  style,
+}: {
+  message: string;
+  actionLabel: string;
+  onAction: () => void;
+  /** Disables the retry and relabels it while a retry is already running. */
+  busy?: boolean;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, layout, radius, typography } = paper;
+  return (
+    <View
+      // The message is a status, not an error dialog: it is announced politely
+      // so a screen reader finishes the numbers it was already reading first.
+      accessibilityLiveRegion="polite"
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: YanjiSpacing.sm,
+          backgroundColor: colors.amberSubtle,
+          borderWidth: layout.hairlineWidth,
+          borderColor: colors.hairline,
+          borderRadius: radius.tag,
+          paddingHorizontal: YanjiSpacing.md,
+          paddingVertical: YanjiSpacing.xs,
+        },
+        style,
+      ]}
+    >
+      <Text style={[typography.captionMeta, { color: colors.amber, flex: 1 }]}>{message}</Text>
+      <YanjiTextAction
+        label={actionLabel}
+        onPress={onAction}
+        disabled={busy}
+        tone="amber"
+      />
+    </View>
   );
 }
 

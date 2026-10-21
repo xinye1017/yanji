@@ -44,7 +44,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiDayRhythmChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
-    'YanjiTaskLedgerRow', 'YanjiTextAction',
+    'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   const { TodayScreen } = loadTypeScript('src/screens/TodayScreen.tsx', {
@@ -93,6 +93,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
       useDailySnapshot: () => snapshot,
+      useDailyReadFailed: () => false,
       useSettingsSnapshot: () => ({
         settings: { dailyGoalHours: 6 },
         examCountdown: { examDate: '2027-12-25', daysRemaining: 435 },
@@ -130,7 +131,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
     'YanjiIcon', 'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
-    'YanjiStackedBarChart', 'YanjiSubjectProportionRow',
+    'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   const { ReviewScreen } = loadTypeScript('src/screens/ReviewScreen.tsx', {
@@ -171,11 +172,13 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
       useDailySnapshot: () => daySnapshot,
+      useDailyReadFailed: () => false,
       useSettingsSnapshot: () => ({ settings: { dailyGoalHours: 6 } }),
       useReviewOverview: () => null,
+      useReviewReadFailed: () => false,
       useReviewDataVisibility: () => {},
-      dataRefreshCoordinator: { refreshReviewOverview: async () => {} },
       refreshDailySnapshot: async () => {},
+      refreshReviewOverview: async () => {},
     },
   }, {
     Date: class extends Date {

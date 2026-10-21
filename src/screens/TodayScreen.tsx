@@ -8,7 +8,7 @@ import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
   YanjiPaperSectionHeading, YanjiPrimaryButton,
-  YanjiTaskLedgerRow, YanjiTextAction,
+  YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
@@ -20,7 +20,8 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
-  refreshDailySnapshot, refreshSettingsSnapshot, useDailySnapshot, useSettingsSnapshot,
+  refreshDailySnapshot, refreshSettingsSnapshot,
+  useDailyReadFailed, useDailySnapshot, useSettingsSnapshot,
 } from '../state/dataRefresh';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
@@ -86,6 +87,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const date = localDay(now);
   const daily = useDailySnapshot('today', date, visible);
   const snapshot = daily?.date === date ? daily : null;
+  /**
+   * A failed read leaves the previous snapshot in place, so the page can keep
+   * showing something real. That is only honest while the page also says the
+   * numbers may be behind — which is exactly what this flag drives.
+   */
+  const dailyReadFailed = useDailyReadFailed(date);
   const settingsSnapshot = useSettingsSnapshot('today', visible);
   const settings = settingsSnapshot?.settings ?? null;
   const countdown = settingsSnapshot?.examCountdown ?? null;
@@ -319,6 +326,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
             </Text>
           ) : null}
           {!snapshot ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}
+          {/* The two banners are mutually exclusive by construction: with no
+              snapshot there is nothing to be stale about, and the retry above
+              already covers it. This one is for the worse-looking case — the
+              page has content, and that content may be behind Room. */}
+          {snapshot && dailyReadFailed ? (
+            <YanjiStaleDataNotice
+              message="读取失败，以下记录可能不是最新。"
+              actionLabel={retrying ? '读取中…' : '重新读取'}
+              onAction={() => void retryRead()}
+              busy={retrying}
+              style={{ marginTop: YanjiSpacing.sm }}
+            />
+          ) : null}
           {active ? (
             <View style={{ marginTop: YanjiSpacing.md, padding: YanjiSpacing.md, backgroundColor: colors.elevated, borderRadius: radius.surface, borderWidth: layout.hairlineWidth, borderColor: colors.hairline }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap }}>

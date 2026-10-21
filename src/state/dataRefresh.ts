@@ -41,6 +41,31 @@ export function useDailySnapshot(
   return snapshot;
 }
 
+/**
+ * Whether the coordinator's last completed read for `date` failed.
+ *
+ * Deliberately a separate hook rather than a field on `useDailySnapshot`'s
+ * return value: a snapshot read and its freshness are two different things a
+ * page may need at different times, and folding them into one object would
+ * force every existing reader (Focus, Review, and their test doubles) to
+ * destructure a new shape for something only the banner cares about.
+ *
+ * It subscribes to the same channel as `useDailySnapshot`, because the
+ * coordinator notifies listeners on failure as well as on success — that is
+ * what lets a page that is holding stale content learn it went stale.
+ */
+export function useDailyReadFailed(date: string): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) => dataRefreshCoordinator.subscribeDailySnapshot(date, listener),
+    [date]
+  );
+  const getSnapshot = useCallback(
+    () => dataRefreshCoordinator.getDailyReadFailed(date),
+    [date]
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
 export function useReviewOverview(request: ReviewRequestKey) {
   const subscribe = useCallback(
     (listener: () => void) => dataRefreshCoordinator.subscribeReviewOverview(request, listener),
@@ -48,6 +73,23 @@ export function useReviewOverview(request: ReviewRequestKey) {
   );
   const getSnapshot = useCallback(
     () => dataRefreshCoordinator.getReviewOverview(request),
+    [request.anchorDate, request.periodsBack, request.scope]
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * Whether the coordinator's last completed read for this window failed, so the
+ * page can say the figures it is showing may be older than they look. See
+ * `useDailyReadFailed` for why this is its own hook.
+ */
+export function useReviewReadFailed(request: ReviewRequestKey): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) => dataRefreshCoordinator.subscribeReviewOverview(request, listener),
+    [request.anchorDate, request.periodsBack, request.scope]
+  );
+  const getSnapshot = useCallback(
+    () => dataRefreshCoordinator.getReviewReadFailed(request),
     [request.anchorDate, request.periodsBack, request.scope]
   );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -81,6 +123,10 @@ export function useReviewDataVisibility(
 
 export function refreshDailySnapshot(date: string): Promise<void> {
   return dataRefreshCoordinator.refreshDailySnapshot(date);
+}
+
+export function refreshReviewOverview(request: ReviewRequestKey): Promise<void> {
+  return dataRefreshCoordinator.refreshReviewOverview(request);
 }
 
 export function refreshSettingsSnapshot(): Promise<void> {

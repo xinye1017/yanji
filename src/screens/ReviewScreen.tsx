@@ -9,7 +9,7 @@ import {
   YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
-  YanjiStackedBarChart, YanjiSubjectProportionRow,
+  YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { SessionNoteModal } from '../components/SessionNoteModal';
@@ -20,8 +20,9 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
-  useDailySnapshot,
-  useReviewDataVisibility, useReviewOverview, useSettingsSnapshot,
+  refreshDailySnapshot, refreshReviewOverview,
+  useDailyReadFailed, useDailySnapshot,
+  useReviewDataVisibility, useReviewOverview, useReviewReadFailed, useSettingsSnapshot,
 } from '../state/dataRefresh';
 import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
@@ -82,9 +83,27 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const previousOverview = useReviewOverview(previousRequest);
   const weekOverview = useReviewOverview(weekRequest);
   useReviewDataVisibility('review', reviewRequests, visible);
+  /**
+   * A failed read keeps the last good snapshot rather than blanking the page, so
+   * these two flags are what stop the page from presenting that snapshot as
+   * current. Only the day's own records and the window being summarised count:
+   * `previousRequest` feeds one delta caption and `weekRequest` only the
+   * filmstrip's subject dots, and neither is a number this page states outright.
+   */
+  const dailyReadFailed = useDailyReadFailed(date);
+  const overviewReadFailed = useReviewReadFailed(overviewRequest);
   const sessions = snapshot?.sessions ?? [];
   const dayTasks = snapshot?.tasks ?? [];
   const [chartWidth, setChartWidth] = useState(0);
+  /**
+   * The banner only earns its place where there is real content on screen that
+   * might be behind Room: the timeline reads the day's snapshot, the trend reads
+   * the window overview. Showing it while a read is merely still in flight (no
+   * value yet) would repeat the 「正在读取」 the page already says.
+   */
+  const staleRead = view === 'trend'
+    ? (overview !== null && overviewReadFailed)
+    : (snapshot !== null && dailyReadFailed);
   const [noteTarget, setNoteTarget] = useState<{
     sessionId: string; isExam: boolean; title: string; note: string;
   } | null>(null);
@@ -98,6 +117,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const deletingRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const entries = useMemo(() => buildTimelineEntries(snapshot), [snapshot]);
   // A new day, a new view, or a resize invalidates the anchor and the clamped
   // placement; closing is the only honest response.
@@ -113,6 +133,30 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     ),
     [date, today, weekOverview]
   );
+
+  /**
+   * Re-reads what the banner is complaining about.
+   *
+   * Both reads are awaited together and neither is allowed to reject out of the
+   * handler: the coordinator already reports a failed read through the flags
+   * that put the banner up, so a rejection here would be a second, louder
+   * report of the same fact. What the user sees is the banner staying (still
+   * failing) or going away (read succeeded).
+   */
+  const retryRead = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await Promise.all([
+        refreshDailySnapshot(date),
+        refreshReviewOverview(overviewRequest),
+      ]);
+    } catch {
+      // The flags decide the banner, not this handler.
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const toggleFavorite = async (noteId: string) => {
     if (busyNote) return;
@@ -263,6 +307,18 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         }
       />
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
+
+      {staleRead ? (
+        <YanjiStaleDataNotice
+          message={view === 'trend'
+            ? '读取失败，以下统计可能不是最新。'
+            : '读取失败，这一天的记录可能不是最新。'}
+          actionLabel={retrying ? '读取中…' : '重新读取'}
+          onAction={() => void retryRead()}
+          busy={retrying}
+          style={{ marginTop: YanjiSpacing.md }}
+        />
+      ) : null}
 
       {view === 'timeline' ? (
         <>

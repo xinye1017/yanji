@@ -107,16 +107,21 @@ const UI_NAMES = [
   'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
   'YanjiLineChart', 'YanjiPaperSectionHeading',
   'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
-  'YanjiStackedBarChart', 'YanjiSubjectProportionRow',
+  'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
 ];
 
-function screenHarness(daySnapshot, { deleteSessionRecord = async () => true } = {}) {
+function screenHarness(daySnapshot, {
+  deleteSessionRecord = async () => true,
+  dailyReadFailed = false,
+} = {}) {
   const ui = Object.fromEntries(UI_NAMES.map(name => [name, name]));
   const calls = [];
   const states = [];
   const refs = {};
   let index = 0;
   let refIndex = 0;
+  // The retry spies record the exact window the banner re-reads.
+  const refreshCalls = [];
   const { ReviewScreen } = loadTypeScript('src/screens/ReviewScreen.tsx', {
     react: {
       useState: initial => {
@@ -158,15 +163,18 @@ function screenHarness(daySnapshot, { deleteSessionRecord = async () => true } =
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
       useDailySnapshot: () => daySnapshot,
+      useDailyReadFailed: () => dailyReadFailed,
       useSettingsSnapshot: () => ({ settings: { dailyGoalHours: 6 } }),
       useReviewOverview: () => null,
+      useReviewReadFailed: () => false,
       useReviewDataVisibility: () => {},
-      dataRefreshCoordinator: { refreshReviewOverview: async () => {} },
-      refreshDailySnapshot: async () => {},
+      refreshDailySnapshot: async day => { refreshCalls.push(['daily', day]); },
+      refreshReviewOverview: async request => { refreshCalls.push(['review', request.scope, request.anchorDate]); },
     },
   }, { Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T18:00:00`])); } } });
   return {
     calls,
+    refreshCalls,
     render: () => {
       index = 0;
       refIndex = 0;
@@ -440,4 +448,40 @@ test('the summary renders whichever day\'s snapshot is selected', () => {
     totalDurationSeconds: 5400, focusParticipationCount: 4,
   })).render();
   assert.deepEqual(summaryNumbers(second), ['90', '0/0', '4']);
+});
+
+
+test('the timeline warns when the day it is showing may be behind Room', () => {
+  // Same gap as Today: the review page kept its last good snapshot on a failed
+  // read and gave no way to tell that the numbers were unconfirmed. It has a
+  // snapshot, so the banner is the honest signal — and the rows stay readable.
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }), { dailyReadFailed: true });
+  const tree = h.render();
+  const notice = nodes(tree, node => node.type === 'YanjiStaleDataNotice')[0];
+  assert.ok(notice, 'a stale-but-present day must offer a retry');
+  assert.match(notice.props.message, /这一天的记录可能不是最新/);
+  assert.equal(notice.props.actionLabel, '重新读取');
+  assert.equal(notice.props.busy, false);
+  assert.match(text(tree), /专注/, 'the timeline content itself is not blanked');
+});
+
+test('a healthy review read shows no staleness banner', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  assert.equal(nodes(h.render(), node => node.type === 'YanjiStaleDataNotice').length, 0);
+});
+
+test('a review still loading shows no staleness banner', () => {
+  // No snapshot yet means nothing is stale — the page is simply reading, which
+  // `TimelineState` already reports. The banner must not double up on that.
+  const h = screenHarness(null, { dailyReadFailed: true });
+  assert.equal(nodes(h.render(), node => node.type === 'YanjiStaleDataNotice').length, 0);
+});
+
+test('the review retry re-reads the selected day and its overview window', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800 }), { dailyReadFailed: true });
+  const notice = nodes(h.render(), node => node.type === 'YanjiStaleDataNotice')[0];
+  notice.props.onAction();
+  // The banner repairs exactly what it warns about: the day's records and the
+  // window being summarised, both re-read through the page's existing path.
+  assert.deepEqual(h.refreshCalls, [['daily', date], ['review', 'TODAY', date]]);
 });

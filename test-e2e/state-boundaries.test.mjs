@@ -742,3 +742,96 @@ test('failed reads preserve the last real snapshot and retry on later activation
   await settle();
   assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 180);
 });
+
+
+test('a failed daily read keeps the previous snapshot and marks it stale until a retry lands', async () => {
+  // The regression this pins: `ensureDaily` swallowed the rejection and kept the
+  // old value, so a page holding that value had no way to know it was no longer
+  // current. The value must survive (blanking is worse), the failure must be
+  // recorded, and a listener must fire so the page re-renders its banner.
+  let calls = 0;
+  const { coordinator } = fixture({ getDailySnapshot: async date => {
+    calls++;
+    if (calls === 2) throw new Error('offline');
+    return { ...daily(date), totalDurationSeconds: calls * 60 };
+  } });
+  let notifications = 0;
+  coordinator.subscribeDailySnapshot('2026-10-10', () => notifications++);
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 60);
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), false);
+
+  const before = notifications;
+  await coordinator.refreshDailySnapshot('2026-10-10');
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 60,
+    'a failed read must not discard the last real snapshot');
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), true,
+    'the retained snapshot is now known-stale');
+  assert.ok(notifications > before, 'listeners are told about the failure, not only success');
+
+  await coordinator.refreshDailySnapshot('2026-10-10');
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 180);
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), false,
+    'a successful retry clears the stale flag');
+});
+
+test('an obsolete failed read cannot mark a superseded request stale', async () => {
+  // The catch path carries the same version guard as the success path. A read
+  // that was invalidated while in flight is not the current read, so its failure
+  // describes nothing the page is showing and must not raise the banner.
+  const first = deferred(), second = deferred();
+  let calls = 0;
+  const { coordinator } = fixture({ getDailySnapshot: () => (++calls === 1 ? first.promise : second.promise) });
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  coordinator.enqueueDataChanged('notes');
+  await settle();
+  assert.equal(calls, 1, 'the in-flight read is not duplicated by the invalidation');
+
+  first.reject(new Error('offline'));
+  await settle();
+  assert.equal(calls, 2, 'the superseding read started');
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), false,
+    'the obsolete rejection did not mark the current request stale');
+
+  second.resolve({ ...daily('2026-10-10'), totalDurationSeconds: 120 });
+  await settle();
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 120);
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), false);
+});
+
+test('a failed review read marks its window stale and a retry clears it', async () => {
+  let calls = 0;
+  const { coordinator } = fixture({ getReviewOverview: async () => {
+    calls++;
+    if (calls === 2) throw new Error('offline');
+    return { totalSeconds: calls * 60 };
+  } });
+  const request = { scope: 'CALENDAR_WEEK', periodsBack: 0, anchorDate: '2026-10-10' };
+  coordinator.setReviewReader('review', [request]);
+  await settle();
+  assert.equal(coordinator.getReviewOverview(request).totalSeconds, 60);
+  assert.equal(coordinator.getReviewReadFailed(request), false);
+
+  await coordinator.refreshReviewOverview(request);
+  assert.equal(coordinator.getReviewOverview(request).totalSeconds, 60,
+    'the previous window figures are kept');
+  assert.equal(coordinator.getReviewReadFailed(request), true);
+
+  await coordinator.refreshReviewOverview(request);
+  assert.equal(coordinator.getReviewOverview(request).totalSeconds, 180);
+  assert.equal(coordinator.getReviewReadFailed(request), false);
+});
+
+test('releasing a reader clears its stale flag so a later mount starts clean', async () => {
+  // The flag belongs to the retained entry. If it outlived the prune, a page that
+  // remounts the same date would open already claiming its data is stale.
+  const { coordinator } = fixture({ getDailySnapshot: async () => { throw new Error('offline'); } });
+  coordinator.setDailyReader('today', '2026-10-10');
+  await settle();
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), true);
+  coordinator.setDailyReader('today', null);
+  assert.equal(coordinator.getDailyReadFailed('2026-10-10'), false,
+    'pruning the released date also drops its failure record');
+});
