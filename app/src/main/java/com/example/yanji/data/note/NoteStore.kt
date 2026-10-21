@@ -114,6 +114,19 @@ internal class NoteStore(
         return count > 0
     }
 
+    /**
+     * 人工纠正分类的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
+     *
+     * AI 只给建议，最终分类由用户定夺——决策模型失败时会静默回落灵感，
+     * 这条路径就是那次回落的纠正入口，所以必须真正落库。
+     * 同一条语句顺带清空 `isResolved` / `resolvedAt`（见 DAO 注释）。
+     */
+    suspend fun setCategoryAndAwait(id: String, category: String): Boolean {
+        val dao = dbProvider()?.noteEntryDao() ?: return false
+        val count = dao.setCategory(id, category, System.currentTimeMillis())
+        return count > 0
+    }
+
     suspend fun deleteAndAwait(id: String): Boolean {
         val db = dbProvider() ?: return false
         db.noteEntryDao().deleteById(id)

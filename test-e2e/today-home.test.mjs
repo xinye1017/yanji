@@ -466,6 +466,7 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   const hidden = { ...older, id: 'hidden', timestamp: at('09:00') };
   const h = screenHarness(snapshot({ notes: [older, hidden, latest] }), {
     toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
+    setNoteCategory: async (id, category) => { calls.push(['category', id, category]); return true; },
     deleteNote: async id => { calls.push(['delete', id]); return true; },
   });
   const anchor = { x: 210, y: 420, width: 44, height: 44 };
@@ -488,12 +489,22 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   assert.equal(menu.props.containerHeight, 820);
   assert.equal(menu.props.bottomInset, 96, 'the floating dock is reserved at the bottom');
   assert.deepEqual(JSON.parse(JSON.stringify(menu.props.actions.map(action => action.label))),
-    ['收藏记录', '编辑记录', '删除记录'], 'an inspiration has no resolution action');
+    ['收藏记录', '改为疑点', '编辑记录', '删除记录'], 'an inspiration has no resolution action, but can still be corrected to a doubt');
 
   pressMenuAction(menu, '收藏记录');
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.deepEqual(calls, [['favorite', 'older']], 'the stored note, not the menu, is updated');
   assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0);
+
+  // The category correction is reachable from the Today menu too, with the same
+  // explicit target value as on Review: AI suggested 灵感, the user overrides it.
+  items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
+  items[1].props.onMore(anchor);
+  pressMenuAction(nodes(h.render(), n => n.type === 'TimelineActionPopover')[0], '改为疑点');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(calls[1], ['category', 'older', 'DOUBT']);
+  assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0,
+    'correcting the category closes the menu like every other action');
 
   items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
   items[0].props.onMore(anchor);
@@ -516,7 +527,8 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
   assert.equal(editor.props.editingNote.id, 'older');
   assert.equal(editor.props.initialConfirmDelete, true, 'delete only opens the existing confirmation');
-  assert.deepEqual(calls, [['favorite', 'older']], 'menu delete never deletes directly');
+  assert.deepEqual(calls, [['favorite', 'older'], ['category', 'older', 'DOUBT']],
+    'menu delete never deletes directly');
 });
 
 test('a failed favorite surfaces the existing error and keeps the note', async () => {

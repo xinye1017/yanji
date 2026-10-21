@@ -148,6 +148,7 @@ function screenHarness(daySnapshot, {
       YanjiDataNative: {
         toggleFavoriteNote: async id => { calls.push(['favorite', id]); return true; },
         toggleNoteResolved: async id => { calls.push(['resolve', id]); return true; },
+        setNoteCategory: async (id, category) => { calls.push(['category', id, category]); return true; },
         deleteSessionRecord: async (...args) => {
           calls.push(['delete', ...args]);
           return deleteSessionRecord(...args);
@@ -358,7 +359,7 @@ test('session delete false or rejection preserves the record and a retry succeed
   }
 });
 
-test('note rows keep favorite, resolution and editing in the anchored menu', async () => {
+test('note rows keep favorite, resolution, category correction and editing in the anchored menu', async () => {
   const harness = screenHarness(snapshot({
     notes: [
       note({ id: 'doubt-1', content: '二叉树前序遍历与线索化区别', category: 'DOUBT' }),
@@ -374,19 +375,31 @@ test('note rows keep favorite, resolution and editing in the anchored menu', asy
   doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   let menu = harness.menu(harness.render());
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
-    ['收藏记录', '标记为已解决', '编辑记录', '删除记录']);
+    ['收藏记录', '标记为已解决', '改为灵感', '编辑记录', '删除记录']);
 
   pressMenuAction(menu, '标记为已解决');
-  await Promise.resolve();
+  await flush();
   assert.deepEqual(plain(harness.calls), [['resolve', 'doubt-1']]);
 
   const inspRow = harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感');
   inspRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   menu = harness.menu(harness.render());
+  // 分类纠正对灵感行同样可达：AI 判成灵感不代表这就是最终结论。
+  assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
+    ['收藏记录', '改为疑点', '编辑记录', '删除记录']);
+  pressMenuAction(menu, '改为疑点');
+  await flush();
+  assert.deepEqual(plain(harness.calls).slice(1), [['category', 'insp-1', 'DOUBT']]);
+
+  harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')
+    .props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  menu = harness.menu(harness.render());
   pressMenuAction(menu, '编辑记录');
   const editor = harness.recordModal(harness.render());
   assert.equal(editor.props.editingNote.id, 'insp-1');
   assert.equal(editor.props.editingNote.content, '今天背词效率很高');
+  assert.equal(editor.props.editingNote.category, 'INSPIRATION',
+    '编辑必须带上已存分类，否则保存时会把疑点悄悄改回灵感');
   assert.equal(editor.props.initialConfirmDelete, false);
 
   harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')

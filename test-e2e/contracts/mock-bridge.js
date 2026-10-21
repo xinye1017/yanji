@@ -290,6 +290,29 @@ export class MockYanjiBridge {
     return true;
   }
 
+  /**
+   * 人工纠正分类（灵感 ⇄ 疑点），与 Kotlin `YanjiDataModule.setNoteCategory` 同语义：
+   * 显式目标值（可幂等重放）、分类真正变化时清空解决状态、非法值抛错而非静默回落。
+   */
+  async setNoteCategory(noteId, category) {
+    if (category !== 'INSPIRATION' && category !== 'DOUBT') {
+      throw Object.assign(new Error(`Unknown note category: ${category}`), { code: 'E_INVALID_CATEGORY' });
+    }
+    const note = this.notes.find(n => n.id === noteId);
+    if (!note) {
+      throw Object.assign(new Error('Note not found'), { code: 'E_NOTE_NOT_FOUND' });
+    }
+    const changed = note.category !== category;
+    note.category = category;
+    if (changed) {
+      note.isResolved = false;
+      note.resolvedAt = null;
+    }
+    // 与 Room 一致：UPDATE 命中行就触发失效事件，即使写回的是同一个值。
+    this._emitDataChanged('notes');
+    return true;
+  }
+
   async deleteNote(noteId) {
     const idx = this.notes.findIndex(n => n.id === noteId);
     if (idx === -1) return false;

@@ -194,6 +194,42 @@ class YanjiDataModule(
         }
     }
 
+    /**
+     * 人工纠正一条记录的分类（灵感 ⇄ 疑点）。
+     *
+     * 决策模型只给建议：它失败或未配置 Key 时 [saveQuickNote] 会静默回落
+     * `INSPIRATION`，这个回落**不能成为无法纠正的事实**，所以这里提供显式改写入口。
+     *
+     * 采用「显式目标值」而不是 toggle：目标分类由调用方给出，无需先读内存里可能尚未
+     * 回灌的列表来推断当前值，也就不存在先查后写的竞态；重复调用同一目标是幂等的。
+     *
+     * 只接受白名单里的两个值，其他一律 reject——把未知输入悄悄当成灵感，等于用一次
+     * 静默的错误写入掩盖调用方的 bug。分类真正变化时由 DAO 一并清空
+     * `isResolved` / `resolvedAt`（解决状态只对疑点有意义）。
+     *
+     * 返回时机与其他可等待写路径一致：Room 写入落库之后才 resolve，
+     * id 不存在 reject `E_NOTE_NOT_FOUND`，写入异常 reject `E_NOTE_CATEGORY`。
+     */
+    @ReactMethod
+    fun setNoteCategory(noteId: String, category: String, promise: Promise) {
+        val validCategory = when (category.uppercase()) {
+            "DOUBT" -> "DOUBT"
+            "INSPIRATION" -> "INSPIRATION"
+            else -> {
+                promise.reject("E_INVALID_CATEGORY", "Unknown note category: $category")
+                return
+            }
+        }
+        scope.launchPersistedWrite(promise, "E_NOTE_CATEGORY") {
+            val updated = repository.setNoteCategoryAndAwait(noteId, validCategory)
+            if (!updated) {
+                promise.reject("E_NOTE_NOT_FOUND", "Note not found")
+                return@launchPersistedWrite
+            }
+            promise.resolve(true)
+        }
+    }
+
     @ReactMethod
     fun deleteNote(noteId: String, promise: Promise) {
         scope.launch {

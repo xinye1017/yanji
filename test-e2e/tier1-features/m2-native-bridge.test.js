@@ -161,6 +161,39 @@ export function registerM2Tests() {
       assertEqual(notes[0].id, note.id);
     });
 
+    it('verifies manual category correction and that it clears resolved state', async () => {
+      const today = '2026-10-08';
+      const note = await bridge.saveQuickNote('这道题我还没弄懂', today, null, 'DOUBT');
+      assertEqual(note.category, 'DOUBT');
+
+      // Resolve it, then correct the category back to 灵感: the stale resolved
+      // state must not survive a record that is no longer a doubt.
+      await bridge.toggleNoteResolved(note.id);
+      assertEqual((await bridge.getDailySnapshot(today)).notes[0].isResolved, true);
+
+      await bridge.setNoteCategory(note.id, 'INSPIRATION');
+      let after = (await bridge.getDailySnapshot(today)).notes[0];
+      assertEqual(after.category, 'INSPIRATION', 'the explicit target category is written');
+      assertEqual(after.isResolved, false, 'switching away from DOUBT clears the resolved flag');
+      assertEqual(after.resolvedAt, null, 'and clears its timestamp');
+      assert(BridgeSchemas.isValidNoteEntry(after), 'a corrected note still matches the schema');
+
+      // Correcting to the same category is idempotent and must not throw.
+      assertEqual(await bridge.setNoteCategory(note.id, 'INSPIRATION'), true);
+    });
+
+    it('rejects an unknown category and a missing note id', async () => {
+      const note = await bridge.saveQuickNote('一条灵感', '2026-10-08');
+      await assertRejects(
+        async () => { await bridge.setNoteCategory(note.id, 'SOMETHING_ELSE'); },
+        /Unknown note category/,
+        'an out-of-contract category must be rejected, not silently coerced');
+      await assertRejects(
+        async () => { await bridge.setNoteCategory('no-such-note', 'DOUBT'); },
+        /Note not found/,
+        'a missing id must reject rather than report success');
+    });
+
     it('verifies user settings queries and partial updates', async () => {
       const settings = await bridge.getUserSettings();
       assert(BridgeSchemas.isValidUserSettings(settings), 'Settings must match UserSettings schema');

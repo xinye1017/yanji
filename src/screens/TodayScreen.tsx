@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
-import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
+import type { ActiveSessionState, NoteCategory, NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
@@ -190,6 +190,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
     } catch { setActionError('疑点状态未保存，请重试。'); }
     finally { setBusyNote(null); }
   };
+  /**
+   * 人工纠正分类。决策模型失败或未配置 Key 时会静默回落灵感，
+   * 这里让那次的回落可以被改回来：AI 建议，用户定夺。
+   */
+  const changeCategory = async (note: NoteEntry, category: NoteCategory) => {
+    if (busyNote) return;
+    setBusyNote(note.id);
+    setActionError(null);
+    try {
+      if (!await YanjiDataNative.setNoteCategory(note.id, category)) throw new Error('refused');
+    } catch { setActionError('分类未保存，请重试。'); }
+    finally { setBusyNote(null); }
+  };
   const openGoal = () => {
     // The goal is edited on the settings page only: one writer per stored value
     // means Today can never save a goal the settings row does not show.
@@ -216,6 +229,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
       label: note.isResolved ? '标记为待解决' : '标记为已解决',
       onPress: () => void toggleResolved(note),
     }] : []),
+    // 人工纠正分类，与回顾页同一组动作、同一套文案：
+    // 灵感 → 疑点 / 疑点 → 灵感，各只需一个显式动作。
+    {
+      key: 'category',
+      icon: note.category === 'DOUBT' ? 'inspiration' : 'doubt',
+      label: note.category === 'DOUBT' ? '改为灵感' : '改为疑点',
+      onPress: () => void changeCategory(note, note.category === 'DOUBT' ? 'INSPIRATION' : 'DOUBT'),
+    },
     { key: 'edit', icon: 'compose', label: '编辑记录', onPress: () => openNote(note) },
     { key: 'delete', icon: 'delete', label: '删除记录', danger: true, onPress: () => openNote(note, true) },
   ];

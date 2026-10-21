@@ -2,21 +2,33 @@
  * Yanji "Record Moment" — the shared lightweight capture sheet.
  *
  * Behaviour contract (E2E Feature 15/16):
- * - Plain text only. No title, tag, mood or rating fields.
+ * - Plain text plus the category choice. No title, mood or rating fields.
  * - Saving never pauses or disturbs a running focus session.
  * - Empty / whitespace-only input is rejected.
  * - On success the sheet closes immediately; on failure the text is preserved.
  * - The note is auto-associated with the current date and, when present, the
  *   active focus session id.
+ *
+ * Category contract:
+ * - The decision model only ever makes a *suggestion*. While the user has not
+ *   touched the 灵感/疑点 control its answer preselects the value; once they have,
+ *   their choice wins and the answer is discarded.
+ * - This matters because classification fails closed to 灵感 when no API key is
+ *   configured or the request times out. Without this control that silent
+ *   fallback would become an uncorrectable fact about the record.
+ * - The pending choice travels with the unsaved capture draft, so closing and
+ *   reopening the sheet cannot quietly hand the decision back to the model.
+ * - Editing writes nothing until 保存: content and category commit together.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import { YanjiDataNative, YanjiTimerNative } from '../bridge';
+import { NoteCategory, YanjiDataNative, YanjiTimerNative } from '../bridge';
 import { classifyMoment } from '../services/decisionClient';
 import {
+  YanjiPaperSegmentedControl,
   YanjiPaperSheetHeading,
   YanjiPrimaryButton,
   YanjiTextInput,
@@ -25,6 +37,11 @@ import {
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import { parseIsoDate, weekdayLabelOf } from '../state/settingsViewLogic';
+
+const CATEGORY_OPTIONS: readonly { value: NoteCategory; label: string }[] = [
+  { value: 'INSPIRATION', label: '灵感' },
+  { value: 'DOUBT', label: '疑点' },
+];
 
 /** The sheet's date stamp: `2026-10-20` → `10月20日 · 周二`. */
 function dateLabel(iso: string): string {
@@ -43,8 +60,12 @@ interface RecordMomentModalProps {
    * When provided, the sheet edits this note instead of creating a new one:
    * the field is prefilled and saving calls `updateNote`. The note's date,
    * session binding and favorite state are left untouched.
+   *
+   * `category` is required on purpose: without the stored value the sheet cannot
+   * tell "the user left it alone" from "the user picked 灵感", and a missing
+   * category would silently rewrite a doubt into an inspiration on save.
    */
-  editingNote?: { id: string; content: string } | null;
+  editingNote?: { id: string; content: string; category: NoteCategory } | null;
   /** When true, the sheet immediately reveals the delete confirmation buttons. */
   initialConfirmDelete?: boolean;
 }
@@ -64,15 +85,34 @@ export function RecordMomentModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const captureDraft = useRef('');
+  const [category, setCategory] = useState<NoteCategory>('INSPIRATION');
+  // "The user has decided" is the switch that stops the model from overwriting
+  // the control: before it flips, the model's answer preselects the value; after
+  // it, the answer is discarded. It survives closing the sheet via the draft ref.
+  const [categoryChosen, setCategoryChosen] = useState(false);
+  const captureDraftCategory = useRef<{ category: NoteCategory; chosen: boolean }>({
+    category: 'INSPIRATION',
+    chosen: false,
+  });
 
   // Editing starts from the saved note; new captures keep a separate unsaved
   // draft across closing the sheet and switching mounted tabs.
   useEffect(() => {
     if (!visible) return;
     setText(editingNote?.content ?? captureDraft.current);
+    setCategory(editingNote ? editingNote.category : captureDraftCategory.current.category);
+    // A saved category is already the user's decision, so editing never lets a
+    // later model answer move it.
+    setCategoryChosen(editingNote ? true : captureDraftCategory.current.chosen);
     setError(null);
     setConfirmDelete(initialConfirmDelete);
   }, [visible, editingNote, initialConfirmDelete]);
+
+  const chooseCategory = useCallback((next: NoteCategory) => {
+    setCategory(next);
+    setCategoryChosen(true);
+    if (!editingNote) captureDraftCategory.current = { category: next, chosen: true };
+  }, [editingNote]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
@@ -83,11 +123,25 @@ export function RecordMomentModal({
     }
     setSaving(true);
     setError(null);
+    // Which write failed decides the message: after the content is committed only
+    // the category is still outstanding, and saying "保存失败" then would imply
+    // the text was lost too.
+    let stage: 'content' | 'category' = 'content';
     try {
       if (editingNote) {
         await YanjiDataNative.updateNote(editingNote.id, content);
+        // Content is already committed at this point, so a failed category write
+        // has to say so instead of reporting a save that did not fully happen.
+        // Both calls are idempotent, so retrying is safe.
+        if (category !== editingNote.category) {
+          stage = 'category';
+          await YanjiDataNative.setNoteCategory(editingNote.id, category);
+        }
       } else {
         // Bind to the active session when one exists; the timer keeps running.
+        // The session lookup and the classification request are started together
+        // so the sheet waits for one round trip instead of two in a row.
+        const suggestion = categoryChosen ? null : classifyMoment(content).catch(() => null);
         let sessionId: string | null = null;
         try {
           const session = await YanjiTimerNative.getActiveSession();
@@ -95,26 +149,29 @@ export function RecordMomentModal({
         } catch {
           sessionId = null;
         }
-        // 使用决策模型自动研判是否为疑点（阈值 0.7），不显示手动打标按钮
-        let category = 'INSPIRATION';
-        try {
-          category = await classifyMoment(content);
-        } catch {
-          category = 'INSPIRATION';
-        }
-        await YanjiDataNative.saveQuickNote(content, date, sessionId, category);
+        // 决策模型只给建议：用户点过「灵感 / 疑点」就以用户为准，
+        // 模型失败时静默回落灵感，但保存后仍可在菜单或编辑里纠正。
+        const resolvedCategory = categoryChosen
+          ? category
+          : ((await suggestion) ?? 'INSPIRATION');
+        await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory);
       }
-      if (!editingNote) captureDraft.current = '';
+      if (!editingNote) {
+        captureDraft.current = '';
+        captureDraftCategory.current = { category: 'INSPIRATION', chosen: false };
+      }
       setText('');
+      setCategory('INSPIRATION');
+      setCategoryChosen(false);
       onSaved?.();
       onClose();
     } catch {
       // Preserve the user's text so nothing is lost on failure.
-      setError('保存失败，内容已保留');
+      setError(stage === 'category' ? '分类未保存，请重试' : '保存失败，内容已保留');
     } finally {
       setSaving(false);
     }
-  }, [saving, text, date, onClose, onSaved, editingNote]);
+  }, [saving, text, date, onClose, onSaved, editingNote, category, categoryChosen]);
 
   const handleDelete = useCallback(async () => {
     if (saving || !editingNote) return;
@@ -205,6 +262,25 @@ export function RecordMomentModal({
             accessibilityLabel="记录内容"
             style={{ minHeight: 152, maxHeight: 232, marginTop: YanjiSpacing.md }}
           />
+
+          {/* The category row sits under the words, not above them: the capture
+              is the page's subject, this is one quiet decision about it. The hint
+              only shows while the model is still allowed to decide, and it says so
+              — once the user has tapped, the row needs no explanation. */}
+          <View style={{ marginTop: YanjiSpacing.md }}>
+            <YanjiPaperSegmentedControl
+              value={category}
+              options={CATEGORY_OPTIONS}
+              onChange={chooseCategory}
+              accessibilityLabel="记录分类"
+              disabled={saving}
+            />
+            {!categoryChosen ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.xs }]}>
+                保存时由决策模型判定，你可以直接选择
+              </Text>
+            ) : null}
+          </View>
 
           {error ? (
             <Text

@@ -318,6 +318,18 @@ interface YanjiDataModuleNative {
   toggleNoteResolved(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
   /**
+   * 人工纠正一条记录的分类（灵感 ⇄ 疑点）。
+   *
+   * 决策模型的建议只是建议：它失败或未配置 Key 时 `saveQuickNote` 会静默回落
+   * `INSPIRATION`，这个回落不能变成无法纠正的事实，所以这里是显式改写入口。
+   * 传入目标分类而不是「翻转」，于是调用不需要先知道当前值，重复调用同一目标是幂等的。
+   *
+   * 分类真正变化时原生侧一并清空 `isResolved` / `resolvedAt`（解决状态只对疑点有意义）。
+   * id 不存在 reject `E_NOTE_NOT_FOUND`；非 `INSPIRATION`/`DOUBT` 的值 reject
+   * `E_INVALID_CATEGORY`；写入失败 reject `E_NOTE_CATEGORY`，不返回虚假成功。
+   */
+  setNoteCategory(noteId: string, category: NoteCategory): Promise<boolean>;
+  /**
    * 编辑一条「记录此刻」的正文。空内容 reject `E_EMPTY_NOTE`；
    * id 不存在 reject `E_NOTE_NOT_FOUND`。日期、归属会话与收藏状态不变。
    */

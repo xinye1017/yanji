@@ -23,15 +23,15 @@ const theme = {
   isDark: false,
   shadow: { floating: () => ({}) },
   paper: {
-    colors: { surface: '#ffffff', hairline: 'rgba(28,30,33,0.08)', scrim: 'rgba(28,30,33,0.32)', danger: '#be3232' },
+    colors: { surface: '#ffffff', hairline: 'rgba(28,30,33,0.08)', scrim: 'rgba(28,30,33,0.32)', danger: '#be3232', secondary: '#5a5f66' },
     radius: { sheet: 26, pill: 9999 },
-    layout: { pageGutter: 22 },
+    layout: { pageGutter: 22, rowMinHeight: 48 },
     typography: { captionMeta: { fontSize: 12 } },
   },
 };
 
-function modalHarness({ save, activeSession = null } = {}) {
-  const calls = { saveQuickNote: [], updateNote: [], deleteNote: [], activeSessionReads: 0 };
+function modalHarness({ save, activeSession = null, classify = async () => 'INSPIRATION', updateNote = async () => true, setNoteCategory = async () => true } = {}) {
+  const calls = { saveQuickNote: [], updateNote: [], deleteNote: [], setNoteCategory: [], activeSessionReads: 0, classifyInputs: [] };
   const states = [];
   const refs = [];
   const effectSlots = [];
@@ -75,11 +75,15 @@ function modalHarness({ save, activeSession = null } = {}) {
       },
       updateNote: (...args) => {
         calls.updateNote.push(args);
-        return Promise.resolve(true);
+        return updateNote(...args);
       },
       deleteNote: (...args) => {
         calls.deleteNote.push(args);
         return Promise.resolve(true);
+      },
+      setNoteCategory: (...args) => {
+        calls.setNoteCategory.push(args);
+        return setNoteCategory(...args);
       },
       getUserSettings: () => Promise.resolve({}),
       getDecisionApiKey: () => Promise.resolve(''),
@@ -100,10 +104,20 @@ function modalHarness({ save, activeSession = null } = {}) {
     '../bridge': bridge,
     './YanjiUI': {
       YanjiHairline: 'YanjiHairline',
+      YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
       YanjiPaperSheetHeading: 'YanjiPaperSheetHeading',
       YanjiPrimaryButton: 'YanjiPrimaryButton',
       YanjiTextInput: 'YanjiTextInput',
       useYanjiKeyboardInset: () => 0,
+    },
+    // The model is a *suggestion* source, so the harness has to be able to make
+    // it disagree with the user and to fail — that disagreement is the behaviour
+    // under test, not an implementation detail of `decisionClient`.
+    '../services/decisionClient': {
+      classifyMoment: content => {
+        calls.classifyInputs.push(content);
+        return classify(content);
+      },
     },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../theme/tokens': { YanjiSpacing: { xs: 4, sm: 8, md: 12, lg: 16 } },
@@ -128,10 +142,14 @@ function modalHarness({ save, activeSession = null } = {}) {
       tree,
       props: lastProps,
       draft: refs[0],
+      draftCategory: refs[1],
       input: walk(tree, node => node.type === 'YanjiTextInput')[0],
+      categoryControl: walk(tree, node => node.type === 'YanjiPaperSegmentedControl')[0],
       save: walk(tree, node => node.type === 'YanjiPrimaryButton')[0],
       heading: walk(tree, node => node.type === 'YanjiPaperSheetHeading')[0],
       error: walk(tree, node => node.type === 'Text' && carriesDanger(node))[0],
+      text: value => walk(tree, node => node.type === 'Text' &&
+        (node.props.children === value || (Array.isArray(node.props.children) && node.props.children.includes(value))))[0],
       pressables: walk(tree, node => node.type === 'Pressable'),
     };
   }
@@ -161,7 +179,13 @@ function modalHarness({ save, activeSession = null } = {}) {
     return render(lastProps);
   }
 
-  return { render, typeInto, calls, refs };
+  /** Pick a category in the segmented control, then re-render. */
+  function chooseCategory(ui, value) {
+    ui.categoryControl.props.onChange(value);
+    return render(lastProps);
+  }
+
+  return { render, typeInto, chooseCategory, calls, refs };
 }
 
 test('a new capture draft survives closing and reopening the sheet', () => {
@@ -307,5 +331,119 @@ test('inline delete toggles between initial delete prompt and confirmation butto
   cancelBtn.props.onPress();
   const cancelled = modal.render({ visible: true });
   assert.ok(cancelled.pressables.find(p => p.props.accessibilityLabel === '删除这条记录'));
+});
+
+// ---------------------------------------------------------------------------
+// 分类：AI 只给建议，用户定夺（且可随时纠正）
+// ---------------------------------------------------------------------------
+
+test('a new capture saves the model suggestion only while the user has not chosen', async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
+
+  const opened = modal.render({ visible: true });
+  assert.equal(opened.categoryControl.props.value, 'INSPIRATION', 'the control starts at 灵感');
+  const typed = modal.typeInto(opened, '为什么这道题要用换元');
+  await typed.save.props.onPress();
+
+  assert.deepEqual(modal.calls.classifyInputs, ['为什么这道题要用换元'], 'the suggestion is computed from the typed text');
+  assert.equal(modal.calls.saveQuickNote[0][3], 'DOUBT', 'an untouched control accepts the model suggestion');
+});
+
+test("the user's category choice overrides a disagreeing model suggestion", async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
+
+  const opened = modal.render({ visible: true });
+  modal.chooseCategory(opened, 'INSPIRATION');
+  const typed = modal.typeInto(modal.render({ visible: true }), '模型觉得是疑点，但这是我的一句心得');
+  await typed.save.props.onPress();
+
+  assert.equal(modal.calls.classifyInputs.length, 0, 'once the user decides, the model is not even consulted');
+  assert.equal(modal.calls.saveQuickNote[0][3], 'INSPIRATION', "the user's choice wins over the suggestion");
+});
+
+test('a failed classification still saves, as an inspiration the user can correct', async () => {
+  const modal = modalHarness({ classify: async () => { throw new Error('network down'); } });
+
+  const typed = modal.typeInto(modal.render({ visible: true }), '这条其实是疑点');
+  await typed.save.props.onPress();
+
+  assert.equal(modal.calls.saveQuickNote.length, 1, 'a failing model must never block the capture');
+  assert.equal(modal.calls.saveQuickNote[0][3], 'INSPIRATION', 'it fails closed to 灵感');
+});
+
+test('the pending category choice travels with the unsaved capture draft', () => {
+  const modal = modalHarness();
+
+  const opened = modal.render({ visible: true });
+  modal.typeInto(opened, '未保存的想法');
+  modal.chooseCategory(modal.render({ visible: true }), 'DOUBT');
+
+  modal.render({ visible: false });
+  const restored = modal.render({ visible: true });
+  assert.equal(restored.input.props.value, '未保存的想法', 'the text is still buffered');
+  assert.equal(restored.categoryControl.props.value, 'DOUBT', 'and so is the category the user picked');
+  assert.equal(modal.refs[1].current.chosen, true, 'reopening must not hand the decision back to the model');
+});
+
+test('a successful new save resets the category choice for the next capture', async () => {
+  const modal = modalHarness();
+
+  modal.chooseCategory(modal.render({ visible: true }), 'DOUBT');
+  const typed = modal.typeInto(modal.render({ visible: true }), '一条疑点');
+  await typed.save.props.onPress();
+  assert.equal(modal.calls.saveQuickNote[0][3], 'DOUBT');
+
+  const reopened = modal.render({ visible: true });
+  assert.equal(reopened.categoryControl.props.value, 'INSPIRATION', 'the next capture starts fresh');
+  assert.equal(modal.refs[1].current.chosen, false, 'and the model may suggest again');
+});
+
+test('editing shows the stored category and leaves it untouched when unchanged', async () => {
+  const modal = modalHarness();
+
+  // A parent holds the note being edited in its own state, so the reference is
+  // stable across re-renders while typing. Reusing one object here mirrors that;
+  // passing a fresh literal every render would re-run the seeding effect and
+  // reset the control, which never happens in the app.
+  const doubtNote = { id: 'note-doubt', content: '之前存下来的疑点', category: 'DOUBT' };
+  const editor = modal.render({ visible: true, editingNote: doubtNote });
+  assert.equal(editor.categoryControl.props.value, 'DOUBT', 'the sheet reflects what is already stored');
+
+  const typed = modal.typeInto(editor, '只改了正文');
+  await typed.save.props.onPress();
+  assert.deepEqual(modal.calls.updateNote, [['note-doubt', '只改了正文']]);
+  assert.deepEqual(modal.calls.setNoteCategory, [], 'an unchanged category is not rewritten');
+  assert.equal(modal.calls.classifyInputs.length, 0, 'editing never re-runs the model');
+});
+
+test('editing commits a category correction through setNoteCategory', async () => {
+  const modal = modalHarness();
+
+  const doubtNote = { id: 'note-doubt', content: '之前存下来的疑点', category: 'DOUBT' };
+  const editor = modal.render({ visible: true, editingNote: doubtNote });
+  // Correct 疑点 → 灵感 and save the body alongside it.
+  modal.chooseCategory(editor, 'INSPIRATION');
+  const typed = modal.typeInto(modal.render({ visible: true, editingNote: doubtNote }), '正文也顺手改了');
+  await typed.save.props.onPress();
+
+  assert.deepEqual(modal.calls.updateNote, [['note-doubt', '正文也顺手改了']]);
+  assert.deepEqual(modal.calls.setNoteCategory, [['note-doubt', 'INSPIRATION']],
+    'the correction is written with an explicit target value');
+  assert.equal(modal.calls.classifyInputs.length, 0, 'editing never re-runs the model');
+});
+
+test('a failed category write on edit reports the failure instead of a false save', async () => {
+  const modal = modalHarness({ setNoteCategory: async () => { throw new Error('room write failed'); } });
+
+  const note = { id: 'note-x', content: '正文', category: 'INSPIRATION' };
+  const editor = modal.render({ visible: true, editingNote: note });
+  modal.chooseCategory(editor, 'DOUBT');
+  const typed = modal.typeInto(editor, '改了正文也改了分类');
+  await typed.save.props.onPress();
+
+  const failed = modal.render({ visible: true, editingNote: note });
+  assert.ok(failed.text('分类未保存，请重试'), 'the failed category write stays visible for a retry');
+  assert.deepEqual(modal.calls.updateNote, [['note-x', '改了正文也改了分类']], 'content already committed');
+  assert.deepEqual(modal.calls.setNoteCategory, [['note-x', 'DOUBT']], 'the category write was attempted');
 });
 

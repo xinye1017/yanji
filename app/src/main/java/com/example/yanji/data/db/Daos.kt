@@ -249,6 +249,30 @@ interface NoteEntryDao {
     @Query("UPDATE journal_entries SET isResolved = :isResolved, resolvedAt = :resolvedAt, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setResolved(id: String, isResolved: Int, resolvedAt: Long?, updatedAt: Long): Int
 
+    /**
+     * 人工纠正分类（灵感 ⇄ 疑点）。
+     *
+     * 解决状态只对疑点有意义，所以**分类真的发生变化时**一并清空 `isResolved` /
+     * `resolvedAt`：刚被纠正成灵感的记录不该留着"已解决"的旧结论，刚被纠正成疑点的
+     * 记录也不可能已经解决。规则写进同一条语句，避免出现"灵感却标记为已解决"的矛盾行。
+     *
+     * 写成 `CASE WHEN category = :category` 是有意的：分类未变时保持解决状态原样，
+     * 于是这条语句可以被无条件重放（前端保存时不必先比较旧值，重试也不会把用户
+     * 已经勾掉的"已解决"再抹掉一次）。SQLite 的 SET 右侧一律按**旧行**求值，
+     * 所以三处赋值互不影响。
+     *
+     * 返回受影响行数：0 表示 id 不存在。
+     */
+    @Query(
+        "UPDATE journal_entries SET " +
+            "isResolved = CASE WHEN category = :category THEN isResolved ELSE 0 END, " +
+            "resolvedAt = CASE WHEN category = :category THEN resolvedAt ELSE NULL END, " +
+            "category = :category, " +
+            "updatedAt = CASE WHEN category = :category THEN updatedAt ELSE :updatedAt END " +
+            "WHERE id = :id"
+    )
+    suspend fun setCategory(id: String, category: String, updatedAt: Long): Int
+
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun deleteById(id: String)
 

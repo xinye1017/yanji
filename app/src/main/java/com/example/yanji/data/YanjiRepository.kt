@@ -521,6 +521,13 @@ class YanjiRepository private constructor() {
     suspend fun setNoteResolvedAndAwait(id: String, isResolved: Boolean) =
         noteStore.setResolvedAndAwait(id, isResolved)
 
+    /**
+     * 人工纠正随笔分类（可等待），返回 false 表示 id 不存在。
+     * AI 的建议只是建议：分类的最终决定权在这里落库，切换时同步清空解决状态。
+     */
+    suspend fun setNoteCategoryAndAwait(id: String, category: String) =
+        noteStore.setCategoryAndAwait(id, category)
+
     suspend fun deleteNoteAndAwait(id: String) = noteStore.deleteAndAwait(id)
 
     fun deleteNote(id: String) = noteStore.delete(id)
