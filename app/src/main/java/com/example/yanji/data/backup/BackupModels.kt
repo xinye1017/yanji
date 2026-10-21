@@ -40,7 +40,11 @@ data class UserSettingsBackup(
      */
     val themeMode: String = "SYSTEM",
     /** 学习伙伴主题；旧备份缺失时默认恢复为卷卷。 */
-    val mascotTheme: String = "CLOUD"
+    val mascotTheme: String = "CLOUD",
+    /** 决策模型配置；v3 新字段，旧备份缺失时使用当前产品默认值，并在预览中提醒。 */
+    val decisionProvider: String = "openrouter",
+    val decisionModel: String = "respan/span-01-lite:free",
+    val decisionEndpoint: String = "https://openrouter.ai/api/alpha/decisions"
 ) {
     fun toDomain(): UserSettings = UserSettings(
         targetExamDate = targetExamDate,
@@ -57,7 +61,10 @@ data class UserSettingsBackup(
         aiModel = aiModel,
         aiProtocol = aiProtocol,
         themeMode = themeMode,
-        mascotTheme = mascotTheme
+        mascotTheme = mascotTheme,
+        decisionProvider = decisionProvider,
+        decisionModel = decisionModel,
+        decisionEndpoint = decisionEndpoint
     )
 
     companion object {
@@ -75,7 +82,10 @@ data class UserSettingsBackup(
             aiModel = settings.aiModel,
             aiProtocol = settings.aiProtocol,
             themeMode = settings.themeMode,
-            mascotTheme = settings.mascotTheme
+            mascotTheme = settings.mascotTheme,
+            decisionProvider = settings.decisionProvider,
+            decisionModel = settings.decisionModel,
+            decisionEndpoint = settings.decisionEndpoint
         )
     }
 }
@@ -87,8 +97,7 @@ data class UserSettingsBackup(
  * 数据库迁移服务的是「已安装应用内的数据升级」，备份格式服务的是「文件在设备之间流转」，
  * 两者的演进节奏不同，绑在一起会让任意一方的小改动都强迫另一方做兼容处理。
  *
- * 所有集合都给了默认值：读取**旧版本**备份时缺失的字段会自动补默认值，
- * 因此 `ignoreUnknownKeys = true` + 默认值组合可以让新旧文件互相可用。
+ * 集合默认值只服务 v1 的字段补全；导入前仍由 [BackupCodec] 校验完整 envelope。
  */
 @Serializable
 data class YanjiBackup(
@@ -116,8 +125,8 @@ data class YanjiBackup(
     /**
      * 用户自定义后的完整学科列表。
      *
-     * 带默认值：v1 备份没有这个字段，读到时会得到空列表，导入时**不覆盖**本机学科
-     * （见 `BackupTransfer.apply`），从而保证旧备份恢复后学科与升级默认值一致。
+     * 带默认值：v1 备份没有这个字段，导入时**不覆盖**本机学科。
+     * 空列表同样不覆盖本机学科，与原生预览和 UI 的提示保持一致。
      */
     val subjects: List<Subject> = emptyList()
 ) {
@@ -137,7 +146,7 @@ data class YanjiBackup(
 
     companion object {
         /** 备份格式版本。改动 [YanjiBackup] 的字段语义时递增。 */
-        const val CURRENT_SCHEMA_VERSION = 2
+        const val CURRENT_SCHEMA_VERSION = 3
     }
 }
 

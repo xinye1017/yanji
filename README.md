@@ -80,8 +80,11 @@
 * **明确的失败反馈**：认证、额度、网络、超时和结果格式错误在页面显示；旧版聊天记录仍保留在本机数据库与备份中，升级不删除历史数据。
 
 ### 6. 数据备份与安全导出 (Backup & Restore)
-* **SAF 标准支持**：基于 Storage Access Framework (SAF) 进行全量 JSON 格式导出与校验导入。
-* **事务化恢复**：导入前校验格式并生成本地防御性快照，表替换在单个 Room 事务内提交；失败时事务回滚。
+* **手动导出与恢复**：设置页「数据管理」通过 Android 系统文件选择器保存和选择 JSON 备份，无需申请全盘存储权限；文件写入、关闭完成后才显示导出成功。
+* **预览后确认覆盖**：选中的备份先校验格式、版本与记录信息，再显示导出时间、各类记录数量和覆盖范围。确认恢复会替换专注、模考、随笔、学习任务、打卡、成就、旧版聊天记录及快捷预设，备份中为空的类别会清空本机对应数据；有设置或非空学科列表时才替换它们。
+* **事务化恢复**：专注或模考尚未结束（包括暂停、正在完成）时拒绝恢复；恢复期间也不能启动新会话。导入前必须成功保存本机快照，整表替换在单个 Room 事务内提交，写入失败整体回滚。格式不合法、版本不兼容或快照保存失败均不改动原有数据。
+* **凭据隔离**：API 密钥不进入备份，恢复也不会覆盖本机凭据；完整导出与恢复核对在独立测试数据库执行。
+* **格式与大小**：当前备份格式 v3 包含决策模型的普通设置，恢复旧版设置前会提示缺失项使用默认值；文件和导入前安全快照均以 UTF-8 的 64 MiB 为上限，超过时拒绝操作。
 
 ---
 
@@ -99,7 +102,7 @@ UI 由 React Native 与 TypeScript 实现，Kotlin 宿主提供计时、数据�
                                 │ typed calls and subscriptions
 ┌───────────────────────────────▼────────────────────────────────┐
 │ src/bridge/index.ts  ⇄  YanjiPackage                            │
-│ Kotlin modules: timer, data, theme                              │
+│ Kotlin modules: timer, data, theme, backup                      │
 └───────────────────────────────┬────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼────────────────────────────────┐
@@ -110,7 +113,7 @@ UI 由 React Native 与 TypeScript 实现，Kotlin 宿主提供计时、数据�
 
 ### React Native 与 Kotlin 原生桥接
 
-`App.tsx` 组合主题、安全区和导航 Provider，并挂载常驻的主页面。页面通过 `src/bridge/index.ts` 调用原生能力；Android 的 `YanjiPackage` 注册计时、数据和主题模块，模块再访问 Kotlin 服务、仓储与 Room。`YanjiApplication` 初始化 `YanjiRepository`，Activity 不再持有全局依赖容器或重复初始化仓储。
+`App.tsx` 组合主题、安全区和导航 Provider，并挂载常驻的主页面。页面通过 `src/bridge/index.ts` 调用原生能力；Android 的 `YanjiPackage` 注册计时、数据、主题和备份模块，模块再访问 Kotlin 服务、仓储与 Room。`YanjiApplication` 初始化 `YanjiRepository`，Activity 不再持有全局依赖容器或重复初始化仓储。
 
 订阅式数据由原生桥接模块推送给 RN；界面消费桥接层提供的当前状态，并通过同一入口执行写入与计时操作。
 
@@ -175,7 +178,7 @@ src/
 └── theme/                             # 语义 Token、主题 Provider、导航材质
 
 app/src/main/java/com/example/yanji/
-├── bridge/                            # YanjiPackage 与计时、数据、主题模块
+├── bridge/                            # YanjiPackage 与计时、数据、主题、备份模块
 ├── data/                              # Room、仓储、AI、备份与计时状态
 ├── liveactivity/                      # Android 实时活动与通知能力
 ├── service/                           # FocusTimerService

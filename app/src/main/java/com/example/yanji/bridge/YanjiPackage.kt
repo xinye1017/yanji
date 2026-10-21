@@ -16,6 +16,7 @@ class YanjiPackage : ReactPackage {
         listOf(
             YanjiTimerModule(reactContext),
             YanjiDataModule(reactContext),
+            YanjiBackupModule(reactContext),
             YanjiThemeModule(reactContext)
         )
 

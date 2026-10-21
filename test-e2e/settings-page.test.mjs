@@ -283,6 +283,7 @@ function settingsHarness({
       '../state/settingsViewLogic': logic,
     }),
     '../components/SubjectsSheet': { SubjectsSheet: 'SubjectsSheet' },
+    '../components/BackupDataSection': { BackupDataSection: 'BackupDataSection' },
     // The advanced block owns its own form state; the page only composes it, so
     // the test loads the real component with the same stubs it needs. Its state
     // slots are keyed by *slot order within one render of that component*, which
@@ -398,6 +399,17 @@ test('every settings group title uses the group scale', () => {
       `${heading.props.title} must use the settings group scale`
     );
   }
+});
+
+test('settings composes the backup data-management section without changing its page groups', () => {
+  const tree = settingsHarness({ settings: stored() }).render();
+  const backup = nodes(tree, node => node.type === 'BackupDataSection');
+  assert.equal(backup.length, 1, 'the settings page owns one backup section');
+  assert.deepEqual(
+    nodes(tree, node => node.type === 'YanjiPaperSectionHeading').map(heading => heading.props.title),
+    ['备考', '学科', '外观', '高级'],
+    'the existing page headings remain unchanged because the section owns its own heading'
+  );
 });
 
 test('the theme switch shares the 外观 heading row as a compact control', () => {

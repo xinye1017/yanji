@@ -1,6 +1,8 @@
 package com.example.yanji.data.backup
 
-import androidx.room.withTransaction
+import androidx.room.deferredTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.example.yanji.data.db.*
 import kotlinx.coroutines.flow.first
 
@@ -20,25 +22,29 @@ internal object BackupTransfer {
         db: YanjiDatabase,
         appVersionName: String,
         now: Long = System.currentTimeMillis()
-    ): YanjiBackup = YanjiBackup(
-        exportedAt = now,
-        appVersionName = appVersionName,
-        settings = db.userSettingsDao().getSettings().first()
-            ?.let { UserSettingsBackup.fromDomain(it.toDomainModel()) },
-        focusSessions = db.focusSessionDao().getAll().first().map { it.toDomainModel() },
-        examSessions = db.examSessionDao().getAll().first().map { it.toDomainModel() },
-        noteEntries = db.noteEntryDao().getAll().first().map { it.toDomainModel() },
-        chatSessions = db.chatSessionDao().getAll().first().map { it.toDomainModel() },
-        chatMessages = db.chatMessageDao().getAll().first().map { it.toDomainModel() },
-        checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
-        unlockedAchievements = db.achievementDao().getAllFlow().first().associate { it.id to it.unlockedAt },
-        quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() },
-        studyTasks = db.studyTaskDao().getAllFlow().first().map { it.toDomainModel() },
-        subjects = db.subjectDao().getAll().map { it.toDomainModel() }
-    )
+    ): YanjiBackup = db.useWriterConnection { transactor ->
+        transactor.deferredTransaction {
+            YanjiBackup(
+                exportedAt = now,
+                appVersionName = appVersionName,
+                settings = db.userSettingsDao().getSettings().first()
+                    ?.let { UserSettingsBackup.fromDomain(it.toDomainModel()) },
+                focusSessions = db.focusSessionDao().getAll().first().map { it.toDomainModel() },
+                examSessions = db.examSessionDao().getAll().first().map { it.toDomainModel() },
+                noteEntries = db.noteEntryDao().getAll().first().map { it.toDomainModel() },
+                chatSessions = db.chatSessionDao().getAll().first().map { it.toDomainModel() },
+                chatMessages = db.chatMessageDao().getAll().first().map { it.toDomainModel() },
+                checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
+                unlockedAchievements = db.achievementDao().getAllFlow().first().associate { it.id to it.unlockedAt },
+                quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() },
+                studyTasks = db.studyTaskDao().getAllFlow().first().map { it.toDomainModel() },
+                subjects = db.subjectDao().getAll().map { it.toDomainModel() }
+            )
+        }
+    }
 
     /**
-     * 整表替换。**必须在事务内调用**；调用方负责 `db.withTransaction { }`。
+     * 整表替换。**必须在事务内调用**；调用方负责提供事务边界。
      *
      * 语义：备份里有几条就写几条——包括"一条都没有"，那意味着清空本机记录。
      * 这是「删空后导出」这种合法状态的自然结果。
@@ -96,7 +102,8 @@ internal object BackupTransfer {
             )
         }
 
-        // 旧版备份没有 subjects 字段：此时保持本机学科不动，避免把用户的学科清空。
+        // 旧版备份没有 subjects 字段或列表为空：保持本机学科不动，
+        // 与原生预览/UI 的 replacesSubjects 语义一致。
         if (backup.subjects.isNotEmpty()) {
             db.subjectDao().deleteAll()
             db.subjectDao().insertAll(backup.subjects.map { SubjectEntity.fromDomainModel(it) })
@@ -109,6 +116,8 @@ internal object BackupTransfer {
 
     /** 在单个事务里执行 [apply]。失败会整体回滚，不会留下"一半新一半旧"的库。 */
     suspend fun applyInTransaction(db: YanjiDatabase, backup: YanjiBackup) {
-        db.withTransaction { apply(db, backup) }
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction { apply(db, backup) }
+        }
     }
 }

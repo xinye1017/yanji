@@ -3,29 +3,36 @@ package com.example.yanji.data.backup
 import com.example.yanji.data.ChatMessage
 import com.example.yanji.data.ChatSender
 import com.example.yanji.data.ChatSession
+import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.UserSettings
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 备份编解码的纯 JVM 测试。
+ * Backup codec tests exercise the destructive-import boundary without touching a database.
  *
- * 这里最关键的两条断言是：
- *  1. **导出的 JSON 里不可能出现 API Key** —— 凭据泄露到用户可以随手转发/上传的
- *     备份文件里，是最难挽回的一类事故；
- *  2. **更高版本的备份必须被拒绝** —— 旧 App 硬读新格式会静默丢字段。
+ * A valid empty backup is allowed only when the complete envelope is present. An empty or
+ * partial object must never be mistaken for a deliberate "clear all local data" backup.
  */
 class BackupCodecTest {
 
+    private val epoch = 1_757_000_000_000L
+
     private fun sampleBackup() = YanjiBackup(
-        exportedAt = 1_757_000_000_000L,
+        exportedAt = epoch,
         appVersionName = "1.0",
         settings = UserSettingsBackup.fromDomain(
             UserSettings(
@@ -46,8 +53,8 @@ class BackupCodecTest {
                 id = "fs-1",
                 subjectId = "math_advanced",
                 subjectName = "高等数学",
-                startTime = 1_757_000_000_000L,
-                endTime = 1_757_000_060_000L,
+                startTime = epoch,
+                endTime = epoch + 60_000L,
                 durationSeconds = 3600,
                 pausedDurationSeconds = 0,
                 pauseCount = 0,
@@ -63,6 +70,8 @@ class BackupCodecTest {
                 subjectName = "数学一 全真模拟",
                 plannedDurationSeconds = 10800,
                 actualDurationSeconds = 10500,
+                startTime = epoch,
+                endTime = epoch + 10_500_000L,
                 score = 126.0,
                 maxScore = 150.0,
                 note = "中值定理失分"
@@ -83,44 +92,64 @@ class BackupCodecTest {
             ChatMessage(id = "m-1", sessionId = "s-1", sender = ChatSender.USER, content = "草稿写乱了怎么办"),
             ChatMessage(id = "m-2", sessionId = "s-1", sender = ChatSender.JUANJUAN, content = "试试十字四折法")
         ),
-        checkIns = emptyList(),
-        unlockedAchievements = mapOf("focus_first" to 1_757_000_000_000L, "streak_7" to 1_757_100_000_000L),
+        checkIns = listOf(CheckIn(date = "2026-09-11", checkInTime = epoch, streak = 3)),
+        unlockedAchievements = mapOf(
+            "focus_first" to epoch,
+            "streak_7" to epoch + 1
+        ),
         quickStartPresets = listOf(
             QuickStartPreset(id = "q-1", type = QuickStartPreset.TYPE_START_FOCUS, label = "开始专注", sortOrder = 0)
         )
     )
 
+    private fun fullJson(backup: YanjiBackup = sampleBackup()): String = BackupCodec.encode(backup)
+
+    private fun fullObject(backup: YanjiBackup = sampleBackup()): JsonObject =
+        Json.parseToJsonElement(fullJson(backup)).jsonObject
+
+    private fun JsonObject.without(vararg keys: String): JsonObject =
+        JsonObject(filterKeys { it !in keys })
+
+    private fun JsonObject.withArrayItem(key: String, item: kotlinx.serialization.json.JsonElement): JsonObject {
+        val items = getValue(key).jsonArray
+        return JsonObject(this + (key to JsonArray(items + item)))
+    }
+
+    private fun assertFailure(raw: String, messageContains: String? = null) {
+        val result = BackupCodec.decode(raw)
+        assertTrue("Expected rejection for: $raw", result is BackupDecodeResult.Failure)
+        if (messageContains != null) {
+            assertTrue(
+                "Expected '$messageContains' in: ${(result as BackupDecodeResult.Failure).message}",
+                result.message.contains(messageContains)
+            )
+        }
+    }
+
     @Test
     fun `round trip preserves every collection and value`() {
         val original = sampleBackup()
-        val json = BackupCodec.encode(original)
-
-        val decoded = BackupCodec.decode(json)
-        assertTrue("应当解码成功", decoded is BackupDecodeResult.Success)
+        val decoded = BackupCodec.decode(fullJson(original))
+        assertTrue(decoded is BackupDecodeResult.Success)
 
         val restored = (decoded as BackupDecodeResult.Success).backup
         assertEquals(original.schemaVersion, restored.schemaVersion)
-        assertEquals(1, restored.focusSessions.size)
-        assertEquals(3600L, restored.focusSessions.first().durationSeconds)
-        assertEquals(SessionStatus.COMPLETED, restored.focusSessions.first().status)
-        assertEquals("正向计时", restored.focusSessions.first().mode)
-        assertEquals(126.0, restored.examSessions.first().score!!, 0.001)
-        assertEquals("高等数学", restored.focusSessions.first().subjectName)
-        assertEquals(listOf("数学突破", "心态平和"), restored.noteEntries.first().tags)
-        assertEquals(2, restored.chatMessages.size)
+        assertEquals(3600L, restored.focusSessions.single().durationSeconds)
+        assertEquals(SessionStatus.COMPLETED, restored.focusSessions.single().status)
+        assertEquals(126.0, restored.examSessions.single().score!!, 0.001)
+        assertEquals(listOf("数学突破", "心态平和"), restored.noteEntries.single().tags)
         assertEquals(ChatSender.JUANJUAN, restored.chatMessages[1].sender)
         assertEquals(2, restored.unlockedAchievements.size)
-        assertEquals("开始专注", restored.quickStartPresets.first().label)
+        assertEquals("开始专注", restored.quickStartPresets.single().label)
         assertEquals("浙江大学 计算机学院", restored.settings!!.targetSchool)
     }
 
     @Test
     fun `exported json never contains the ai api key`() {
-        val json = BackupCodec.encode(sampleBackup())
+        val json = fullJson()
 
         assertFalse("备份文件里不得出现 aiApiKey 字段", json.contains("aiApiKey"))
         assertFalse("备份文件里不得出现凭据明文", json.contains("sk-super-secret-should-never-appear"))
-        // 非敏感设置必须保留，否则恢复后要用户重新配置
         assertTrue(json.contains("https://api.deepseek.com/v1"))
         assertTrue(json.contains("deepseek-chat"))
     }
@@ -134,96 +163,182 @@ class BackupCodecTest {
 
     @Test
     fun `decode rejects a backup from a newer schema version`() {
-        val json = BackupCodec.encode(
-            sampleBackup().copy(schemaVersion = YanjiBackup.CURRENT_SCHEMA_VERSION + 1)
-        )
-
-        val result = BackupCodec.decode(json)
-        assertTrue(result is BackupDecodeResult.Failure)
-        val message = (result as BackupDecodeResult.Failure).message
-        assertTrue("应提示版本过高：$message", message.contains("更新版本"))
+        val json = fullJson(sampleBackup().copy(schemaVersion = YanjiBackup.CURRENT_SCHEMA_VERSION + 1))
+        assertFailure(json, "更新版本")
     }
 
     @Test
-    fun `decode accepts an older schema version with a warning`() {
-        val json = """
-            {
-              "schemaVersion": 0,
-              "focusSessions": [],
-              "examSessions": [],
-              "journalEntries": []
-            }
-        """.trimIndent()
+    fun `valid v1 envelope is accepted while newer table keys are absent`() {
+        val legacy = fullObject()
+            .without("studyTasks", "subjects")
+            .let { JsonObject(it + ("schemaVersion" to JsonPrimitive(1))) }
 
-        val result = BackupCodec.decode(json, currentSchemaVersion = YanjiBackup.CURRENT_SCHEMA_VERSION)
-        assertTrue(result is BackupDecodeResult.Failure)
-
-        val older = """
-            {
-              "schemaVersion": 1,
-              "exportedAt": 1,
-              "focusSessions": [{"id":"fs-1","subjectId":"math","subjectName":"数学","startTime":1,"endTime":2,"durationSeconds":1}]
-            }
-        """.trimIndent()
-        val ok = BackupCodec.decode(older, currentSchemaVersion = 2)
-        assertTrue(ok is BackupDecodeResult.Success)
-        val success = ok as BackupDecodeResult.Success
-        assertTrue("应给出旧版本提示", success.warnings.any { it.contains("旧版本") })
+        val result = BackupCodec.decode(legacy.toString())
+        assertTrue(result is BackupDecodeResult.Success)
+        val success = result as BackupDecodeResult.Success
+        assertTrue(success.warnings.any { it.contains("旧版本") })
         assertEquals(1, success.backup.focusSessions.size)
     }
 
     @Test
-    fun `decode tolerates unknown fields from future minor versions`() {
-        val json = """
-            {
-              "schemaVersion": 1,
-              "exportedAt": 1,
-              "someFutureField": {"a":1},
-              "focusSessions": []
-            }
-        """.trimIndent()
+    fun `old v2 settings disclose decision model defaults before replacement`() {
+        val root = fullObject()
+        val oldSettings = root.getValue("settings").jsonObject
+            .without("decisionProvider", "decisionModel", "decisionEndpoint")
+        val legacy = JsonObject(root + mapOf(
+            "schemaVersion" to JsonPrimitive(2),
+            "settings" to oldSettings
+        ))
 
-        val result = BackupCodec.decode(json)
-        assertTrue(result is BackupDecodeResult.Success)
+        val result = BackupCodec.decode(legacy.toString()) as BackupDecodeResult.Success
+        assertTrue("New exports must distinguish the added settings fields", YanjiBackup.CURRENT_SCHEMA_VERSION > 2)
+        assertTrue(result.warnings.any { it.contains("决策模型") && it.contains("默认") })
+        assertEquals(UserSettings().decisionModel, result.backup.settings!!.decisionModel)
     }
 
     @Test
-    fun `decode rejects malformed json with a readable message`() {
-        val result = BackupCodec.decode("{ this is not json ")
-        assertTrue(result is BackupDecodeResult.Failure)
-        assertTrue((result as BackupDecodeResult.Failure).message.contains("不是有效的研迹备份"))
+    fun `current format rejects silently missing decision settings`() {
+        val root = fullObject()
+        val incomplete = root.getValue("settings").jsonObject.without("decisionModel")
+        assertFailure(JsonObject(root + ("settings" to incomplete)).toString(), "决策模型")
     }
 
     @Test
-    fun `decode rejects blank input`() {
-        val result = BackupCodec.decode("   ")
-        assertTrue(result is BackupDecodeResult.Failure)
+    fun `decode rejects an empty unrelated or incomplete envelope`() {
+        assertFailure("{}")
+        assertFailure("""{"hello":"world"}""")
+
+        val incomplete = fullObject().without("chatMessages").toString()
+        assertFailure(incomplete)
+
+        val v2MissingNewTables = fullObject().without("studyTasks", "subjects").toString()
+        assertFailure(v2MissingNewTables)
     }
 
     @Test
-    fun `decode rejects oversized input before parsing`() {
-        // 远超 64 MB 上限：即便内容看起来像一个合法前缀，也必须在解析前被拒绝。
-        val huge = "{\"schemaVersion\":1,\"focusSessions\":[" + "0,".repeat(40_000_000) + "0]}"
-        assertTrue(huge.length > 64L * 1024 * 1024)
-        val result = BackupCodec.decode(huge)
-        assertTrue(result is BackupDecodeResult.Failure)
-        assertTrue((result as BackupDecodeResult.Failure).message.contains("过大"))
+    fun `decode rejects malformed and truncated json`() {
+        assertFailure("{ this is not json ", "不是有效的研迹备份")
+
+        val truncated = fullJson().dropLast(17)
+        assertFailure(truncated, "不是有效的研迹备份")
     }
 
     @Test
-    fun `decode warns when the backup carries no data`() {
-        val json = BackupCodec.encode(YanjiBackup(exportedAt = 1L))
+    fun `decode tolerates unknown fields only inside a complete envelope`() {
+        val withFutureField = JsonObject(
+            fullObject() + ("someFutureField" to Json.parseToJsonElement("""{"a":1}"""))
+        )
+        assertTrue(BackupCodec.decode(withFutureField.toString()) is BackupDecodeResult.Success)
 
-        val result = BackupCodec.decode(json)
-        assertTrue(result is BackupDecodeResult.Success)
-        val success = result as BackupDecodeResult.Success
-        assertTrue(success.backup.isEmpty)
-        assertTrue("应提示会清空本机记录", success.warnings.any { it.contains("清空") })
+        assertFailure("""{"schemaVersion":2,"someFutureField":1}""")
     }
 
     @Test
-    fun `encode stamps the current schema version`() {
-        val json = BackupCodec.encode(YanjiBackup(exportedAt = 1L))
-        assertTrue(json.contains("\"schemaVersion\": ${YanjiBackup.CURRENT_SCHEMA_VERSION}"))
+    fun `duplicate ids and check-in dates are rejected before import`() {
+        val focus = fullObject().getValue("focusSessions").jsonArray.first()
+        val duplicateFocus = fullObject().withArrayItem("focusSessions", focus)
+        assertFailure(duplicateFocus.toString(), "重复")
+
+        val checkIn = fullObject().getValue("checkIns").jsonArray.first()
+        val duplicateDate = fullObject().withArrayItem("checkIns", checkIn)
+        assertFailure(duplicateDate.toString(), "重复")
+    }
+
+    @Test
+    fun `chat messages must reference an existing session`() {
+        val broken = JsonObject(
+            fullObject() + (
+                "chatMessages" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"m-broken","sessionId":"missing","sender":"USER","content":"x","timestamp":$epoch}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertFailure(broken.toString(), "会话")
+
+        val legacyInitial = JsonObject(
+            fullObject() + (
+                "chatMessages" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"m-initial","sessionId":"session-initial","sender":"USER","content":"x","timestamp":$epoch}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertTrue(BackupCodec.decode(legacyInitial.toString()) is BackupDecodeResult.Success)
+    }
+
+    @Test
+    fun `invalid date primitives are rejected`() {
+        val invalidNote = JsonObject(
+            fullObject() + (
+                "journalEntries" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"j-invalid","date":"2026-02-30","title":"x","content":"x"}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertFailure(invalidNote.toString(), "日期")
+    }
+
+    @Test
+    fun `nonfinite and product-breaking negative values are rejected`() {
+        val nonfinite = fullJson().replace("\"dailyGoalHours\": 10.0", "\"dailyGoalHours\": 1e999")
+        assertFailure(nonfinite, "数值")
+
+        val negativeDuration = JsonObject(
+            fullObject() + (
+                "focusSessions" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"fs-neg","subjectId":"math","subjectName":"数学","startTime":$epoch,"endTime":${epoch + 1},"durationSeconds":-1}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertFailure(negativeDuration.toString(), "负数")
+    }
+
+    @Test
+    fun `wall clock adjustments do not invalidate real study records`() {
+        val reversedSession = JsonObject(
+            fullObject() + (
+                "focusSessions" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"fs-time","subjectId":"math","subjectName":"数学","startTime":${epoch + 10},"endTime":$epoch,"durationSeconds":1}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertTrue(BackupCodec.decode(reversedSession.toString()) is BackupDecodeResult.Success)
+
+        val reversedChat = JsonObject(
+            fullObject() + (
+                "chatSessions" to JsonArray(
+                    listOf(
+                        Json.parseToJsonElement(
+                            """{"id":"s-1","title":"x","createdAt":${epoch + 10},"updatedAt":$epoch,"model":"m"}"""
+                        )
+                    )
+                )
+                )
+        )
+        assertTrue(BackupCodec.decode(reversedChat.toString()) is BackupDecodeResult.Success)
+    }
+
+    @Test
+    fun `max import limit is the shared 64 mib authority`() {
+        assertEquals(64 * 1024 * 1024, BackupCodec.MAX_IMPORT_BYTES)
     }
 }

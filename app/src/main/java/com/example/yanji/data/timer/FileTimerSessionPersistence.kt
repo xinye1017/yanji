@@ -137,6 +137,15 @@ class FileTimerSessionPersistence(
     override suspend fun loadActiveSession(): ActiveSession? =
         loadActiveSessionRecord()?.activeSession
 
+    override suspend fun requireNoActiveSessionSnapshot(): Unit = withContext(ioDispatcher) {
+        if (!directory.exists()) return@withContext
+        val names = directory.list()
+            ?: error("无法读取活动计时快照目录，暂不能安全恢复备份")
+        check(FILE_NAME !in names && TMP_FILE_NAME !in names) {
+            "检测到未结束或尚未清理的计时快照，请先检查并结束专注或模考后再恢复备份"
+        }
+    }
+
     private fun writeAtomically(content: String) {
         val tmp = tmpFile
         val target = sessionFile

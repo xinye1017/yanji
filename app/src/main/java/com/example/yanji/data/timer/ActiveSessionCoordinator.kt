@@ -104,6 +104,13 @@ interface TimerSessionPersistence {
 
     /** 读回上次未结束的活动会话。 */
     suspend fun loadActiveSession(): ActiveSession?
+
+    /** Destructive import requires an idle snapshot without cold-start cleanup side effects. */
+    suspend fun requireNoActiveSessionSnapshot() {
+        check(loadActiveSessionRecord() == null && loadActiveSession() == null) {
+            "正在计时中，请先结束当前的专注或模考再导入"
+        }
+    }
 }
 
 /**
@@ -150,6 +157,9 @@ open class ActiveSessionCoordinatorCore(
 
     private val persistenceMutex = Mutex()
 
+    /** Import owns the coordinator until its database transaction has committed or failed. */
+    private var backupRestoreOwned = false
+
     suspend fun awaitPersistence() {
         lastPersistenceJob?.join()
     }
@@ -160,7 +170,7 @@ open class ActiveSessionCoordinatorCore(
 
     /** 当前是否有活动会话在跑或在完成中。 */
     val isBusy: Boolean
-        get() = synchronized(stateLock) { _state.value != CoordinatorState.IDLE }
+        get() = synchronized(stateLock) { backupRestoreOwned || _state.value != CoordinatorState.IDLE }
 
     fun activeKind(): ActiveSessionKind? = _active.value?.kind
 
@@ -174,9 +184,10 @@ open class ActiveSessionCoordinatorCore(
      */
     suspend fun begin(session: ActiveSession): Boolean {
         val recordToSave = synchronized(stateLock) {
-            if (_state.value != CoordinatorState.IDLE) {
+            if (backupRestoreOwned || _state.value != CoordinatorState.IDLE) {
                 // 同一 session 的重复登记是幂等读取，绝不能重置计时快照。
-                return _state.value == CoordinatorState.ACTIVE &&
+                return !backupRestoreOwned &&
+                    _state.value == CoordinatorState.ACTIVE &&
                     _active.value?.sessionId == session.sessionId
             }
             val snapshot = TimerSnapshot(
@@ -371,9 +382,24 @@ open class ActiveSessionCoordinatorCore(
      * - Reboot（bootId 变更或单调时钟失效）：单调基准失效，严禁伪造 elapsed，明确恢复为暂停状态待用户确认。
      */
     suspend fun restorePersistedNow(): ActiveSession? {
+        synchronized(stateLock) {
+            if (backupRestoreOwned) return null
+        }
         val p = persistence ?: return null
-        val record = runCatching { p.loadActiveSessionRecord() }.getOrNull()
-            ?: runCatching { p.loadActiveSession() }.getOrNull()?.let { s ->
+        val loadedRecord = runCatching { p.loadActiveSessionRecord() }.getOrNull()
+        synchronized(stateLock) {
+            if (backupRestoreOwned) return null
+        }
+        val loadedLegacy = if (loadedRecord == null) {
+            runCatching { p.loadActiveSession() }.getOrNull()
+        } else {
+            null
+        }
+        synchronized(stateLock) {
+            if (backupRestoreOwned) return null
+        }
+        val record = loadedRecord
+            ?: loadedLegacy?.let { s ->
                 ActiveSessionRecord(
                     activeSession = s,
                     timerSnapshot = TimerSnapshot(
@@ -389,7 +415,7 @@ open class ActiveSessionCoordinatorCore(
             ?: return null
 
         val restored = synchronized(stateLock) {
-            if (_state.value != CoordinatorState.IDLE) return@synchronized null
+            if (backupRestoreOwned || _state.value != CoordinatorState.IDLE) return@synchronized null
 
             val isSameBoot = record.bootId.isNotBlank() &&
                 record.bootId == clock.currentBootId() &&
@@ -450,6 +476,40 @@ open class ActiveSessionCoordinatorCore(
             }
         }
         return restored
+    }
+
+    /**
+     * Reserve the idle coordinator for the complete import transaction.
+     *
+     * The persistence guard does not invoke cold-start cleanup. A corrupt or pending
+     * on-disk snapshot must prevent destructive import while remaining available for recovery.
+     */
+    suspend fun <T> withBackupRestore(block: suspend () -> T): T {
+        val p = persistence ?: throw IllegalStateException("活动会话持久层尚未初始化，无法安全恢复备份")
+
+        synchronized(stateLock) {
+            if (backupRestoreOwned || _state.value != CoordinatorState.IDLE) {
+                throw IllegalStateException("正在计时中，请先结束当前的专注或模考再导入")
+            }
+            // Acquire ownership in the same critical section as the IDLE check. Every
+            // start/restore path checks this flag under the same lock.
+            backupRestoreOwned = true
+        }
+
+        try {
+            // Persistence I/O stays outside stateLock while restore ownership keeps all
+            // start and persisted-restore paths out for the complete snapshot/import.
+            awaitPersistence()
+            p.requireNoActiveSessionSnapshot()
+            synchronized(stateLock) {
+                if (persistence !== p || _state.value != CoordinatorState.IDLE) {
+                    throw IllegalStateException("活动会话状态已变化，无法安全恢复备份")
+                }
+            }
+            return block()
+        } finally {
+            synchronized(stateLock) { backupRestoreOwned = false }
+        }
     }
 
     /** 进程启动时把上次未结束的活动会话读回内存。 */

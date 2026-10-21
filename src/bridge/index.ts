@@ -221,6 +221,29 @@ export interface Subject {
   isCategory: boolean;
 }
 
+export interface BackupPreview {
+  token: string;
+  fileName: string;
+  schemaVersion: number;
+  exportedAt: number;
+  appVersionName: string;
+  counts: {
+    focusSessions: number;
+    examSessions: number;
+    noteEntries: number;
+    chatSessions: number;
+    chatMessages: number;
+    checkIns: number;
+    achievements: number;
+    quickStartPresets: number;
+    studyTasks: number;
+    subjects: number;
+  };
+  replacesSettings: boolean;
+  replacesSubjects: boolean;
+  warnings: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Event payloads
 // ---------------------------------------------------------------------------
@@ -338,6 +361,13 @@ interface YanjiThemeModuleNative {
   setThemePreference(mode: ThemeMode): Promise<boolean>;
 }
 
+interface YanjiBackupModuleNative {
+  exportBackup(): Promise<{ fileName: string } | null>;
+  prepareBackupImport(): Promise<BackupPreview | null>;
+  restoreBackupImport(token: string): Promise<{ warnings: string[] }>;
+  discardBackupImport(token: string): Promise<boolean>;
+}
+
 // ---------------------------------------------------------------------------
 // Module resolution
 // ---------------------------------------------------------------------------
@@ -357,6 +387,7 @@ function requireNativeModule<T>(name: string): T {
 export const YanjiTimerNative = requireNativeModule<YanjiTimerModuleNative>('YanjiTimerModule');
 export const YanjiDataNative = requireNativeModule<YanjiDataModuleNative>('YanjiDataModule');
 export const YanjiThemeNative = requireNativeModule<YanjiThemeModuleNative>('YanjiThemeModule');
+export const YanjiBackupNative = requireNativeModule<YanjiBackupModuleNative>('YanjiBackupModule');
 
 const emitter =
   Platform.OS === 'android' ? new NativeEventEmitter(NativeModules.YanjiTimerModule) : null;

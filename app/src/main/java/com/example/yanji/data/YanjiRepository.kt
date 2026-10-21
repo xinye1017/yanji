@@ -606,6 +606,9 @@ class YanjiRepository private constructor() {
             onSubjectsReplaced = { restored ->
                 SubjectCatalog.replaceAll(restored)
                 _subjects.value = SubjectCatalog.all
+            },
+            onSettingsReplaced = { restored ->
+                _settings.value = restored.copy(aiApiKey = cachedAiApiKey)
             }
         )
     }

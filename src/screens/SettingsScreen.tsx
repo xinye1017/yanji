@@ -1,17 +1,20 @@
 /**
  * Yanji settings — a secondary destination reached from the Today header.
  *
- * Shape of the page: three short groups, one line per setting, no cards.
+ * Shape of the page: five short groups, one line per setting, no cards.
  *  1. 备考 — the two values the product actually measures against (考试日期 /
  *     每日学习时长). Both are edited here, in the sheet that owns them.
- *  2. 外观 — the app theme preference.
- *  3. 高级 — the decision-model configuration, collapsed by default. It is a
+ *  2. 学科 — the names used by focus sessions.
+ *  3. 外观 — the app theme preference.
+ *  4. 高级 — the decision-model configuration, collapsed by default. It is a
  *     long form that is configured once and then never touched, so letting it
  *     occupy the first screen was the single biggest source of clutter.
+ *  5. 数据管理 — manual backup export and a validated restore preview.
  *
  * Everything printed here comes from the native snapshot (`UserSettings`), and
- * the only writes are `updateUserSettings` (date, goal, decision model) and the
- * theme module. Today still reads the same Room row, so the two pages can never
+ * regular setting writes use `updateUserSettings` (date, goal, decision model)
+ * and the theme module. BackupDataSection owns the separate restore workflow.
+ * Today still reads the same Room row, so the two pages can never
  * disagree — but there is exactly one editor per value, on this page.
  */
 
@@ -30,6 +33,7 @@ import {
 } from '../components/YanjiUI';
 import { YanjiSettingRow } from '../components/SettingsRows';
 import { YanjiDecisionModelSection } from '../components/DecisionModelSection';
+import { BackupDataSection } from '../components/BackupDataSection';
 import { DailyGoalSheet, ExamDateSheet } from '../components/SettingsSheets';
 import { SubjectsSheet } from '../components/SubjectsSheet';
 import { useNavigationActions } from '../navigation/NavigationShell';
@@ -302,6 +306,8 @@ export function SettingsScreen(): React.JSX.Element {
           />
           <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} />
         </View>
+
+        <BackupDataSection />
 
         <YanjiHairline style={{ marginTop: layout.sectionGap }} />
         <Text

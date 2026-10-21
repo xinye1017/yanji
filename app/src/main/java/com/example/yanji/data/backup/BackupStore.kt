@@ -2,12 +2,16 @@ package com.example.yanji.data.backup
 
 import android.content.Context
 import com.example.yanji.data.Subject
+import com.example.yanji.data.UserSettings
 import com.example.yanji.data.YanjiTime
 import com.example.yanji.data.db.YanjiDatabase
 import com.example.yanji.data.timer.ActiveSessionCoordinator
+import com.example.yanji.data.timer.ActiveSessionCoordinatorCore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.time.Instant
 
 /**
@@ -27,21 +31,26 @@ import java.time.Instant
  *
  * **不负责**：UI/SAF 文件读写、备份格式演进（属 [BackupCodec]/[YanjiBackup]）。
  *
- * 事务语义、JSON 结构、表替换顺序、校验逻辑与失败回滚**逐字沿用**抽取前的实现，未做任何变更。
+ * 导入顺序固定为：严格解码 → 预留活动会话所有权并复核持久快照 →
+ * 同步落盘唯一的安全快照 → 单事务整表替换 → 提交后的镜像校正。
+ * 快照或事务失败都在提交前中止；镜像回调失败只作为成功结果中的告警返回。
  */
 class BackupStore(
     /** 数据库延迟提供者：与 `YanjiRepository` 一样，进程可能先于 `init` 构造本类。 */
     private val dbProvider: () -> YanjiDatabase?,
-    /** 用于解析 `filesDir` 与包版本号；null 表示尚未 attach（导出仍可用，快照会被跳过）。 */
+    /** 用于解析 `filesDir` 与包版本号；null 时导出仍可用，但导入因无法创建快照而拒绝。 */
     private val contextProvider: () -> Context?,
     /** 导入事务成功后的镜像校正回调。由组合根（Repository）注入，避免本类反持其内部状态。 */
     private val onActiveFocusCleared: () -> Unit,
-    private val onSubjectsReplaced: (List<Subject>) -> Unit
+    private val onSubjectsReplaced: (List<Subject>) -> Unit,
+    private val onSettingsReplaced: (UserSettings) -> Unit = {},
+    private val snapshotWriter: (suspend (YanjiBackup) -> String)? = null,
+    private val coordinator: ActiveSessionCoordinatorCore = ActiveSessionCoordinator
 ) {
 
     /** 采集当前全部数据，生成可序列化的备份负载。实现见 [BackupTransfer.collect]。 */
     private suspend fun buildPayload(): YanjiBackup {
-        val db = dbProvider() ?: return YanjiBackup(exportedAt = System.currentTimeMillis())
+        val db = dbProvider() ?: throw IllegalStateException("数据库尚未初始化，请重启研迹后重试")
         return BackupTransfer.collect(db, appVersionName())
     }
 
@@ -61,48 +70,98 @@ class BackupStore(
      * @return 成功时带回落盘快照路径与来自 [BackupCodec] 的提醒；失败时 message 可直接展示给用户。
      */
     suspend fun importJson(rawJson: String): BackupImportResult = withContext(Dispatchers.IO) {
-        if (ActiveSessionCoordinator.isBusy) {
-            return@withContext BackupImportResult.Failure("正在计时中，请先结束当前的专注或模考再导入")
-        }
-
         val decoded = BackupCodec.decode(rawJson)
         if (decoded is BackupDecodeResult.Failure) {
             return@withContext BackupImportResult.Failure(decoded.message)
         }
         val backup = (decoded as BackupDecodeResult.Success).backup
 
-        val db = dbProvider()
-            ?: return@withContext BackupImportResult.Failure("数据库尚未初始化，请重启研迹后重试")
-
-        // 先留一份「导入前」快照。即使导入事务回滚，这份快照也不受影响。
-        val snapshotPath = runCatching { writePreImportSnapshot() }.getOrNull()
-
-        val applied = runCatching {
-            BackupTransfer.applyInTransaction(db, backup)
+        if (dbProvider() == null) {
+            return@withContext BackupImportResult.Failure("数据库尚未初始化，请重启研迹后重试")
         }
-        if (applied.isFailure) {
-            val reason = applied.exceptionOrNull()?.localizedMessage ?: "未知错误"
-            return@withContext BackupImportResult.Failure("导入失败，已回滚，本机数据未改变（$reason）")
+        // The import guard inspects persisted state without invoking cold-start recovery,
+        // which may quarantine a corrupt snapshot and hide it from a subsequent check.
+        if (coordinator.isBusy) {
+            return@withContext BackupImportResult.Failure("正在计时中，请先结束当前的专注或模考再导入")
         }
 
-        onActiveFocusCleared()
+        var committed = false
+        var snapshotPath: String? = null
+        try {
+            coordinator.withBackupRestore {
+                val db = dbProvider()
+                    ?: throw IllegalStateException("数据库尚未初始化，请重启研迹后重试")
+                // Snapshot creation is fail-closed; replacement remains one atomic transaction.
+                snapshotPath = writePreImportSnapshot()
+                BackupTransfer.applyInTransaction(db, backup)
+                committed = true
 
-        // 学科镜像也要立即刷新：导入是整表替换，若不在这里同步，紧接着的同步查询
-        // （统计分桶、AI 提示词）会读到导入前的旧学科列表。
-        val restoredSubjects = db.subjectDao().getAll().map { it.toDomainModel() }
-        if (restoredSubjects.isNotEmpty()) {
-            onSubjectsReplaced(restoredSubjects)
+                val warnings = decoded.warnings.toMutableList()
+                try {
+                    backup.settings?.let { onSettingsReplaced(it.toDomain()) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    warnings += "数据已恢复，但设置界面刷新失败，请重启研迹"
+                }
+                try {
+                    onActiveFocusCleared()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    warnings += "数据已恢复，但活动计时界面刷新失败，请重启研迹"
+                }
+                try {
+                    val restoredSubjects = db.subjectDao().getAll().map { it.toDomainModel() }
+                    if (restoredSubjects.isNotEmpty()) onSubjectsReplaced(restoredSubjects)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    warnings += "数据已恢复，但学科界面刷新失败，请重启研迹"
+                }
+                BackupImportResult.Success(backup, snapshotPath, warnings)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (committed) {
+                BackupImportResult.Success(
+                    backup,
+                    snapshotPath,
+                    decoded.warnings + "数据已恢复，但界面状态刷新失败，请重启研迹"
+                )
+            } else {
+                BackupImportResult.Failure(
+                    "导入未完成，本机数据未改变（${error.localizedMessage ?: "未知错误"}）"
+                )
+            }
         }
-
-        BackupImportResult.Success(backup, snapshotPath, decoded.warnings)
     }
 
-    private suspend fun writePreImportSnapshot(): String? {
-        val ctx = contextProvider() ?: return null
-        val dir = File(ctx.filesDir, "pre_import_snapshots").apply { mkdirs() }
+    private suspend fun writePreImportSnapshot(): String {
+        val payload = buildPayload()
+        // A safety snapshot must satisfy the same byte limit as a user-selected backup.
+        // Validate before creating the file and write exactly these validated UTF-8 bytes.
+        val bytes = BackupDocumentIO.encodeUtf8(BackupCodec.encode(payload))
+        snapshotWriter?.let { return it(payload) }
+        val ctx = contextProvider()
+            ?: throw IllegalStateException("应用上下文尚未初始化，无法创建导入前快照")
+        val dir = File(ctx.filesDir, "pre_import_snapshots")
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw IllegalStateException("无法创建导入前快照目录")
+        }
         val stamp = YanjiTime.backupStamp(Instant.now())
-        val file = File(dir, "yanji-pre-import-$stamp.json")
-        file.writeText(BackupCodec.encode(buildPayload()))
-        return file.absolutePath
+        val file = File.createTempFile("yanji-pre-import-$stamp-", ".json", dir)
+        return try {
+            FileOutputStream(file).use { output ->
+                output.write(bytes)
+                output.flush()
+                output.fd.sync()
+            }
+            file.absolutePath
+        } catch (error: Exception) {
+            file.delete()
+            throw error
+        }
     }
 }

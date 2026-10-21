@@ -135,6 +135,10 @@ internal class TimerStore(
         override suspend fun loadActiveSessionRecord(): ActiveSessionRecord? {
             return requireDiskPersistence().loadActiveSessionRecord()
         }
+
+        override suspend fun requireNoActiveSessionSnapshot() {
+            requireDiskPersistence().requireNoActiveSessionSnapshot()
+        }
     }
 
     private fun requireDiskPersistence(): TimerSessionPersistence =

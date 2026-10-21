@@ -14,6 +14,7 @@ import com.example.yanji.data.FocusSession
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
+import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
 import com.example.yanji.data.db.CheckInEntity
@@ -24,6 +25,8 @@ import com.example.yanji.data.db.UserSettingsEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -166,9 +169,14 @@ class BackupTransferInstrumentedTest {
             SubjectEntity.fromDomainModel(Subject("keep-me", "保留的学科", "#356AE6", 1))
         )
 
-        // v1 备份没有 subjects 字段 → 反序列化后为空列表
-        val legacyJson = BackupCodec.encode(YanjiBackup(exportedAt = epoch))
-        val decoded = BackupCodec.decode(legacyJson) as BackupDecodeResult.Success
+        // A genuine v1 envelope predates both studyTasks and subjects.
+        val legacyJson = BackupCodec.encode(sampleBackup().copy(schemaVersion = 1))
+            .let(Json::parseToJsonElement)
+            .let { it as JsonObject }
+            .let { root ->
+                JsonObject(root.filterKeys { it != "studyTasks" && it != "subjects" })
+            }
+        val decoded = BackupCodec.decode(legacyJson.toString()) as BackupDecodeResult.Success
         assertTrue(decoded.backup.subjects.isEmpty())
 
         BackupTransfer.applyInTransaction(db, decoded.backup)
@@ -230,6 +238,8 @@ class BackupTransferInstrumentedTest {
             assertEquals(1, secondDb.checkInDao().count())
             assertEquals(2, secondDb.achievementDao().getAllFlow().first().size)
             assertEquals(1, secondDb.quickStartPresetDao().count())
+            assertEquals(1, secondDb.studyTaskDao().getAllFlow().first().size)
+            assertEquals(2, secondDb.subjectDao().count())
             assertEquals(1, secondDb.userSettingsDao().count())
 
             val focus = secondDb.focusSessionDao().getById("fs-1")!!.toDomainModel()
@@ -237,12 +247,28 @@ class BackupTransferInstrumentedTest {
             assertEquals(3600L, focus.durationSeconds)
             assertEquals(SessionStatus.COMPLETED, focus.status)
             assertEquals("正向计时", focus.mode)
+            assertEquals("task-1", focus.taskId)
 
             val notes = secondDb.noteEntryDao().getByDate("2026-09-05")!!
             assertEquals(listOf("数学突破", "心态平和"), notes.toDomainModel().tags)
 
+            val task = secondDb.studyTaskDao().getAllFlow().first().single().toDomainModel()
+            assertEquals("task-1", task.id)
+            assertEquals("2026-09-05", task.date)
+            assertEquals("math_advanced", task.subjectId)
+            assertEquals("高等数学", task.subjectName)
+            assertEquals("二重积分", task.title)
+            assertEquals(90, task.plannedMinutes)
+            assertTrue(task.isCompleted)
+            assertEquals(epoch - 100, task.createdAt)
+            assertEquals(epoch + 3_600_000L, task.updatedAt)
+            assertEquals("math_advanced", secondDb.subjectDao().getAll().single { it.id == task.subjectId }.id)
+
             val settings = secondDb.userSettingsDao().getSettings().first()!!.toDomainModel()
             assertEquals("浙江大学 计算机学院", settings.targetSchool)
+            assertEquals("openrouter-custom", settings.decisionProvider)
+            assertEquals("decision-model-v2", settings.decisionModel)
+            assertEquals("https://example.test/decisions", settings.decisionEndpoint)
             assertEquals("", settings.aiApiKey)
         } finally {
             secondDb.close()
@@ -253,13 +279,23 @@ class BackupTransferInstrumentedTest {
     @Test
     fun exportedJsonFromRealSchemaNeverContainsApiKey() = runBlocking {
         db.userSettingsDao().saveSettings(
-            UserSettingsEntity.fromDomainModel(UserSettings(aiApiKey = "sk-should-not-be-exported"))
+            UserSettingsEntity.fromDomainModel(UserSettings(aiApiKey = ""))
         )
 
         val json = BackupCodec.encode(BackupTransfer.collect(db, appVersionName = "test", now = epoch))
 
         assertFalse(json.contains("aiApiKey"))
-        assertFalse(json.contains("sk-should-not-be-exported"))
+    }
+
+    @Test
+    fun truncatedJsonIsRejectedWithoutChangingDatabase() = runBlocking {
+        db.focusSessionDao().insert(FocusSessionEntity.fromDomainModel(focus("fs-keep", "keep")))
+        val complete = BackupCodec.encode(sampleBackup())
+
+        val decoded = BackupCodec.decode(complete.dropLast(1))
+
+        assertTrue(decoded is BackupDecodeResult.Failure)
+        assertEquals("fs-keep", db.focusSessionDao().getAll().first().single().id)
     }
 
     // ---------------------------------------------------------------- fixtures
@@ -274,7 +310,8 @@ class BackupTransferInstrumentedTest {
         pauseCount = 1,
         mode = "正向计时",
         note = note,
-        status = SessionStatus.COMPLETED
+        status = SessionStatus.COMPLETED,
+        taskId = "task-1"
     )
 
     private fun sampleBackup() = YanjiBackup(
@@ -283,8 +320,10 @@ class BackupTransferInstrumentedTest {
         settings = UserSettingsBackup.fromDomain(
             UserSettings(
                 targetSchool = "浙江大学 计算机学院",
-                aiApiKey = "sk-must-not-leak",
-                aiModel = "deepseek-chat"
+                aiModel = "deepseek-chat",
+                decisionProvider = "openrouter-custom",
+                decisionModel = "decision-model-v2",
+                decisionEndpoint = "https://example.test/decisions"
             )
         ),
         focusSessions = listOf(focus("fs-1", "二重积分")),
@@ -321,6 +360,23 @@ class BackupTransferInstrumentedTest {
         unlockedAchievements = mapOf("focus_first" to epoch, "streak_7" to epoch + 1),
         quickStartPresets = listOf(
             QuickStartPreset(id = "q-1", type = QuickStartPreset.TYPE_START_FOCUS, label = "开始专注", sortOrder = 0)
+        ),
+        studyTasks = listOf(
+            StudyTask(
+                id = "task-1",
+                date = "2026-09-05",
+                subjectId = "math_advanced",
+                subjectName = "高等数学",
+                title = "二重积分",
+                plannedMinutes = 90,
+                isCompleted = true,
+                createdAt = epoch - 100,
+                updatedAt = epoch + 3_600_000L
+            )
+        ),
+        subjects = listOf(
+            Subject("math", "数学一", "#356AE6", 1),
+            Subject("math_advanced", "高等数学", "#7C3AED", 11, parentId = "math")
         )
     )
 }
