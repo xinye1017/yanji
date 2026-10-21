@@ -31,7 +31,8 @@ import {
   durationMetricMinutes,
   formatPercent, goalReachedDays, peakHourBucket, peakTrendDay,
   periodDelta, periodDeltaPercent, previousWindowArgs, scopeDateRangeLabel,
-  shiftIsoDate, stepForwardWithinToday, weekNumberOfYear,
+  shiftIsoDate, shiftMonthAnchor, stepForwardWithinToday, stepMonthForwardWithinToday,
+  weekNumberOfYear,
   type FilmstripDay, type TimelineEntry,
 } from './reviewViewLogic';
 import { todayIso } from '../state/settingsViewLogic';
@@ -292,12 +293,12 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
             onPrevious={() => {
               if (scope === 'TODAY') setDate(prev => shiftIsoDate(prev, -1));
               else if (scope === 'CALENDAR_WEEK') setDate(prev => shiftIsoDate(prev, -7));
-              else setDate(prev => shiftIsoDate(prev, -30));
+              else setDate(prev => shiftMonthAnchor(prev, -1));
             }}
             onNext={() => {
               if (scope === 'TODAY') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 1), todayIso()));
               else if (scope === 'CALENDAR_WEEK') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 7), todayIso()));
-              else setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 30), todayIso()));
+              else setDate(prev => stepMonthForwardWithinToday(prev, todayIso()));
             }}
             canStepForward={date < todayIso()}
           />

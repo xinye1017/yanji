@@ -130,6 +130,32 @@ export function registerReviewViewLogicTests() {
       assertEqual(logic.shiftIsoDate('2026-10-01', -1), '2026-09-30', 'Must cross into September');
       assertEqual(logic.shiftIsoDate('2026-03-01', -1), '2026-02-28', 'Must cross into February');
     });
+
+    it('month navigation steps by whole calendar months, not 30 days', () => {
+      // The bug: CALENDAR_MONTH stepped by ±30 days, so from the 31st the
+      // window drifted into the middle of the neighbouring month.
+      assertEqual(logic.shiftMonthAnchor('2026-10-31', -1), '2026-09-30',
+        'September has no 31st; the anchor must converge to its last day');
+      assertEqual(logic.shiftMonthAnchor('2026-10-15', -1), '2026-09-15',
+        'A mid-month anchor keeps its day number');
+      assertEqual(logic.shiftMonthAnchor('2026-01-15', -1), '2025-12-15',
+        'Backward month steps must cross the year boundary');
+      assertEqual(logic.shiftMonthAnchor('2026-03-31', -1), '2026-02-28',
+        'A common-year February clamps the 31st to the 28th');
+      assertEqual(logic.shiftMonthAnchor('2028-03-31', -1), '2028-02-29',
+        'A leap-year February clamps the 31st to the 29th');
+      assertEqual(logic.shiftMonthAnchor('2026-10-15', 1), '2026-11-15',
+        'Forward month steps land in the next calendar month');
+    });
+
+    it('forward month navigation never walks past today', () => {
+      assertEqual(logic.stepMonthForwardWithinToday('2026-08-10', '2026-10-05'), '2026-09-10',
+        'When the next month is still in the past, step into it');
+      assertEqual(logic.stepMonthForwardWithinToday('2026-10-05', '2026-10-21'), '2026-10-21',
+        'When the next month has not started, clamp to today');
+      assertEqual(logic.stepMonthForwardWithinToday('2026-10-21', '2026-10-21'), '2026-10-21',
+        'Already at today, a forward press must not move into the future');
+    });
   });
 
   describe('Tier 1: Review view logic — one chronological timeline', () => {

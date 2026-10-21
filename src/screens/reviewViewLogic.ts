@@ -42,6 +42,41 @@ export function stepForwardWithinToday(iso: string, today: string): string {
 }
 
 /**
+ * Move the anchor date by whole calendar months.
+ *
+ * The month scope used to step by ±30 days, which drifts: from the 31st of a
+ * month, "-30 days" lands mid-next-month and the header's 「N月01日 – N月31日」
+ * window no longer matches the month the user thinks they pressed. Anchoring by
+ * calendar month keeps one press = one month; a day that does not exist in the
+ * target month (31 → February) converges to that month's last day.
+ */
+export function shiftMonthAnchor(iso: string, deltaMonths: number): string {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  const day = parsed.getDate();
+  // Day 0 of the next month is the last day of the target month, which gives us
+  // its length without a lookup table (leap years included).
+  const target = new Date(parsed.getFullYear(), parsed.getMonth() + deltaMonths + 1, 0);
+  target.setDate(Math.min(day, target.getDate()));
+  const month = `${target.getMonth() + 1}`.padStart(2, '0');
+  const dayStr = `${target.getDate()}`.padStart(2, '0');
+  return `${target.getFullYear()}-${month}-${dayStr}`;
+}
+
+/**
+ * Forward month step with today as the ceiling.
+ *
+ * `stepForwardWithinToday` only ever moves one day, which would turn a month
+ * press into a day press. The next calendar month is allowed only while its
+ * anchor stays in the past; once it would overshoot, the step lands on today
+ * (ISO string comparison is exact for the fixed-width `yyyy-MM-dd` form).
+ */
+export function stepMonthForwardWithinToday(iso: string, today: string): string {
+  const next = shiftMonthAnchor(iso, 1);
+  return next < today ? next : today;
+}
+
+/**
  * "今天 / 昨天 / 前天 / N 天前" — or null once the date is old enough that a
  * relative name stops helping. An empty day still deserves a real name.
  */
