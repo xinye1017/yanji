@@ -310,6 +310,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
   onChange,
   accessibilityLabel,
   compact = false,
+  borderless = false,
   disabled = false,
 }: {
   value: T;
@@ -317,15 +318,18 @@ export function YanjiPaperSegmentedControl<T extends string>({
   onChange: (value: T) => void;
   accessibilityLabel: string;
   compact?: boolean;
+  borderless?: boolean;
   disabled?: boolean;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const reduceMotion = useReducedMotion();
+  const segmentHeight = borderless ? paper.layout.borderlessSegmentHeight : paper.layout.compactSegmentHeight;
   // Inset the compact paint inside full-height radios so the touch area stays 48dp.
-  const segmentInset = compact
-    ? (paper.layout.rowMinHeight - paper.layout.compactSegmentHeight) / 2
-    : 0;
+  const segmentInset = compact ? (paper.layout.rowMinHeight - segmentHeight) / 2 : 0;
+  const trackPadding = borderless
+    ? paper.layout.borderlessSegmentPadding
+    : YanjiSpacing.xs + paper.layout.hairlineWidth;
 
   return (
     <View
@@ -337,10 +341,10 @@ export function YanjiPaperSegmentedControl<T extends string>({
         alignSelf: 'flex-start',
         backgroundColor: compact ? 'transparent' : paper.colors.subtle,
         borderRadius: paper.radius.pill,
-        borderWidth: compact ? 0 : paper.layout.hairlineWidth,
+        borderWidth: compact || borderless ? 0 : paper.layout.hairlineWidth,
         borderColor: paper.colors.hairline,
         paddingVertical: compact ? 0 : YanjiSpacing.xs,
-        paddingHorizontal: YanjiSpacing.xs + (compact ? paper.layout.hairlineWidth : 0),
+        paddingHorizontal: compact ? trackPadding : YanjiSpacing.xs,
       }}
     >
       {compact ? (
@@ -350,11 +354,11 @@ export function YanjiPaperSegmentedControl<T extends string>({
             position: 'absolute',
             left: 0,
             right: 0,
-            top: segmentInset - YanjiSpacing.xs - paper.layout.hairlineWidth,
-            bottom: segmentInset - YanjiSpacing.xs - paper.layout.hairlineWidth,
+            top: segmentInset - trackPadding,
+            bottom: segmentInset - trackPadding,
             backgroundColor: paper.colors.subtle,
             borderRadius: paper.radius.pill,
-            borderWidth: paper.layout.hairlineWidth,
+            borderWidth: borderless ? 0 : paper.layout.hairlineWidth,
             borderColor: paper.colors.hairline,
           }}
         />
@@ -365,6 +369,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
           label={option.label}
           selected={option.value === value}
           compact={compact}
+          borderless={borderless}
           segmentInset={segmentInset}
           reduceMotion={reduceMotion}
           disabled={disabled}
@@ -379,6 +384,7 @@ function PaperSegment({
   label,
   selected,
   compact,
+  borderless,
   segmentInset,
   reduceMotion,
   disabled,
@@ -387,6 +393,7 @@ function PaperSegment({
   label: string;
   selected: boolean;
   compact: boolean;
+  borderless: boolean;
   segmentInset: number;
   reduceMotion: boolean;
   disabled: boolean;
@@ -436,7 +443,7 @@ function PaperSegment({
             bottom: segmentInset,
             backgroundColor: paper.colors.surface,
             borderRadius: paper.radius.pill,
-            borderWidth: paper.layout.hairlineWidth,
+            borderWidth: borderless ? 0 : paper.layout.hairlineWidth,
             borderColor: paper.colors.hairline,
           },
           fill,
@@ -1292,6 +1299,7 @@ export function YanjiTaskLedgerRow({
 
 export function YanjiPrimaryButton({
   label,
+  detail,
   icon,
   onPress,
   disabled = false,
@@ -1299,6 +1307,8 @@ export function YanjiPrimaryButton({
   style,
 }: {
   label: string;
+  /** Smaller trailing context aligned to the label's lower edge. */
+  detail?: string;
   icon?: YanjiIconName;
   onPress: () => void;
   disabled?: boolean;
@@ -1336,7 +1346,7 @@ export function YanjiPrimaryButton({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={detail ? `${label}，${detail}` : label}
       style={({ pressed }) => [
         {
           backgroundColor,
@@ -1346,6 +1356,9 @@ export function YanjiPrimaryButton({
           paddingVertical: 15,
           paddingHorizontal: 24,
           flexDirection: 'row',
+          flexWrap: detail ? 'wrap' : 'nowrap',
+          columnGap: detail ? YanjiSpacing.sm : 0,
+          rowGap: detail ? YanjiSpacing.xs : 0,
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: YanjiTouch.comfortable + 4,
@@ -1357,7 +1370,7 @@ export function YanjiPrimaryButton({
       ]}
     >
       {icon ? (
-        <View style={{ marginRight: YanjiSpacing.sm }}>
+        <View style={{ marginRight: detail ? 0 : YanjiSpacing.sm }}>
           <YanjiIcon name={icon} size={17} color={textColor} />
         </View>
       ) : null}
@@ -1367,10 +1380,26 @@ export function YanjiPrimaryButton({
           fontSize: 16,
           fontWeight: '600',
           fontVariant: ['tabular-nums'],
+          maxWidth: detail ? '100%' : undefined,
         }}
       >
         {label}
       </Text>
+      {detail ? (
+        <Text
+          style={[
+            paper.typography.captionMeta,
+            {
+              color: textColor,
+              alignSelf: 'flex-end',
+              maxWidth: '100%',
+              marginBottom: -YanjiSpacing.xs / 2,
+            },
+          ]}
+        >
+          {detail}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
-import { YanjiIcon, YanjiPaperSegmentedControl } from '../components/YanjiUI';
+import { YanjiIcon, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
 import { RollingTimeDisplay } from '../components/RollingTimeDisplay';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -330,6 +330,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
               onChange={setTimerMode}
               accessibilityLabel="计时模式"
               compact
+              borderless
             />
 
             <View style={{ minWidth: 84, minHeight: YanjiTouch.min }} />
@@ -361,9 +362,9 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                         paddingVertical: 10,
                         paddingHorizontal: YanjiSpacing.md,
                         borderRadius: paper.radius.compactCard,
-                        backgroundColor: paper.colors.surface,
-                        borderWidth: isActive ? 1.5 : paper.layout.hairlineWidth,
-                        borderColor: isActive ? accent : paper.colors.hairline,
+                        backgroundColor: isActive ? paper.colors.brand : paper.colors.surface,
+                        borderWidth: isActive ? 0 : paper.layout.hairlineWidth,
+                        borderColor: paper.colors.hairline,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: YanjiSpacing.sm,
@@ -375,7 +376,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                         numberOfLines={1}
                         style={[
                           paper.typography.bodyPrimary,
-                          { color: paper.colors.ink, fontWeight: isActive ? '700' : '500', flex: 1 },
+                          { color: isActive ? paper.colors.onBrand : paper.colors.ink, fontWeight: isActive ? '700' : '500', flex: 1 },
                         ]}
                       >
                         {group.category.name}
@@ -422,33 +423,41 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       onPress={() => handleSelect(child.id)}
                       style={({ pressed }) => ({
                         minHeight: YanjiTouch.min,
-                        paddingHorizontal: YanjiSpacing.md,
-                        borderRadius: paper.radius.pill,
-                        backgroundColor: selected ? paper.colors.surface : paper.colors.subtle,
-                        borderWidth: selected ? 1.5 : paper.layout.hairlineWidth,
-                        borderColor: selected ? accent : paper.colors.hairline,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
+                        justifyContent: 'center',
                         opacity: pressed ? 0.72 : 1,
                       })}
                     >
                       <View
                         style={{
-                          width: 6,
-                          height: 6,
+                          minHeight: paper.layout.subjectChipHeight,
+                          paddingVertical: YanjiSpacing.xs,
+                          paddingHorizontal: YanjiSpacing.md,
                           borderRadius: paper.radius.pill,
-                          backgroundColor: selected ? accent : paper.colors.muted,
+                          backgroundColor: selected ? paper.colors.brand : paper.colors.subtle,
+                          borderWidth: selected ? 0 : paper.layout.hairlineWidth,
+                          borderColor: paper.colors.hairline,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: YanjiSpacing.md / 2,
                         }}
-                      />
-                      <Text
-                        style={[
-                          paper.typography.captionMeta,
-                          { color: selected ? paper.colors.ink : paper.colors.secondary, fontWeight: selected ? '700' : '500' },
-                        ]}
                       >
-                        {child.name}
-                      </Text>
+                        <View
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: paper.radius.pill,
+                            backgroundColor: accent,
+                          }}
+                        />
+                        <Text
+                          style={[
+                            paper.typography.captionMeta,
+                            { color: selected ? paper.colors.onBrand : paper.colors.secondary, fontWeight: selected ? '700' : '500' },
+                          ]}
+                        >
+                          {child.name}
+                        </Text>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -555,46 +564,12 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           </View>
 
           <View style={{ marginTop: YanjiSpacing.md }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={busy ? '正在启动专注' : '开始专注'}
+            <YanjiPrimaryButton
+              label={busy ? '启动中…' : '开始专注'}
+              detail={busy ? undefined : timerMode === 'COUNTDOWN' ? `${durationMinutes} min` : '正计时'}
               disabled={busy || !selectedSubject}
               onPress={handleStart}
-              style={({ pressed }) => ({
-                minHeight: 56,
-                borderRadius: paper.radius.cta,
-                backgroundColor: busy || !selectedSubject ? paper.colors.subtle : paper.colors.ink,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: YanjiSpacing.sm,
-                opacity: pressed ? 0.85 : 1,
-                ...(busy || !selectedSubject ? null : theme.shadow.floating(theme.isDark)),
-              })}
-            >
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: '700',
-                  color: busy || !selectedSubject ? paper.colors.secondary : paper.colors.canvas,
-                }}
-              >
-                {busy ? '启动中…' : '开始专注'}
-              </Text>
-              {!busy ? (
-                <Text
-                  style={[
-                    paper.typography.captionMeta,
-                    {
-                      color: busy || !selectedSubject ? paper.colors.secondary : paper.colors.canvas,
-                      opacity: 0.72,
-                    },
-                  ]}
-                >
-                  · {timerMode === 'COUNTDOWN' ? `${durationMinutes} MIN` : '正计时'}
-                </Text>
-              ) : null}
-            </Pressable>
+            />
 
             {actionError ? (
               <Text

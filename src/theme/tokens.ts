@@ -424,6 +424,10 @@ export const YanjiPaperLayout = {
   activeSessionReadoutMinWidth: 132,
   /** Visible compact segment; the radio keeps a full row-height touch target. */
   compactSegmentHeight: 28,
+  borderlessSegmentHeight: 34,
+  borderlessSegmentPadding: 2,
+  /** Visible subject chip inside a full-height touch target. */
+  subjectChipHeight: 32,
   hairlineWidth: 1,
   vernierTickWidth: 14,
   vernierMinHeight: 96,
@@ -523,8 +527,6 @@ export const YanjiPaperRadius = {
   /** Subject-matrix cells — tighter than a card so the grid reads as one block. */
   compactCard: 12,
   surface: 14,
-  /** The one full-width page action (开始专注). */
-  cta: 18,
   sheet: 26,
   pill: 9999,
 } as const;

@@ -296,10 +296,13 @@ test('major ticks carry readable subtitle labels in an enlarged, single accessib
  * The real FocusScreen with native/time adapters mocked. Pass session: null for
  * the ready state. Both states read task titles from the shared daily snapshot.
  */
-function focusScreenHarness({ session = {}, tasks = [] } = {}) {
+function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = false } = {}) {
   const alerts = [];
   const calls = [];
   const noop = () => {};
+  const states = [];
+  let stateIndex = 0;
+  let effects = [];
   const active = session === null ? null : {
     sessionId: 'test-owned', subjectId: 'math', subjectName: '数学',
     mode: 'COUNTDOWN', taskId: null, startTime: 0,
@@ -308,7 +311,7 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
     ...session,
   };
   const paper = {
-    colors: tokens.YanjiPaperColors.light,
+    colors: tokens.YanjiPaperColors[isDark ? 'dark' : 'light'],
     radius: tokens.YanjiPaperRadius,
     layout: tokens.YanjiPaperLayout,
     typography: tokens.YanjiPaperTypography,
@@ -316,8 +319,14 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
   };
   const mocks = {
     react: {
-      useCallback: fn => fn, useMemo: fn => fn(), useEffect: noop,
-      useState: initial => [typeof initial === 'function' ? initial() : initial, noop],
+      useCallback: fn => fn, useMemo: fn => fn(), useEffect: effect => effects.push(effect),
+      useState: initial => {
+        const index = stateIndex++;
+        if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
+        return [states[index], next => {
+          states[index] = typeof next === 'function' ? next(states[index]) : next;
+        }];
+      },
     },
     'react-native': {
       Alert: { alert: (...args) => alerts.push(args) }, View: 'View',
@@ -330,8 +339,10 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
       Rect: 'Rect', Stop: 'Stop',
     },
     '../bridge': {
-      YanjiDataNative: { getSubjects: async () => [] },
+      YanjiDataNative: { getSubjects: async () => subjects },
+      onDataChanged: () => noop,
       YanjiTimerNative: {
+        startFocus: async (...args) => { calls.push(['start', ...args]); },
         discardTimer: async () => { calls.push('discard'); },
         completeTimer: async () => { calls.push('complete'); },
         resumeTimer: async () => { calls.push('resume'); },
@@ -340,6 +351,7 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
     },
     '../components/YanjiUI': {
       YanjiIcon: noop, YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
+      YanjiPrimaryButton: 'YanjiPrimaryButton',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
@@ -358,7 +370,21 @@ function focusScreenHarness({ session = {}, tasks = [] } = {}) {
     },
   };
   const { FocusScreen } = loadTypeScript('src/screens/FocusScreen.tsx', mocks);
-  return { root: FocusScreen({ visible: true }), alerts, calls };
+  const render = () => {
+    stateIndex = 0;
+    effects = [];
+    return FocusScreen({ visible: true });
+  };
+  return {
+    root: render(), alerts, calls, paper, render,
+    async loadSubjects() {
+      for (const effect of effects) effect();
+      await new Promise(resolve => setImmediate(resolve));
+      render();
+      for (const effect of effects) effect();
+      return render();
+    },
+  };
 }
 
 function findAll(node, predicate, matches = []) {
@@ -384,12 +410,113 @@ test('the ready screen offers the countdown ruler without preset or custom-durat
   const strip = findAll(root, n => n.props?.children === dial)[0];
   assert.ok(strip, 'the enlarged ruler is the strip’s only child');
   assert.equal(strip.props.style.marginHorizontal, -tokens.YanjiPaperLayout.pageGutter);
-  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button').length, 2,
+  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button' || n.type === 'YanjiPrimaryButton').length, 2,
     'the empty ready state needs only record and start buttons');
   assert.equal(findAll(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
   assert.equal(findAll(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
   assert.equal(findAll(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
   assert.deepEqual(calls, [], 'rendering the ready state does not touch a native timer');
+});
+
+function sharedControlsHarness(isDark = false) {
+  const paper = {
+    colors: tokens.YanjiPaperColors[isDark ? 'dark' : 'light'],
+    layout: tokens.YanjiPaperLayout, radius: tokens.YanjiPaperRadius,
+    typography: tokens.YanjiPaperTypography, motion: tokens.YanjiPaperMotion,
+  };
+  return loadTypeScript('src/components/YanjiUI.tsx', {
+    react: { useEffect: () => {} },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+    'react-native-reanimated': {
+      default: { View: 'AnimatedView' }, useReducedMotion: () => true,
+      useSharedValue: value => ({ value }), useAnimatedStyle: fn => fn(),
+    },
+    'react-native-svg': {},
+    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper, isDark, shadow: { sheet: () => ({}) } }) },
+    './icons': {},
+  });
+}
+
+test('the focus mode switch removes both outlines and enlarges its fill without shrinking radio targets', () => {
+  const h = focusScreenHarness({ session: null });
+  const props = findAll(h.root, n => n.type === 'YanjiPaperSegmentedControl')[0].props;
+  assert.equal(props.borderless, true);
+  const controls = sharedControlsHarness();
+  const plain = controls.YanjiPaperSegmentedControl(props);
+  const outlined = controls.YanjiPaperSegmentedControl({ ...props, borderless: false });
+  const track = findAll(plain, n => n.props?.pointerEvents === 'none')[0];
+  assert.equal(track.props.style.borderWidth, 0);
+  const radioElement = plain.props.children[1][0];
+  const radio = radioElement.type(radioElement.props);
+  const oldRadioElement = outlined.props.children[1][0];
+  const oldRadio = oldRadioElement.type(oldRadioElement.props);
+  const fill = findAll(radio, n => n.type === 'AnimatedView')[0].props.style[0];
+  const oldFill = findAll(oldRadio, n => n.type === 'AnimatedView')[0].props.style[0];
+  assert.equal(fill.borderWidth, 0);
+  assert.ok(fill.top < oldFill.top && fill.bottom < oldFill.bottom, 'selected fill occupies more of the track');
+  assert.ok(radio.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
+});
+
+test('ready subject selection shares the theme fill, keeps subject dots and preserves flat-chip touch targets', async () => {
+  const subjects = [
+    { id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: true, sortOrder: 1 },
+    { id: 'algebra', name: 'Algebra', colorHex: '#2D7A5E', enabled: true, parentId: 'math', isCategory: false, sortOrder: 2 },
+    { id: 'calculus', name: 'Calculus', colorHex: '#875400', enabled: true, parentId: 'math', isCategory: false, sortOrder: 3 },
+  ];
+  for (const isDark of [false, true]) {
+    const h = focusScreenHarness({ session: null, subjects, isDark });
+    let tree = await h.loadSubjects();
+    const subject = name => findAll(tree, n => n.props?.accessibilityLabel === name)[0];
+    for (const name of ['Math', 'Algebra']) {
+      const button = subject(name);
+      assert.equal(button.props.accessibilityState.selected, true);
+      const paint = findAll(button, n => n.props?.style?.backgroundColor === h.paper.colors.brand)[0]
+        ?? (button.props.style({ pressed: false }).backgroundColor === h.paper.colors.brand ? button : null);
+      assert.ok(paint, 'both selection levels must use the theme brand, not a subject colour');
+      const style = typeof paint.props.style === 'function' ? paint.props.style({ pressed: false }) : paint.props.style;
+      assert.equal(style.borderWidth, 0);
+      const dotColor = name === 'Math' ? subjects[0].colorHex : subjects[1].colorHex;
+      assert.ok(findAll(button, n => n.props?.style?.backgroundColor === dotColor).length);
+    }
+    const child = subject('Algebra');
+    assert.ok(child.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
+    const capsule = child.props.children;
+    assert.ok(capsule.props.style.minHeight < tokens.YanjiTouch.min);
+    subject('Calculus').props.onPress();
+    tree = h.render();
+    assert.equal(subject('Calculus').props.accessibilityState.selected, true);
+    assert.equal(subject('Algebra').props.accessibilityState.selected, false);
+  }
+});
+
+test('start reuses the home primary button with a lowercase bottom-aligned duration and the selected native subject', async () => {
+  const subjects = [{ id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: false, sortOrder: 1 }];
+  const h = focusScreenHarness({ session: null, subjects });
+  let tree = await h.loadSubjects();
+  const start = findAll(tree, n => n.type === 'YanjiPrimaryButton')[0];
+  assert.ok(start);
+  assert.equal(start.props.label, '开始专注');
+  assert.equal(start.props.detail, '45 min');
+  assert.equal(start.props.disabled, false);
+  const controls = sharedControlsHarness();
+  const focusButton = controls.YanjiPrimaryButton(start.props);
+  const homeButton = controls.YanjiPrimaryButton({ label: '开始一轮专注', onPress: () => {} });
+  const style = focusButton.props.style({ pressed: false })[0];
+  const homeStyle = homeButton.props.style({ pressed: false })[0];
+  assert.equal(style.backgroundColor, homeStyle.backgroundColor);
+  assert.equal(style.borderRadius, homeStyle.borderRadius);
+  assert.equal(style.flexWrap, 'wrap', 'large text can move the detail onto another line');
+  assert.equal(homeStyle.flexWrap, 'nowrap', 'buttons without details retain their existing layout');
+  const detail = findAll(focusButton, n => n.props?.children === '45 min')[0];
+  assert.equal(detail.props.style[1].alignSelf, 'flex-end');
+  assert.equal(detail.props.style[1].maxWidth, '100%');
+  await start.props.onPress();
+  assert.deepEqual(h.calls[0].slice(0, 4), ['start', 'math', 'Math', 'COUNTDOWN']);
+  tree = h.render();
+  const mode = findAll(tree, n => n.type === 'YanjiPaperSegmentedControl')[0];
+  mode.props.onChange('STOPWATCH');
+  tree = h.render();
+  assert.equal(findAll(tree, n => n.type === 'YanjiPrimaryButton')[0].props.detail, '正计时');
 });
 
 test('the immersion subtitle names the bound task and stays quiet when unbound', () => {
