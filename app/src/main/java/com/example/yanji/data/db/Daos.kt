@@ -565,8 +565,30 @@ interface StudyTaskDao {
     @Query("UPDATE study_tasks SET subjectName = :newName WHERE subjectId = :subjectId")
     suspend fun updateSubjectName(subjectId: String, newName: String)
 
+    /** 删除承接副本前先解除来源链接，避免来源任务永久退出待处理区。 */
+    @Query(
+        "UPDATE study_tasks SET carriedOverToId = NULL, updatedAt = :updatedAt " +
+            "WHERE carriedOverToId = :destinationId"
+    )
+    suspend fun releaseCarryOverSources(destinationId: String, updatedAt: Long): Int
+
+    /**
+     * 修复已经存在的悬空承接链接：只解除指向不存在任务的来源。
+     *
+     * 这是幂等的数据完整性清理，不改动来源日期、完成状态或专注关联。
+     */
+    @Query(
+        "UPDATE study_tasks SET carriedOverToId = NULL, updatedAt = :updatedAt " +
+            "WHERE carriedOverToId IS NOT NULL " +
+            "AND NOT EXISTS (" +
+            "SELECT 1 FROM study_tasks AS destination " +
+            "WHERE destination.id = study_tasks.carriedOverToId" +
+            ")"
+    )
+    suspend fun releaseDanglingCarryOverLinks(updatedAt: Long): Int
+
     @Query("DELETE FROM study_tasks WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: String): Int
 
     /** 仅用于备份恢复 / 全新备考旅程。 */
     @Query("DELETE FROM study_tasks")

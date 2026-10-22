@@ -283,6 +283,9 @@ class YanjiRepository private constructor() {
             // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
             // 「没有学习记录」是合法业务状态，不能与「首次安装」混为一谈。
             AppInitializer(db.userSettingsDao()).initialize()
+            // 早期删除承接副本时只删了副本，可能留下指向不存在任务的来源链接。
+            // 启动时幂等清理悬空链接，让原计划重新可见，同时保留其日期、完成状态和历史专注。
+            db.studyTaskDao().releaseDanglingCarryOverLinks(System.currentTimeMillis())
             // Collect real-time DB changes
             // NOTE: The DB is the source of truth. The in-memory StateFlows are a cache for
             // synchronous reads from the UI. We unconditionally overwrite the cache with the
@@ -460,8 +463,21 @@ class YanjiRepository private constructor() {
         requireDatabase().studyTaskDao()
             .setCompleted(id, completed, System.currentTimeMillis()) > 0
 
-    suspend fun deleteStudyTask(id: String) {
-        requireDatabase().studyTaskDao().deleteById(id)
+    /**
+     * 删除任务。若它是跨日承接产生的今日副本，则在同一个事务里先解除来源链接，
+     * 让原计划重新进入待处理区；副本和链接不能出现只完成一半的状态。
+     */
+    suspend fun deleteStudyTask(id: String): Boolean {
+        val db = requireDatabase()
+        return db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                deleteStudyTaskInTransaction(
+                    db = db,
+                    id = id,
+                    timestamp = System.currentTimeMillis()
+                )
+            }
+        }
     }
 
     /**
@@ -808,4 +824,21 @@ internal suspend fun carryStudyTaskToTodayInTransaction(
         dao.insertCarryOver(destination)
         StudyTaskWithActualSeconds(destination.toDomainModel(), actualSeconds = 0L)
     }
+}
+
+/**
+ * Deterministic delete boundary shared by production and SQLite tests.
+ *
+ * Releasing sources and deleting the destination happen before the transaction
+ * commits. [delete] is injectable so the failure path can prove that the source
+ * remains linked when the destination deletion fails.
+ */
+internal suspend fun deleteStudyTaskInTransaction(
+    db: YanjiDatabase,
+    id: String,
+    timestamp: Long,
+    delete: suspend () -> Int = { db.studyTaskDao().deleteById(id) }
+): Boolean {
+    db.studyTaskDao().releaseCarryOverSources(destinationId = id, updatedAt = timestamp)
+    return delete() > 0
 }

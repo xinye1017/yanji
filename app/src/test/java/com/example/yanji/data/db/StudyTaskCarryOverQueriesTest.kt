@@ -1,9 +1,12 @@
 package com.example.yanji.data.db
 
 import androidx.room.Room
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.example.yanji.data.StudyTaskNotCarryableException
 import com.example.yanji.data.carryStudyTaskToTodayInTransaction
+import com.example.yanji.data.deleteStudyTaskInTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -284,5 +287,133 @@ class StudyTaskCarryOverQueriesTest {
         assertTrue(source!!.isCompleted)
         assertEquals("2026-10-20", source.date)
         assertEquals(50_000L, source.updatedAt)
+    }
+
+    @Test
+    fun deletingACarriedCopyRestoresTheSourceToPending() = isolatedDatabase { db ->
+        val dao = db.studyTaskDao()
+        dao.insert(task("source", "2026-10-20", title = "文件管理复习"))
+        carryStudyTaskToTodayInTransaction(
+            db = db,
+            taskId = "source",
+            today = today,
+            timestamp = 60_000L,
+            destinationId = "copy"
+        )
+        assertEquals(0, dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size)
+
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                assertTrue(deleteStudyTaskInTransaction(db, "copy", 70_000L))
+            }
+        }
+
+        val source = dao.getById("source")!!
+        assertNull(source.carriedOverToId)
+        assertEquals("2026-10-20", source.date)
+        assertEquals(70_000L, source.updatedAt)
+        assertNull(dao.getById("copy"))
+        assertEquals(
+            listOf("source"),
+            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22")
+                .map { it.task.id }
+        )
+    }
+
+    @Test
+    fun deletingAnOrdinaryTaskLeavesOtherLinksUntouchedAndReportsMissingIds() =
+        isolatedDatabase { db ->
+            val dao = db.studyTaskDao()
+            dao.insert(task("source", "2026-10-20"))
+            carryStudyTaskToTodayInTransaction(
+                db = db,
+                taskId = "source",
+                today = today,
+                timestamp = 60_000L,
+                destinationId = "copy"
+            )
+            dao.insert(task("ordinary", "2026-10-22"))
+
+            assertTrue(deleteStudyTaskInTransaction(db, "ordinary", timestamp = 70_000L))
+            assertFalse(deleteStudyTaskInTransaction(db, "missing", timestamp = 80_000L))
+
+            assertEquals("copy", dao.getById("source")!!.carriedOverToId)
+            assertNull(dao.getById("ordinary"))
+            assertEquals("copy", dao.getById("copy")!!.id)
+        }
+
+    @Test
+    fun aDeleteFailureRollsBackTheSourceRelease() = isolatedDatabase { db ->
+        val dao = db.studyTaskDao()
+        dao.insert(task("source", "2026-10-20"))
+        val sourceBeforeRelease = runBlocking {
+            carryStudyTaskToTodayInTransaction(
+                db = db,
+                taskId = "source",
+                today = today,
+                timestamp = 60_000L,
+                destinationId = "copy"
+            )
+            dao.getById("source")!!
+        }
+
+        assertFailsWith<Exception>("the injected delete failure must abort the transaction") {
+            db.useWriterConnection { transactor ->
+                transactor.immediateTransaction {
+                    deleteStudyTaskInTransaction(db, "copy", timestamp = 70_000L) {
+                        throw IllegalStateException("delete failed")
+                    }
+                }
+            }
+        }
+
+        val source = dao.getById("source")!!
+        assertEquals(sourceBeforeRelease.carriedOverToId, source.carriedOverToId)
+        assertEquals(sourceBeforeRelease.updatedAt, source.updatedAt)
+        assertEquals("copy", dao.getById("copy")!!.id)
+    }
+
+    @Test
+    fun danglingCarryOverLinksAreReleasedWithoutChangingTaskHistory() = isolatedDatabase { db ->
+        val dao = db.studyTaskDao()
+        val dangling = task(
+            "dangling",
+            "2026-10-20",
+            title = "学完图论",
+            carriedOverToId = "missing-copy",
+            createdAt = 1_000L
+        )
+        val validSource = task("valid-source", "2026-10-18")
+        dao.insert(dangling)
+        dao.insert(validSource)
+        carryStudyTaskToTodayInTransaction(
+            db = db,
+            taskId = validSource.id,
+            today = today,
+            timestamp = 2_000L,
+            destinationId = "valid-copy"
+        )
+        assertEquals(0, dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size)
+
+        assertEquals(1, dao.releaseDanglingCarryOverLinks(updatedAt = 3_000L))
+
+        val released = dao.getById("dangling")!!
+        assertNull(released.carriedOverToId)
+        assertEquals("2026-10-20", released.date)
+        assertEquals(dangling.isCompleted, released.isCompleted)
+        assertEquals(dangling.createdAt, released.createdAt)
+        assertEquals(3_000L, released.updatedAt)
+        assertEquals("valid-copy", dao.getById("valid-source")!!.carriedOverToId)
+        assertEquals(
+            listOf("dangling"),
+            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22")
+                .map { it.task.id }
+        )
+        assertEquals(
+            "the integrity repair must be idempotent",
+            0,
+            dao.releaseDanglingCarryOverLinks(updatedAt = 4_000L)
+        )
+        assertEquals(3_000L, dao.getById("dangling")!!.updatedAt)
     }
 }
