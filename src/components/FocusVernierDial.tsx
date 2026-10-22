@@ -61,6 +61,7 @@ export function FocusVernierDial({
   const userDragging = useRef(false);
   const momentumFallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastEmittedValue = useRef(valueMinutes);
+  const lastContentOffsetX = useRef<number>(0);
   const isMounted = useRef(false);
   const [width, setWidth] = useState(0);
 
@@ -92,7 +93,9 @@ export function FocusVernierDial({
   // mounting this ruler must never round it or write a new planned duration.
   useEffect(() => {
     if (width <= 0 || userDragging.current || ticks.length === 0) return;
-    list.current?.scrollTo({ x: offsetFor(valueMinutes), animated: false });
+    const initialOffset = offsetFor(valueMinutes);
+    lastContentOffsetX.current = initialOffset;
+    list.current?.scrollTo({ x: initialOffset, animated: false });
   }, [width, valueMinutes, ticks.length, offsetFor]);
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export function FocusVernierDial({
   }, [valueMinutes]);
 
   const selectOffset = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    (eOrX?: NativeSyntheticEvent<NativeScrollEvent> | number) => {
       if (disabled || !userDragging.current) return;
       userDragging.current = false;
       if (momentumFallbackTimer.current) {
@@ -108,7 +111,16 @@ export function FocusVernierDial({
         momentumFallbackTimer.current = null;
       }
       onDragStateChange?.(false);
-      const index = Math.round(e.nativeEvent.contentOffset.x / tickWidth);
+      let x: number | undefined;
+      if (typeof eOrX === 'number') {
+        x = eOrX;
+      } else if (eOrX && eOrX.nativeEvent && eOrX.nativeEvent.contentOffset) {
+        x = eOrX.nativeEvent.contentOffset.x;
+      } else {
+        x = lastContentOffsetX.current;
+      }
+      if (x === undefined || isNaN(x)) return;
+      const index = Math.round(x / tickWidth);
       const target = ticks[Math.max(0, Math.min(ticks.length - 1, index))];
       if (target !== undefined) {
         if (target !== valueMinutes) {
@@ -122,8 +134,13 @@ export function FocusVernierDial({
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = e?.nativeEvent?.contentOffset?.x;
+      if (x !== undefined && !isNaN(x)) {
+        lastContentOffsetX.current = x;
+      }
       if (!userDragging.current || disabled || ticks.length === 0) return;
-      const index = Math.round(e.nativeEvent.contentOffset.x / tickWidth);
+      if (x === undefined || isNaN(x)) return;
+      const index = Math.round(x / tickWidth);
       const target = ticks[Math.max(0, Math.min(ticks.length - 1, index))];
       if (target !== undefined && target !== lastEmittedValue.current) {
         lastEmittedValue.current = target;
@@ -206,14 +223,19 @@ export function FocusVernierDial({
           }}
           onScrollEndDrag={e => {
             if (disabled) return;
-            const vx = Math.abs(e.nativeEvent.velocity?.x ?? 0);
+            const contentX = e?.nativeEvent?.contentOffset?.x;
+            if (contentX !== undefined && !isNaN(contentX)) {
+              lastContentOffsetX.current = contentX;
+            }
+            const vx = Math.abs(e?.nativeEvent?.velocity?.x ?? 0);
             if (vx < 0.1) {
               if (momentumFallbackTimer.current) clearTimeout(momentumFallbackTimer.current);
-              selectOffset(e);
+              selectOffset(contentX ?? lastContentOffsetX.current);
             } else {
               if (momentumFallbackTimer.current) clearTimeout(momentumFallbackTimer.current);
+              const targetX = contentX ?? lastContentOffsetX.current;
               momentumFallbackTimer.current = setTimeout(() => {
-                selectOffset(e);
+                selectOffset(targetX);
               }, 250);
               if (typeof (momentumFallbackTimer.current as any)?.unref === 'function') {
                 (momentumFallbackTimer.current as any).unref();
@@ -234,7 +256,11 @@ export function FocusVernierDial({
               clearTimeout(momentumFallbackTimer.current);
               momentumFallbackTimer.current = null;
             }
-            selectOffset(e);
+            const contentX = e?.nativeEvent?.contentOffset?.x;
+            if (contentX !== undefined && !isNaN(contentX)) {
+              lastContentOffsetX.current = contentX;
+            }
+            selectOffset(contentX ?? lastContentOffsetX.current);
           }}
           contentContainerStyle={{
             paddingHorizontal: horizontalInset,
