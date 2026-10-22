@@ -126,6 +126,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
   const [settledDuration, setSettledDuration] = useState(DEFAULT_MINUTES);
+  const [isDialDragging, setIsDialDragging] = useState(false);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -591,6 +592,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                         valueMinutes={durationMinutes}
                         onChangeMinutes={setDurationMinutes}
                         onSettleMinutes={setSettledDuration}
+                        onDragStateChange={setIsDialDragging}
                         minMinutes={MIN_MINUTES}
                         maxMinutes={MAX_MINUTES}
                         stepMinutes={5}
@@ -654,7 +656,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     }}
                   >
                     {FOCUS_PRESETS.map(preset => {
-                      const isSelected = durationMinutes === preset;
+                      const isSelected = !isDialDragging && settledDuration === preset;
                       return (
                         <Pressable
                           key={preset}

@@ -307,3 +307,91 @@ test('FocusVernierDial defers onSettleMinutes until user releases touch / draggi
   ruler.props.onScrollEndDrag({ nativeEvent: { contentOffset: { x: 11 * tickWidth }, velocity: { x: 0 } } });
   assert.deepEqual(settledChanges, [60], 'settled value updates only upon touch release');
 });
+
+test('FocusVernierDial preserves active drag across mid-gesture pauses and signals drag state', () => {
+  const dynamicChanges = [];
+  const settledChanges = [];
+  const dragStates = [];
+  const paper = {
+    colors: tokens.YanjiPaperColors.light,
+    radius: tokens.YanjiPaperRadius,
+    layout: tokens.YanjiPaperLayout,
+    typography: tokens.YanjiPaperTypography,
+  };
+
+  const VernierDial = loadTypeScript('src/components/FocusVernierDial.tsx', {
+    react: {
+      useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+      useRef: initial => ({ current: initial }),
+      useEffect: () => {},
+      useCallback: fn => fn,
+      useMemo: fn => fn(),
+    },
+    'react-native': {
+      View: 'View',
+      Text: 'Text',
+      ScrollView: 'ScrollView',
+      PixelRatio: { roundToNearestPixel: s => s },
+      useWindowDimensions: () => ({ width: 358, height: 720, fontScale: 1 }),
+    },
+    'react-native-reanimated': { useReducedMotion: () => false },
+    '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
+  }).FocusVernierDial;
+
+  let current = 5;
+  const tree = VernierDial({
+    valueMinutes: current,
+    onChangeMinutes: next => {
+      dynamicChanges.push(next);
+      current = next;
+    },
+    onSettleMinutes: next => {
+      settledChanges.push(next);
+    },
+    onDragStateChange: isDragging => {
+      dragStates.push(isDragging);
+    },
+    minMinutes: 5,
+    maxMinutes: 180,
+    stepMinutes: 5,
+  });
+
+  function findNode(node, pred) {
+    if (!node || typeof node !== 'object') return null;
+    if (pred(node)) return node;
+    if (Array.isArray(node.props?.children)) {
+      for (const c of node.props.children) {
+        const found = findNode(c, pred);
+        if (found) return found;
+      }
+    } else if (node.props?.children) {
+      return findNode(node.props.children, pred);
+    }
+    return null;
+  }
+
+  const ruler = findNode(tree, n => n.props?.testID === 'focus-vernier-ruler');
+  assert.ok(ruler);
+  const tickWidth = ruler.props.snapToInterval;
+
+  // Touch begins: drag state is true
+  ruler.props.onScrollBeginDrag();
+  assert.deepEqual(dragStates, [true], 'drag state is true when dragging begins');
+
+  // Pull to 5m tick (index 0) or overscroll slightly
+  ruler.props.onScroll({ nativeEvent: { contentOffset: { x: 0 } } });
+
+  // Pause mid-drag without lifting finger — no onScrollEndDrag
+  // Resume dragging to index 1 (10m), index 2 (15m), index 17 (90m)
+  ruler.props.onScroll({ nativeEvent: { contentOffset: { x: 1 * tickWidth } } });
+  ruler.props.onScroll({ nativeEvent: { contentOffset: { x: 2 * tickWidth } } });
+  ruler.props.onScroll({ nativeEvent: { contentOffset: { x: 17 * tickWidth } } });
+
+  assert.deepEqual(dynamicChanges, [10, 15, 90], 'resuming drag after a pause continues to emit updates');
+  assert.deepEqual(settledChanges, [], 'remains unsettled while finger is still held down');
+
+  // Release at 90m
+  ruler.props.onScrollEndDrag({ nativeEvent: { contentOffset: { x: 17 * tickWidth }, velocity: { x: 0 } } });
+  assert.deepEqual(settledChanges, [90], 'commits settled duration on release');
+  assert.deepEqual(dragStates, [true, false], 'drag state resets to false on settle');
+});
