@@ -13,3 +13,23 @@ come from `src/theme/liquidGlass.ts`.
 `npm install` / `npm ci` applies the patch via `postinstall` and fails if it no
 longer applies. When upgrading this library, check the upstream implementation
 and both theme appearances before updating or removing the patch.
+
+# Heroicons even-odd fill correction
+
+`react-native-svg+15.15.5.patch` fixes Android path rendering for Heroicons
+solid glyphs whose cut-outs rely on `fillRule="evenodd"`.
+
+`PathView` initializes its path in the constructor, so `RenderableView.draw()`
+does not enter the `computePaths` branch on the first real draw. Upstream set
+the fill type only inside that branch, leaving the native path on
+`Path.FillType.WINDING`; the focus clock's face and hands then collapse into a
+solid dot.
+
+The patch applies the component's fill rule whenever the path is drawn, while
+leaving path construction, bounds, paint setup and caching unchanged. This
+restores every Heroicons even-odd glyph across navigation and screens.
+
+`npm install` / `npm ci` applies the patch via `postinstall`, and
+`npm run test:guards` checks that the installed Android source still applies
+the fill rule outside `computePaths`. When upgrading `react-native-svg`, verify
+the upstream implementation before updating or removing the patch.

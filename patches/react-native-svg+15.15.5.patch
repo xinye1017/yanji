@@ -1,0 +1,14 @@
+diff --git a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/RenderableView.java b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/RenderableView.java
+index 791eb57..2a84fde 100644
+--- a/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/RenderableView.java
++++ b/node_modules/react-native-svg/android/src/main/java/com/horcrux/svg/RenderableView.java
+@@ -509,8 +509,8 @@ public abstract class RenderableView extends VirtualView implements ReactHitSlop
+     boolean computePaths = mPath == null;
+     if (computePaths) {
+       mPath = getPath(canvas, paint);
+-      mPath.setFillType(fillRule);
+     }
++    mPath.setFillType(fillRule);
+     boolean nonScalingStroke = vectorEffect == VECTOR_EFFECT_NON_SCALING_STROKE;
+     Path path = mPath;
+     if (nonScalingStroke) {
