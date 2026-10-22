@@ -10,7 +10,7 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { toSubtleColor, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { YanjiIcon } from './YanjiUI';
 import type { YanjiIconName } from './icons';
 import type { PopoverAnchor } from './TimelineActionPopover';
@@ -25,18 +25,21 @@ interface TimelineCompactRowProps {
   tagIcon?: YanjiIconName;
   /** 灵感 = positive (green), 疑点 = brand (orange-red), sessions = neutral. */
   tagTone?: CompactTagTone;
+  /** Explicit subject/tag color (e.g. subjectColor) that styles the capsule background wash and text. */
+  tagColor?: string;
   /** Overrides the dot colour; sessions pass their subject colour. */
   dotColor?: string;
   /** Right-aligned secondary text before the menu, e.g. a session duration. */
   metaText?: string;
-  content: string;
+  /** Note text body. If omitted or empty, the row renders as a lightweight single-line event without a body card. */
+  content?: string | null;
   isFirst: boolean;
   isLast: boolean;
   disabled: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   moreAccessibilityLabel?: string;
-  onPressContent: () => void;
+  onPressContent?: () => void;
   /** Receives the 「···」 button's window rect so the menu can anchor to it. */
   onMore: (anchor: PopoverAnchor) => void;
 }
@@ -54,6 +57,7 @@ export function TimelineCompactRow({
   tagLabel,
   tagIcon,
   tagTone = 'neutral',
+  tagColor,
   dotColor,
   metaText,
   content,
@@ -70,15 +74,26 @@ export function TimelineCompactRow({
   const { colors, typography, layout, radius } = paper;
   const [rowHeight, setRowHeight] = useState<number>(YanjiTouch.min);
   const moreRef = useRef<React.ComponentRef<typeof View>>(null);
-  const title = previewOf(content);
-  // Anchored to the first line's vertical center (paddingTop 10 + half of minHeight 28 = 24)
-  const center = 24;
-  const nodeRadius = layout.timelineNodeSize / 2;
+  const hasContent = Boolean(content && content.trim());
+  const title = hasContent ? previewOf(content!) : '';
+
   const tone = tagTone === 'positive'
     ? { dot: colors.positive, chipBg: colors.positiveSubtle, chipInk: colors.positive }
     : tagTone === 'brand'
       ? { dot: colors.brand, chipBg: colors.brandSubtle, chipInk: colors.brandInk }
       : { dot: colors.secondary, chipBg: colors.subtle, chipInk: colors.secondary };
+
+  const capsuleTone = tagColor
+    ? {
+        dot: tagColor,
+        chipBg: toSubtleColor(tagColor, 0.14),
+        chipInk: tagColor,
+      }
+    : tone;
+
+  // Single-line compact row (focus session) centers at 16; multi-line card row (note) centers at 24
+  const center = hasContent ? 24 : 16;
+  const nodeRadius = layout.timelineNodeSize / 2;
 
   // Window coordinates are the only space both the row and the overlay agree
   // on; the screen converts them into the overlay's own origin.
@@ -91,9 +106,8 @@ export function TimelineCompactRow({
       <View style={{ flexDirection: 'row' }}>
         <View
           style={{
-            // The clock sits flush with the page gutter, aligned with the first line.
-            marginTop: 10,
-            height: 28,
+            marginTop: hasContent ? 10 : 0,
+            height: hasContent ? 28 : 32,
             justifyContent: 'center',
             alignItems: 'flex-start',
             marginRight: YanjiSpacing.xs,
@@ -127,7 +141,7 @@ export function TimelineCompactRow({
               width: layout.timelineNodeSize,
               height: layout.timelineNodeSize,
               borderRadius: nodeRadius,
-              backgroundColor: dotColor ?? tone.dot,
+              backgroundColor: dotColor ?? capsuleTone.dot,
             }}
           />
           {!isLast ? (
@@ -143,109 +157,182 @@ export function TimelineCompactRow({
           ) : null}
         </View>
 
-        <View
-          onLayout={event => setRowHeight(event.nativeEvent.layout.height)}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            backgroundColor: colors.elevated,
-            borderRadius: radius.surface,
-            borderWidth: layout.hairlineWidth,
-            borderColor: colors.hairline,
-            paddingHorizontal: YanjiSpacing.md,
-            paddingTop: 10,
-            paddingBottom: 12,
-          }}
-        >
+        {hasContent ? (
           <View
+            onLayout={event => setRowHeight(event.nativeEvent.layout.height)}
             style={{
+              flex: 1,
+              minWidth: 0,
+              backgroundColor: colors.elevated,
+              borderRadius: radius.surface,
+              borderWidth: layout.hairlineWidth,
+              borderColor: colors.hairline,
+              paddingHorizontal: YanjiSpacing.md,
+              paddingTop: 10,
+              paddingBottom: 12,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                minHeight: 28,
+              }}
+            >
+              {tagLabel ? (
+                <View
+                  style={{
+                    flexShrink: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: layout.taskTagPadding + 2,
+                    backgroundColor: capsuleTone.chipBg,
+                    borderRadius: radius.pill,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                  }}
+                >
+                  {tagIcon ? (
+                    // One fixed slot for every category, so the tag text starts at
+                    // the same x whether the glyph is a bulb, a question or a clock.
+                    <View
+                      style={{
+                        width: layout.momentTagIconSlot,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={capsuleTone.chipInk} />
+                    </View>
+                  ) : null}
+                  <Text numberOfLines={1} style={[typography.captionMeta, { color: capsuleTone.chipInk, fontWeight: '600' }]}>
+                    {tagLabel}
+                  </Text>
+                </View>
+              ) : <View />}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
+                {metaText ? (
+                  <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 0 }]}>
+                    {metaText}
+                  </Text>
+                ) : null}
+
+                <Pressable
+                  ref={moreRef}
+                  onPress={openMenu}
+                  disabled={disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${title.replace(/\n+/g, ' ')}`}
+                  accessibilityState={{ disabled }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={({ pressed }) => ({
+                    width: 28,
+                    height: 28,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: radius.pill,
+                    backgroundColor: pressed ? colors.subtle : 'transparent',
+                    opacity: disabled ? 0.5 : 1,
+                  })}
+                >
+                  <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={onPressContent}
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel ?? `查看完整记录：${title.replace(/\n+/g, ' ')}`}
+              accessibilityHint={accessibilityHint}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                numberOfLines={3}
+                ellipsizeMode="tail"
+                style={[typography.bodyPrimary, { color: colors.ink, lineHeight: 22 }]}
+              >
+                {title}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View
+            onLayout={event => setRowHeight(event.nativeEvent.layout.height)}
+            style={{
+              flex: 1,
+              minWidth: 0,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              minHeight: 28,
+              minHeight: 32,
             }}
           >
-            {tagLabel ? (
-              <View
-                style={{
-                  flexShrink: 0,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: layout.taskTagPadding + 2,
-                  backgroundColor: tone.chipBg,
-                  borderRadius: radius.pill,
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                }}
-              >
-                {tagIcon ? (
-                  // One fixed slot for every category, so the tag text starts at
-                  // the same x whether the glyph is a bulb, a question or a clock.
-                  <View
-                    style={{
-                      width: layout.momentTagIconSlot,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={tone.chipInk} />
-                  </View>
-                ) : null}
-                <Text numberOfLines={1} style={[typography.captionMeta, { color: tone.chipInk, fontWeight: '600' }]}>
-                  {tagLabel}
-                </Text>
-              </View>
-            ) : <View />}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flexShrink: 1 }}>
+              {tagLabel ? (
+                <View
+                  style={{
+                    flexShrink: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: layout.taskTagPadding + 2,
+                    backgroundColor: capsuleTone.chipBg,
+                    borderRadius: radius.pill,
+                    paddingHorizontal: 9,
+                    paddingVertical: 3.5,
+                  }}
+                >
+                  {tagIcon ? (
+                    <View
+                      style={{
+                        width: layout.momentTagIconSlot,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={capsuleTone.chipInk} />
+                    </View>
+                  ) : null}
+                  <Text numberOfLines={1} style={[typography.captionMeta, { color: capsuleTone.chipInk, fontWeight: '600' }]}>
+                    {tagLabel}
+                  </Text>
+                </View>
+              ) : null}
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
               {metaText ? (
-                <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 0 }]}>
+                <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
                   {metaText}
                 </Text>
               ) : null}
-
-              <Pressable
-                ref={moreRef}
-                onPress={openMenu}
-                disabled={disabled}
-                accessibilityRole="button"
-                accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${title.replace(/\n+/g, ' ')}`}
-                accessibilityState={{ disabled }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={({ pressed }) => ({
-                  width: 28,
-                  height: 28,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: radius.pill,
-                  backgroundColor: pressed ? colors.subtle : 'transparent',
-                  opacity: disabled ? 0.5 : 1,
-                })}
-              >
-                <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
-              </Pressable>
             </View>
-          </View>
 
-          <Pressable
-            onPress={onPressContent}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel ?? `查看完整记录：${title.replace(/\n+/g, ' ')}`}
-            accessibilityHint={accessibilityHint}
-            style={({ pressed }) => ({
-              marginTop: 8,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text
-              numberOfLines={3}
-              ellipsizeMode="tail"
-              style={[typography.bodyPrimary, { color: colors.ink, lineHeight: 22 }]}
+            <Pressable
+              ref={moreRef}
+              onPress={openMenu}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${tagLabel ?? ''}`}
+              accessibilityState={{ disabled }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                width: 28,
+                height: 28,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: radius.pill,
+                backgroundColor: pressed ? colors.subtle : 'transparent',
+                opacity: disabled ? 0.5 : 1,
+              })}
             >
-              {title}
-            </Text>
-          </Pressable>
-        </View>
+              <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
+            </Pressable>
+          </View>
+        )}
       </View>
     </View>
   );

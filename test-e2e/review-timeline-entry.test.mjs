@@ -212,7 +212,7 @@ function deferred() {
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-test('a session is one compact line whose body opens its note editor', () => {
+test('a session renders as a single-line tag capsule with subject colour and duration, decoupled from note editing', () => {
   const harness = screenHarness(snapshot({
     sessions: [session({ note: '手画了一遍指针断链过程', taskId: 'task-os-ch4' })],
     tasks: [{
@@ -227,21 +227,15 @@ test('a session is one compact line whose body opens its note editor', () => {
 
   assert.equal(row.props.tagLabel, '数据结构');
   assert.equal(row.props.tagIcon, 'clock3', 'every focus subject shares the clock icon');
-  assert.equal(row.props.tagTone, 'neutral');
+  assert.equal(row.props.tagColor, '#2D7A5E', 'tag carries the subject colour');
   assert.equal(row.props.dotColor, '#2D7A5E', 'the node keeps the subject colour');
-  assert.equal(row.props.content, '手画了一遍指针断链过程', 'the note is the body');
-  assert.equal(row.props.metaText, '2 小时 6 分', 'duration rides on the same line');
+  assert.equal(row.props.content, undefined, 'no body text / "专注" line on sessions');
+  assert.equal(row.props.metaText, '2 小时 6 分', 'duration rides beside the capsule');
   assert.equal(row.props.isFirst, true);
   assert.equal(row.props.isLast, true);
-
-  assert.equal(harness.noteModal(tree).props.visible, false);
-  row.props.onPressContent();
-  const reopened = harness.noteModal(harness.render());
-  assert.equal(reopened.props.visible, true, 'tapping the body opens the note editor');
-  assert.equal(reopened.props.sessionId, 'focus-a', 'it opens the session that was tapped');
 });
 
-test('an empty session note falls back to the bound plan, then to the kind of block', () => {
+test('sessions omit body text regardless of bound plans or notes, staying single-line', () => {
   const bound = screenHarness(snapshot({
     sessions: [session({ taskId: 'task-1' })],
     tasks: [{ id: 'task-1', title: '王道操作系统第四章' }],
@@ -249,25 +243,26 @@ test('an empty session note falls back to the bound plan, then to the kind of bl
   assert.equal(screenHarness(snapshot({
     sessions: [session({ taskId: 'task-1' })],
     tasks: [{ id: 'task-1', title: '王道操作系统第四章' }],
-  })).rows(bound)[0].props.content, '达成「王道操作系统第四章」');
+  })).rows(bound)[0].props.content, undefined);
 
   const plain = screenHarness(snapshot({ sessions: [session()] })).render();
-  assert.equal(screenHarness(snapshot({ sessions: [session()] })).rows(plain)[0].props.content, '专注');
+  assert.equal(screenHarness(snapshot({ sessions: [session()] })).rows(plain)[0].props.content, undefined);
 
   const exam = screenHarness(snapshot({ sessions: [session({ isExam: true, subjectName: '英语一' })] })).render();
   assert.equal(screenHarness(snapshot({
     sessions: [session({ isExam: true, subjectName: '英语一' })],
-  })).rows(exam)[0].props.content, '模考');
+  })).rows(exam)[0].props.content, undefined);
 });
 
-test('the session menu keeps edit/delete behind the existing confirmation', async () => {
+test('the session menu only offers delete, decoupling focus records from note editing', async () => {
   const harness = screenHarness(snapshot({ sessions: [session({ note: '已写好的随笔' })] }));
   let tree = harness.render();
   harness.rows(tree)[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   tree = harness.render();
   const menu = harness.menu(tree);
   assert.ok(menu, 'the row opens the anchored menu');
-  assert.deepEqual(plain(menu.props.actions.map(action => action.label)), ['编辑随笔', '删除记录']);
+  assert.deepEqual(plain(menu.props.actions.map(action => action.label)), ['删除记录'],
+    'editing note is decoupled from focus session menu');
 
   pressMenuAction(menu, '删除记录');
   const after = harness.render();
@@ -277,7 +272,7 @@ test('the session menu keeps edit/delete behind the existing confirmation', asyn
   const exam = screenHarness(snapshot({ sessions: [session({ isExam: true })] }));
   exam.rows(exam.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   assert.deepEqual(plain(exam.menu(exam.render()).props.actions.map(action => action.label)), ['删除记录'],
-    'an exam has no editable note');
+    'an exam also only has delete');
 });
 
 function openSessionDelete(harness) {

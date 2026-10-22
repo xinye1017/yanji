@@ -12,7 +12,6 @@ import {
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
-import { SessionNoteModal } from '../components/SessionNoteModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
@@ -26,7 +25,7 @@ import {
 } from '../state/dataRefresh';
 import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
-  boundTaskTitle, buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
+  buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
   computeAxisLabelsLayout, countElapsedDays, countWorkedDays, dominantSubjectColors,
   formatClockFromEpoch, formatDailyAverageDuration, formatDuration, formatDurationMetric,
   durationMetricMinutes,
@@ -104,9 +103,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const staleRead = view === 'trend'
     ? (overview !== null && overviewReadFailed)
     : (snapshot !== null && dailyReadFailed);
-  const [noteTarget, setNoteTarget] = useState<{
-    sessionId: string; isExam: boolean; title: string; note: string;
-  } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     sessionId: string; isExam: boolean; subjectName: string;
   } | null>(null);
@@ -206,14 +202,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     if (entry.kind === 'session') {
       const session = entry.session;
       return [
-        ...(session.isExam ? [] : [{
-          key: 'edit',
-          icon: 'compose' as const,
-          label: '编辑随笔',
-          onPress: () => setNoteTarget({
-            sessionId: session.id, isExam: session.isExam, title: session.subjectName, note: session.note,
-          }),
-        }]),
         {
           key: 'delete',
           icon: 'delete' as const,
@@ -347,11 +335,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
 
           <Timeline
             entries={entries}
-            dayTasks={dayTasks}
             busyNote={busyNote !== null}
-            onEditSession={session => setNoteTarget({
-              sessionId: session.id, isExam: session.isExam, title: session.subjectName, note: session.note,
-            })}
             onEditNote={note => {
               setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
               setConfirmDeleteNote(false);
@@ -415,8 +399,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       />
     ) : null}
 
-    <SessionNoteModal visible={noteTarget !== null} sessionId={noteTarget?.sessionId ?? null} sessionTitle={noteTarget?.title ?? ''}
-      initialNote={noteTarget?.note ?? ''} examSession={noteTarget?.isExam ?? false} onClose={() => setNoteTarget(null)} onSaved={() => setNoteTarget(null)} />
     <RecordMomentModal
       visible={editingNote !== null}
       date={date}
@@ -573,11 +555,9 @@ function DaySummary({ snapshot }: {
 // The timeline — one spine, clock on the left, event on the right
 // ---------------------------------------------------------------------------
 
-function Timeline({ entries, dayTasks, busyNote, onEditSession, onEditNote, onOpenMenu }: {
+function Timeline({ entries, busyNote, onEditNote, onOpenMenu }: {
   entries: readonly TimelineEntry[];
-  dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
-  onEditSession: (session: DailySession) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
   onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
 }): React.JSX.Element {
@@ -586,21 +566,19 @@ function Timeline({ entries, dayTasks, busyNote, onEditSession, onEditNote, onOp
   return <View style={{ marginTop: YanjiSpacing.lg }}>
     {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
       isFirst={index === 0} isLast={index === entries.length - 1}
-      dayTasks={dayTasks} busyNote={busyNote}
-      onEditSession={onEditSession} onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
+      busyNote={busyNote}
+      onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
     {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
       按真实发生时刻排列；完成计划不标记未提供的完成时刻。
     </Text> : null}
   </View>;
 }
 
-function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSession, onEditNote, onOpenMenu }: {
+function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu }: {
   entry: TimelineEntry;
   isFirst: boolean;
   isLast: boolean;
-  dayTasks: readonly { id: string; title: string }[];
   busyNote: boolean;
-  onEditSession: (session: DailySession) => void;
   onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
   onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
 }): React.JSX.Element {
@@ -608,27 +586,16 @@ function TimelineItem({ entry, isFirst, isLast, dayTasks, busyNote, onEditSessio
   const { colors } = paper;
   if (entry.kind === 'session') {
     const session = entry.session;
-    const boundTitle = boundTaskTitle(session.taskId, dayTasks);
-    // The note is what the reader came for; when it is empty the bound plan (or
-    // the fact that this was a focus block) is the honest one-line summary.
-    const body = session.note.trim()
-      ? session.note
-      : boundTitle
-        ? `达成「${boundTitle}」`
-        : session.isExam ? '模考' : '专注';
     return <TimelineCompactRow
       timeLabel={formatClockFromEpoch(entry.at)}
       tagLabel={session.subjectName}
       tagIcon="clock3"
-      tagTone="neutral"
+      tagColor={session.subjectColor || colors.secondary}
       dotColor={session.subjectColor || colors.secondary}
       metaText={formatDuration(session.durationSeconds)}
-      content={body}
       isFirst={isFirst} isLast={isLast} disabled={busyNote}
-      accessibilityLabel={`${session.subjectName}，${session.isExam ? '模考' : '专注'}，${formatDuration(session.durationSeconds)}`}
-      accessibilityHint={session.isExam ? '模考随笔暂不支持编辑' : '打开这次专注的随笔'}
+      accessibilityLabel={`${session.subjectName}，${formatDuration(session.durationSeconds)}`}
       moreAccessibilityLabel={`更多操作：${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起`}
-      onPressContent={() => onEditSession(session)}
       onMore={anchor => onOpenMenu(entry, anchor)}
     />;
   }
