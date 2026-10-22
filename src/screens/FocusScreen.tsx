@@ -631,47 +631,35 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       />
                     </View>
 
-                    {/* Left Edge Fade */}
+                    {/* Full-span Feathering Fade: Keep only central tick and label solid, fading out towards both sides */}
                     <View
                       pointerEvents="none"
                       style={{
                         position: 'absolute',
                         left: -paper.layout.pageGutter,
-                        top: 0,
-                        bottom: 0,
-                        width: 44,
-                      }}
-                    >
-                      <Svg width="100%" height="100%">
-                        <Defs>
-                          <LinearGradient id="ruler-fade-left" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={1} />
-                            <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={0} />
-                          </LinearGradient>
-                        </Defs>
-                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-fade-left)" />
-                      </Svg>
-                    </View>
-
-                    {/* Right Edge Fade */}
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
                         right: -paper.layout.pageGutter,
                         top: 0,
                         bottom: 0,
-                        width: 44,
                       }}
                     >
                       <Svg width="100%" height="100%">
                         <Defs>
-                          <LinearGradient id="ruler-fade-right" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                          <LinearGradient id="ruler-feather-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={1} />
+                            <Stop offset="12%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
+                            <Stop offset="24%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
+                            <Stop offset="34%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
+                            <Stop offset="42%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
+                            <Stop offset="46%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                            <Stop offset="54%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                            <Stop offset="58%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
+                            <Stop offset="66%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
+                            <Stop offset="76%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
+                            <Stop offset="88%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
                             <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={1} />
                           </LinearGradient>
                         </Defs>
-                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-fade-right)" />
+                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-feather-gradient)" />
                       </Svg>
                     </View>
                   </View>
