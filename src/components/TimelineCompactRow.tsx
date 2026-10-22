@@ -42,12 +42,11 @@ interface TimelineCompactRowProps {
 }
 
 /**
- * The stored text as one display line: whitespace-only breaks collapse to a
- * space so the preview cannot start blank, and an empty note still gets a
- * truthful placeholder. The persisted content is never touched.
+ * The stored text for display: excessive blank lines collapse, and an empty
+ * note gets a truthful placeholder. The persisted content is never touched.
  */
 function previewOf(content: string): string {
-  return content.replace(/\s*\n+\s*/g, ' ').trim() || '无标题记录';
+  return content.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || '无标题记录';
 }
 
 export function TimelineCompactRow({
@@ -72,7 +71,8 @@ export function TimelineCompactRow({
   const [rowHeight, setRowHeight] = useState<number>(YanjiTouch.min);
   const moreRef = useRef<React.ComponentRef<typeof View>>(null);
   const title = previewOf(content);
-  const center = rowHeight / 2;
+  // Anchored to the first line's vertical center (paddingTop 10 + half of minHeight 28 = 24)
+  const center = 24;
   const nodeRadius = layout.timelineNodeSize / 2;
   const tone = tagTone === 'positive'
     ? { dot: colors.positive, chipBg: colors.positiveSubtle, chipInk: colors.positive }
@@ -91,9 +91,9 @@ export function TimelineCompactRow({
       <View style={{ flexDirection: 'row' }}>
         <View
           style={{
-            // The clock sits flush with the page gutter and only a hair away
-            // from its node. Every row uses the same HH:MM width, so the dots
-            // stay aligned without reserving a wider fixed column.
+            // The clock sits flush with the page gutter, aligned with the first line.
+            marginTop: 10,
+            height: 28,
             justifyContent: 'center',
             alignItems: 'flex-start',
             marginRight: YanjiSpacing.xs,
@@ -148,97 +148,102 @@ export function TimelineCompactRow({
           style={{
             flex: 1,
             minWidth: 0,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: YanjiSpacing.xs,
-            minHeight: YanjiTouch.min,
             backgroundColor: colors.elevated,
-            borderRadius: radius.tag,
+            borderRadius: radius.surface,
             borderWidth: layout.hairlineWidth,
             borderColor: colors.hairline,
-            paddingLeft: YanjiSpacing.sm,
+            paddingHorizontal: YanjiSpacing.md,
+            paddingTop: 10,
+            paddingBottom: 12,
           }}
         >
-          {tagLabel ? (
-            <View
-              style={{
-                flexShrink: 0,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: layout.taskTagPadding,
-                backgroundColor: tone.chipBg,
-                borderRadius: radius.badge,
-                paddingHorizontal: layout.taskTagPaddingHorizontal,
-                paddingVertical: layout.taskTagPadding,
-              }}
-            >
-              {tagIcon ? (
-                // One fixed slot for every category, so the tag text starts at
-                // the same x whether the glyph is a bulb, a question or a clock.
-                <View
-                  style={{
-                    width: layout.momentTagIconSlot,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={tone.chipInk} />
-                </View>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              minHeight: 28,
+            }}
+          >
+            {tagLabel ? (
+              <View
+                style={{
+                  flexShrink: 0,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: layout.taskTagPadding + 2,
+                  backgroundColor: tone.chipBg,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                }}
+              >
+                {tagIcon ? (
+                  // One fixed slot for every category, so the tag text starts at
+                  // the same x whether the glyph is a bulb, a question or a clock.
+                  <View
+                    style={{
+                      width: layout.momentTagIconSlot,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <YanjiIcon name={tagIcon} size={typography.captionMeta.fontSize} color={tone.chipInk} />
+                  </View>
+                ) : null}
+                <Text numberOfLines={1} style={[typography.captionMeta, { color: tone.chipInk, fontWeight: '600' }]}>
+                  {tagLabel}
+                </Text>
+              </View>
+            ) : <View />}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
+              {metaText ? (
+                <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 0 }]}>
+                  {metaText}
+                </Text>
               ) : null}
-              <Text numberOfLines={1} style={[typography.captionMeta, { color: tone.chipInk }]}>
-                {tagLabel}
-              </Text>
+
+              <Pressable
+                ref={moreRef}
+                onPress={openMenu}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${title.replace(/\n+/g, ' ')}`}
+                accessibilityState={{ disabled }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => ({
+                  width: 28,
+                  height: 28,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: radius.pill,
+                  backgroundColor: pressed ? colors.subtle : 'transparent',
+                  opacity: disabled ? 0.5 : 1,
+                })}
+              >
+                <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
+              </Pressable>
             </View>
-          ) : null}
+          </View>
 
           <Pressable
             onPress={onPressContent}
             accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel ?? `查看完整记录：${title}`}
+            accessibilityLabel={accessibilityLabel ?? `查看完整记录：${title.replace(/\n+/g, ' ')}`}
             accessibilityHint={accessibilityHint}
             style={({ pressed }) => ({
-              flex: 1,
-              minWidth: 0,
-              minHeight: YanjiTouch.min,
-              justifyContent: 'center',
-              paddingHorizontal: YanjiSpacing.xs,
+              marginTop: 8,
               opacity: pressed ? 0.7 : 1,
             })}
           >
             <Text
-              numberOfLines={1}
+              numberOfLines={3}
               ellipsizeMode="tail"
-              style={[typography.bodyPrimary, { color: colors.ink }]}
+              style={[typography.bodyPrimary, { color: colors.ink, lineHeight: 22 }]}
             >
               {title}
             </Text>
-          </Pressable>
-
-          {metaText ? (
-            <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 0 }]}>
-              {metaText}
-            </Text>
-          ) : null}
-
-          <Pressable
-            ref={moreRef}
-            onPress={openMenu}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${title}`}
-            accessibilityState={{ disabled }}
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            style={({ pressed }) => ({
-              width: YanjiTouch.min,
-              height: YanjiTouch.min,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: radius.pill,
-              backgroundColor: pressed ? colors.subtle : 'transparent',
-              opacity: disabled ? 0.5 : 1,
-            })}
-          >
-            <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
           </Pressable>
         </View>
       </View>

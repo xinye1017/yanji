@@ -536,3 +536,16 @@ export const YanjiPaperMotion = {
   selectionMs: 160,
   opacityReducedMs: 120,
 } as const;
+
+/**
+ * Resolves a translucent background wash from a hex or rgba color string.
+ */
+export function toSubtleColor(hexOrColor: string, alpha = 0.14): string {
+  if (hexOrColor.startsWith('#') && hexOrColor.length === 7) {
+    const r = parseInt(hexOrColor.slice(1, 3), 16);
+    const g = parseInt(hexOrColor.slice(3, 5), 16);
+    const b = parseInt(hexOrColor.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hexOrColor;
+}

@@ -151,20 +151,26 @@ const menuView = tree => nodes(tree, n => n.type === 'View' &&
 // The compact row
 // ---------------------------------------------------------------------------
 
-test('an event is one line: clock, tag, single-line preview and 「···」', () => {
+test('an event is a rounded card: capsule tag on line 1, content below (up to 3 lines) and 「···」', () => {
   const calls = [];
   const h = rowHarness({ measureInWindow: callback => callback(300, 200, 44, 44) });
   const tree = h.render({ onMore: anchor => calls.push(anchor) });
 
-  const preview = nodes(tree, n => n.type === 'Text' && n.props.numberOfLines === 1 && n.props.ellipsizeMode === 'tail')[0];
-  assert.ok(preview, 'the body is explicitly a one-line preview');
-  assert.equal(text(preview), '第一行 第二行 ✨', 'line breaks collapse for display; the stored text is untouched');
+  const preview = nodes(tree, n => n.type === 'Text' && n.props.numberOfLines === 3 && n.props.ellipsizeMode === 'tail')[0];
+  assert.ok(preview, 'the body is a multi-line preview (up to 3 lines)');
+  assert.match(text(preview), /第一行/);
+  assert.match(text(preview), /第二行 ✨/);
   assert.match(text(tree), /19:43/);
   assert.match(text(tree), /灵感/);
 
+  const card = nodes(tree, n => n.type === 'View' && n.props.style?.borderRadius === theme.paper.radius.surface)[0];
+  assert.ok(card, 'the card container has radius.surface');
+
   const presses = nodes(tree, n => n.type === 'Pressable');
   assert.equal(presses.length, 2, 'only the body and the 「···」 are targets');
-  presses[1].props.onPress();
+  const more = nodes(tree, n => n.type === 'Pressable' && n.props.accessibilityLabel?.startsWith('更多记录操作'))[0];
+  assert.ok(more, 'the more button exists');
+  more.props.onPress();
   assert.equal(calls.length, 1);
   assert.equal(calls[0].x, 300);
   assert.equal(calls[0].y, 200);
@@ -183,11 +189,11 @@ test('every tag carries a fixed-width icon slot: bulb, question or clock', () =>
   assert.equal(slot.props.style.alignItems, 'center');
   assert.equal(slot.props.style.justifyContent, 'center');
 
-  // The chip keeps its old compact padding, so the icon can never grow the row.
+  // The chip uses pill radius on line 1.
   const chip = nodes(bulb, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positiveSubtle)[0];
-  assert.equal(chip.props.style.paddingVertical, tokens.YanjiPaperLayout.taskTagPadding);
-  const card = nodes(bulb, n => n.type === 'View' && n.props.style?.minHeight === tokens.YanjiTouch.min && n.props.style?.backgroundColor === theme.paper.colors.elevated)[0];
-  assert.equal(card.props.style.minHeight, tokens.YanjiTouch.min, 'the one-line row keeps its 44dp floor');
+  assert.equal(chip.props.style.borderRadius, theme.paper.radius.pill);
+  const card = nodes(bulb, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.elevated)[0];
+  assert.ok(card, 'the card container renders with elevated background');
 
   const doubt = h.render({ tagLabel: '疑点 · 待解决', tagIcon: 'doubt', tagTone: 'brand' });
   assert.equal(tagIcon(doubt).props.name, 'doubt', '疑点 uses the circled question mark');
@@ -222,7 +228,7 @@ test('the clock sits on the page gutter, and the dot/chip follow the tag tone', 
   assert.match(text(session), /30分钟/, 'the duration meta rides on the same line');
 });
 
-test('the spine follows the measured row, crosses the gap, and stops at both ends', () => {
+test('the spine follows the header band, crosses the gap, and stops at both ends', () => {
   const h = rowHarness();
   const lines = tree => nodes(tree, n => n.type === 'View' && n.props.style?.position === 'absolute' &&
     n.props.style?.width === tokens.YanjiPaperLayout.hairlineWidth);
@@ -231,13 +237,11 @@ test('the spine follows the measured row, crosses the gap, and stops at both end
   assert.equal(lines(tree).length, 1);
   assert.equal(lines(tree)[0].props.style.bottom, -tokens.YanjiPaperLayout.momentItemGap);
 
-  const measured = nodes(tree, n => typeof n.props.onLayout === 'function')[0];
-  measured.props.onLayout({ nativeEvent: { layout: { height: 56 } } });
   tree = h.render({ isFirst: false, isLast: true });
   assert.equal(lines(tree).length, 1);
   assert.equal(lines(tree)[0].props.style.bottom, undefined);
   const dot = nodes(tree, n => n.props.style?.backgroundColor === theme.paper.colors.positive)[0];
-  assert.equal(dot.props.style.top + tokens.YanjiPaperLayout.timelineNodeSize / 2, 28);
+  assert.equal(dot.props.style.top + tokens.YanjiPaperLayout.timelineNodeSize / 2, 24, 'dot anchors to line 1 at y=24');
 
   assert.equal(lines(h.render({ isFirst: true, isLast: true })).length, 0);
 });

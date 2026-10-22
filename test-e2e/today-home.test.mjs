@@ -169,7 +169,7 @@ test('task controls keep completion, editing, and focus separate; completed rows
   assert.equal(nodes(completed, node => node.props.accessibilityRole === 'checkbox')[0].props.accessibilityState.checked, true);
 });
 
-test('task subject labels use readable theme text rather than the decorative subject colour', () => {
+test('task subject labels render as a rounded rectangle badge with the subject colour (Scheme A)', () => {
   const original = theme.paper.colors;
   try {
     for (const colors of Object.values(tokens.YanjiPaperColors)) {
@@ -180,7 +180,17 @@ test('task subject labels use readable theme text rather than the decorative sub
           completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
         });
         const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
-        assert.equal(label.props.style.color, colors.secondary, 'subject colour belongs to the dot, not small text');
+        assert.equal(label.props.style.color, accentColor, 'Scheme A: subject label text carries the subject color');
+        const badge = nodes(row, n => n.type === 'View' && n.props.style?.backgroundColor === tokens.toSubtleColor(accentColor, 0.14))[0];
+        assert.ok(badge, 'Scheme A: subject label lives in a tinted rounded-rectangle badge');
+        assert.equal(badge.props.style.borderRadius, theme.paper.radius.tag);
+
+        const completedRow = shared.YanjiTaskLedgerRow({
+          title: '积分练习', subjectName: '数学一', meta: '已投入 0m', accentColor,
+          completed: true, onToggle() {}, onEdit() {}, onStartFocus() {},
+        });
+        const completedLabel = nodes(completedRow, n => n.type === 'Text' && n.props.children === '数学一')[0];
+        assert.equal(completedLabel.props.style.color, colors.secondary, 'completed task recedes to secondary text');
       }
     }
   } finally {

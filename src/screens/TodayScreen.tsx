@@ -27,7 +27,7 @@ import { TaskEditorModal } from '../components/TaskEditorModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
-import { YanjiSpacing } from '../theme/tokens';
+import { toSubtleColor, YanjiSpacing } from '../theme/tokens';
 import {
   refreshDailySnapshot, refreshSettingsSnapshot,
   useDailyReadFailed, useDailySnapshot, useSettingsSnapshot,
@@ -114,7 +114,7 @@ function CarryOverLedgerRow({
   onDefer: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout } = paper;
+  const { colors, typography, layout, radius } = paper;
   return (
     <View>
       <View style={{ paddingVertical: YanjiSpacing.sm, gap: YanjiSpacing.xs }}>
@@ -125,14 +125,15 @@ function CarryOverLedgerRow({
           {task.title}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
-            <View style={{
-              width: layout.subjectSwatchSize,
-              height: layout.subjectSwatchSize,
-              borderRadius: layout.subjectSwatchSize / 2,
-              backgroundColor: task.subjectColor,
-            }} />
-            <Text style={[typography.captionMeta, { color: colors.secondary }]}>{task.subjectName}</Text>
+          <View style={{
+            backgroundColor: toSubtleColor(task.subjectColor, 0.14),
+            borderRadius: radius.tag,
+            paddingHorizontal: 7,
+            paddingVertical: 1.5,
+          }}>
+            <Text numberOfLines={1} style={[typography.captionMeta, { color: task.subjectColor, fontWeight: '600' }]}>
+              {task.subjectName}
+            </Text>
           </View>
           <Text style={[typography.captionMeta, { color: colors.secondary }]}>{taskMeta(task)}</Text>
         </View>

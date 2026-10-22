@@ -33,7 +33,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { toSubtleColor, YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+export { toSubtleColor } from '../theme/tokens';
 import { buildLineChartGeometry } from './lineChartGeometry';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
@@ -1239,12 +1240,17 @@ export function YanjiTaskLedgerRow({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
             <View style={{
               flexShrink: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: YanjiSpacing.xs,
+              backgroundColor: completed ? colors.subtle : toSubtleColor(accentColor, 0.14),
+              borderRadius: radius.tag,
+              paddingHorizontal: 7,
+              paddingVertical: 1.5,
             }}>
-              <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: accentColor }} />
-              <Text numberOfLines={1} style={{ ...typography.captionMeta, color: colors.secondary, flexShrink: 1 }}>{subjectName}</Text>
+              <Text numberOfLines={1} style={{
+                ...typography.captionMeta,
+                color: completed ? colors.secondary : accentColor,
+                fontWeight: '600',
+                flexShrink: 1,
+              }}>{subjectName}</Text>
             </View>
             <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
           </View>
