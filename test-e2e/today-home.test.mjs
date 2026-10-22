@@ -160,6 +160,8 @@ test('task controls keep completion, editing, and focus separate; completed rows
     assert.ok(control.props.style({ pressed: false }).minHeight >= 48);
     control.props.onPress();
   }
+  assert.ok(controls[0].props.style({ pressed: false }).width >= 48,
+    'the checkbox owns a full touch target without relying on overlapping hit slop');
   assert.deepEqual(calls, ['toggle', 'edit', 'focus']);
   const completed = shared.YanjiTaskLedgerRow({ ...props, completed: true });
   assert.equal(nodes(completed, node => node.type === 'Pressable').length, 2);
@@ -177,7 +179,7 @@ test('task subject labels use readable theme text rather than the decorative sub
           completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
         });
         const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
-        assert.equal(label.props.style.color, colors.secondary, 'subject colour belongs to the dot and tint, not small text');
+        assert.equal(label.props.style.color, colors.secondary, 'subject colour belongs to the dot, not small text');
       }
     }
   } finally {
@@ -202,6 +204,8 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   let active = null;
+  let tick;
+  let visible = true;
   let tickReads = 0;
   // Retry paths are asserted per test, so they start as no-ops that record
   // nothing; `setRefreshDaily` installs the spy that a test cares about.
@@ -296,7 +300,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       refreshSettingsSnapshot: async () => refreshSettings(),
     },
     '../state/timerStore': {
-      useActiveSession: () => active, useTimerTick: () => { tickReads++; },
+      useActiveSession: () => active, useTimerTick: () => { tickReads++; return tick; },
       syncActiveSession: async () => {},
     },
   }, {
@@ -315,7 +319,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     refIndex = 0;
     effectIndex = 0;
     callbackIndex = 0;
-    return TodayScreen({ visible: true, foregroundRevision: 0 });
+    return TodayScreen({ visible, foregroundRevision: 0 });
   }
 
   function pendingState() {
@@ -353,6 +357,8 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
 
   return {
     calls, setActive: value => { active = value; }, get tickReads() { return tickReads; },
+    setTick: value => { tick = value; },
+    setVisible: value => { visible = value; },
     setRefreshDaily: next => { refreshDaily = next; },
     setCarryOverTasks: next => {
       carryOverTasks = next;
@@ -377,11 +383,33 @@ test('production homepage routes free focus and running focus without a page-lev
   let tree = harness.render();
   nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '开始一轮专注')[0].props.onPress();
   assert.deepEqual(harness.calls, [['tab', 'focus']]);
-  harness.setActive({ sessionId: 'active', subjectName: '数学', isPaused: true });
+  harness.setActive({ sessionId: 'active', subjectName: '数学', isPaused: true, isCountdown: false, elapsedSeconds: 120 });
   tree = harness.render();
   assert.equal(harness.tickReads, 0, 'the page root never subscribes to timer ticks');
   assert.equal(nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '开始一轮专注').length, 0);
-  nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '返回专注工作台')[0].props.onPress();
+  nodes(tree, node => node.type === 'Pressable' && node.props.accessibilityLabel === '返回专注工作台')[0].props.onPress();
+  assert.deepEqual(harness.calls, [['tab', 'focus'], ['tab', 'focus']]);
+});
+
+test('compact session reads countdown, stopwatch and pause ticks without adding them to saved totals', () => {
+  const harness = screenHarness(snapshot({ totalDurationSeconds: 3600 }));
+  const active = {
+    sessionId: 'active', subjectName: '概率论与数理统计', isPaused: false,
+    isCountdown: true, remainingSeconds: 1200, elapsedSeconds: 60,
+  };
+  harness.setActive(active);
+  assert.match(text(harness.render()), /概率论与数理统计 · 正在专注20:00本轮剩余/);
+  harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 61, isPaused: false });
+  let tree = harness.render();
+  assert.match(text(tree), /19:59本轮剩余/);
+  const saved = nodes(tree, n => n.props.accessibilityLabel === '今日已保存专注 1小时');
+  assert.equal(saved.length, 1, 'a live tick does not inflate the persisted daily result');
+  harness.setActive({ ...active, isCountdown: false });
+  harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 3661, isPaused: true });
+  tree = harness.render();
+  assert.match(text(tree), /概率论与数理统计 · 已暂停1:01:01已持续/);
+  const readout = nodes(tree, n => n.props.accessibilityHint === '本轮尚未计入今日已保存总量')[0];
+  assert.match(readout.props.accessibilityLabel, /本轮已持续 1:01:01，已暂停/);
 });
 
 test('production homepage shows truthful task metadata and expands rhythm only on request', () => {
@@ -831,22 +859,50 @@ const carryButton = (tree, suffix = 'carry-0') => {
     node.type === 'YanjiTextAction' && node.props.testID === `carry-over-${suffix}`)[0];
 };
 
-test('pending history renders above today and says the source date truthfully', async () => {
+function openCarryOver(h) {
+  const trigger = nodes(h.render(), node => node.props.testID === 'open-carry-over')[0];
+  assert.ok(trigger, 'real pending work has a reachable summary entry');
+  trigger.props.onPress();
+  return h.render();
+}
+
+test('today plans precede collapsed history, whose sheet keeps truthful dates and actions', async () => {
   const h = screenHarness(snapshot(), {}, {});
   h.setCarryOverTasks([
     carryOverTask(),
     carryOverTask({ id: 'older-source', date: '2026-10-13', title: '整理错题', actualMinutes: 0 }),
   ]);
-  const tree = await h.mount();
-  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
-  const pendingIndex = headings.findIndex(node => node.props.title === '待处理');
-  const todayIndex = headings.findIndex(node => node.props.title === '今日计划');
-  assert.ok(pendingIndex >= 0, 'the pending section appears only because real rows exist');
-  assert.ok(pendingIndex < todayIndex, 'unfinished history sits immediately above today');
+  let tree = await h.mount();
+  const order = nodes(tree, node => node.props.title === '今日计划' || node.props.testID === 'open-carry-over');
+  assert.equal(order[0].props.title, '今日计划');
+  assert.equal(order[1].props.testID, 'open-carry-over');
+  assert.doesNotMatch(text(tree), /复习操作系统文件管理|整理错题/,
+    'history must not displace today before the user chooses to handle it');
+  const trigger = order[1];
+  assert.match(trigger.props.accessibilityLabel, /待处理.*2/);
+  assert.ok(trigger.props.style({ pressed: false }).minHeight >= 48);
+  tree = openCarryOver(h);
+  assert.equal(nodes(tree, node => node.type === 'Modal').length, 1);
   assert.match(text(tree), /昨天的计划 · 尚未完成/);
   assert.match(text(tree), /10月13日的计划 · 尚未完成/);
   assert.match(text(tree), /复习操作系统文件管理/);
   assert.match(text(tree), /已投入 20m \/ 预计 45m/);
+});
+
+test('dismissing pending history through back, backdrop or header never writes or loses rows', async () => {
+  const h = screenHarness(snapshot());
+  h.setCarryOverTasks([carryOverTask()]);
+  await h.mount();
+  const before = h.calls.length;
+  for (const closeBy of ['back', 'backdrop', 'header']) {
+    const tree = openCarryOver(h);
+    if (closeBy === 'back') nodes(tree, n => n.type === 'Modal')[0].props.onRequestClose();
+    if (closeBy === 'backdrop') nodes(tree, n => n.props.testID === 'close-carry-over-backdrop')[0].props.onPress();
+    if (closeBy === 'header') nodes(tree, n => n.type === 'YanjiPaperSheetHeading')[0].props.onClose();
+    assert.equal(nodes(h.render(), n => n.type === 'Modal').length, 0);
+    assert.ok(nodes(h.render(), n => n.props.testID === 'open-carry-over')[0]);
+  }
+  assert.equal(h.calls.length, before, 'opening and closing only changes presentation');
 });
 
 test('an empty pending read leaves no empty section behind', async () => {
@@ -855,6 +911,31 @@ test('an empty pending read leaves no empty section behind', async () => {
   const tree = await h.mount();
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading'
     && node.props.title === '待处理').length, 0);
+  assert.equal(nodes(tree, node => node.props.testID === 'open-carry-over').length, 0);
+});
+
+test('hiding the page or exhausting history closes its sheet without reopening on the next read', async () => {
+  const h = screenHarness(snapshot());
+  h.setCarryOverTasks([carryOverTask()]);
+  await h.mount();
+  openCarryOver(h);
+  h.setVisible(false);
+  let tree = await h.rerender();
+  assert.equal(nodes(tree, n => n.type === 'Modal').length, 0);
+  h.setVisible(true);
+  tree = await h.rerender();
+  assert.equal(nodes(tree, n => n.type === 'Modal').length, 0);
+  openCarryOver(h);
+  h.setCarryOverTasks([]);
+  h.emitDataChanged('tasks');
+  await h.flush();
+  await h.rerender();
+  h.setCarryOverTasks([carryOverTask({ id: 'next-history' })]);
+  h.emitDataChanged('tasks');
+  await h.flush();
+  tree = await h.rerender();
+  assert.ok(nodes(tree, n => n.props.testID === 'open-carry-over')[0]);
+  assert.equal(nodes(tree, n => n.type === 'Modal').length, 0);
 });
 
 test('carry-over waits for one durable write and then refreshes today', async () => {
@@ -870,7 +951,8 @@ test('carry-over waits for one durable write and then refreshes today', async ()
   let refreshed = 0;
   h.setRefreshDaily(() => { refreshed += 1; });
 
-  let tree = await h.mount();
+  await h.mount();
+  let tree = openCarryOver(h);
   carryButton(tree).props.onPress();
   carryButton(tree).props.onPress();
   await h.flush();
@@ -886,13 +968,16 @@ test('carry-over waits for one durable write and then refreshes today', async ()
     && node.props.title === '待处理').length, 0,
   'the source disappears only after the durable carry resolves');
   assert.equal(refreshed, 1, 'today is re-read after the write commits');
+  assert.equal(nodes(tree, n => n.type === 'Modal').length, 0);
+  assert.equal(nodes(tree, n => n.props.testID === 'open-carry-over').length, 0);
 });
 
 test('failed carry-over keeps the source visible and offers an honest retry', async () => {
   const h = screenHarness(snapshot(), {}, {});
   h.setCarryOverTasks([carryOverTask()]);
   h.setCarryTaskToToday(async () => { throw new Error('disk full'); });
-  let tree = await h.mount();
+  await h.mount();
+  let tree = openCarryOver(h);
   carryButton(tree).props.onPress();
   await h.flush();
   tree = h.render();
@@ -909,7 +994,8 @@ test('completing historical work removes it only after the persisted write succe
     calls.push(['toggle', id, completed]);
     return true;
   });
-  const tree = await h.mount();
+  await h.mount();
+  const tree = openCarryOver(h);
   carryButton(tree, 'complete-0').props.onPress();
   await h.flush();
   assert.deepEqual(calls, [['toggle', 'carry-source', true]]);
@@ -920,7 +1006,8 @@ test('completing historical work removes it only after the persisted write succe
 test('defer hides for this session without writing to Room', async () => {
   const h = screenHarness(snapshot(), {}, {});
   h.setCarryOverTasks([carryOverTask()]);
-  let tree = await h.mount();
+  await h.mount();
+  let tree = openCarryOver(h);
   const before = h.calls.length;
   carryButton(tree, 'defer-0').props.onPress();
   tree = h.render();
@@ -938,7 +1025,8 @@ test('a failed pending read keeps old rows and exposes a retry; success clears i
     if (attempt === 2) throw new Error('read failed');
     return [carryOverTask()];
   });
-  let tree = await h.mount();
+  await h.mount();
+  let tree = openCarryOver(h);
   h.emitDataChanged('tasks');
   await h.flush();
   tree = h.render();

@@ -321,14 +321,25 @@ export const YanjiPaperTypography = {
   metricDaily: {
     fontSize: 48,
     lineHeight: 54,
-    fontWeight: '700' as const,
+    fontWeight: '600' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  metricSession: {
+    fontSize: 24,
+    lineHeight: 32,
+    fontWeight: '500' as const,
     fontVariant: ['tabular-nums'] as const,
   },
   titleGreeting: {
-    fontSize: 24,
-    lineHeight: 33,
-    fontWeight: '700' as const,
+    fontSize: 20,
+    lineHeight: 29,
+    fontWeight: '600' as const,
     fontFamily: 'serif',
+  },
+  titleLedger: {
+    fontSize: 15,
+    lineHeight: 23,
+    fontWeight: '600' as const,
   },
   titleEditorial: {
     fontSize: 22,
@@ -368,6 +379,11 @@ export const YanjiPaperTypography = {
     lineHeight: 23,
     fontWeight: '500' as const,
   },
+  bodyTask: {
+    fontSize: 15,
+    lineHeight: 23,
+    fontWeight: '500' as const,
+  },
   bodyJournal: {
     fontSize: 14,
     lineHeight: 23,
@@ -403,6 +419,8 @@ export const YanjiPaperLayout = {
   pageGutter: 22,
   sectionGap: 24,
   rowMinHeight: 48,
+  activeSessionMinHeight: 76,
+  activeSessionReadoutMinWidth: 132,
   /** Visible compact segment; the radio keeps a full row-height touch target. */
   compactSegmentHeight: 28,
   hairlineWidth: 1,
@@ -420,20 +438,11 @@ export const YanjiPaperLayout = {
   taskTagPadding: 2,
   /** The tag's horizontal inset — wider than the vertical so it reads as a chip. */
   taskTagPaddingHorizontal: 6,
-  /** AB-01's ledger rhythm: 11dp above and below, 11dp between the columns. */
-  taskRowPadding: 11,
-  /** Row columns sit 11dp apart; the checkbox carries its 48dp target as hit slop. */
-  taskRowGap: 11,
+  /** The checkbox owns a full touch column; compact gaps keep the text nearby. */
+  taskRowPadding: 8,
+  taskRowGap: 4,
   /** The sub-line hugs its title — 2dp reads as one line, not two blocks. */
   taskSubMarginTop: 2,
-  /**
-   * Subject tag wash. Identity is carried by the tint and the swatch, never by
-   * the label: at 12% every colour in the subject palette keeps the tag's own
-   * `secondary` label above the 4.5:1 readable tier on all four paper steps
-   * (measured worst case 4.88:1). Painting the label in the subject colour
-   * instead fails that bar in 46 of 48 colour/surface combinations.
-   */
-  subjectTagTintOpacity: 0.12,
   compactActionHeight: 28,
   /** Inline capsule inset — AB-01's `5px 10px` play trigger. */
   compactActionPadding: 10,
