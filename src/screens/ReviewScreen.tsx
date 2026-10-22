@@ -536,9 +536,9 @@ function DaySummary({ snapshot }: {
     },
     {
       label: '专注次数',
-      value: snapshot ? `${snapshot.focusParticipationCount}` : '—',
+      value: snapshot ? `${snapshot.focusCount}` : '—',
       unit: snapshot ? '次' : null,
-      spoken: snapshot ? `专注次数 ${snapshot.focusParticipationCount} 次` : '正在读取专注次数',
+      spoken: snapshot ? `专注次数 ${snapshot.focusCount} 次` : '正在读取专注次数',
     },
   ];
   return <View style={{
