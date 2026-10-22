@@ -80,7 +80,7 @@ test('RollingTimeDisplay renders correct digits and fixed suffix', () => {
   assert.equal(ui5.slots.length, 2, '5 minutes has tens and units slots');
   assert.equal(ui5.slots[0].props.digit, '0');
   assert.equal(ui5.slots[1].props.digit, '5');
-  assert.ok(ui5.textValues.includes(':00'), 'includes fixed :00 suffix');
+  assert.ok(ui5.textValues.includes('min'), 'includes fixed min suffix');
 
   // Test 45 minutes -> "4" "5" ":00"
   const ui45 = harness.render(45);

@@ -319,7 +319,7 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
   };
   const mocks = {
     react: {
-      useCallback: fn => fn, useMemo: fn => fn(), useEffect: effect => effects.push(effect),
+      useCallback: fn => fn, useMemo: fn => fn(), useEffect: effect => effects.push(effect), useRef: initial => ({ current: initial }),
       useState: initial => {
         const index = stateIndex++;
         if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
@@ -332,6 +332,8 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
       Alert: { alert: (...args) => alerts.push(args) }, View: 'View',
       ScrollView: 'ScrollView', Pressable: 'Pressable', Text: 'Text',
       useWindowDimensions: () => ({ width: 358, height: 800, fontScale: 1 }),
+      Animated: { Value: function(v) { this.val = v; this.interpolate = () => 0; }, timing: () => ({ start: fn => fn && fn() }), View: 'View' },
+      Easing: { out: () => () => 0, cubic: () => 0, in: () => () => 0 },
     },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 24 }) },
     'react-native-svg': {
@@ -457,7 +459,7 @@ test('the focus mode switch removes both outlines and enlarges its fill without 
   assert.ok(radio.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
 });
 
-test('ready subject selection shares the theme fill, keeps subject dots and preserves flat-chip touch targets', async () => {
+test('ready subject selection uses clean brand border and indicator underline without colored dots', async () => {
   const subjects = [
     { id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: true, sortOrder: 1 },
     { id: 'algebra', name: 'Algebra', colorHex: '#2D7A5E', enabled: true, parentId: 'math', isCategory: false, sortOrder: 2 },
@@ -467,21 +469,23 @@ test('ready subject selection shares the theme fill, keeps subject dots and pres
     const h = focusScreenHarness({ session: null, subjects, isDark });
     let tree = await h.loadSubjects();
     const subject = name => findAll(tree, n => n.props?.accessibilityLabel === name)[0];
-    for (const name of ['Math', 'Algebra']) {
-      const button = subject(name);
-      assert.equal(button.props.accessibilityState.selected, true);
-      const paint = findAll(button, n => n.props?.style?.backgroundColor === h.paper.colors.brand)[0]
-        ?? (button.props.style({ pressed: false }).backgroundColor === h.paper.colors.brand ? button : null);
-      assert.ok(paint, 'both selection levels must use the theme brand, not a subject colour');
-      const style = typeof paint.props.style === 'function' ? paint.props.style({ pressed: false }) : paint.props.style;
-      assert.equal(style.borderWidth, 0);
-      const dotColor = name === 'Math' ? subjects[0].colorHex : subjects[1].colorHex;
-      assert.ok(findAll(button, n => n.props?.style?.backgroundColor === dotColor).length);
-    }
+    
+    // Level 1 category check
+    const cat = subject('Math');
+    assert.equal(cat.props.accessibilityState.selected, true);
+    const catStyle = typeof cat.props.style === 'function' ? cat.props.style({ pressed: false }) : cat.props.style;
+    assert.equal(catStyle.borderColor, h.paper.colors.brand);
+    assert.equal(catStyle.borderWidth, 1.5);
+    assert.equal(findAll(cat, n => n.props?.style?.backgroundColor === subjects[0].colorHex).length, 0);
+
+    // Level 2 sub-subject check
     const child = subject('Algebra');
+    assert.equal(child.props.accessibilityState.selected, true);
     assert.ok(child.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
-    const capsule = child.props.children;
-    assert.ok(capsule.props.style.minHeight < tokens.YanjiTouch.min);
+    const indicator = findAll(child, n => n.props?.style?.backgroundColor === h.paper.colors.brand)[0];
+    assert.ok(indicator, 'selected sub-subject has brand indicator underline');
+    assert.equal(findAll(child, n => n.props?.style?.backgroundColor === subjects[1].colorHex).length, 0);
+
     subject('Calculus').props.onPress();
     tree = h.render();
     assert.equal(subject('Calculus').props.accessibilityState.selected, true);
@@ -489,14 +493,14 @@ test('ready subject selection shares the theme fill, keeps subject dots and pres
   }
 });
 
-test('start reuses the home primary button with a lowercase bottom-aligned duration and the selected native subject', async () => {
+test('start button uses clean 开始专注 without detail duration', async () => {
   const subjects = [{ id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: false, sortOrder: 1 }];
   const h = focusScreenHarness({ session: null, subjects });
   let tree = await h.loadSubjects();
   const start = findAll(tree, n => n.type === 'YanjiPrimaryButton')[0];
   assert.ok(start);
   assert.equal(start.props.label, '开始专注');
-  assert.equal(start.props.detail, '45 min');
+  assert.equal(start.props.detail, undefined);
   assert.equal(start.props.disabled, false);
   const controls = sharedControlsHarness();
   const focusButton = controls.YanjiPrimaryButton(start.props);
@@ -505,18 +509,13 @@ test('start reuses the home primary button with a lowercase bottom-aligned durat
   const homeStyle = homeButton.props.style({ pressed: false })[0];
   assert.equal(style.backgroundColor, homeStyle.backgroundColor);
   assert.equal(style.borderRadius, homeStyle.borderRadius);
-  assert.equal(style.flexWrap, 'wrap', 'large text can move the detail onto another line');
-  assert.equal(homeStyle.flexWrap, 'nowrap', 'buttons without details retain their existing layout');
-  const detail = findAll(focusButton, n => n.props?.children === '45 min')[0];
-  assert.equal(detail.props.style[1].alignSelf, 'flex-end');
-  assert.equal(detail.props.style[1].maxWidth, '100%');
   await start.props.onPress();
   assert.deepEqual(h.calls[0].slice(0, 4), ['start', 'math', 'Math', 'COUNTDOWN']);
   tree = h.render();
   const mode = findAll(tree, n => n.type === 'YanjiPaperSegmentedControl')[0];
   mode.props.onChange('STOPWATCH');
   tree = h.render();
-  assert.equal(findAll(tree, n => n.type === 'YanjiPrimaryButton')[0].props.detail, '正计时');
+  assert.equal(findAll(tree, n => n.type === 'YanjiPrimaryButton')[0].props.detail, undefined);
 });
 
 test('the immersion subtitle names the bound task and stays quiet when unbound', () => {

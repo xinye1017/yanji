@@ -200,6 +200,16 @@ export function RollingTimeDisplay({
     includeFontPadding: false,
   };
 
+  const unitStyle: TextStyle = {
+    ...paper.typography.titleSection,
+    fontSize: Math.round(24 * effectiveScale),
+    lineHeight: slotHeight,
+    fontWeight: '500',
+    color: paper.colors.secondary,
+    marginLeft: Math.round(6 * effectiveScale),
+    includeFontPadding: false,
+  };
+
   return (
     <View
       testID={testID}
@@ -245,7 +255,7 @@ export function RollingTimeDisplay({
         color={inkColor}
         reducedMotion={reducedMotion}
       />
-      <Text allowFontScaling={false} style={[textStyle, { textAlign: 'center' }]}>:00</Text>
+      <Text allowFontScaling={false} style={[unitStyle, { textAlign: 'center' }]}>min</Text>
     </View>
   );
 }

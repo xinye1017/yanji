@@ -5,9 +5,12 @@
  * leaf alone subscribes to second ticks; neither AppShell nor this parent
  * redraws on a second boundary. A note may be captured without pausing.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
+  PixelRatio,
   Pressable,
   ScrollView,
   Text,
@@ -77,14 +80,41 @@ function formatEstimatedEndTime(durationMinutes: number): string {
   return `预计 ${hh}:${mm} 结束本轮`;
 }
 
+const AnimatedView = (Animated && Animated.View ? Animated.View : View) as React.ComponentType<any>;
+
 export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const { contentPadding } = useBottomTabLayout();
   const safe = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const [date] = useState(todayIso);
+  const { width, fontScale } = useWindowDimensions();
+    const [date] = useState(todayIso);
   const session = useActiveSession(visible);
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    if (!visible || session) return;
+    const interval = setInterval(() => setClockTick(t => t + 1), 15000);
+    if (typeof (interval as any)?.unref === 'function') (interval as any).unref();
+    return () => clearInterval(interval);
+  }, [visible, session]);
+
+  const transitionAnim = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
+  const immersionFade = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
+
+  useEffect(() => {
+    if (session) {
+      if (transitionAnim && transitionAnim.setValue) transitionAnim.setValue(0);
+      if (immersionFade && immersionFade.setValue) immersionFade.setValue(0);
+      if (Animated && Animated.timing) {
+        Animated.timing(immersionFade, {
+          toValue: 1,
+          duration: 320,
+          easing: Easing?.out ? Easing.out(Easing.cubic) : undefined,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  }, [session?.sessionId, immersionFade, transitionAnim]);
   // Today's per-subject totals come from the shared daily snapshot the refresh
   // coordinator already owns — the same read TodayScreen renders, so the two
   // pages can never disagree about today's minutes.
@@ -233,6 +263,16 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     if (busy || !selectedSubject) return;
     setBusy(true);
     setActionError(null);
+
+    if (Animated && Animated.timing) {
+      Animated.timing(transitionAnim, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing?.out ? Easing.out(Easing.cubic) : undefined,
+        useNativeDriver: true,
+      }).start();
+    }
+
     try {
       await YanjiTimerNative.startFocus(
         selectedSubject.id,
@@ -249,16 +289,30 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       setActionError(code === 'E_SESSION_ACTIVE'
         ? '已有专注正在进行，先结束或放弃当前会话'
         : '启动失败，请重试');
+      if (Animated && Animated.timing) {
+        Animated.timing(transitionAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
       await syncActiveSession();
     } finally {
       setBusy(false);
     }
-  }, [busy, durationMinutes, selectedSubject, taskBinding, timerMode]);
+  }, [busy, durationMinutes, selectedSubject, taskBinding, timerMode, transitionAnim]);
 
   const handleTimerAction = useCallback(async (action: 'pause' | 'resume' | 'complete' | 'discard') => {
     if (busy) return;
     setBusy(true);
     setActionError(null);
+    if ((action === 'complete' || action === 'discard') && Animated && Animated.timing) {
+      Animated.timing(immersionFade, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
     try {
       if (action === 'pause') await YanjiTimerNative.pauseTimer();
       if (action === 'resume') await YanjiTimerNative.resumeTimer();
@@ -271,7 +325,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     } finally {
       setBusy(false);
     }
-  }, [busy]);
+  }, [busy, immersionFade]);
 
   const confirmDiscard = useCallback(() => {
     if (busy) return;
@@ -287,303 +341,368 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   }, [busy, handleTimerAction]);
 
   if (!session) {
-    const cardWidth = Math.floor((width - paper.layout.pageGutter * 2 - paper.layout.gridGap) / 2);
+    const effectiveScale = Math.min(1.15, Math.max(0.85, fontScale));
+    const dialSlotHeight = Math.ceil(paper.typography.displayDial.lineHeight * effectiveScale);
+    const rulerLabelHeight = Math.ceil(paper.typography.captionMeta.lineHeight * fontScale);
+    const rulerLabelTop = YanjiSpacing.lg + paper.layout.vernierPointerHeight + YanjiSpacing.sm;
+    const dialRulerHeight = Math.max(
+      paper.layout.vernierMinHeight,
+      rulerLabelTop + rulerLabelHeight + YanjiSpacing.lg
+    );
 
     return (
       <View testID="focus-ready" style={{ flex: 1, backgroundColor: paper.colors.canvas }}>
-        <ScrollView
-          testID="scroll-focus"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingHorizontal: paper.layout.pageGutter,
-            paddingTop: YanjiSpacing.sm,
-            paddingBottom: contentPadding,
+        <AnimatedView
+          style={{
+            flex: 1,
+            opacity: transitionAnim?.interpolate
+              ? transitionAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+              : 1,
+            transform: [{
+              scale: transitionAnim?.interpolate
+                ? transitionAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.96] })
+                : 1,
+            }],
           }}
         >
-          {/* Left action | centred mode switch | balancing placeholder.
-              The two 84dp shoulders are what keep the switch on the page axis. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="补录记录"
-              hitSlop={8}
-              onPress={() => setRecordOpen(true)}
-              style={({ pressed }) => ({
-                minWidth: 84,
-                minHeight: YanjiTouch.min,
-                flexDirection: 'row',
-                alignItems: 'center',
-                opacity: pressed ? 0.68 : 1,
-              })}
-            >
-              <YanjiIcon name="compose" size={15} color={paper.colors.secondary} />
-              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginLeft: 5 }]}>
-                补录记录
-              </Text>
-            </Pressable>
-
-            <YanjiPaperSegmentedControl
-              value={timerMode}
-              options={TIMER_MODES}
-              onChange={setTimerMode}
-              accessibilityLabel="计时模式"
-              compact
-              borderless
-            />
-
-            <View style={{ minWidth: 84, minHeight: YanjiTouch.min }} />
-          </View>
-
-          <View style={{ marginTop: YanjiSpacing.md }}>
-            <Text
-              accessibilityRole="header"
-              style={[paper.typography.titleSection, { color: paper.colors.ink, marginBottom: YanjiSpacing.sm }]}
-            >
-              选择科目
-            </Text>
-
-            {subjectGroups.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: paper.layout.gridGap }}>
-                {subjectGroups.map(group => {
-                  const isActive = activeGroup?.category.id === group.category.id;
-                  const accent = group.category.colorHex || paper.colors.brand;
-                  return (
-                    <Pressable
-                      key={group.category.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={group.category.name}
-                      accessibilityState={{ selected: isActive }}
-                      onPress={() => handleSelectCategory(group)}
-                      style={({ pressed }) => ({
-                        width: cardWidth,
-                        minHeight: YanjiTouch.min,
-                        paddingVertical: 10,
-                        paddingHorizontal: YanjiSpacing.md,
-                        borderRadius: paper.radius.compactCard,
-                        backgroundColor: isActive ? paper.colors.brand : paper.colors.surface,
-                        borderWidth: isActive ? 0 : paper.layout.hairlineWidth,
-                        borderColor: paper.colors.hairline,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: YanjiSpacing.sm,
-                        opacity: pressed ? 0.72 : isActive ? 1 : 0.76,
-                      })}
-                    >
-                      <View style={{ width: 8, height: 8, borderRadius: paper.radius.pill, backgroundColor: accent }} />
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          paper.typography.bodyPrimary,
-                          { color: isActive ? paper.colors.onBrand : paper.colors.ink, fontWeight: isActive ? '700' : '500', flex: 1 },
-                        ]}
-                      >
-                        {group.category.name}
-                      </Text>
-                    </Pressable>
-                  );
+          <ScrollView
+            testID="scroll-focus"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingHorizontal: paper.layout.pageGutter,
+              paddingTop: YanjiSpacing.sm,
+              paddingBottom: contentPadding,
+            }}
+          >
+            {/* Left action | centred mode switch | balancing placeholder.
+                The two 84dp shoulders are what keep the switch on the page axis. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="补录记录"
+                hitSlop={8}
+                onPress={() => setRecordOpen(true)}
+                style={({ pressed }) => ({
+                  minWidth: 84,
+                  minHeight: YanjiTouch.min,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  opacity: pressed ? 0.68 : 1,
                 })}
-              </View>
-            ) : (
-              <View style={{ minHeight: paper.layout.rowMinHeight, justifyContent: 'center' }}>
-                <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-                  {subjectLoadState === 'loading' ? '正在读取科目…' :
-                    subjectLoadState === 'error' ? '科目读取失败' : '暂无可用科目'}
-                </Text>
-                {subjectLoadState === 'error' ? (
-                  <Pressable
-                    onPress={loadSubjects}
-                    accessibilityRole="button"
-                    accessibilityLabel="重新读取科目"
-                    style={{ minHeight: paper.layout.rowMinHeight, justifyContent: 'center' }}
-                  >
-                    <Text style={[paper.typography.bodyPrimary, { color: paper.colors.brandInk }]}>重新读取科目</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            )}
-
-            {/* Level 2: the active category's children, only when it has any. */}
-            {activeGroup && activeGroup.children.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: YanjiSpacing.sm, paddingTop: YanjiSpacing.sm }}
               >
-                {activeGroup.children.map(child => {
-                  const selected = child.id === selectedSubjectId;
-                  const accent = child.colorHex || activeGroup.category.colorHex || paper.colors.brand;
-                  return (
-                    <Pressable
-                      key={child.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={child.name}
-                      accessibilityState={{ selected }}
-                      onPress={() => handleSelect(child.id)}
-                      style={({ pressed }) => ({
-                        minHeight: YanjiTouch.min,
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.72 : 1,
-                      })}
-                    >
-                      <View
-                        style={{
-                          minHeight: paper.layout.subjectChipHeight,
-                          paddingVertical: YanjiSpacing.xs,
+                <YanjiIcon name="compose" size={15} color={paper.colors.secondary} />
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginLeft: 5 }]}>
+                  补录记录
+                </Text>
+              </Pressable>
+
+              <YanjiPaperSegmentedControl
+                value={timerMode}
+                options={TIMER_MODES}
+                onChange={setTimerMode}
+                accessibilityLabel="计时模式"
+                compact
+                borderless
+              />
+
+              <View style={{ minWidth: 84, minHeight: YanjiTouch.min }} />
+            </View>
+
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: YanjiSpacing.sm }}>
+                <Text
+                  accessibilityRole="header"
+                  style={[paper.typography.titleSection, { color: paper.colors.ink }]}
+                >
+                  学习内容
+                </Text>
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, letterSpacing: 0.8 }]}>
+                  01 / SUBJECT
+                </Text>
+              </View>
+
+              {subjectGroups.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
+                  {subjectGroups.map(group => {
+                    const isActive = activeGroup?.category.id === group.category.id;
+                    return (
+                      <Pressable
+                        key={group.category.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={group.category.name}
+                        accessibilityState={{ selected: isActive }}
+                        onPress={() => handleSelectCategory(group)}
+                        style={({ pressed }) => ({
+                          minHeight: 38,
+                          minWidth: 54,
+                          paddingVertical: 8,
                           paddingHorizontal: YanjiSpacing.md,
-                          borderRadius: paper.radius.pill,
-                          backgroundColor: selected ? paper.colors.brand : paper.colors.subtle,
-                          borderWidth: selected ? 0 : paper.layout.hairlineWidth,
-                          borderColor: paper.colors.hairline,
-                          flexDirection: 'row',
+                          borderRadius: paper.radius.compactCard,
+                          backgroundColor: isActive ? paper.colors.brandSubtle : paper.colors.surface,
+                          borderWidth: 1.5,
+                          borderColor: isActive ? paper.colors.brand : 'transparent',
                           alignItems: 'center',
-                          gap: YanjiSpacing.md / 2,
-                        }}
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.72 : 1,
+                        })}
                       >
-                        <View
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: paper.radius.pill,
-                            backgroundColor: accent,
-                          }}
-                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            paper.typography.bodyPrimary,
+                            {
+                              color: isActive ? paper.colors.ink : paper.colors.secondary,
+                              fontWeight: isActive ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {group.category.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={{ minHeight: paper.layout.rowMinHeight, justifyContent: 'center' }}>
+                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+                    {subjectLoadState === 'loading' ? '正在读取科目…' :
+                      subjectLoadState === 'error' ? '科目读取失败' : '暂无可用科目'}
+                  </Text>
+                  {subjectLoadState === 'error' ? (
+                    <Pressable
+                      onPress={loadSubjects}
+                      accessibilityRole="button"
+                      accessibilityLabel="重新读取科目"
+                      style={{ minHeight: paper.layout.rowMinHeight, justifyContent: 'center' }}
+                    >
+                      <Text style={[paper.typography.bodyPrimary, { color: paper.colors.brandInk }]}>重新读取科目</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Level 2: the active category's children, only when it has any. */}
+              {activeGroup && activeGroup.children.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: YanjiSpacing.lg, paddingTop: YanjiSpacing.md, paddingBottom: YanjiSpacing.xs }}
+                >
+                  {activeGroup.children.map(child => {
+                    const selected = child.id === selectedSubjectId;
+                    return (
+                      <Pressable
+                        key={child.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={child.name}
+                        accessibilityState={{ selected }}
+                        onPress={() => handleSelect(child.id)}
+                        style={({ pressed }) => ({
+                          minHeight: YanjiTouch.min,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.72 : 1,
+                        })}
+                      >
                         <Text
                           style={[
-                            paper.typography.captionMeta,
-                            { color: selected ? paper.colors.onBrand : paper.colors.secondary, fontWeight: selected ? '700' : '500' },
+                            paper.typography.bodyPrimary,
+                            {
+                              color: selected ? paper.colors.ink : paper.colors.secondary,
+                              fontWeight: selected ? '700' : '500',
+                            },
                           ]}
                         >
                           {child.name}
                         </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : null}
+                        <View
+                          style={{
+                            marginTop: 4,
+                            height: 2.5,
+                            width: '100%',
+                            borderRadius: paper.radius.pill,
+                            backgroundColor: selected ? paper.colors.brand : 'transparent',
+                          }}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
 
-            {taskBinding ? (
-              <View
-                style={{
-                  marginTop: YanjiSpacing.sm,
-                  paddingLeft: YanjiSpacing.md,
-                  paddingRight: YanjiSpacing.xs,
-                  paddingVertical: YanjiSpacing.xs,
-                  borderRadius: paper.radius.compactCard,
-                  backgroundColor: paper.colors.brandSubtle,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                }}
-              >
-                <YanjiIcon name="tasks" size={16} color={paper.colors.brandInk} />
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    paper.typography.captionMeta,
-                    { color: paper.colors.brandInk, fontWeight: '700', flex: 1, marginHorizontal: YanjiSpacing.sm },
-                  ]}
-                >
-                  关联任务 · {taskBinding.title}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="取消关联任务"
-                  hitSlop={8}
-                  onPress={() => setTaskBinding(null)}
-                  style={{ minWidth: YanjiTouch.min, minHeight: YanjiTouch.min, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <YanjiIcon name="close" size={16} color={paper.colors.secondary} />
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', marginVertical: YanjiSpacing.sm }}>
-            {timerMode === 'COUNTDOWN' ? (
-              <>
-                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                  {formatEstimatedEndTime(durationMinutes)}
-                </Text>
-
-                <RollingTimeDisplay
-                  valueMinutes={durationMinutes}
-                  color={paper.colors.ink}
-                  style={{ marginVertical: YanjiSpacing.xs }}
-                />
-
-                <Text
-                  testID="focus-duration-value"
-                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-                  accessible={false}
-                >
-                  {formatDialMinutes(durationMinutes)}
-                </Text>
-
-                {/* Full-bleed strip: the ruler belongs to the page, not to a card. */}
+              {taskBinding ? (
                 <View
                   style={{
-                    alignSelf: 'stretch',
-                    marginHorizontal: -paper.layout.pageGutter,
-                    marginTop: YanjiSpacing.md,
-                    backgroundColor: paper.colors.vernierWash,
-                    borderTopWidth: paper.layout.hairlineWidth,
-                    borderBottomWidth: paper.layout.hairlineWidth,
-                    borderColor: paper.colors.hairline,
+                    marginTop: YanjiSpacing.sm,
+                    paddingLeft: YanjiSpacing.md,
+                    paddingRight: YanjiSpacing.xs,
+                    paddingVertical: YanjiSpacing.xs,
+                    borderRadius: paper.radius.compactCard,
+                    backgroundColor: paper.colors.brandSubtle,
+                    flexDirection: 'row',
+                    alignItems: 'center',
                   }}
                 >
-                  <FocusVernierDial
-                    valueMinutes={durationMinutes}
-                    onChangeMinutes={setDurationMinutes}
-                    minMinutes={MIN_MINUTES}
-                    maxMinutes={MAX_MINUTES}
-                    stepMinutes={5}
-                    accessibilityLabel="调整倒计时长度"
-                  />
+                  <YanjiIcon name="tasks" size={16} color={paper.colors.brandInk} />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      paper.typography.captionMeta,
+                      { color: paper.colors.brandInk, fontWeight: '700', flex: 1, marginHorizontal: YanjiSpacing.sm },
+                    ]}
+                  >
+                    关联任务 · {taskBinding.title}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="取消关联任务"
+                    hitSlop={8}
+                    onPress={() => setTaskBinding(null)}
+                    style={{ minWidth: YanjiTouch.min, minHeight: YanjiTouch.min, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <YanjiIcon name="close" size={16} color={paper.colors.secondary} />
+                  </Pressable>
                 </View>
-              </>
-            ) : (
-              <View style={{ paddingVertical: YanjiSpacing.xl, alignItems: 'center' }}>
-                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                  自由正向计时 · 不设上限
-                </Text>
+              ) : null}
+            </View>
+
+            <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', marginVertical: YanjiSpacing.sm }}>
+              {timerMode === 'COUNTDOWN' ? (
+                <>
+                  <RollingTimeDisplay
+                    valueMinutes={durationMinutes}
+                    color={paper.colors.ink}
+                    style={{ marginVertical: YanjiSpacing.xs }}
+                  />
+
+                  <Text
+                    testID="focus-duration-value"
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                    accessible={false}
+                  >
+                    {formatDialMinutes(durationMinutes)}
+                  </Text>
+
+                  {/* Full-bleed strip: the ruler belongs to the page, not to a card. */}
+                  <View
+                    style={{
+                      alignSelf: 'stretch',
+                      marginHorizontal: -paper.layout.pageGutter,
+                      marginTop: YanjiSpacing.md,
+                      backgroundColor: paper.colors.vernierWash,
+                      borderTopWidth: paper.layout.hairlineWidth,
+                      borderBottomWidth: paper.layout.hairlineWidth,
+                      borderColor: paper.colors.hairline,
+                    }}
+                  >
+                    <FocusVernierDial
+                      valueMinutes={durationMinutes}
+                      onChangeMinutes={setDurationMinutes}
+                      minMinutes={MIN_MINUTES}
+                      maxMinutes={MAX_MINUTES}
+                      stepMinutes={5}
+                      accessibilityLabel="调整倒计时长度"
+                    />
+                  </View>
+
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
+                    {formatEstimatedEndTime(durationMinutes)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="正向自由计时，不设上限"
+                    style={{
+                      height: dialSlotHeight,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginVertical: YanjiSpacing.xs,
+                    }}
+                  >
+                    <Text
+                      allowFontScaling={false}
+                      style={[
+                        paper.typography.displayDial,
+                        {
+                          fontSize: Math.round(paper.typography.displayDial.fontSize * effectiveScale),
+                          lineHeight: dialSlotHeight,
+                          color: paper.colors.ink,
+                          textAlign: 'center',
+                          includeFontPadding: false,
+                        },
+                      ]}
+                    >
+                      ∞
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      alignSelf: 'stretch',
+                      marginHorizontal: -paper.layout.pageGutter,
+                      marginTop: YanjiSpacing.md,
+                      height: dialRulerHeight,
+                      backgroundColor: paper.colors.vernierWash,
+                      borderTopWidth: paper.layout.hairlineWidth,
+                      borderBottomWidth: paper.layout.hairlineWidth,
+                      borderColor: paper.colors.hairline,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
+                      正向计时待命中 · 随时开启
+                    </Text>
+                  </View>
+
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
+                    自由正向计时 · 不设上限
+                  </Text>
+                </>
+              )}
+            </View>
+
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              <YanjiPrimaryButton
+                label={busy ? '启动中…' : '开始专注'}
+                disabled={busy || !selectedSubject}
+                onPress={handleStart}
+              />
+
+              {actionError ? (
                 <Text
+                  accessibilityRole="alert"
                   style={[
-                    paper.typography.displayDial,
-                    { color: paper.colors.ink, marginVertical: YanjiSpacing.xs, textAlign: 'center' },
+                    paper.typography.bodyPrimary,
+                    { color: paper.colors.danger, textAlign: 'center', marginTop: YanjiSpacing.md },
                   ]}
                 >
-                  00:00
+                  {actionError}
                 </Text>
-                <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary, textAlign: 'center' }]}>
-                  随时暂停或结算本轮专注时长
-                </Text>
-              </View>
-            )}
-          </View>
+              ) : null}
+            </View>
+          </ScrollView>
+        </AnimatedView>
 
-          <View style={{ marginTop: YanjiSpacing.md }}>
-            <YanjiPrimaryButton
-              label={busy ? '启动中…' : '开始专注'}
-              detail={busy ? undefined : timerMode === 'COUNTDOWN' ? `${durationMinutes} min` : '正计时'}
-              disabled={busy || !selectedSubject}
-              onPress={handleStart}
-            />
-
-            {actionError ? (
-              <Text
-                accessibilityRole="alert"
-                style={[
-                  paper.typography.bodyPrimary,
-                  { color: paper.colors.danger, textAlign: 'center', marginTop: YanjiSpacing.md },
-                ]}
-              >
-                {actionError}
-              </Text>
-            ) : null}
-          </View>
-        </ScrollView>
+        <AnimatedView
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            backgroundColor: paper.immersive?.running?.canvas ?? paper.colors.canvas,
+            opacity: transitionAnim?.interpolate
+              ? transitionAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
+              : 0,
+          }}
+        />
 
         <RecordMomentModal visible={recordOpen} date={date} onClose={() => setRecordOpen(false)} />
       </View>
@@ -597,6 +716,19 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
   return (
     <View testID={isPaused ? 'focus-paused' : 'focus-running'} style={{ flex: 1, backgroundColor: immersed.canvas }}>
+      <AnimatedView
+        style={{
+          flex: 1,
+          opacity: immersionFade?.interpolate
+            ? immersionFade.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
+            : 1,
+          transform: [{
+            scale: immersionFade?.interpolate
+              ? immersionFade.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] })
+              : 1,
+          }],
+        }}
+      >
       {/* Horizon tide: a wash that rises from the bottom edge and colours the
           whole field with the session's accent.
 
@@ -737,6 +869,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       </ScrollView>
 
       <RecordMomentModal visible={recordOpen} date={date} onClose={() => setRecordOpen(false)} />
+      </AnimatedView>
     </View>
   );
 }
