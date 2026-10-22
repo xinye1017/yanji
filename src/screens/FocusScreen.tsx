@@ -19,7 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
@@ -124,6 +124,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [subjectLoadState, setSubjectLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
+  const [settledDuration, setSettledDuration] = useState(DEFAULT_MINUTES);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -225,11 +226,11 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     const planned = focusPreset.plannedMinutes;
     // Do NOT silently round a real task's planned time to the nearest mark.
     // The dial projects it for display only until the user changes the scale.
-    setDurationMinutes(
-      Number.isFinite(planned) && planned >= MIN_MINUTES
-        ? Math.min(MAX_MINUTES, planned)
-        : DEFAULT_MINUTES
-    );
+    const mins = Number.isFinite(planned) && planned >= MIN_MINUTES
+      ? Math.min(MAX_MINUTES, planned)
+      : DEFAULT_MINUTES;
+    setDurationMinutes(mins);
+    setSettledDuration(mins);
     setTimerMode('COUNTDOWN');
     setSelectedSubjectId(focusPreset.subjectId);
     setTaskBinding({
@@ -411,15 +412,12 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             </View>
 
             <View style={{ marginTop: YanjiSpacing.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: YanjiSpacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: YanjiSpacing.sm }}>
                 <Text
                   accessibilityRole="header"
                   style={[paper.typography.titleSection, { color: paper.colors.ink }]}
                 >
                   学习内容
-                </Text>
-                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, letterSpacing: 0.8 }]}>
-                  01 / SUBJECT
                 </Text>
               </View>
 
@@ -600,6 +598,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     <FocusVernierDial
                       valueMinutes={durationMinutes}
                       onChangeMinutes={setDurationMinutes}
+                      onSettleMinutes={setSettledDuration}
                       minMinutes={MIN_MINUTES}
                       maxMinutes={MAX_MINUTES}
                       stepMinutes={5}
@@ -608,7 +607,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   </View>
 
                   <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
-                    {formatEstimatedEndTime(durationMinutes)}
+                    {formatEstimatedEndTime(settledDuration)}
                   </Text>
                 </>
               ) : (
@@ -624,33 +623,27 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       marginVertical: YanjiSpacing.xs,
                     }}
                   >
-                    <Text
-                      allowFontScaling={false}
-                      style={[
-                        paper.typography.displayDial,
-                        {
-                          fontSize: Math.round(paper.typography.displayDial.fontSize * effectiveScale),
-                          lineHeight: dialSlotHeight,
-                          color: paper.colors.ink,
-                          textAlign: 'center',
-                          includeFontPadding: false,
-                        },
-                      ]}
+                    <Svg
+                      width={Math.round(86 * effectiveScale)}
+                      height={Math.round(50 * effectiveScale)}
+                      viewBox="0 5 24 14"
+                      fill="none"
                     >
-                      ∞
-                    </Text>
+                      <Path
+                        d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"
+                        stroke={paper.colors.ink}
+                        strokeWidth={1.8}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
                   </View>
 
                   <View
                     style={{
                       alignSelf: 'stretch',
-                      marginHorizontal: -paper.layout.pageGutter,
                       marginTop: YanjiSpacing.md,
                       height: dialRulerHeight,
-                      backgroundColor: paper.colors.vernierWash,
-                      borderTopWidth: paper.layout.hairlineWidth,
-                      borderBottomWidth: paper.layout.hairlineWidth,
-                      borderColor: paper.colors.hairline,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
@@ -660,7 +653,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     </Text>
                   </View>
 
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.muted, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
                     自由正向计时 · 不设上限
                   </Text>
                 </>

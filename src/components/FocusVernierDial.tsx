@@ -24,6 +24,7 @@ import { YanjiSpacing } from '../theme/tokens';
 interface FocusVernierDialProps {
   valueMinutes: number;
   onChangeMinutes: (value: number) => void;
+  onSettleMinutes?: (value: number) => void;
   minMinutes: number;
   maxMinutes: number;
   stepMinutes: number;
@@ -34,6 +35,7 @@ interface FocusVernierDialProps {
 export function FocusVernierDial({
   valueMinutes,
   onChangeMinutes,
+  onSettleMinutes,
   minMinutes,
   maxMinutes,
   stepMinutes,
@@ -55,7 +57,14 @@ export function FocusVernierDial({
   );
   const list = useRef<React.ElementRef<typeof ScrollView>>(null);
   const userDragging = useRef(false);
+  const settleTimeout = useRef<any>(null);
   const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimeout.current) clearTimeout(settleTimeout.current);
+    };
+  }, []);
 
   const ticks = useMemo(() => {
     const values: number[] = [];
@@ -100,9 +109,15 @@ export function FocusVernierDial({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (!userDragging.current) return;
       userDragging.current = false;
-      selectIndex(Math.round(e.nativeEvent.contentOffset.x / tickWidth));
+      if (settleTimeout.current) clearTimeout(settleTimeout.current);
+      const index = Math.round(e.nativeEvent.contentOffset.x / tickWidth);
+      selectIndex(index);
+      const target = ticks[Math.max(0, Math.min(ticks.length - 1, index))];
+      if (target !== undefined && onSettleMinutes) {
+        onSettleMinutes(target);
+      }
     },
-    [selectIndex, tickWidth],
+    [onSettleMinutes, selectIndex, tickWidth, ticks],
   );
 
   const handleScroll = useCallback(
@@ -114,8 +129,20 @@ export function FocusVernierDial({
         lastEmittedValue.current = target;
         onChangeMinutes(target);
       }
+      if (onSettleMinutes && target !== undefined) {
+        if (settleTimeout.current) clearTimeout(settleTimeout.current);
+        settleTimeout.current = setTimeout(() => {
+          if (userDragging.current) {
+            userDragging.current = false;
+            onSettleMinutes(target);
+          }
+        }, 150);
+        if (typeof (settleTimeout.current as any)?.unref === 'function') {
+          (settleTimeout.current as any).unref();
+        }
+      }
     },
-    [disabled, onChangeMinutes, tickWidth, ticks],
+    [disabled, onChangeMinutes, onSettleMinutes, tickWidth, ticks],
   );
 
   const adjust = useCallback(
@@ -130,9 +157,13 @@ export function FocusVernierDial({
           : Math.ceil(raw - 0.000001) - 1;
       const target = Math.max(0, Math.min(ticks.length - 1, index));
       selectIndex(target);
+      const next = ticks[target];
+      if (next !== undefined && onSettleMinutes) {
+        onSettleMinutes(next);
+      }
       list.current?.scrollTo({ x: target * tickWidth, animated: !reducedMotion });
     },
-    [disabled, minMinutes, reducedMotion, selectIndex, stepMinutes, ticks.length, tickWidth, valueMinutes],
+    [disabled, minMinutes, onSettleMinutes, reducedMotion, selectIndex, stepMinutes, ticks, tickWidth, valueMinutes],
   );
 
   const horizontalInset = Math.max(0, (width - tickWidth) / 2);
