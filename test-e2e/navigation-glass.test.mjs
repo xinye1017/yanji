@@ -41,12 +41,12 @@ test('the backdrop excludes the dock and secondary settings layer', () => {
 
 test('the dock resolves its whole surface from the glass material', () => {
   // The backdrop and hairline used to be literals in the component while the
-  // tint and selection came from `YanjiLiquidGlass`, so the same surface had
-  // two sources and a palette change could update one and miss the other. The
-  // material now owns every colour the dock paints.
+  // tint came from `YanjiLiquidGlass`, so the same surface had two sources and
+  // a palette change could update one and miss the other. The material now owns
+  // every colour the dock paints.
   for (const variant of ['light', 'dark']) {
     const material = YanjiLiquidGlass[variant];
-    for (const role of ['tint', 'backdrop', 'border', 'selection']) {
+    for (const role of ['tint', 'backdrop', 'border']) {
       assert.equal(typeof material[role], 'string', `YanjiLiquidGlass.${variant}.${role} is a colour`);
       assert.ok(material[role].length > 0, `YanjiLiquidGlass.${variant}.${role} is not empty`);
     }
@@ -55,11 +55,40 @@ test('the dock resolves its whole surface from the glass material', () => {
   }
 
   const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
-  for (const role of ['tint', 'backdrop', 'border', 'selection']) {
+  for (const role of ['tint', 'backdrop', 'border']) {
     assert.match(dock, new RegExp(`material\\.${role}\\b`), `the dock paints its ${role} from the material`);
   }
   assert.ok(!/rgba\(/.test(dock),
     'the dock hardcodes no colour of its own; every one comes from the material');
+});
+
+test('dragging only previews the target slot and commits navigation on release', () => {
+  const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
+  const moveHandler = dock.slice(
+    dock.indexOf('onPanResponderMove:'),
+    dock.indexOf('onPanResponderRelease:'),
+  );
+  const releaseHandler = dock.slice(
+    dock.indexOf('onPanResponderRelease:'),
+    dock.indexOf('onPanResponderTerminate:'),
+  );
+  assert.ok(moveHandler.length > 0);
+  assert.ok(releaseHandler.length > 0);
+  assert.doesNotMatch(moveHandler, /selectTab/,
+    'moving across the dock must not navigate before the finger is released');
+  assert.match(releaseHandler, /selectTabRef\.current\(TABS\[finalSlot\]\.key\)/,
+    'release commits the final slot');
+  assert.match(releaseHandler, /wasDragging/,
+    'a tap without meaningful movement must not be re-routed by the drag release');
+});
+
+test('the selected dock tab is a solid icon with no selection surface', () => {
+  const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
+  const material = readFileSync(new URL('../src/theme/liquidGlass.ts', import.meta.url), 'utf8');
+  assert.match(dock, /filled=\{isActive\}/, 'the active glyph must switch to its solid variant');
+  assert.doesNotMatch(dock, /material\.selection|Animated\.View|calculatePillDeformation/,
+    'the dock must not paint or animate a selection pill');
+  assert.doesNotMatch(material, /\bselection\s*:/, 'the glass material has no selection colour');
 });
 
 test('both native glass components are registered through the manual Fabric pipeline', () => {

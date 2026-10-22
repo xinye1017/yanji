@@ -126,9 +126,10 @@ export function YanjiThing() {
 
 const tabSource = `
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { YanjiLiquidGlass } from '../theme/liquidGlass';
 export function BottomTabBar() {
   const theme = useYanjiTheme();
-  return theme.motion.duration.fast;
+  return { color: theme.paper.colors.ink, padding: YanjiLiquidGlass.padding };
 }
 `;
 
@@ -360,6 +361,21 @@ test('disconnecting the provider from a token scale fails', async () => {
   });
   const { errors } = await runGuard(tree.root);
   assert.ok(errors.some(e => e.includes('ThemeProvider uses YanjiPaperColors')), errors.join('\n'));
+  tree.cleanup();
+});
+
+test('disconnecting navigation from the glass material fails', async () => {
+  const tree = fixtureTree({
+    'src/navigation/BottomTabBar.tsx': tabSource.replace(
+      'YanjiLiquidGlass.padding',
+      'theme.spacing.sm',
+    ),
+  });
+  const { errors } = await runGuard(tree.root);
+  assert.ok(
+    errors.some(e => e.includes('navigation uses the shared glass geometry/material tokens')),
+    errors.join('\n'),
+  );
   tree.cleanup();
 });
 

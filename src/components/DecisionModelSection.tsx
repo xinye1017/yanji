@@ -13,7 +13,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { YanjiPaperSegmentedControl, YanjiTextAction, YanjiTextInput } from './YanjiUI';
+import { YanjiIcon, YanjiPaperSegmentedControl, YanjiTextAction, YanjiTextInput } from './YanjiUI';
 import { YanjiSettingDisclosureRow } from './SettingsRows';
 import { testDecisionConnection, toBaseUrl } from '../services/decisionClient';
 import { YanjiDataNative } from '../bridge';
@@ -263,18 +263,27 @@ export function YanjiDecisionModelSection({
                   backgroundColor: testResult.success ? colors.positiveSubtle : colors.brandSubtle,
                 }}
               >
-                <Text
-                  style={[
-                    typography.captionMeta,
-                    {
-                      color: testResult.success ? colors.positive : colors.brandInk,
-                      fontWeight: '600',
-                    },
-                  ]}
-                >
-                  {testResult.success ? '✓ ' : '✕ '}
-                  {testResult.message}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <View style={{ marginRight: YanjiSpacing.xs, marginTop: 1 }}>
+                    <YanjiIcon
+                      name={testResult.success ? 'check' : 'close'}
+                      size={typography.captionMeta.fontSize}
+                      color={testResult.success ? colors.positive : colors.brandInk}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      typography.captionMeta,
+                      {
+                        flex: 1,
+                        color: testResult.success ? colors.positive : colors.brandInk,
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {testResult.message}
+                  </Text>
+                </View>
               </View>
             ) : null}
 

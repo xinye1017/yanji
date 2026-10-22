@@ -241,7 +241,7 @@ for (const [description, pattern, sharedFileToo] of [
 }
 
 requireSourceMatch(sharedUiSource, /\buseYanjiTheme\b/, 'shared RN components use the theme provider');
-requireSourceMatch(tabSource, /\btheme\.motion\./, 'navigation uses the shared motion tokens');
+requireSourceMatch(tabSource, /\bYanjiLiquidGlass\./, 'navigation uses the shared glass geometry/material tokens');
 
 // ---------------------------------------------------------------------------
 // Per-file forbidden-use rules.

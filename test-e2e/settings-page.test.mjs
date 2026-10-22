@@ -655,6 +655,25 @@ test('decision-model save keeps its draft pending and shares one same-tick write
   assert.match(text(harness.render()), /AI 决策模型配置已保存/);
 });
 
+test('decision-model connection feedback uses the shared icon registry', async () => {
+  const harness = settingsHarness({ settings: stored() });
+  const model = openDecisionModel(harness);
+  model.input('API Key').props.onChangeText('sk-test');
+
+  const testButton = nodes(harness.render(), node =>
+    node.type === 'Pressable' &&
+    node.props.accessibilityLabel === '测试决策模型连通性')[0];
+  await testButton.props.onPress();
+  await flush();
+
+  const icons = nodes(harness.render(), node =>
+    node.type === 'YanjiIcon' &&
+    (node.props.name === 'check' || node.props.name === 'close'));
+  assert.equal(icons.length, 1, 'the result marker is rendered by the icon registry');
+  assert.equal(icons[0].props.name, 'check');
+  assert.doesNotMatch(text(harness.render()), /[✓✕]/);
+});
+
 test('decision-model false or rejection preserves every draft field and a retry saves', async () => {
   for (const failure of [false, new Error('room write failed')]) {
     const write = deferred();
