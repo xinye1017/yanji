@@ -9,6 +9,7 @@ const theme = {
     typography: tokens.YanjiPaperTypography,
     layout: tokens.YanjiPaperLayout,
     radius: tokens.YanjiPaperRadius,
+    motion: tokens.YanjiPaperMotion,
   },
 };
 const logic = loadTypeScript('src/screens/todayViewLogic.ts');
@@ -190,6 +191,7 @@ test('task subject labels use readable theme text rather than the decorative sub
 function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   const states = [];
   const refs = [];
+  const sharedValues = [];
   const effects = [];
   const callbacks = [];
   const calls = [];
@@ -197,6 +199,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   let refIndex = 0;
   let effectIndex = 0;
   let callbackIndex = 0;
+  let sharedValueIndex = 0;
   const dataListeners = [];
   const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
@@ -266,7 +269,19 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       RefreshControl: 'RefreshControl',
       useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
     },
-    'react-native-reanimated': { useReducedMotion: () => true },
+    'react-native-reanimated': {
+      Easing: { out: value => value, in: value => value, cubic: 'cubic' },
+      runOnJS: callback => callback,
+      useAnimatedStyle: style => style(),
+      useReducedMotion: () => true,
+      useSharedValue: initial => {
+        const i = sharedValueIndex++;
+        if (!(i in sharedValues)) sharedValues[i] = { value: initial };
+        return sharedValues[i];
+      },
+      withTiming: value => value,
+      default: { View: 'AnimatedView' },
+    },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 24, bottom: 0 }) },
     '../bridge': {
       YanjiDataNative: bridgeMethods,
@@ -319,6 +334,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     refIndex = 0;
     effectIndex = 0;
     callbackIndex = 0;
+    sharedValueIndex = 0;
     return TodayScreen({ visible, foregroundRevision: 0 });
   }
 
@@ -883,6 +899,17 @@ test('today plans precede collapsed history, whose sheet keeps truthful dates an
   assert.ok(trigger.props.style({ pressed: false }).minHeight >= 48);
   tree = openCarryOver(h);
   assert.equal(nodes(tree, node => node.type === 'Modal').length, 1);
+  const modal = nodes(tree, node => node.type === 'Modal')[0];
+  const animatedLayers = nodes(modal, node => node.type === 'AnimatedView');
+  assert.equal(modal.props.animationType, 'none',
+    'the platform modal must not translate the whole screen');
+  assert.equal(animatedLayers.length, 2,
+    'the fixed scrim and moving sheet need independent animation layers');
+  assert.equal(animatedLayers[0].props.style[0].backgroundColor, theme.paper.colors.scrim);
+  assert.equal(animatedLayers[0].props.style[1].opacity, 1,
+    'the scrim settles at full tone without moving');
+  assert.equal(animatedLayers[1].props.style[1].transform[0].translateY, 0,
+    'only the sheet settles at its resting position');
   assert.match(text(tree), /昨天的计划 · 尚未完成/);
   assert.match(text(tree), /10月13日的计划 · 尚未完成/);
   assert.match(text(tree), /复习操作系统文件管理/);
@@ -963,7 +990,7 @@ test('carry-over waits for one durable write and then refreshes today', async ()
 
   release(carryOverTask({ id: 'today-copy' }));
   await h.flush();
-  tree = h.render();
+  tree = await h.rerender();
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading'
     && node.props.title === '待处理').length, 0,
   'the source disappears only after the durable carry resolves');

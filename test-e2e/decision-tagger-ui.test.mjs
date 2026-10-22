@@ -9,6 +9,7 @@ const theme = {
     typography: tokens.YanjiPaperTypography,
     layout: tokens.YanjiPaperLayout,
     radius: tokens.YanjiPaperRadius,
+    motion: tokens.YanjiPaperMotion,
   },
 };
 
@@ -63,7 +64,15 @@ function todayHarness(snapshot, nativeOverrides = {}) {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
       useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
     },
-    'react-native-reanimated': { useReducedMotion: () => true },
+    'react-native-reanimated': {
+      Easing: { out: value => value, in: value => value, cubic: 'cubic' },
+      runOnJS: callback => callback,
+      useAnimatedStyle: style => style(),
+      useReducedMotion: () => true,
+      useSharedValue: initial => ({ value: initial }),
+      withTiming: value => value,
+      default: { View: 'AnimatedView' },
+    },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 24, bottom: 0 }) },
     '../bridge': {
       YanjiDataNative: {

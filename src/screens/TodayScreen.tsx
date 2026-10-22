@@ -1,7 +1,15 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
+import {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteCategory, NoteEntry, StudyTask } from '../bridge';
@@ -204,6 +212,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [actionError, setActionError] = useState<string | null>(null);
   const [carryOverTasks, setCarryOverTasks] = useState<StudyTask[]>([]);
   const [carryOverOpen, setCarryOverOpen] = useState(false);
+  const [carryOverClosing, setCarryOverClosing] = useState(false);
   const [carryOverLoading, setCarryOverLoading] = useState(false);
   const [carryOverReadFailed, setCarryOverReadFailed] = useState(false);
   const [carryWrite, setCarryWrite] = useState<{ taskId: string; action: 'carry' | 'complete' } | null>(null);
@@ -212,6 +221,42 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const previousDate = useRef(date);
   const carryReadSequence = useRef(0);
   const carryWriteInFlight = useRef(false);
+  const carryOverProgress = useSharedValue(0);
+
+  const openCarryOver = useCallback(() => {
+    setCarryActionError(null);
+    setCarryOverClosing(false);
+    setCarryOverOpen(true);
+    carryOverProgress.value = 0;
+    carryOverProgress.value = withTiming(1, {
+      duration: reduceMotion ? paper.motion.opacityReducedMs : paper.motion.sheetEnterMs,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [carryOverProgress, paper.motion.opacityReducedMs, paper.motion.sheetEnterMs, reduceMotion]);
+
+  const closeCarryOver = useCallback(() => {
+    if (!carryOverOpen || carryOverClosing) return;
+    if (reduceMotion) {
+      setCarryOverOpen(false);
+      return;
+    }
+    setCarryOverClosing(true);
+    carryOverProgress.value = withTiming(0, {
+      duration: paper.motion.sheetExitMs,
+      easing: Easing.in(Easing.cubic),
+    }, finished => {
+      if (!finished) return;
+      runOnJS(setCarryOverOpen)(false);
+      runOnJS(setCarryOverClosing)(false);
+    });
+  }, [carryOverClosing, carryOverOpen, carryOverProgress, paper.motion.sheetExitMs, reduceMotion]);
+
+  const carryOverBackdropStyle = useAnimatedStyle(() => ({
+    opacity: carryOverProgress.value,
+  }));
+  const carryOverSheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - carryOverProgress.value) * windowSize.height }],
+  }));
 
   useEffect(() => {
     if (previousDate.current !== date) {
@@ -219,10 +264,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
       if (visible) void refreshSettingsSnapshot();
       setSelection(null);
       setMomentMenu(null);
-      setCarryOverOpen(false);
+      closeCarryOver();
       setDeferredCarryTaskIds(new Set());
     }
-  }, [date, visible]);
+  }, [closeCarryOver, date, visible]);
   useEffect(() => {
     if (!visible) return;
     setNow(new Date());
@@ -232,9 +277,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
   useEffect(() => {
     if (!visible) {
       setMomentMenu(null);
-      setCarryOverOpen(false);
+      closeCarryOver();
     }
-  }, [visible]);
+  }, [closeCarryOver, visible]);
   // A rotation or a window resize invalidates both the anchor and the menu's
   // clamped placement; closing is the only honest response.
   useEffect(() => { setMomentMenu(null); }, [windowSize.width, windowSize.height]);
@@ -300,8 +345,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
     [carryOverTasks, deferredCarryTaskIds],
   );
   useEffect(() => {
-    if (visibleCarryOverTasks.length === 0) setCarryOverOpen(false);
-  }, [visibleCarryOverTasks.length]);
+    if (visibleCarryOverTasks.length === 0) closeCarryOver();
+  }, [closeCarryOver, visibleCarryOverTasks.length]);
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
@@ -587,9 +632,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
         ))}
 
         {visibleCarryOverTasks.length > 0 ? (
-          <Pressable testID="open-carry-over" onPress={() => { setCarryActionError(null); setCarryOverOpen(true); }}
+          <Pressable testID="open-carry-over" onPress={openCarryOver}
             accessibilityRole="button" accessibilityLabel={`待处理，${visibleCarryOverTasks.length} 项历史计划`}
-            accessibilityState={{ expanded: carryOverOpen }}
+            accessibilityState={{ expanded: carryOverOpen && !carryOverClosing }}
             style={({ pressed }) => ({
               minHeight: layout.rowMinHeight, paddingVertical: YanjiSpacing.sm,
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: YanjiSpacing.sm,
@@ -869,18 +914,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       </ScrollView>
 
-      {carryOverOpen && visible && visibleCarryOverTasks.length > 0 ? (
-        <Modal visible transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => setCarryOverOpen(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
-            <Pressable testID="close-carry-over-backdrop" onPress={() => setCarryOverOpen(false)}
+      {carryOverOpen && visible ? (
+        <Modal visible transparent animationType="none" onRequestClose={closeCarryOver}>
+          <Animated.View pointerEvents={carryOverClosing ? 'none' : 'auto'}
+            style={[{ flex: 1, backgroundColor: colors.scrim }, carryOverBackdropStyle]}>
+            <Pressable testID="close-carry-over-backdrop" onPress={closeCarryOver}
               accessibilityRole="button" accessibilityLabel="关闭待处理计划" style={{ flex: 1 }} />
-            <View accessibilityViewIsModal style={{
+            <Animated.View accessibilityViewIsModal style={[{
               maxHeight: windowSize.height - insets.top - YanjiSpacing.xl,
               backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
               paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: insets.bottom + YanjiSpacing.lg,
-            }}>
+            }, carryOverSheetStyle]}>
               <YanjiPaperSheetHeading title={`待处理 · ${visibleCarryOverTasks.length} 项`}
-                subtitle="保留原计划日期，选择接下来如何安排。" onClose={() => setCarryOverOpen(false)} />
+                subtitle="保留原计划日期，选择接下来如何安排。" onClose={closeCarryOver} />
               <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
                 {carryOverReadFailed ? (
                   <YanjiStaleDataNotice message="读取失败，以下计划可能不是最新。"
@@ -897,8 +943,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
                     onDefer={() => deferCarryOverTask(task.id)} />
                 ))}
               </ScrollView>
-            </View>
-          </View>
+            </Animated.View>
+          </Animated.View>
         </Modal>
       ) : null}
       {momentMenu ? (
