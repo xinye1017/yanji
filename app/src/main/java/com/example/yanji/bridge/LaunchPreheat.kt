@@ -226,6 +226,8 @@ internal fun taskMap(
         // 真实累计分钟数（秒 / 60），不再是恒为 0 的占位值。
         putInt("actualMinutes", fields.actualMinutes)
         putBoolean("completed", fields.completed)
+        if (fields.carriedOverToId == null) putNull("carriedOverToId")
+        else putString("carriedOverToId", fields.carriedOverToId)
         putDouble("createdAt", fields.createdAt)
     }
 }

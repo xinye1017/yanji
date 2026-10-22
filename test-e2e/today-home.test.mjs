@@ -16,7 +16,8 @@ const date = '2026-10-16';
 const at = time => new Date(`${date}T${time}:00`).getTime();
 const task = (changes = {}) => ({
   id: 'task-a', date, subjectId: 'math', subjectName: '数学一', subjectColor: '#356AE6',
-  title: '积分练习', plannedMinutes: 90, actualMinutes: 0, completed: false, createdAt: at('08:00'),
+  title: '积分练习', plannedMinutes: 90, actualMinutes: 0, completed: false,
+  carriedOverToId: null, createdAt: at('08:00'),
   ...changes,
 });
 const session = (id, from, to, changes = {}) => ({
@@ -31,7 +32,11 @@ function nodes(tree, predicate) {
     if (Array.isArray(node)) node.forEach(walk);
     else if (node && typeof node === 'object' && 'type' in node) {
       if (predicate(node)) result.push(node);
-      walk(node.props.children);
+      if (typeof node.type === 'function') walk(node.type(node.props));
+      else {
+        if (node.type === 'YanjiTextAction') return;
+        walk(node.props.children);
+      }
     }
   }
   walk(tree);
@@ -39,7 +44,13 @@ function nodes(tree, predicate) {
 }
 function text(tree) {
   if (Array.isArray(tree)) return tree.map(text).join('');
-  if (tree && typeof tree === 'object') return text(tree.props?.children);
+  if (tree && typeof tree === 'object') {
+    if (typeof tree.type === 'function') return text(tree.type(tree.props));
+    if ('type' in tree && tree.props?.children === undefined) {
+      return tree.props?.title ?? tree.props?.label ?? tree.props?.prompt ?? '';
+    }
+    return text(tree.props?.children);
+  }
   return typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
 }
 let spectrumWidth = 276;
@@ -176,8 +187,15 @@ test('task subject labels use readable theme text rather than the decorative sub
 
 function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   const states = [];
+  const refs = [];
+  const effects = [];
+  const callbacks = [];
   const calls = [];
-  let index = 0;
+  let stateIndex = 0;
+  let refIndex = 0;
+  let effectIndex = 0;
+  let callbackIndex = 0;
+  const dataListeners = [];
   const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
@@ -189,14 +207,55 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   // nothing; `setRefreshDaily` installs the spy that a test cares about.
   let refreshDaily = async () => {};
   const refreshSettings = async () => {};
+  let carryOverTasks = [];
+  let getCarryOverImpl = async () => carryOverTasks;
+  let carryTaskImpl = async id => task({ id: `copy-${id}` });
+  let toggleTaskImpl = async () => true;
+  const bridgeMethods = {
+    ...bridge,
+    getCarryOverTasks: (...args) => {
+      calls.push(['getCarryOverTasks']);
+      return getCarryOverImpl(...args);
+    },
+    carryTaskToToday: (...args) => {
+      calls.push(['carryTaskToToday', ...args]);
+      return carryTaskImpl(...args);
+    },
+    toggleTask: (...args) => {
+      calls.push(['toggleTask', ...args]);
+      return toggleTaskImpl(...args);
+    },
+  };
   const { TodayScreen } = loadTypeScript('src/screens/TodayScreen.tsx', {
     react: {
       useState: initial => {
-        const i = index++;
+        const i = stateIndex++;
         if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
         return [states[i], next => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
       },
-      useMemo: fn => fn(), useCallback: fn => fn, useRef: value => ({ current: value }), useEffect: () => {},
+      useMemo: fn => fn(),
+      useCallback: (fn, deps) => {
+        const i = callbackIndex++;
+        const previous = callbacks[i];
+        const unchanged = previous && deps && previous.deps
+          && deps.length === previous.deps.length
+          && deps.every((value, itemIndex) => Object.is(value, previous.deps[itemIndex]));
+        if (!unchanged) callbacks[i] = { fn, deps };
+        return callbacks[i].fn;
+      },
+      useRef: value => {
+        const i = refIndex++;
+        if (!(i in refs)) refs[i] = { current: value };
+        return refs[i];
+      },
+      useEffect: (effect, deps) => {
+        const i = effectIndex++;
+        const previous = effects[i];
+        const unchanged = previous && deps && previous.deps
+          && deps.length === previous.deps.length
+          && deps.every((value, itemIndex) => Object.is(value, previous.deps[itemIndex]));
+        if (!unchanged) effects[i] = { effect, deps, ran: false };
+      },
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
@@ -205,7 +264,16 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     },
     'react-native-reanimated': { useReducedMotion: () => true },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 24, bottom: 0 }) },
-    '../bridge': { YanjiDataNative: bridge },
+    '../bridge': {
+      YanjiDataNative: bridgeMethods,
+      onDataChanged: callback => {
+        dataListeners.push(callback);
+        return () => {
+          const index = dataListeners.indexOf(callback);
+          if (index >= 0) dataListeners.splice(index, 1);
+        };
+      },
+    },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
@@ -231,11 +299,74 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       useActiveSession: () => active, useTimerTick: () => { tickReads++; },
       syncActiveSession: async () => {},
     },
-  }, { Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T15:00:00`])); } } });
+  }, {
+    Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T15:00:00`])); } },
+    setInterval: () => 1,
+    clearInterval: () => {},
+  });
+  async function flush(turns = 4) {
+    for (let turn = 0; turn < turns; turn += 1) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+
+  function render() {
+    stateIndex = 0;
+    refIndex = 0;
+    effectIndex = 0;
+    callbackIndex = 0;
+    return TodayScreen({ visible: true, foregroundRevision: 0 });
+  }
+
+  function pendingState() {
+    return states.slice(0, 26).map(value => value instanceof Set ? `Set(${[...value].join(',')})` : value);
+  }
+
+  function runPendingEffects(cleanupBeforeRun = false) {
+    for (const effect of effects.filter(item => item && !item.ran)) {
+      if (cleanupBeforeRun) effect.cleanup?.();
+      effect.ran = true;
+      const cleanup = effect.effect();
+      effect.cleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    }
+  }
+
+  async function mount() {
+    render();
+    for (let pass = 0; pass < 4; pass += 1) {
+      runPendingEffects(pass > 0);
+      await flush();
+      render();
+    }
+    return render();
+  }
+
+  async function rerender() {
+    render();
+    runPendingEffects(true);
+    await flush();
+    render();
+    runPendingEffects();
+    await flush();
+    return render();
+  }
+
   return {
     calls, setActive: value => { active = value; }, get tickReads() { return tickReads; },
     setRefreshDaily: next => { refreshDaily = next; },
-    render: () => { index = 0; return TodayScreen({ visible: true, foregroundRevision: 0 }); },
+    setCarryOverTasks: next => {
+      carryOverTasks = next;
+      getCarryOverImpl = async () => carryOverTasks;
+    },
+    setGetCarryOverTasks: next => { getCarryOverImpl = next; },
+    setCarryTaskToToday: next => { carryTaskImpl = next; },
+    setToggleTask: next => { toggleTaskImpl = next; },
+    emitDataChanged: type => dataListeners.forEach(callback => callback({ type })),
+    pendingState,
+    render,
+    mount,
+    rerender,
+    flush,
   };
 }
 
@@ -248,9 +379,9 @@ test('production homepage routes free focus and running focus without a page-lev
   assert.deepEqual(harness.calls, [['tab', 'focus']]);
   harness.setActive({ sessionId: 'active', subjectName: '数学', isPaused: true });
   tree = harness.render();
+  assert.equal(harness.tickReads, 0, 'the page root never subscribes to timer ticks');
   assert.equal(nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '开始一轮专注').length, 0);
   nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '返回专注工作台')[0].props.onPress();
-  assert.equal(harness.tickReads, 0);
 });
 
 test('production homepage shows truthful task metadata and expands rhythm only on request', () => {
@@ -682,4 +813,143 @@ test('pressing the staleness retry re-reads the day and disables itself while ru
   await new Promise(resolve => setTimeout(resolve, 0));
   const done = nodes(h.render(), node => node.type === 'YanjiStaleDataNotice')[0];
   assert.equal(done.props.busy, false, 'the action is available again once the read settles');
+});
+
+function carryOverTask(changes = {}) {
+  return task({
+    id: 'carry-source',
+    date: '2026-10-15',
+    title: '复习操作系统文件管理',
+    plannedMinutes: 45,
+    actualMinutes: 20,
+    ...changes,
+  });
+}
+
+const carryButton = (tree, suffix = 'carry-0') => {
+  return nodes(tree, node =>
+    node.type === 'YanjiTextAction' && node.props.testID === `carry-over-${suffix}`)[0];
+};
+
+test('pending history renders above today and says the source date truthfully', async () => {
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([
+    carryOverTask(),
+    carryOverTask({ id: 'older-source', date: '2026-10-13', title: '整理错题', actualMinutes: 0 }),
+  ]);
+  const tree = await h.mount();
+  const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
+  const pendingIndex = headings.findIndex(node => node.props.title === '待处理');
+  const todayIndex = headings.findIndex(node => node.props.title === '今日计划');
+  assert.ok(pendingIndex >= 0, 'the pending section appears only because real rows exist');
+  assert.ok(pendingIndex < todayIndex, 'unfinished history sits immediately above today');
+  assert.match(text(tree), /昨天的计划 · 尚未完成/);
+  assert.match(text(tree), /10月13日的计划 · 尚未完成/);
+  assert.match(text(tree), /复习操作系统文件管理/);
+  assert.match(text(tree), /已投入 20m \/ 预计 45m/);
+});
+
+test('an empty pending read leaves no empty section behind', async () => {
+  const h = screenHarness(snapshot());
+  h.setCarryOverTasks([]);
+  const tree = await h.mount();
+  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading'
+    && node.props.title === '待处理').length, 0);
+});
+
+test('carry-over waits for one durable write and then refreshes today', async () => {
+  let release;
+  const write = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([carryOverTask()]);
+  h.setCarryTaskToToday(async id => {
+    calls.push(['carry', id]);
+    return write;
+  });
+  let refreshed = 0;
+  h.setRefreshDaily(() => { refreshed += 1; });
+
+  let tree = await h.mount();
+  carryButton(tree).props.onPress();
+  carryButton(tree).props.onPress();
+  await h.flush();
+  assert.deepEqual(calls, [['carry', 'carry-source']],
+    'the synchronous gate blocks the second tap before either promise settles');
+  tree = h.render();
+  assert.equal(carryButton(tree).props.disabled, true);
+
+  release(carryOverTask({ id: 'today-copy' }));
+  await h.flush();
+  tree = h.render();
+  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading'
+    && node.props.title === '待处理').length, 0,
+  'the source disappears only after the durable carry resolves');
+  assert.equal(refreshed, 1, 'today is re-read after the write commits');
+});
+
+test('failed carry-over keeps the source visible and offers an honest retry', async () => {
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([carryOverTask()]);
+  h.setCarryTaskToToday(async () => { throw new Error('disk full'); });
+  let tree = await h.mount();
+  carryButton(tree).props.onPress();
+  await h.flush();
+  tree = h.render();
+  assert.match(text(tree), /未能加入今日，任务仍在待处理区，请重试/);
+  assert.match(text(tree), /复习操作系统文件管理/);
+  assert.equal(carryButton(tree).props.disabled, false);
+});
+
+test('completing historical work removes it only after the persisted write succeeds', async () => {
+  const calls = [];
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([carryOverTask()]);
+  h.setToggleTask(async (id, completed) => {
+    calls.push(['toggle', id, completed]);
+    return true;
+  });
+  const tree = await h.mount();
+  carryButton(tree, 'complete-0').props.onPress();
+  await h.flush();
+  assert.deepEqual(calls, [['toggle', 'carry-source', true]]);
+  assert.equal(nodes(h.render(), node => node.type === 'YanjiPaperSectionHeading'
+    && node.props.title === '待处理').length, 0);
+});
+
+test('defer hides for this session without writing to Room', async () => {
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([carryOverTask()]);
+  let tree = await h.mount();
+  const before = h.calls.length;
+  carryButton(tree, 'defer-0').props.onPress();
+  tree = h.render();
+  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading'
+    && node.props.title === '待处理').length, 0);
+  assert.equal(h.calls.length, before, 'temporarily preserving a row is a local view choice');
+});
+
+test('a failed pending read keeps old rows and exposes a retry; success clears it', async () => {
+  let attempt = 0;
+  const h = screenHarness(snapshot(), {}, {});
+  h.setCarryOverTasks([carryOverTask()]);
+  h.setGetCarryOverTasks(async () => {
+    attempt += 1;
+    if (attempt === 2) throw new Error('read failed');
+    return [carryOverTask()];
+  });
+  let tree = await h.mount();
+  h.emitDataChanged('tasks');
+  await h.flush();
+  tree = h.render();
+  const notice = nodes(tree, node => node.type === 'YanjiStaleDataNotice')
+    .find(node => /待处理任务读取失败/.test(node.props.message));
+  assert.ok(notice, 'a failed refresh must not silently keep stale rows');
+  assert.match(text(tree), /复习操作系统文件管理/);
+
+  notice.props.onAction();
+  await h.flush();
+  tree = h.render();
+  assert.equal(nodes(tree, node => node.type === 'YanjiStaleDataNotice'
+    && /待处理任务读取失败/.test(node.props.message)).length, 0);
 });

@@ -28,7 +28,9 @@ export class MockYanjiBridge {
     this.themeListeners = [];
 
     // In-Memory Storage mirroring Room Database tables
-    this.tasks = initialData.tasks ? [...initialData.tasks] : [];
+    this.tasks = initialData.tasks
+      ? initialData.tasks.map(task => ({ carriedOverToId: null, ...task }))
+      : [];
     this.notes = initialData.notes ? [...initialData.notes] : [];
     this.sessionRecords = initialData.sessionRecords ? [...initialData.sessionRecords] : [];
     this.subjects = initialData.subjects ? [...initialData.subjects] : [
@@ -221,6 +223,7 @@ export class MockYanjiBridge {
       plannedMinutes: Math.max(1, plannedMinutes),
       actualMinutes: 0,
       completed: false,
+      carriedOverToId: null,
       createdAt: this.virtualClockMs,
     };
     this.tasks.push(newTask);
@@ -242,6 +245,53 @@ export class MockYanjiBridge {
     this.tasks.splice(index, 1);
     this._emitDataChanged('tasks');
     return true;
+  }
+
+  async getCarryOverTasks() {
+    const today = this._isoDateAt(this.virtualClockMs, 0);
+    const earliest = this._isoDateAt(this.virtualClockMs, -7);
+    return this.tasks
+      .filter(task => task.date >= earliest && task.date < today
+        && !task.completed && task.carriedOverToId === null)
+      .sort((left, right) => right.date.localeCompare(left.date) || left.createdAt - right.createdAt)
+      .map(task => ({
+        ...task,
+        subjectColor: this._subjectColor(task.subjectId),
+        actualMinutes: Math.floor(
+          this.sessionRecords
+            .filter(session => session.taskId === task.id && !session.isExam)
+            .reduce((total, session) => total + (session.elapsedSeconds ?? session.durationSeconds ?? 0), 0)
+          / 60
+        ),
+      }));
+  }
+
+  async carryTaskToToday(taskId) {
+    const today = this._isoDateAt(this.virtualClockMs, 0);
+    const earliest = this._isoDateAt(this.virtualClockMs, -7);
+    const source = this.tasks.find(task => task.id === taskId);
+    if (!source || source.date < earliest || source.date >= today
+      || source.completed || source.carriedOverToId !== null) {
+      const error = new Error('Task can no longer be carried over');
+      error.code = 'E_TASK_NOT_CARRYABLE';
+      throw error;
+    }
+    const copy = {
+      ...source,
+      id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      date: today,
+      actualMinutes: 0,
+      completed: false,
+      carriedOverToId: null,
+      createdAt: this.virtualClockMs,
+    };
+    source.carriedOverToId = copy.id;
+    this.tasks.push(copy);
+    this._emitDataChanged('tasks');
+    return {
+      ...copy,
+      subjectColor: this._subjectColor(copy.subjectId),
+    };
   }
 
   async saveQuickNote(content, date, sessionId = null, category = 'INSPIRATION') {

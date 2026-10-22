@@ -703,7 +703,7 @@ export function YanjiDayRhythmChart({
 // the page's one filled CTA.
 // ---------------------------------------------------------------------------
 
-export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false, tone = 'brand' }: {
+export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled = false, tone = 'brand', testID }: {
   label: string;
   accessibilityLabel?: string;
   onPress: () => void;
@@ -714,10 +714,12 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
    * reads as part of that notice rather than competing with the page accent.
    */
   tone?: 'brand' | 'quiet' | 'amber';
+  testID?: string;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"

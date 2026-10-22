@@ -8,6 +8,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.example.yanji.data.NoteEntry
+import com.example.yanji.data.StudyTaskNotCarryableException
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.YanjiRepository
@@ -83,7 +84,7 @@ class YanjiDataModule(
             return
         }
         val minutes = plannedMinutes.toInt().coerceAtLeast(1)
-        scope.launch {
+        scope.launchPersistedWrite(promise, "E_TASK_CREATE_FAILED") {
             val task = com.example.yanji.data.StudyTask(
                 id = UUID.randomUUID().toString(),
                 date = date,
@@ -116,9 +117,44 @@ class YanjiDataModule(
 
     @ReactMethod
     fun toggleTask(taskId: String, completed: Boolean, promise: Promise) {
-        scope.launch {
-            repository.setStudyTaskCompleted(taskId, completed)
+        scope.launchPersistedWrite(promise, "E_TASK_SAVE_FAILED") {
+            if (!repository.setStudyTaskCompleted(taskId, completed)) {
+                throw IllegalStateException("Task no longer exists")
+            }
             promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun getCarryOverTasks(promise: Promise) {
+        scope.launch {
+            try {
+                val tasks = Arguments.createArray()
+                repository.getCarryOverTasks().forEach { item ->
+                    tasks.pushMap(taskMap(item.task, item.actualSeconds))
+                }
+                promise.resolve(tasks)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_CARRY_OVER_READ", "读取待处理任务失败", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun carryTaskToToday(taskId: String, promise: Promise) {
+        scope.launch {
+            try {
+                val carry = repository.carryStudyTaskToToday(taskId)
+                promise.resolve(taskMap(carry.task, carry.actualSeconds))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: StudyTaskNotCarryableException) {
+                promise.reject("E_TASK_NOT_CARRYABLE", "Task can no longer be carried over")
+            } catch (error: Exception) {
+                promise.reject("E_TASK_CARRY_OVER", "加入今日失败，请重试", error)
+            }
         }
     }
 

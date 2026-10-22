@@ -148,6 +148,7 @@ object BridgeMappers {
         val plannedMinutes: Int,
         val actualMinutes: Int,
         val completed: Boolean,
+        val carriedOverToId: String?,
         val createdAt: Double
     )
 
@@ -174,6 +175,7 @@ object BridgeMappers {
         plannedMinutes = task.plannedMinutes,
         actualMinutes = actualMinutesOf(actualSeconds ?: 0L),
         completed = task.isCompleted,
+        carriedOverToId = task.carriedOverToId,
         createdAt = task.createdAt.toDouble()
     )
 

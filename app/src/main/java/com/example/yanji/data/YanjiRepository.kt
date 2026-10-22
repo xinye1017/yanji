@@ -24,6 +24,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
+import java.time.LocalDate
 import java.util.UUID
 
 class YanjiRepository private constructor() {
@@ -414,13 +417,48 @@ class YanjiRepository private constructor() {
         requireDatabase().studyTaskDao().insert(StudyTaskEntity.fromDomainModel(task))
     }
 
+    /**
+     * 最近 7 天的未完成任务，带真实累计专注时长。
+     *
+     * 窗口在原生命中计算，避免 RN 先拿整张任务表再筛。
+     */
+    suspend fun getCarryOverTasks(): List<StudyTaskWithActualSeconds> {
+        val today = YanjiTime.today()
+        return requireDatabase().studyTaskDao().getCarryOverWithActualSeconds(
+            earliestDate = today.minusDays(7).format(YanjiTime.isoDateFormatter),
+            today = today.format(YanjiTime.isoDateFormatter)
+        ).map { row ->
+            StudyTaskWithActualSeconds(
+                task = row.task.toDomainModel(),
+                actualSeconds = row.actualSeconds
+            )
+        }
+    }
+
+    /**
+     * 保留来源任务与历史，创建今天的副本并在同一事务内链接回来源。
+     *
+     * 条件更新先占用来源，因此并发或重复承接最多只有一次能落库；
+     * 副本插入失败会连同来源链接一起回滚。
+     */
+    suspend fun carryStudyTaskToToday(taskId: String): StudyTaskWithActualSeconds {
+        val db = requireDatabase()
+        return carryStudyTaskToTodayInTransaction(
+            db = db,
+            taskId = taskId,
+            today = YanjiTime.today(),
+            timestamp = System.currentTimeMillis(),
+            destinationId = UUID.randomUUID().toString()
+        )
+    }
+
     suspend fun updateStudyTaskDetails(id: String, title: String, plannedMinutes: Int): Boolean =
         requireDatabase().studyTaskDao()
             .updateDetails(id, title, plannedMinutes, System.currentTimeMillis()) > 0
 
-    suspend fun setStudyTaskCompleted(id: String, completed: Boolean) {
-        requireDatabase().studyTaskDao().setCompleted(id, completed, System.currentTimeMillis())
-    }
+    suspend fun setStudyTaskCompleted(id: String, completed: Boolean): Boolean =
+        requireDatabase().studyTaskDao()
+            .setCompleted(id, completed, System.currentTimeMillis()) > 0
 
     suspend fun deleteStudyTask(id: String) {
         requireDatabase().studyTaskDao().deleteById(id)
@@ -721,5 +759,53 @@ class YanjiRepository private constructor() {
             val now = System.currentTimeMillis()
             _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
         }
+    }
+}
+
+/** Internally raised when a task is no longer eligible for carry-over. */
+class StudyTaskNotCarryableException : IllegalStateException("Task is not carryable")
+
+/** Task plus the persisted completed-focus seconds used by bridge payloads. */
+data class StudyTaskWithActualSeconds(
+    val task: StudyTask,
+    val actualSeconds: Long
+)
+
+/**
+ * Deterministic transaction boundary shared by production and SQLite tests.
+ *
+ * The source is claimed first with one conditional update. A second attempt
+ * therefore sees `linked == 0`; an insert failure rolls that claim back too.
+ */
+internal suspend fun carryStudyTaskToTodayInTransaction(
+    db: YanjiDatabase,
+    taskId: String,
+    today: LocalDate,
+    timestamp: Long,
+    destinationId: String
+): StudyTaskWithActualSeconds = db.useWriterConnection { transactor ->
+    transactor.immediateTransaction {
+        val dao = db.studyTaskDao()
+        val source = dao.getById(taskId) ?: throw StudyTaskNotCarryableException()
+        val todayIso = today.format(YanjiTime.isoDateFormatter)
+        val linked = dao.linkCarryOverSource(
+            sourceId = taskId,
+            destinationId = destinationId,
+            earliestDate = today.minusDays(7).format(YanjiTime.isoDateFormatter),
+            today = todayIso,
+            updatedAt = timestamp
+        )
+        if (linked != 1) throw StudyTaskNotCarryableException()
+
+        val destination = source.copy(
+            id = destinationId,
+            date = todayIso,
+            isCompleted = false,
+            carriedOverToId = null,
+            createdAt = timestamp,
+            updatedAt = timestamp
+        )
+        dao.insertCarryOver(destination)
+        StudyTaskWithActualSeconds(destination.toDomainModel(), actualSeconds = 0L)
     }
 }

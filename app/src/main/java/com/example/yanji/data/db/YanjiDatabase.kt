@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -689,6 +689,13 @@ abstract class YanjiDatabase : RoomDatabase() {
             }
         }
 
+        /** v23 → v24：承接来源指向新建的今日任务；存量任务一律尚未承接。 */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE study_tasks ADD COLUMN carriedOverToId TEXT")
+            }
+        }
+
         /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
@@ -718,7 +725,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_19_20,
             MIGRATION_20_21,
             MIGRATION_21_22,
-            MIGRATION_22_23
+            MIGRATION_22_23,
+            MIGRATION_23_24
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

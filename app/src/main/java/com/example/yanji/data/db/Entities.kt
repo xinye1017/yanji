@@ -476,6 +476,7 @@ data class StudyTaskEntity(
     val title: String,
     val plannedMinutes: Int,
     val isCompleted: Boolean,
+    val carriedOverToId: String? = null,
     val createdAt: Long,
     val updatedAt: Long
 ) {
@@ -487,6 +488,7 @@ data class StudyTaskEntity(
         title = title,
         plannedMinutes = plannedMinutes,
         isCompleted = isCompleted,
+        carriedOverToId = carriedOverToId,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
@@ -500,6 +502,7 @@ data class StudyTaskEntity(
             title = model.title,
             plannedMinutes = model.plannedMinutes,
             isCompleted = model.isCompleted,
+            carriedOverToId = model.carriedOverToId,
             createdAt = model.createdAt,
             updatedAt = model.updatedAt
         )

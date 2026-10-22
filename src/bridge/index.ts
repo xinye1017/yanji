@@ -42,6 +42,12 @@ export interface StudyTask {
   plannedMinutes: number;
   actualMinutes: number;
   completed: boolean;
+  /**
+   * Set only on the historical source after it has been carried into today.
+   * The source's date and focus history remain unchanged; the destination
+   * task has `carriedOverToId: null`.
+   */
+  carriedOverToId: string | null;
   createdAt: number;
 }
 
@@ -308,6 +314,14 @@ interface YanjiDataModuleNative {
   toggleTask(taskId: string, completed: boolean): Promise<boolean>;
   updateTask(taskId: string, title: string, plannedMinutes: number): Promise<boolean>;
   deleteTask(taskId: string): Promise<boolean>;
+  /** Unfinished, unlinked tasks from today-7 through yesterday, newest first. */
+  getCarryOverTasks(): Promise<StudyTask[]>;
+  /**
+   * Atomically copy an eligible historical task to today and link the source.
+   * Rejects with `E_TASK_NOT_CARRYABLE` when the source is completed, already
+   * carried, outside the seven-day window, in the future, or missing.
+   */
+  carryTaskToToday(taskId: string): Promise<StudyTask>;
   saveQuickNote(
     content: string,
     date: string,

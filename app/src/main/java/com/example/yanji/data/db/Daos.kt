@@ -29,6 +29,13 @@ data class StudyTaskActualSecondsRow(
     val actualSeconds: Long
 )
 
+/** A carry-over candidate together with completed focus accumulated across all dates. */
+data class CarryOverTaskRow(
+    @Embedded(prefix = "task_")
+    val task: StudyTaskEntity,
+    val actualSeconds: Long
+)
+
 @Dao
 interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
@@ -468,6 +475,7 @@ interface StudyTaskDao {
             "t.id AS task_id, t.date AS task_date, t.subjectId AS task_subjectId, " +
             "t.subjectName AS task_subjectName, t.title AS task_title, " +
             "t.plannedMinutes AS task_plannedMinutes, t.isCompleted AS task_isCompleted, " +
+            "t.carriedOverToId AS task_carriedOverToId, " +
             "t.createdAt AS task_createdAt, t.updatedAt AS task_updatedAt, " +
             "COALESCE(SUM(f.durationSeconds), 0) AS actualSeconds " +
             "FROM study_tasks AS t " +
@@ -475,16 +483,57 @@ interface StudyTaskDao {
             "ON f.taskId = t.id AND f.status = 'COMPLETED' " +
             "WHERE t.date = :date " +
             "GROUP BY t.id, t.date, t.subjectId, t.subjectName, t.title, " +
-            "t.plannedMinutes, t.isCompleted, t.createdAt, t.updatedAt " +
+            "t.plannedMinutes, t.isCompleted, t.carriedOverToId, t.createdAt, t.updatedAt " +
             "ORDER BY t.isCompleted ASC, t.createdAt ASC"
     )
     suspend fun getByDateWithActualSeconds(date: String): List<StudyTaskActualSecondsRow>
+
+    /**
+     * 最近 7 天内仍有希望继续的计划：不含今天，包含今天减去 7 天。
+     *
+     * 完成、已承接与更早的任务都不再进入待处理区；实际投入仍按任务 id 汇总，
+     * 不按日期截断跨日专注。
+     */
+    @Query(
+        "SELECT " +
+            "t.id AS task_id, t.date AS task_date, t.subjectId AS task_subjectId, " +
+            "t.subjectName AS task_subjectName, t.title AS task_title, " +
+            "t.plannedMinutes AS task_plannedMinutes, t.isCompleted AS task_isCompleted, " +
+            "t.carriedOverToId AS task_carriedOverToId, " +
+            "t.createdAt AS task_createdAt, t.updatedAt AS task_updatedAt, " +
+            "COALESCE(SUM(f.durationSeconds), 0) AS actualSeconds " +
+            "FROM study_tasks AS t " +
+            "LEFT JOIN focus_sessions AS f " +
+            "ON f.taskId = t.id AND f.status = 'COMPLETED' " +
+            "WHERE t.date >= :earliestDate AND t.date < :today " +
+            "AND t.isCompleted = 0 AND t.carriedOverToId IS NULL " +
+            "GROUP BY t.id, t.date, t.subjectId, t.subjectName, t.title, " +
+            "t.plannedMinutes, t.isCompleted, t.carriedOverToId, t.createdAt, t.updatedAt " +
+            "ORDER BY t.date DESC, t.createdAt ASC"
+    )
+    suspend fun getCarryOverWithActualSeconds(
+        earliestDate: String,
+        today: String
+    ): List<CarryOverTaskRow>
+
+    @Query("SELECT * FROM study_tasks WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): StudyTaskEntity?
+
+    @Query("SELECT * FROM study_tasks ORDER BY date DESC, createdAt ASC")
+    suspend fun getAllOnce(): List<StudyTaskEntity>
 
     @Query("SELECT * FROM study_tasks ORDER BY date DESC, createdAt ASC")
     fun getAllFlow(): Flow<List<StudyTaskEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(task: StudyTaskEntity)
+
+    /**
+     * 承接事务使用 ABORT：失败必须抛出并回滚同事务内的来源链接，
+     * 不能被 REPLACE 静默覆盖。
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCarryOver(task: StudyTaskEntity)
 
     /** 原位更新保留任务 ID 和历史专注关联，不采用删除再创建。 */
     @Query("UPDATE study_tasks SET title = :title, plannedMinutes = :plannedMinutes, updatedAt = :updatedAt WHERE id = :id")
@@ -494,7 +543,24 @@ interface StudyTaskDao {
     suspend fun insertAll(tasks: List<StudyTaskEntity>)
 
     @Query("UPDATE study_tasks SET isCompleted = :completed, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun setCompleted(id: String, completed: Boolean, updatedAt: Long)
+    suspend fun setCompleted(id: String, completed: Boolean, updatedAt: Long): Int
+
+    /**
+     * 以条件更新占用来源任务，返回 0 表示已完成、已承接、超出窗口或不存在。
+     * 并发承接时 SQLite 只允许其中一次把 NULL 改成目标 id。
+     */
+    @Query(
+        "UPDATE study_tasks SET carriedOverToId = :destinationId, updatedAt = :updatedAt " +
+            "WHERE id = :sourceId AND date >= :earliestDate AND date < :today " +
+            "AND isCompleted = 0 AND carriedOverToId IS NULL"
+    )
+    suspend fun linkCarryOverSource(
+        sourceId: String,
+        destinationId: String,
+        earliestDate: String,
+        today: String,
+        updatedAt: Long
+    ): Int
 
     @Query("UPDATE study_tasks SET subjectName = :newName WHERE subjectId = :subjectId")
     suspend fun updateSubjectName(subjectId: String, newName: String)
@@ -506,6 +572,7 @@ interface StudyTaskDao {
     @Query("DELETE FROM study_tasks")
     suspend fun deleteAll()
 }
+
 
 @Dao
 interface AiAnalysisDao {

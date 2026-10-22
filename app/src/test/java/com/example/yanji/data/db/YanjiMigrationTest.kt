@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 23
+    private val CURRENT_VERSION = 24
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -191,7 +191,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_19_20,
         YanjiDatabase.MIGRATION_20_21,
         YanjiDatabase.MIGRATION_21_22,
-        YanjiDatabase.MIGRATION_22_23
+        YanjiDatabase.MIGRATION_22_23,
+        YanjiDatabase.MIGRATION_23_24
     )
 
     /**
@@ -1191,6 +1192,43 @@ class YanjiMigrationTest {
         assertEquals("openrouter", db.textValue("SELECT decisionProvider FROM user_settings WHERE id=1"))
         assertEquals("respan/span-01-lite:free", db.textValue("SELECT decisionModel FROM user_settings WHERE id=1"))
         assertEquals("https://openrouter.ai/api/alpha/decisions", db.textValue("SELECT decisionEndpoint FROM user_settings WHERE id=1"))
+        db.close()
+    }
+
+    // ---------------------------------------------------------------- 23 -> 24 跨日任务承接
+
+    @Test
+    fun migrate23To24_addsNullableCarryLinkAndPreservesEveryTaskField() {
+        val db23 = helper.createDatabase(23)
+        db23.prepare(
+            "INSERT INTO study_tasks " +
+                "(id, date, subjectId, subjectName, title, plannedMinutes, isCompleted, createdAt, updatedAt) " +
+                "VALUES ('task-v23', '2026-10-20', 'operating_system', '操作系统', " +
+                "'文件管理复习', 75, 0, 1000, 1200)"
+        ).use { it.step() }
+        db23.close()
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(23))
+
+        assertTrue("carriedOverToId 列应已存在", "carriedOverToId" in db.columnNames("study_tasks"))
+        assertEquals("task-v23", db.textValue("SELECT id FROM study_tasks"))
+        assertEquals("2026-10-20", db.textValue("SELECT date FROM study_tasks WHERE id='task-v23'"))
+        assertEquals("operating_system", db.textValue("SELECT subjectId FROM study_tasks WHERE id='task-v23'"))
+        assertEquals("操作系统", db.textValue("SELECT subjectName FROM study_tasks WHERE id='task-v23'"))
+        assertEquals("文件管理复习", db.textValue("SELECT title FROM study_tasks WHERE id='task-v23'"))
+        assertEquals(75, db.intValue("SELECT plannedMinutes FROM study_tasks WHERE id='task-v23'"))
+        assertEquals(0, db.intValue("SELECT isCompleted FROM study_tasks WHERE id='task-v23'"))
+        assertEquals(
+            "存量任务尚未承接，升级后必须保持 NULL",
+            1L,
+            db.longValue(
+                "SELECT CASE WHEN carriedOverToId IS NULL THEN 1 ELSE 0 END " +
+                    "FROM study_tasks WHERE id='task-v23'"
+            )
+        )
+        assertEquals(1000L, db.longValue("SELECT createdAt FROM study_tasks WHERE id='task-v23'"))
+        assertEquals(1200L, db.longValue("SELECT updatedAt FROM study_tasks WHERE id='task-v23'"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM study_tasks"))
         db.close()
     }
 

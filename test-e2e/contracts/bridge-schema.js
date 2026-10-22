@@ -36,6 +36,8 @@ export const BridgeSchemas = {
       typeof obj.plannedMinutes === 'number' &&
       typeof obj.actualMinutes === 'number' &&
       typeof obj.completed === 'boolean' &&
+      (obj.carriedOverToId === null ||
+        (typeof obj.carriedOverToId === 'string' && obj.carriedOverToId.length > 0)) &&
       typeof obj.createdAt === 'number'
     );
   },

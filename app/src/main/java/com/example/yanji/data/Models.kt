@@ -93,6 +93,12 @@ data class StudyTask(
     val title: String,
     val plannedMinutes: Int,
     val isCompleted: Boolean = false,
+    /**
+     * 原计划承接后指向新建的今日任务；来源日期与历史投入不变。
+     *
+     * null 表示这条任务尚未被承接。备份反序列化也依赖默认值兼容旧备份。
+     */
+    val carriedOverToId: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

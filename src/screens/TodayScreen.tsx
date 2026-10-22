@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { YanjiDataNative } from '../bridge';
+import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteCategory, NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
@@ -72,6 +72,97 @@ function timeLabel(timestamp: number): string {
 function noteTitle(note: NoteEntry): string {
   return note.content.trim().split('\n').find(line => line.trim())?.trim() || '无标题记录';
 }
+function carryOverSourceLabel(sourceDate: string, today: string): string {
+  const yesterday = new Date(`${today}T12:00:00`);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sourceDate === localDay(yesterday)) return '昨天的计划 · 尚未完成';
+  const source = new Date(`${sourceDate}T12:00:00`);
+  return `${source.getMonth() + 1}月${source.getDate()}日的计划 · 尚未完成`;
+}
+
+/**
+ * A historical unfinished plan is still a ledger row, but its decisions are
+ * different from today's: carry it forward, finish it where it belongs, or put
+ * it aside for this session. Keeping this local avoids pretending it is a
+ * Today task before the user has decided.
+ */
+function CarryOverLedgerRow({
+  task,
+  today,
+  index,
+  busy,
+  disabled,
+  isLast,
+  onCarry,
+  onComplete,
+  onDefer,
+}: {
+  task: StudyTask;
+  today: string;
+  index: number;
+  busy: boolean;
+  disabled: boolean;
+  isLast: boolean;
+  onCarry: () => void;
+  onComplete: () => void;
+  onDefer: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  return (
+    <View>
+      <View style={{ paddingVertical: YanjiSpacing.sm, gap: YanjiSpacing.xs }}>
+        <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+          {carryOverSourceLabel(task.date, today)}
+        </Text>
+        <Text numberOfLines={2} style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '600' }]}>
+          {task.title}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
+            <View style={{
+              width: layout.subjectSwatchSize,
+              height: layout.subjectSwatchSize,
+              borderRadius: layout.subjectSwatchSize / 2,
+              backgroundColor: task.subjectColor,
+            }} />
+            <Text style={[typography.captionMeta, { color: colors.secondary }]}>{task.subjectName}</Text>
+          </View>
+          <Text style={[typography.captionMeta, { color: colors.secondary }]}>{taskMeta(task)}</Text>
+        </View>
+        <View
+          accessibilityState={{ disabled, busy }}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: YanjiSpacing.md }}
+        >
+          <YanjiTextAction
+            testID={`carry-over-carry-${index}`}
+            label={busy ? '处理中…' : '加入今日'}
+            accessibilityLabel={`加入今日：${task.title}`}
+            onPress={onCarry}
+            disabled={disabled}
+          />
+          <YanjiTextAction
+            testID={`carry-over-complete-${index}`}
+            label="标记完成"
+            accessibilityLabel={`完成历史计划：${task.title}`}
+            onPress={onComplete}
+            disabled={disabled}
+            tone="quiet"
+          />
+          <YanjiTextAction
+            testID={`carry-over-defer-${index}`}
+            label="暂时保留"
+            accessibilityLabel={`暂时保留：${task.title}`}
+            onPress={onDefer}
+            disabled={disabled}
+            tone="quiet"
+          />
+        </View>
+      </View>
+      {isLast ? null : <YanjiHairline />}
+    </View>
+  );
+}
 
 export function TodayScreen({ visible, foregroundRevision }: {
   visible: boolean; foregroundRevision: number;
@@ -109,7 +200,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [busyTask, setBusyTask] = useState<string | null>(null);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [carryOverTasks, setCarryOverTasks] = useState<StudyTask[]>([]);
+  const [carryOverLoading, setCarryOverLoading] = useState(false);
+  const [carryOverReadFailed, setCarryOverReadFailed] = useState(false);
+  const [carryWrite, setCarryWrite] = useState<{ taskId: string; action: 'carry' | 'complete' } | null>(null);
+  const [carryActionError, setCarryActionError] = useState<string | null>(null);
+  const [deferredCarryTaskIds, setDeferredCarryTaskIds] = useState<Set<string>>(() => new Set());
   const previousDate = useRef(date);
+  const carryReadSequence = useRef(0);
+  const carryWriteInFlight = useRef(false);
 
   useEffect(() => {
     if (previousDate.current !== date) {
@@ -117,6 +216,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
       if (visible) void refreshSettingsSnapshot();
       setSelection(null);
       setMomentMenu(null);
+      setDeferredCarryTaskIds(new Set());
     }
   }, [date, visible]);
   useEffect(() => {
@@ -129,6 +229,43 @@ export function TodayScreen({ visible, foregroundRevision }: {
   // A rotation or a window resize invalidates both the anchor and the menu's
   // clamped placement; closing is the only honest response.
   useEffect(() => { setMomentMenu(null); }, [windowSize.width, windowSize.height]);
+
+  const loadCarryOverTasks = useCallback(async () => {
+    if (!visible) {
+      carryReadSequence.current += 1;
+      return;
+    }
+    const sequence = ++carryReadSequence.current;
+    setCarryOverLoading(true);
+    try {
+      const tasks = await YanjiDataNative.getCarryOverTasks();
+      if (sequence !== carryReadSequence.current) return;
+      setCarryOverTasks(tasks);
+      setCarryOverReadFailed(false);
+    } catch {
+      if (sequence !== carryReadSequence.current) return;
+      setCarryOverReadFailed(true);
+    } finally {
+      if (sequence === carryReadSequence.current) setCarryOverLoading(false);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      carryReadSequence.current += 1;
+      return;
+    }
+    void loadCarryOverTasks();
+  }, [visible, foregroundRevision, date, loadCarryOverTasks]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    return onDataChanged(event => {
+      if (event.type === 'tasks' || event.type === 'sessions') {
+        void loadCarryOverTasks();
+      }
+    });
+  }, [visible, loadCarryOverTasks]);
 
   const retryRead = useCallback(async () => {
     setRetrying(true);
@@ -148,6 +285,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const latestNotes = useMemo(() => [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
   const todayDoubts = useMemo(() => (notes ?? []).filter(note => note.category === 'DOUBT'), [notes]);
   const resolvedDoubts = useMemo(() => todayDoubts.filter(note => note.isResolved), [todayDoubts]);
+  const visibleCarryOverTasks = useMemo(
+    () => carryOverTasks.filter(task =>
+      !task.completed && task.carriedOverToId === null && !deferredCarryTaskIds.has(task.id)),
+    [carryOverTasks, deferredCarryTaskIds],
+  );
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
   const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
   const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
@@ -171,6 +313,40 @@ export function TodayScreen({ visible, foregroundRevision }: {
       if (!await YanjiDataNative.toggleTask(task.id, !task.completed)) throw new Error('refused');
     } catch { setActionError('任务状态未保存，请再次点击勾选重试。'); }
     finally { setBusyTask(null); }
+  };
+  const handleCarryOverAction = async (task: StudyTask, action: 'carry' | 'complete') => {
+    if (carryWriteInFlight.current) return;
+    carryWriteInFlight.current = true;
+    setCarryWrite({ taskId: task.id, action });
+    setCarryActionError(null);
+    try {
+      if (action === 'carry') {
+        await YanjiDataNative.carryTaskToToday(task.id);
+      } else if (!await YanjiDataNative.toggleTask(task.id, true)) {
+        throw new Error('refused');
+      }
+      if (action === 'carry') {
+        setCarryOverTasks(current => current.filter(item => item.id !== task.id));
+      } else {
+        setCarryOverTasks(current => current.filter(item => item.id !== task.id));
+      }
+      // The write is already durable. A failed refresh leaves the Room-backed
+      // stale-data notice in charge; it must not turn a committed write into a
+      // misleading action failure.
+      void refreshDailySnapshot(date).catch(() => {});
+    } catch {
+      setCarryActionError(action === 'carry'
+        ? '未能加入今日，任务仍在待处理区，请重试。'
+        : '未能标记完成，任务仍在待处理区，请重试。');
+    } finally {
+      carryWriteInFlight.current = false;
+      setCarryWrite(null);
+    }
+  };
+  const deferCarryOverTask = (taskId: string) => {
+    if (carryWriteInFlight.current) return;
+    setCarryActionError(null);
+    setDeferredCarryTaskIds(current => new Set(current).add(taskId));
   };
   const toggleFavorite = async (note: NoteEntry) => {
     if (busyNote) return;
@@ -377,6 +553,45 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
         <YanjiHairline />
         {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
+
+        {carryOverReadFailed ? (
+          <YanjiStaleDataNotice
+            message={visibleCarryOverTasks.length > 0
+              ? '待处理任务读取失败，以下内容可能不是最新。'
+              : '待处理任务读取失败。'}
+            actionLabel={carryOverLoading ? '读取中…' : '重新读取'}
+            onAction={() => void loadCarryOverTasks()}
+            busy={carryOverLoading}
+            style={{ marginTop: YanjiSpacing.md }}
+          />
+        ) : null}
+        {carryActionError ? (
+          <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>
+            {carryActionError}
+          </Text>
+        ) : null}
+        {visibleCarryOverTasks.length > 0 ? (
+          <View>
+            <YanjiPaperSectionHeading
+              title="待处理"
+              countText={`${visibleCarryOverTasks.length} 项`}
+            />
+            {visibleCarryOverTasks.map((task, index) => (
+              <CarryOverLedgerRow
+                key={task.id}
+                task={task}
+                today={date}
+                index={index}
+                busy={carryWrite?.taskId === task.id}
+                disabled={carryWrite !== null}
+                isLast={index === visibleCarryOverTasks.length - 1}
+                onCarry={() => void handleCarryOverAction(task, 'carry')}
+                onComplete={() => void handleCarryOverAction(task, 'complete')}
+                onDefer={() => deferCarryOverTask(task.id)}
+              />
+            ))}
+          </View>
+        ) : null}
 
         <YanjiPaperSectionHeading title="今日计划" countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
           right={<YanjiTextAction label="＋ 新建任务" accessibilityLabel="添加任务" onPress={openTaskEditor} />} />
