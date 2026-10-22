@@ -19,7 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
@@ -37,6 +37,7 @@ import { syncActiveSession, useActiveSession, useTimerTick } from '../state/time
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 180;
 const DEFAULT_MINUTES = 45;
+const FOCUS_PRESETS = [25, 45, 60, 90, 120, 180] as const;
 const TIMER_MODES: ReadonlyArray<{ value: TimerMode; label: string }> = [
   { value: 'COUNTDOWN', label: '倒计时' },
   { value: 'STOPWATCH', label: '正计时' },
@@ -584,29 +585,119 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   </Text>
 
                   {/* Full-bleed strip: the ruler belongs to the page, not to a card. */}
-                  <View
-                    style={{
-                      alignSelf: 'stretch',
-                      marginHorizontal: -paper.layout.pageGutter,
-                      marginTop: YanjiSpacing.md,
-                      backgroundColor: paper.colors.vernierWash,
-                      borderTopWidth: paper.layout.hairlineWidth,
-                      borderBottomWidth: paper.layout.hairlineWidth,
-                      borderColor: paper.colors.hairline,
-                    }}
-                  >
-                    <FocusVernierDial
-                      valueMinutes={durationMinutes}
-                      onChangeMinutes={setDurationMinutes}
-                      onSettleMinutes={setSettledDuration}
-                      minMinutes={MIN_MINUTES}
-                      maxMinutes={MAX_MINUTES}
-                      stepMinutes={5}
-                      accessibilityLabel="调整倒计时长度"
-                    />
+                  <View style={{ alignSelf: 'stretch', position: 'relative', marginTop: YanjiSpacing.sm }}>
+                    <View style={{ marginHorizontal: -paper.layout.pageGutter }}>
+                      <FocusVernierDial
+                        valueMinutes={durationMinutes}
+                        onChangeMinutes={setDurationMinutes}
+                        onSettleMinutes={setSettledDuration}
+                        minMinutes={MIN_MINUTES}
+                        maxMinutes={MAX_MINUTES}
+                        stepMinutes={5}
+                        accessibilityLabel="调整倒计时长度"
+                      />
+                    </View>
+
+                    {/* Left Edge Fade */}
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        left: -paper.layout.pageGutter,
+                        top: 0,
+                        bottom: 0,
+                        width: 44,
+                      }}
+                    >
+                      <Svg width="100%" height="100%">
+                        <Defs>
+                          <LinearGradient id="ruler-fade-left" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={1} />
+                            <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                          </LinearGradient>
+                        </Defs>
+                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-fade-left)" />
+                      </Svg>
+                    </View>
+
+                    {/* Right Edge Fade */}
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        right: -paper.layout.pageGutter,
+                        top: 0,
+                        bottom: 0,
+                        width: 44,
+                      }}
+                    >
+                      <Svg width="100%" height="100%">
+                        <Defs>
+                          <LinearGradient id="ruler-fade-right" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                            <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={1} />
+                          </LinearGradient>
+                        </Defs>
+                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-fade-right)" />
+                      </Svg>
+                    </View>
                   </View>
 
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
+                  {/* Quick Preset Chips */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: YanjiSpacing.xs + 2,
+                      marginTop: YanjiSpacing.md,
+                    }}
+                  >
+                    {FOCUS_PRESETS.map(preset => {
+                      const isSelected = durationMinutes === preset;
+                      return (
+                        <Pressable
+                          key={preset}
+                          testID={`focus-preset-${preset}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${preset}分钟`}
+                          accessibilityState={{ selected: isSelected }}
+                          hitSlop={6}
+                          onPress={() => {
+                            setDurationMinutes(preset);
+                            setSettledDuration(preset);
+                          }}
+                          style={({ pressed }) => [
+                            {
+                              paddingHorizontal: 12,
+                              paddingVertical: 5,
+                              borderRadius: paper.radius.pill,
+                              backgroundColor: isSelected
+                                ? paper.colors.brandSubtle
+                                : paper.colors.subtle,
+                              borderWidth: isSelected ? 1 : 0,
+                              borderColor: isSelected ? paper.colors.brand : 'transparent',
+                              opacity: pressed ? 0.75 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              paper.typography.captionMeta,
+                              {
+                                color: isSelected ? paper.colors.brandInk : paper.colors.secondary,
+                                fontWeight: isSelected ? '700' : '500',
+                              },
+                            ]}
+                          >
+                            {preset}m
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm + 2, textAlign: 'center' }]}>
                     {formatEstimatedEndTime(settledDuration)}
                   </Text>
                 </>
@@ -884,89 +975,122 @@ function FocusTimerReadout({
   const elapsed = tick?.elapsedSeconds ?? session.elapsedSeconds;
   const remaining = Math.max(0, tick?.remainingSeconds ?? session.remainingSeconds);
   const total = elapsed + remaining;
-  const progress = session.isCountdown && total > 0
-    ? Math.max(0, Math.min(1, elapsed / total))
-    : null;
+  // Countdown ring: starts 100% full, depletes gradually down to 0 as time flows
+  const remainingRatio = session.isCountdown && total > 0
+    ? Math.max(0, Math.min(1, remaining / total))
+    : (session.isCountdown ? 1 : null);
   const paused = session.isPaused || tick?.isPaused === true;
   const immersed = paused ? theme.paper.immersive.paused : theme.paper.immersive.running;
   const { main, sub } = splitClockParts(seconds);
-  const percent = progress === null ? null : Math.round(progress * 100);
+
+  const ringSize = Math.min(270, Math.max(220, Math.round(width * 0.66)));
+  const strokeWidth = 4.5;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = remainingRatio !== null
+    ? circumference * (1 - remainingRatio)
+    : 0;
 
   return (
     <View style={{ alignItems: 'center', alignSelf: 'stretch' }}>
-      <Text
-        testID="focus-native-clock"
-        adjustsFontSizeToFit
-        minimumFontScale={0.45}
-        numberOfLines={1}
-        style={[
-          theme.paper.typography.displayTimer,
-          {
-            color: immersed.ink,
-            maxWidth: Math.max(180, width - 2 * theme.paper.layout.pageGutter),
-            fontSize: Math.min(
-              theme.paper.typography.displayTimer.fontSize,
-              Math.max(60, width * 0.245)
-            ),
-            textAlign: 'center',
-          },
-        ]}
+      <View
+        accessibilityRole="progressbar"
+        accessibilityLabel="倒计时进度"
+        accessibilityValue={{
+          min: 0,
+          max: 100,
+          now: remainingRatio !== null ? Math.round(remainingRatio * 100) : 100,
+        }}
+        style={{
+          width: ringSize,
+          height: ringSize,
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+        }}
       >
-        {main}
-        <Text style={{ opacity: 0.45 }}>:</Text>
-        {sub}
-      </Text>
-
-      {progress === null ? (
-        <View
-          style={{
-            width: 80,
-            height: 3,
-            marginTop: 28,
-            marginBottom: 10,
-            borderRadius: theme.paper.radius.pill,
-            backgroundColor: immersed.accent,
-            opacity: 0.85,
-          }}
-        />
-      ) : (
-        <View
-          accessibilityRole="progressbar"
-          accessibilityLabel="倒计时进度"
-          accessibilityValue={{ min: 0, max: 100, now: percent ?? 0 }}
-          style={{
-            width: 220,
-            height: 3,
-            marginTop: 28,
-            marginBottom: 10,
-            backgroundColor: immersed.subtle,
-            overflow: 'hidden',
-            borderRadius: theme.paper.radius.pill,
-          }}
-        >
-          <View
-            style={{
-              height: 3,
-              width: `${progress * 100}%`,
-              backgroundColor: immersed.accent,
-              borderRadius: theme.paper.radius.pill,
-            }}
+        <Svg width={ringSize} height={ringSize} style={{ position: 'absolute' }}>
+          {/* Subtle background track */}
+          <Circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={radius}
+            fill="none"
+            stroke={immersed.subtle}
+            strokeWidth={3}
+            opacity={0.35}
           />
-        </View>
-      )}
+          {/* Active circular progress ring: drains from full to 0 */}
+          {remainingRatio !== null ? (
+            <Circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              fill="none"
+              stroke={immersed.accent}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={strokeDashoffset}
+              rotation="-90"
+              origin={`${ringSize / 2}, ${ringSize / 2}`}
+            />
+          ) : (
+            <Circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              fill="none"
+              stroke={immersed.accent}
+              strokeWidth={2}
+              opacity={0.4}
+            />
+          )}
+        </Svg>
 
-      <Text
-        style={[
-          theme.paper.typography.captionMeta,
-          { color: immersed.secondary, textAlign: 'center' },
-        ]}
-      >
-        {paused
-          ? `已专注 ${formatClock(elapsed)} · 已暂停`
-          : percent === null
-            ? `已专注 ${formatClock(elapsed)} · 正向计时中`
-            : `已专注 ${formatClock(elapsed)} · 进度 ${percent}%`}
-      </Text>
+        <Text
+          testID="focus-native-clock"
+          adjustsFontSizeToFit
+          minimumFontScale={0.45}
+          numberOfLines={1}
+          style={[
+            theme.paper.typography.displayTimer,
+            {
+              color: immersed.ink,
+              fontSize: Math.min(
+                theme.paper.typography.displayTimer.fontSize,
+                Math.max(48, Math.round(ringSize * 0.25))
+              ),
+              textAlign: 'center',
+            },
+          ]}
+        >
+          {main}
+          <Text style={{ opacity: 0.45 }}>:</Text>
+          {sub}
+        </Text>
+      </View>
+
+      {/* Static status below the ring — quiet and calm, no second-by-second ticking distraction */}
+      {paused ? (
+        <Text
+          style={[
+            theme.paper.typography.captionMeta,
+            { color: immersed.secondary, textAlign: 'center', marginTop: YanjiSpacing.md },
+          ]}
+        >
+          已暂停 · 随时继续
+        </Text>
+      ) : (
+        <Text
+          style={[
+            theme.paper.typography.captionMeta,
+            { color: immersed.secondary, textAlign: 'center', marginTop: YanjiSpacing.md, opacity: 0.75 },
+          ]}
+        >
+          {session.isCountdown ? '倒计时专注中' : '正向自由计时中'}
+        </Text>
+      )}
     </View>
   );
 }

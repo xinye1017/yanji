@@ -338,7 +338,7 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 24 }) },
     'react-native-svg': {
       default: 'Svg', Svg: 'Svg', Defs: 'Defs', LinearGradient: 'LinearGradient',
-      Rect: 'Rect', Stop: 'Stop',
+      Rect: 'Rect', Stop: 'Stop', Circle: 'Circle', Path: 'Path',
     },
     '../bridge': {
       YanjiDataNative: { getSubjects: async () => subjects },
@@ -412,8 +412,12 @@ test('the ready screen offers the countdown ruler without preset or custom-durat
   const strip = findAll(root, n => n.props?.children === dial)[0];
   assert.ok(strip, 'the enlarged ruler is the strip’s only child');
   assert.equal(strip.props.style.marginHorizontal, -tokens.YanjiPaperLayout.pageGutter);
-  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button' || n.type === 'YanjiPrimaryButton').length, 2,
-    'the empty ready state needs only record and start buttons');
+  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button' || n.type === 'YanjiPrimaryButton').length, 8,
+    'the ready state includes record, start, and 6 quick preset chips');
+  const presetChips = findAll(root, n => typeof n.props?.testID === 'string' && n.props.testID.startsWith('focus-preset-'));
+  assert.equal(presetChips.length, 6, 'provides 6 quick preset duration chips');
+  const chip45 = findAll(root, n => n.props?.testID === 'focus-preset-45')[0];
+  assert.equal(chip45.props.accessibilityState.selected, true);
   assert.equal(findAll(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
   assert.equal(findAll(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
   assert.equal(findAll(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
