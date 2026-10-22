@@ -18,6 +18,7 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
@@ -244,38 +245,33 @@ export function YanjiPaperSectionHeading({
   countText,
   right,
   spaceBefore = YanjiSpacing.lg,
+  spaceAfter = 4,
   titleStyle,
   align = 'baseline',
+  style,
 }: {
   title: string;
   countText?: string;
   right?: React.ReactNode;
-  /**
-   * Gap above the heading. A page that gives every group the same gap passes
-   * its own value; the default keeps the three primary screens' rhythm.
-   */
   spaceBefore?: number;
-  /** Overrides the title scale where the group title is the page's structure. */
+  spaceAfter?: number;
   titleStyle?: TextStyle;
-  /**
-   * `baseline` keeps text accessories on the title's baseline; `center` is for
-   * accessories that are a full-height control row of their own.
-   */
   align?: 'baseline' | 'center';
+  style?: StyleProp<ViewStyle>;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   return (
     <View
-      style={{
+      style={[{
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: align,
         flexWrap: 'wrap',
         gap: YanjiSpacing.sm,
-        marginBottom: 4,
+        marginBottom: spaceAfter,
         marginTop: spaceBefore,
-      }}
+      }, style]}
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
         <Text

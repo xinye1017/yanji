@@ -234,7 +234,7 @@ test('TodayScreen hides 今日疑点 card when no doubts exist', () => {
   assert.equal(headings.length, 0, 'When no doubts exist, 今日疑点 section heading must be absent');
 });
 
-test('TodayScreen renders 今日疑点 and allows toggling resolution when doubts exist', async () => {
+test('TodayScreen renders doubts inside 记录此刻 without redundant 今日疑点 section', async () => {
   const harness = todayHarness({
     date,
     totalDurationSeconds: 1200,
@@ -259,13 +259,12 @@ test('TodayScreen renders 今日疑点 and allows toggling resolution when doubt
 
   const tree = harness.render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props?.title === '今日疑点');
-  assert.equal(headings.length, 1, 'When doubts exist, 今日疑点 section heading must appear');
-  assert.equal(headings[0].props.countText, '0/1', 'Count should display resolved/total');
+  assert.equal(headings.length, 0, '今日疑点 section heading must be absent; doubts are displayed in 记录此刻');
 
-  const checkboxes = nodes(tree, node => node.type === 'Pressable' && node.props?.accessibilityRole === 'checkbox');
-  assert.ok(checkboxes.length > 0, 'Checkbox for doubt resolution must exist');
-  await checkboxes[0].props.onPress();
-  assert.deepEqual(harness.calls, [['toggleNoteResolved', 'doubt-today-1']]);
+  const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].props.tagLabel, '疑点 · 待解决');
+  assert.equal(rows[0].props.tagTone, 'brand');
 });
 
 test('ReviewScreen tags doubts/inspirations and resolves them through the anchored menu', async () => {

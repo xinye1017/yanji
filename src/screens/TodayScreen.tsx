@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteCategory, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
+  YanjiBadge, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton,
   YanjiPaperSectionHeading, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
@@ -77,9 +77,6 @@ function clock(seconds: number): string {
 }
 function timeLabel(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-function noteTitle(note: NoteEntry): string {
-  return note.content.trim().split('\n').find(line => line.trim())?.trim() || '无标题记录';
 }
 function carryOverSourceLabel(sourceDate: string, today: string): string {
   const yesterday = new Date(`${today}T12:00:00`);
@@ -337,8 +334,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const pending = tasks?.filter(task => !task.completed) ?? [];
   const completed = tasks?.filter(task => task.completed) ?? [];
   const latestNotes = useMemo(() => [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
-  const todayDoubts = useMemo(() => (notes ?? []).filter(note => note.category === 'DOUBT'), [notes]);
-  const resolvedDoubts = useMemo(() => todayDoubts.filter(note => note.isResolved), [todayDoubts]);
   const visibleCarryOverTasks = useMemo(
     () => carryOverTasks.filter(task =>
       !task.completed && task.carriedOverToId === null && !deferredCarryTaskIds.has(task.id)),
@@ -517,16 +512,16 @@ export function TodayScreen({ visible, foregroundRevision }: {
           titleStyle={typography.titleGreeting}
           trailing={<YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标" size={layout.rowMinHeight} />}
         />
-        <YanjiHairline style={{ marginTop: 8 }} />
+        <YanjiHairline style={{ marginTop: 10 }} />
 
-        <View style={{ paddingVertical: YanjiSpacing.md }}>
+        <View style={{ paddingTop: YanjiSpacing.sm, paddingBottom: YanjiSpacing.xs }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: layout.gridGap }}>
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日累计专注</Text>
             {snapshot ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>
               已完成 <Text style={{ color: colors.ink }}>{snapshot.focusCount}</Text> 轮专注
             </Text> : null}
           </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap, marginTop: YanjiSpacing.xs, marginBottom: YanjiSpacing.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: layout.gridGap, marginTop: YanjiSpacing.xs, marginBottom: YanjiSpacing.xs }}>
             <View accessible accessibilityLabel={snapshot ? `今日已保存专注 ${duration(effectiveSeconds)}` : '正在读取今日专注'}
               style={{ flexDirection: 'row', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
               {snapshot ? <>
@@ -550,7 +545,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               )}
             </Pressable>
           </View>
-          {savedStatus ? <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.sm }]}>{savedStatus}</Text> : null}
+          {savedStatus ? <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.xs }]}>{savedStatus}</Text> : null}
           <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
             accessibilityLabel={snapshot ? undefined : '正在读取今日专注'} />
           {legendItems.length > 0 ? (
@@ -618,22 +613,31 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiHairline />
         {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
-        <YanjiPaperSectionHeading title="今日计划" titleStyle={typography.titleLedger} countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
-          right={<YanjiTextAction label="＋ 新建任务" accessibilityLabel="添加任务" onPress={openTaskEditor} />} />
-        {!tasks?.length ? <YanjiEmptyLedgerRow
-          prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注…' : '正在读取今日计划…'}
-          onPress={openTaskEditor} /> : null}
-        {[...pending, ...completed].map((task, index, rows) => (
-          <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
-            meta={taskMeta(task)} accentColor={task.subjectColor} completed={task.completed}
-            isLast={index === rows.length - 1}
-            busy={busyTask === task.id} disabled={busyTask !== null}
-            onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)} onStartFocus={() => startTask(task)} />
-        ))}
+        <YanjiPaperSectionHeading
+          title="今日计划"
+          titleStyle={typography.titleLedger}
+          countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
+          spaceBefore={YanjiSpacing.sm}
+          spaceAfter={0}
+          align="center"
+          right={<YanjiTextAction label="＋ 新建任务" accessibilityLabel="添加任务" onPress={openTaskEditor} />}
+        />
+        <View style={{ marginTop: -2 }}>
+          {!tasks?.length ? <YanjiEmptyLedgerRow
+            prompt={snapshot ? '写下一件想完成的事，也可以直接开始专注…' : '正在读取今日计划…'}
+            onPress={openTaskEditor} /> : null}
+          {[...pending, ...completed].map((task, index, rows) => (
+            <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
+              meta={taskMeta(task)} accentColor={task.subjectColor} completed={task.completed}
+              isLast={index === rows.length - 1}
+              busy={busyTask === task.id} disabled={busyTask !== null}
+              onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)} onStartFocus={() => startTask(task)} />
+          ))}
+        </View>
 
         {visibleCarryOverTasks.length > 0 ? (
           <Pressable testID="open-carry-over" onPress={openCarryOver}
-            accessibilityRole="button" accessibilityLabel={`待处理，${visibleCarryOverTasks.length} 项历史计划`}
+            accessibilityRole="button" accessibilityLabel={`待处理计划，${visibleCarryOverTasks.length} 项`}
             accessibilityState={{ expanded: carryOverOpen && !carryOverClosing }}
             style={({ pressed }) => ({
               minHeight: layout.rowMinHeight, paddingVertical: YanjiSpacing.sm,
@@ -641,15 +645,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
               marginTop: YanjiSpacing.sm, borderTopWidth: layout.hairlineWidth, borderColor: colors.hairline,
               opacity: pressed ? 0.65 : 1,
             })}>
-            <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>待处理 · {visibleCarryOverTasks.length} 项</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flexShrink: 1 }}>
-              <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
-                {visibleCarryOverTasks.length === 1
-                  ? carryOverSourceLabel(visibleCarryOverTasks[0].date, date).split(' · ')[0]
-                  : `来自 ${new Set(visibleCarryOverTasks.map(task => task.date)).size} 天的计划`}
-              </Text>
-              <YanjiIcon name="forward" size={16} color={colors.secondary} />
-            </View>
+            <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>待处理计划</Text>
+            <YanjiIcon name="forward" size={16} color={colors.secondary} />
           </Pressable>
         ) : null}
         {carryOverReadFailed ? (
@@ -664,76 +661,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
           />
         ) : null}
 
-        {todayDoubts.length > 0 ? (
-          <View style={{ marginTop: YanjiSpacing.sm }}>
-            <YanjiPaperSectionHeading
-              title="今日疑点"
-              titleStyle={typography.titleLedger}
-              countText={`${resolvedDoubts.length}/${todayDoubts.length}`}
-            />
-            <YanjiCard variant="default">
-              {todayDoubts.map((doubt, index) => (
-                <View key={doubt.id}>
-                  {index > 0 ? <YanjiHairline style={{ marginVertical: YanjiSpacing.sm }} /> : null}
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: layout.gridGap }}>
-                    <Pressable
-                      onPress={() => void toggleResolved(doubt)}
-                      disabled={busyNote !== null}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: !!doubt.isResolved }}
-                      accessibilityLabel={`${doubt.isResolved ? '标记为未解决' : '标记为已解决'}：${noteTitle(doubt)}`}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={({ pressed }) => ({
-                        minHeight: layout.rowMinHeight,
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.65 : 1,
-                      })}
-                    >
-                      <YanjiIcon
-                        name={doubt.isResolved ? 'doubtResolved' : 'doubtUnresolved'}
-                        size={20}
-                        color={doubt.isResolved ? colors.positive : colors.secondary}
-                      />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => { setEditingNote(doubt); setRecordOpen(true); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`编辑疑点：${noteTitle(doubt)}`}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        minHeight: layout.rowMinHeight,
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.65 : 1,
-                      })}
-                    >
-                      <Text
-                        style={[
-                          typography.bodyExcerpt,
-                          {
-                            color: doubt.isResolved ? colors.secondary : colors.ink,
-                            textDecorationLine: doubt.isResolved ? 'line-through' : 'none',
-                          },
-                        ]}
-                        numberOfLines={3}
-                      >
-                        {doubt.content}
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, marginTop: 4 }}>
-                        <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                          {timeLabel(doubt.timestamp)}
-                        </Text>
-                        <YanjiBadge
-                          tone={doubt.isResolved ? 'positive' : 'brand'}
-                          label={doubt.isResolved ? '已解决' : '待解决'}
-                        />
-                      </View>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </YanjiCard>
-          </View>
-        ) : null}
 
         {/* The clock lives with its note; only the quiet spine sits outside. */}
         <View style={{ marginTop: YanjiSpacing.sm }}>
@@ -925,7 +852,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
               paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: insets.bottom + YanjiSpacing.lg,
             }, carryOverSheetStyle]}>
-              <YanjiPaperSheetHeading title={`待处理 · ${visibleCarryOverTasks.length} 项`}
+              <YanjiPaperSheetHeading title={`待处理计划 · ${visibleCarryOverTasks.length} 项`}
                 subtitle="保留原计划日期，选择接下来如何安排。" onClose={closeCarryOver} />
               <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
                 {carryOverReadFailed ? (

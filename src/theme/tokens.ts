@@ -331,10 +331,11 @@ export const YanjiPaperTypography = {
     fontVariant: ['tabular-nums'] as const,
   },
   titleGreeting: {
-    fontSize: 20,
-    lineHeight: 29,
+    fontSize: 22,
+    lineHeight: 30,
     fontWeight: '600' as const,
     fontFamily: 'serif',
+    letterSpacing: 0.5,
   },
   titleLedger: {
     fontSize: 15,

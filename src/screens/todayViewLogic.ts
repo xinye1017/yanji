@@ -14,24 +14,16 @@ const RHYTHM_HOURS = Array.from(
   { length: RHYTHM_LAST_HOUR - RHYTHM_FIRST_HOUR },
   (_, index) => index + RHYTHM_FIRST_HOUR,
 );
-const CHINESE_DIGITS = '零一二三四五六七八九';
-
-function chineseNumber(value: number): string {
-  if (value < 10) return CHINESE_DIGITS[value];
-  return `${value < 20 ? '' : CHINESE_DIGITS[Math.floor(value / 10)]}十${value % 10 ? CHINESE_DIGITS[value % 10] : ''}`;
-}
-
 export function displayDate(date: string): string {
   const day = new Date(`${date}T12:00:00`);
-  return `${chineseNumber(day.getMonth() + 1)}月${chineseNumber(day.getDate())}日 · 周${'日一二三四五六'[day.getDay()]}`;
+  return `${day.getMonth() + 1}月${day.getDate()}日 · 周${'日一二三四五六'[day.getDay()]}`;
 }
 
 export function greeting(hour: number): string {
-  if (hour < 5) return '夜深露重，注意休整。';
-  if (hour < 11) return '晨光微熹，步履从容。';
-  if (hour < 14) return '日当正午，笃定前行。';
-  if (hour < 18) return '午后沉静，步履不停。';
-  return '灯火温润，归卷沉思。';
+  if (hour >= 5 && hour < 11) return '上午好';
+  if (hour >= 11 && hour < 14) return '中午好';
+  if (hour >= 14 && hour < 18) return '下午好';
+  return '晚上好';
 }
 
 export function compactDuration(seconds: number): string {

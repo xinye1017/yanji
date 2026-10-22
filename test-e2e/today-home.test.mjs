@@ -65,8 +65,8 @@ const shared = loadTypeScript('src/components/YanjiUI.tsx', {
 });
 
 test('Chinese dates and durations retain truthful zero and subminute values', () => {
-  assert.equal(logic.displayDate(date), '十月十六日 · 周五');
-  assert.match(logic.displayDate('2026-12-31'), /^十二月三十一日/);
+  assert.equal(logic.displayDate(date), '10月16日 · 周五');
+  assert.match(logic.displayDate('2026-12-31'), /^12月31日/);
   assert.equal(logic.goalClock(21600), '06h 00m');
   assert.equal(logic.compactDuration(3599), '59m');
   assert.equal(logic.compactDuration(10), '<1m');
