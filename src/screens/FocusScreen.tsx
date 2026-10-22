@@ -101,6 +101,37 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
   const transitionAnim = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
   const immersionFade = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
+  const isPaused = session?.isPaused ?? false;
+  const pauseAnim = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(isPaused ? 1 : 0)).current;
+  const [showPausedActions, setShowPausedActions] = useState(isPaused);
+
+  useEffect(() => {
+    if (!session) return;
+    if (session.isPaused) {
+      setShowPausedActions(true);
+      if (Animated && Animated.timing) {
+        Animated.timing(pauseAnim, {
+          toValue: 1,
+          duration: 350,
+          easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
+          useNativeDriver: false,
+        }).start();
+      }
+    } else {
+      if (Animated && Animated.timing) {
+        Animated.timing(pauseAnim, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
+          useNativeDriver: false,
+        }).start(({ finished }) => {
+          if (finished) setShowPausedActions(false);
+        });
+      } else {
+        setShowPausedActions(false);
+      }
+    }
+  }, [session?.isPaused, session, pauseAnim]);
 
   useEffect(() => {
     if (session) {
@@ -797,11 +828,36 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
   // Active / paused share the same full-height ink field. The navigation
   // intentionally does not reserve its glass dock inset in this state.
-  const isPaused = session.isPaused;
   const immersed = isPaused ? paper.immersive.paused : paper.immersive.running;
 
+  const animatedCanvasBg = pauseAnim?.interpolate
+    ? pauseAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [paper.immersive.running.canvas, paper.immersive.paused.canvas],
+      })
+    : immersed.canvas;
+
+  const row2Opacity = pauseAnim?.interpolate
+    ? pauseAnim.interpolate({
+        inputRange: [0, 0.35, 1],
+        outputRange: [0, 0, 1],
+      })
+    : (isPaused ? 1 : 0);
+  const row2TranslateY = pauseAnim?.interpolate
+    ? pauseAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [14, 0],
+      })
+    : 0;
+  const row2Scale = pauseAnim?.interpolate
+    ? pauseAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.94, 1],
+      })
+    : 1;
+
   return (
-    <View testID={isPaused ? 'focus-paused' : 'focus-running'} style={{ flex: 1, backgroundColor: immersed.canvas }}>
+    <AnimatedView testID={isPaused ? 'focus-paused' : 'focus-running'} style={{ flex: 1, backgroundColor: animatedCanvasBg }}>
       <AnimatedView
         style={{
           flex: 1,
@@ -835,22 +891,16 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
         </Svg>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: 'space-between',
-          alignItems: 'stretch',
+      <View
+        style={{
+          flex: 1,
           paddingHorizontal: paper.layout.pageGutter,
-          paddingTop: YanjiSpacing.md,
-          paddingBottom: Math.max(safe.bottom, YanjiSpacing.lg) + 28,
+          paddingTop: Math.max(safe.top, YanjiSpacing.md),
+          paddingBottom: Math.max(safe.bottom, YanjiSpacing.md) + 12,
         }}
       >
-        {/* AB-04 keeps this field to one centred column: the session's own
-            context pill, then what this session is actually about. There is
-            deliberately no back affordance — the immersion field is exited
-            with the system back gesture, which AppShell routes to Today. */}
-        <View style={{ alignItems: 'center', gap: 6 }}>
+        {/* Top Header: Clean, quiet, and minimal — only the subject badge */}
+        <View style={{ alignItems: 'center', height: 48, justifyContent: 'center' }}>
           <View
             style={{
               flexDirection: 'row',
@@ -865,70 +915,47 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             }}
           >
             <View style={{ width: 7, height: 7, borderRadius: paper.radius.pill, backgroundColor: immersed.accent }} />
-            <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: immersed.secondary }]}>
-              {session.subjectName} · {session.isCountdown ? '倒计时' : '正计时'}
+            <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: immersed.secondary, fontWeight: '600' }]}>
+              {session.subjectName}
             </Text>
           </View>
 
-          <Text
-            numberOfLines={1}
-            style={[paper.typography.captionMeta, { color: immersed.subtitle, textAlign: 'center' }]}
-          >
-            {taskTitle ?? (isPaused ? '专注已暂歇 · 随时继续当前进度' : '全神贯注 · 把时间留给眼前这一件事')}
-          </Text>
+          {taskTitle ? (
+            <Text
+              numberOfLines={1}
+              style={[paper.typography.captionMeta, { color: immersed.subtitle, textAlign: 'center', marginTop: 4 }]}
+            >
+              {taskTitle}
+            </Text>
+          ) : null}
         </View>
 
-        <View style={{ alignItems: 'center', paddingVertical: YanjiSpacing.xl }}>
+        {/* Center Clock & Ring: Rock-solid anchor, never shifts when pausing or resuming */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <FocusTimerReadout session={session} visible={visible} />
         </View>
 
-        <View style={{ alignItems: 'center', gap: 18 }}>
-          {isPaused ? (
-            <View style={{ alignSelf: 'stretch', gap: YanjiSpacing.md }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
-                <ImmersiveAction
-                  label="记录此刻"
-                  icon="compose"
-                  variant="secondary"
-                  paused
-                  onPress={() => setRecordOpen(true)}
-                />
-                <ImmersiveAction
-                  label={busy ? '处理中…' : '继续专注'}
-                  icon="play"
-                  variant="primary"
-                  paused
-                  disabled={busy}
-                  onPress={() => { void handleTimerAction('resume'); }}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
-                <ImmersiveAction
-                  label="提前结束"
-                  icon="check"
-                  variant="ghost"
-                  paused
-                  disabled={busy}
-                  onPress={() => { void handleTimerAction('complete'); }}
-                />
-                <ImmersiveAction
-                  label="放弃本轮"
-                  icon="delete"
-                  variant="danger"
-                  paused
-                  disabled={busy}
-                  onPress={confirmDiscard}
-                />
-              </View>
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
+        {/* Bottom Actions: Fixed height container (124dp) so center clock does not move */}
+        <View style={{ height: 124, alignItems: 'center', justifyContent: 'flex-start' }}>
+          {/* Row 1: 记录此刻 + 暂停专注 / 继续专注 */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
+            <ImmersiveAction
+              label="记录此刻"
+              icon="compose"
+              variant="secondary"
+              paused={isPaused}
+              onPress={() => setRecordOpen(true)}
+            />
+            {isPaused ? (
               <ImmersiveAction
-                label="记录此刻"
-                icon="compose"
-                variant="secondary"
-                onPress={() => setRecordOpen(true)}
+                label={busy ? '处理中…' : '继续专注'}
+                icon="play"
+                variant="primary"
+                paused
+                disabled={busy}
+                onPress={() => { void handleTimerAction('resume'); }}
               />
+            ) : (
               <ImmersiveAction
                 label={busy ? '处理中…' : '暂停专注'}
                 icon="pause"
@@ -936,27 +963,54 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 disabled={busy}
                 onPress={() => { void handleTimerAction('pause'); }}
               />
-            </View>
-          )}
+            )}
+          </View>
+
+          {/* Row 2: 提前结束 + 放弃本轮 (Smooth slide up and fade in on pause) */}
+          {showPausedActions ? (
+            <AnimatedView
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 16,
+                marginTop: 14,
+                opacity: row2Opacity,
+                transform: [{ translateY: row2TranslateY }, { scale: row2Scale }],
+              }}
+            >
+              <ImmersiveAction
+                label="提前结束"
+                icon="check"
+                variant="ghost"
+                paused
+                disabled={busy}
+                onPress={() => { void handleTimerAction('complete'); }}
+              />
+              <ImmersiveAction
+                label="放弃本轮"
+                icon="delete"
+                variant="danger"
+                paused
+                disabled={busy}
+                onPress={confirmDiscard}
+              />
+            </AnimatedView>
+          ) : null}
 
           {actionError ? (
             <Text
               accessibilityRole="alert"
-              style={[paper.typography.captionMeta, { color: paper.colors.danger, textAlign: 'center' }]}
+              style={[paper.typography.captionMeta, { color: paper.colors.danger, textAlign: 'center', marginTop: 8 }]}
             >
               {actionError}
             </Text>
           ) : null}
-
-          <Text style={[paper.typography.captionMeta, { color: immersed.subtitle, textAlign: 'center' }]}>
-            锁屏或切到其他应用后，本轮计时仍会继续
-          </Text>
         </View>
-      </ScrollView>
+      </View>
 
       <RecordMomentModal visible={recordOpen} date={date} onClose={() => setRecordOpen(false)} />
       </AnimatedView>
-    </View>
+    </AnimatedView>
   );
 }
 
@@ -985,8 +1039,8 @@ function FocusTimerReadout({
   const immersed = paused ? theme.paper.immersive.paused : theme.paper.immersive.running;
   const { main, sub } = splitClockParts(seconds);
 
-  const ringSize = Math.min(270, Math.max(220, Math.round(width * 0.66)));
-  const strokeWidth = 4.5;
+  const ringSize = Math.min(320, Math.max(260, Math.round(width * 0.76)));
+  const strokeWidth = 5.5;
   const radius = (ringSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = remainingRatio !== null
@@ -994,7 +1048,7 @@ function FocusTimerReadout({
     : 0;
 
   return (
-    <View style={{ alignItems: 'center', alignSelf: 'stretch' }}>
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       <View
         accessibilityRole="progressbar"
         accessibilityLabel="倒计时进度"
@@ -1019,7 +1073,7 @@ function FocusTimerReadout({
             r={radius}
             fill="none"
             stroke={immersed.subtle}
-            strokeWidth={3}
+            strokeWidth={3.5}
             opacity={0.35}
           />
           {/* Active circular progress ring: drains from full to 0 */}
@@ -1044,7 +1098,7 @@ function FocusTimerReadout({
               r={radius}
               fill="none"
               stroke={immersed.accent}
-              strokeWidth={2}
+              strokeWidth={2.5}
               opacity={0.4}
             />
           )}
@@ -1060,9 +1114,11 @@ function FocusTimerReadout({
             {
               color: immersed.ink,
               fontSize: Math.min(
-                theme.paper.typography.displayTimer.fontSize,
-                Math.max(48, Math.round(ringSize * 0.25))
+                78,
+                Math.max(54, Math.round(ringSize * 0.24))
               ),
+              fontWeight: '600',
+              fontFamily: 'sans-serif-medium',
               textAlign: 'center',
             },
           ]}
@@ -1072,27 +1128,6 @@ function FocusTimerReadout({
           {sub}
         </Text>
       </View>
-
-      {/* Static status below the ring — quiet and calm, no second-by-second ticking distraction */}
-      {paused ? (
-        <Text
-          style={[
-            theme.paper.typography.captionMeta,
-            { color: immersed.secondary, textAlign: 'center', marginTop: YanjiSpacing.md },
-          ]}
-        >
-          已暂停 · 随时继续
-        </Text>
-      ) : (
-        <Text
-          style={[
-            theme.paper.typography.captionMeta,
-            { color: immersed.secondary, textAlign: 'center', marginTop: YanjiSpacing.md, opacity: 0.75 },
-          ]}
-        >
-          {session.isCountdown ? '倒计时专注中' : '正向自由计时中'}
-        </Text>
-      )}
     </View>
   );
 }

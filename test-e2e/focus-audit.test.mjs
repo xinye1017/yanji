@@ -530,9 +530,9 @@ test('the immersion subtitle names the bound task and stays quiet when unbound',
   const named = findAll(bound.root, n => n.props?.children === '王道操作系统 · 页面置换算法');
   assert.equal(named.length, 1, 'a bound session must name the task it is running for');
 
-  // A session started without a task keeps the standing copy …
+  // A session started without a task keeps quiet without standing copy
   const unbound = focusScreenHarness({ session: { taskId: null } });
-  assert.equal(findAll(unbound.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
+  assert.equal(findAll(unbound.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 0);
   assert.equal(findAll(unbound.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
 
   // … and so does one whose task is not in today's snapshot (it outlived its
@@ -542,7 +542,7 @@ test('the immersion subtitle names the bound task and stays quiet when unbound',
     tasks: [{ id: 'task-1', title: '王道操作系统 · 页面置换算法' }],
   });
   assert.equal(findAll(stale.root, n => n.props?.children === '王道操作系统 · 页面置换算法').length, 0);
-  assert.equal(findAll(stale.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 1);
+  assert.equal(findAll(stale.root, n => n.props?.children === '专注已暂歇 · 随时继续当前进度').length, 0);
 });
 
 test('the horizon tide carries its alpha in stopOpacity, never in the colour', () => {
