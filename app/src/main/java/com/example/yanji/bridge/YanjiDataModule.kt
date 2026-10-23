@@ -555,6 +555,83 @@ class YanjiDataModule(
     }
 
     /**
+     * 补录一条**已经发生**的专注记录。
+     *
+     * 与计时器无关：不触碰活动会话、不产生 tick，只把一段真实的过去写进
+     * `focus_sessions`，口径与计时结束后落库的那条完全一致（`status = COMPLETED`），
+     * 于是今天 / 回顾 / 统计在它面前不需要区分"是补的还是计的"。
+     *
+     * 入参是**开始时刻 + 时长**而不是结束时刻：用户记得的是"四点半开始的、学了五十分钟"，
+     * 结束时刻由原生侧推导（`end = start + duration`），避免两侧各算一次而出现偏差。
+     *
+     * @param taskId 可选的「今日计划」关联；计划 id 必须真实存在，否则 reject 而不是
+     *   写一条指向空计划的记录——那条记录永远回灌不到任何计划上。
+     */
+    @ReactMethod
+    fun createFocusRecord(args: com.facebook.react.bridge.ReadableMap, promise: Promise) {
+        // 一个 ReadableMap 而不是六个标量参数：React Native 只能把 JS 的**对象**
+        // 绑定到一个 ReadableMap，多标量参数会收到 undefined 并静默失败。
+        val subjectId = args.getString("subjectId")?.trim().orEmpty()
+        val subjectName = args.getString("subjectName")?.trim().orEmpty()
+        val startTime = if (args.hasKey("startTime")) args.getDouble("startTime") else 0.0
+        val durationMinutes = if (args.hasKey("durationMinutes")) args.getDouble("durationMinutes") else 0.0
+        val taskId = args.getString("taskId")?.takeIf { it.isNotBlank() }
+        val note = args.getString("note")
+        val startedAt = startTime.toLong()
+        val minutes = durationMinutes.toInt();
+        if (subjectId.isEmpty()) {
+            promise.reject("E_INVALID_SUBJECT", "Subject id cannot be empty")
+            return
+        }
+        // 时长下限挡住"0 分钟"这种无法在任何统计里成立的记录；上限是一天，
+        // 用来挡住误输入（比如把 50 打成 5000）。
+        if (minutes < MIN_RECORDED_MINUTES || minutes > MAX_RECORDED_MINUTES) {
+            promise.reject("E_INVALID_DURATION", "Duration must be between ${MIN_RECORDED_MINUTES} and ${MAX_RECORDED_MINUTES} minutes")
+            return
+        }
+        if (startedAt <= 0L) {
+            promise.reject("E_INVALID_START", "Start time must be a positive epoch-millis value")
+            return
+        }
+        if (startedAt > System.currentTimeMillis()) {
+            promise.reject("E_FUTURE_SESSION", "A focus record cannot start in the future")
+            return
+        }
+        val cleanSubject = subjectName.trim()
+        if (cleanSubject.isEmpty()) {
+            promise.reject("E_INVALID_SUBJECT", "Subject name cannot be empty")
+            return
+        }
+        scope.launchPersistedWrite(promise, "E_SESSION_CREATE_FAILED") {
+            if (!repository.subjectExists(subjectId)) {
+                promise.reject("E_UNKNOWN_SUBJECT", "No subject with id $subjectId")
+                return@launchPersistedWrite
+            }
+            if (taskId != null && !repository.taskExists(taskId)) {
+                promise.reject("E_UNKNOWN_TASK", "No task with id $taskId")
+                return@launchPersistedWrite
+            }
+            val started = startedAt
+            val durationSeconds = minutes * 60L
+            val record = com.example.yanji.data.FocusSession(
+                id = UUID.randomUUID().toString(),
+                subjectId = subjectId,
+                subjectName = cleanSubject,
+                startTime = started,
+                endTime = started + durationSeconds * 1000L,
+                durationSeconds = durationSeconds,
+                mode = "补录",
+                note = note?.trim().orEmpty(),
+                taskId = taskId,
+                status = com.example.yanji.data.SessionStatus.COMPLETED,
+            )
+            repository.addFocusSession(record)
+            emitDataChanged("sessions")
+            promise.resolve(true)
+        }
+    }
+
+    /**
      * 删除一条专注 / 模考记录。
      *
      * 以 DELETE 的受影响行数判断记录是否存在，避免先查后删之间的竞态。
@@ -696,6 +773,12 @@ class YanjiDataModule(
 
     companion object {
         const val EVENT_DATA_CHANGED = "onDataChanged"
+
+        /** 一次补录至少要有一分钟，否则它在任何统计里都不成立。 */
+        private const val MIN_RECORDED_MINUTES = 1
+
+        /** 上限取一天：挡住把「50」打成「5000」这类误输入。 */
+        private const val MAX_RECORDED_MINUTES = 24 * 60
     }
 }
 

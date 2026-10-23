@@ -25,6 +25,7 @@ import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
 import { YanjiIcon, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
 import { RollingTimeDisplay } from '../components/RollingTimeDisplay';
+import { BackfillFocusModal } from '../components/BackfillFocusModal';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
@@ -160,6 +161,9 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [isDialDragging, setIsDialDragging] = useState(false);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
+  // 补录专注 ≠ 补录随笔：ready 态的「补录记录」写一条真实的 focus_sessions，
+  // 沉浸态的「记录此刻」仍然只是随笔，两者用的是两张表、两个入口。
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -415,9 +419,9 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="补录记录"
+                accessibilityLabel="补录专注记录"
                 hitSlop={8}
-                onPress={() => setRecordOpen(true)}
+                onPress={() => setBackfillOpen(true)}
                 style={({ pressed }) => ({
                   minWidth: 84,
                   minHeight: YanjiTouch.min,
@@ -809,7 +813,11 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           }}
         />
 
-        <RecordMomentModal visible={recordOpen} date={date} onClose={() => setRecordOpen(false)} />
+        <BackfillFocusModal
+          visible={backfillOpen}
+          onClose={() => setBackfillOpen(false)}
+          initialSubjectId={selectedSubjectId}
+        />
       </View>
     );
   }

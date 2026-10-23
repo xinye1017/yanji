@@ -128,6 +128,7 @@ test('FocusScreen category cards do not show 今日 xx duration text', () => {
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/BackfillFocusModal': { BackfillFocusModal: 'BackfillFocusModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({ clearFocusPreset: () => {} }),
       useNavigationState: () => ({ focusPreset: null }),
@@ -331,6 +332,7 @@ test('FocusScreen reloads subjects when onDataChanged receives event.type subjec
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/BackfillFocusModal': { BackfillFocusModal: 'BackfillFocusModal' },
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({ clearFocusPreset: () => {} }),
       useNavigationState: () => ({ focusPreset: null }),

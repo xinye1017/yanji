@@ -358,6 +358,8 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
     '../components/RecordMomentModal': { RecordMomentModal: noop },
+    // 补录专注是独立弹窗；这里只验证 FocusScreen 的装配，弹窗本身由自己的用例覆盖。
+    '../components/BackfillFocusModal': { BackfillFocusModal: noop },
     '../navigation/NavigationShell': {
       useNavigationState: () => ({ focusPreset: null }),
       useNavigationActions: () => ({ clearFocusPreset: noop, selectTab: noop }),

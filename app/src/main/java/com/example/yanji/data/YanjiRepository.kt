@@ -511,6 +511,13 @@ class YanjiRepository private constructor() {
 
     suspend fun addFocusSession(session: FocusSession) = timerStore.addFocusSession(session)
 
+    /** 补录用的存在性校验：指向不存在的学科或计划，那条记录永远回灌不到任何东西上。 */
+    suspend fun subjectExists(subjectId: String): Boolean =
+        requireDatabase().subjectDao().getAll().any { it.id == subjectId }
+
+    suspend fun taskExists(taskId: String): Boolean =
+        requireDatabase().studyTaskDao().getById(taskId) != null
+
     fun addExamSession(session: ExamSession) = timerStore.addExamSession(session)
 
     suspend fun deleteFocusSession(id: String) = timerStore.deleteFocusSession(id)

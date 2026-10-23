@@ -242,9 +242,10 @@ export function RecordMomentModal({
             }}
           />
 
+          {/* No date stamp: this sheet always writes to the day the page is
+              showing, so printing it restated the context the reader arrived with. */}
           <YanjiPaperSheetHeading
             title={editingNote ? '编辑记录' : '记录此刻'}
-            subtitle={dateLabel(date)}
             onClose={handleClose}
           />
 

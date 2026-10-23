@@ -244,7 +244,9 @@ test('a successful new save clears the draft and writes the selected target date
 
   const reopened = modal.render({ visible: true });
   assert.equal(reopened.input.props.value, '');
-  assert.equal(reopened.heading.props.subtitle, '10月9日 周五', 'the visible subtitle stays the selected date');
+  // The sheet no longer prints the date: it always writes to the day the page is
+  // showing, so the stamp only restated context the reader already had.
+  assert.equal(reopened.heading.props.subtitle, undefined, 'no date stamp in the sheet heading');
 });
 
 test('whitespace-only input is rejected without touching the draft buffer', async () => {

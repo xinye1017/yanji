@@ -397,6 +397,28 @@ interface YanjiDataModuleNative {
   updateSessionNote(sessionId: string, isExam: boolean, note: string): Promise<boolean>;
   /** 删除一条专注/模考记录。找不到会话 reject `E_SESSION_NOT_FOUND`。 */
   deleteSessionRecord(sessionId: string, isExam: boolean): Promise<boolean>;
+  /**
+   * 补录一条**已经发生**的专注记录（与计时器无关，不触碰活动会话）。
+   *
+   * 传开始时刻与时长而不是结束时刻：用户记得的是「四点半开始的、学了五十分钟」，
+   * 结束时刻由原生侧推导，避免两端各算一次而出现偏差。
+   *
+   * 校验（原生侧 reject，不做静默回落）：
+   * - 时长 < 1 分钟或 > 24 小时 → `E_INVALID_DURATION`
+   * - 开始时刻非正 / 落在未来 → `E_INVALID_START` / `E_FUTURE_SESSION`
+   * - 学科或计划不存在 → `E_UNKNOWN_SUBJECT` / `E_UNKNOWN_TASK`
+   */
+  createFocusRecord(args: {
+    subjectId: string;
+    subjectName: string;
+    /** 开始时刻，epoch 毫秒。 */
+    startTime: number;
+    /** 这一段的实际时长（分钟）。 */
+    durationMinutes: number;
+    /** 关联的「今日计划」id，可空。 */
+    taskId: string | null;
+    note: string | null;
+  }): Promise<boolean>;
   getUserSettings(): Promise<UserSettings>;
   updateUserSettings(settings: Partial<UserSettings>): Promise<boolean>;
   saveDecisionApiKey(apiKey: string): Promise<boolean>;
