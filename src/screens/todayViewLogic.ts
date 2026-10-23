@@ -34,16 +34,28 @@ export function compactDuration(seconds: number): string {
   return hours > 0 ? `${hours}h${remainder ? `${remainder}m` : ''}` : `${minutes}m`;
 }
 
+/**
+ * A goal as a clock reading: `6:00`, never `06h 30m`.
+ *
+ * A daily goal is a wall-clock target, so it reads like one. The old form
+ * (`06h 30m`) borrowed the timer's unit notation, which belongs to a duration
+ * being measured, not to a time being aimed at.
+ */
 export function goalClock(seconds: number): string {
   const minutes = Math.max(0, Math.floor(seconds / 60));
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}h ${String(minutes % 60).padStart(2, '0')}m`;
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 export function taskMeta(task: StudyTask): string {
   const actual = compactDuration(task.actualMinutes * 60);
   if (task.completed) return `实际专注 ${actual}`;
   const planned = compactDuration(task.plannedMinutes * 60);
-  return task.actualMinutes > 0 ? `已投入 ${actual} / 预计 ${planned}` : `预计 ${planned}`;
+  // Two facts, two readings: with real investment the row states both, without
+  // it only the plan exists. The plan keeps the wording a person uses for a
+  // promise ("预计 25 分钟") rather than the compact chip form.
+  return task.actualMinutes > 0
+    ? `已投入 ${actual} 预计 ${planned}`
+    : `预计 ${compactDuration(task.plannedMinutes * 60)}`;
 }
 
 export function summarizeSubjects(

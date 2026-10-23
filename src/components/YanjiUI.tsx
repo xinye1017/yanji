@@ -822,7 +822,8 @@ export function YanjiEmptyLedgerRow({
 }: {
   prompt: string;
   onPress: () => void;
-  actionLabel?: string;
+  /** `null` when the section heading already owns the only create entry. */
+  actionLabel?: string | null;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
@@ -1203,6 +1204,32 @@ export function YanjiLedgerChip({
   );
 }
 
+/**
+ * The plan's own time promise, for the row's left margin: `45m` / `1h30m`.
+ *
+ * `taskMeta` answers "what has happened here too" (投入/实际), which belongs on
+ * the sub-line; the margin only has room for the bare commitment.
+ */
+export function planCommitment(meta: string): string {
+  const planned = /预计\s*([^·]+)$/.exec(meta);
+  const actual = /实际专注\s*([^·]+)$/.exec(meta);
+  const invested = /已投入\s*([^·]+?)\s/.exec(meta);
+  const value = planned?.[1] ?? actual?.[1] ?? invested?.[1];
+  return (value ?? '').trim();
+}
+
+/**
+ * The part of `taskMeta` that the margin does *not* already say.
+ *
+ * Used rows report how much actually happened ("实际专注 52m" / "已投入 12m");
+ * a plan that has not been started has nothing to add, so the sub-line stays a
+ * single subject chip rather than repeating the margin's number.
+ */
+export function planSubLineMeta(meta: string): string | null {
+  const reported = /(实际专注|已投入)\s*([^·]+?)(?:\s+预计|$)/.exec(meta);
+  return reported ? `${reported[1]} ${reported[2].trim()}` : null;
+}
+
 export function YanjiTaskLedgerRow({
   title,
   subjectName,
@@ -1233,26 +1260,36 @@ export function YanjiTaskLedgerRow({
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
+  // The left margin is the plan's time commitment, the same column the journal
+  // uses for a note's clock: the day reads down one axis whether it is a task
+  // being promised or an entry being recorded.
+  const commitment = planCommitment(meta);
+  const subLineMeta = planSubLineMeta(meta);
   return (
     <View>
       <View style={{
-        flexDirection: 'row', alignItems: 'center', gap: layout.taskRowGap,
+        flexDirection: 'row', alignItems: 'flex-start', gap: YanjiSpacing.sm + 2,
         paddingVertical: layout.taskRowPadding,
-        // Keep the visible box on the page gutter while its target extends
-        // into the gutter, without overlapping the adjacent edit target.
-        marginLeft: -(layout.rowMinHeight - layout.taskCheckboxSize) / 2,
       }}>
+        <View style={{ width: 40, flexShrink: 0, paddingTop: 2 }}>
+          <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>
+            {commitment}
+          </Text>
+        </View>
         <Pressable
           onPress={onToggle}
           disabled={disabled}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: completed, disabled, busy }}
           accessibilityLabel={`${completed ? '恢复待办' : '完成任务'}：${title}`}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={({ pressed }) => ({
-            width: layout.rowMinHeight,
-            minHeight: layout.rowMinHeight,
-            justifyContent: 'center',
-            alignItems: 'center',
+            // The box itself is the visible 18dp square; `hitSlop` supplies the
+            // 44dp target, so the checkbox can sit flush with the title's left
+            // edge instead of being floated inside a wider touch column.
+            width: layout.taskCheckboxSize,
+            minHeight: layout.taskCheckboxSize,
+            marginTop: 4,
             opacity: pressed ? 0.6 : 1,
           })}
         >
@@ -1277,8 +1314,7 @@ export function YanjiTaskLedgerRow({
           accessibilityLabel={`编辑任务：${title}`}
           style={({ pressed }) => ({
             flex: 1,
-            minHeight: layout.rowMinHeight,
-            justifyContent: 'center',
+            minWidth: 0,
             opacity: pressed ? 0.65 : 1,
           })}
         >
@@ -1290,34 +1326,36 @@ export function YanjiTaskLedgerRow({
               textDecorationLine: completed ? 'line-through' : 'none',
             }}
           >{title}</Text>
+          {/* The margin already states the plan's commitment, so the sub-line
+              only adds what the margin cannot: the subject, and — once the row
+              has real investment — how much of it has happened. */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.xs + 2, marginTop: layout.taskSubMarginTop }}>
             <YanjiLedgerChip label={subjectName} tone="subject" color={accentColor} completed={completed} />
-            <YanjiLedgerChip label={meta} tone="meta" completed={completed} />
+            {subLineMeta ? <YanjiLedgerChip label={subLineMeta} tone="meta" completed={completed} /> : null}
           </View>
         </Pressable>
         {!completed ? (
+          /* A single circular play target, centred on the row. The old
+             「▶ 专注」 capsule competed with the row's own title for attention and
+             was the widest thing in a two-line ledger. */
           <Pressable
             onPress={onStartFocus}
             accessibilityRole="button"
-            accessibilityLabel={`为${title}设置专注`}
+            accessibilityLabel={`开始专注：${title}`}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={({ pressed }) => ({
-              minHeight: layout.rowMinHeight,
-              justifyContent: 'center',
-              opacity: pressed ? 0.68 : 1,
-            })}
-          >
-            <View style={{
-              minHeight: layout.compactActionHeight,
-              paddingHorizontal: layout.compactActionPadding,
-              borderRadius: radius.pill,
-              flexDirection: 'row',
+              alignSelf: 'center',
+              width: layout.compactActionHeight + 2,
+              height: layout.compactActionHeight + 2,
+              borderRadius: (layout.compactActionHeight + 2) / 2,
+              borderWidth: layout.hairlineWidth,
+              borderColor: colors.hairline,
               alignItems: 'center',
               justifyContent: 'center',
-              gap: YanjiSpacing.xs,
-            }}>
-              <YanjiIcon name="play" size={typography.captionMeta.fontSize - 1} color={colors.secondary} />
-              <Text style={[typography.captionMeta, { color: colors.secondary }]}>专注</Text>
-            </View>
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <YanjiIcon name="play" size={11} color={colors.secondary} />
           </Pressable>
         ) : null}
       </View>

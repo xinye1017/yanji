@@ -67,11 +67,14 @@ const shared = loadTypeScript('src/components/YanjiUI.tsx', {
 test('Chinese dates and durations retain truthful zero and subminute values', () => {
   assert.equal(logic.displayDate(date), '10月16日 周五');
   assert.match(logic.displayDate('2026-12-31'), /^12月31日/);
-  assert.equal(logic.goalClock(21600), '06h 00m');
+  // A daily goal is a wall-clock target, so it reads like one (`6:00`), not
+  // like a timer's unit notation (`06h 00m`).
+  assert.equal(logic.goalClock(21600), '6:00');
+  assert.equal(logic.goalClock(21600 + 1800), '6:30');
   assert.equal(logic.compactDuration(3599), '59m');
   assert.equal(logic.compactDuration(10), '<1m');
   assert.equal(logic.taskMeta(task({ completed: true })), '实际专注 0m');
-  assert.equal(logic.taskMeta(task({ actualMinutes: 45 })), '已投入 45m / 预计 1h30m');
+  assert.equal(logic.taskMeta(task({ actualMinutes: 45 })), '已投入 45m 预计 1h30m');
 });
 
 test('subject legend includes genuine planned subjects at zero and keeps their color', () => {
@@ -158,11 +161,18 @@ test('task controls keep completion, editing, and focus separate; completed rows
   const controls = nodes(row, node => node.type === 'Pressable');
   assert.equal(controls.length, 3);
   for (const control of controls) {
-    assert.ok(control.props.style({ pressed: false }).minHeight >= 48);
     control.props.onPress();
   }
-  assert.ok(controls[0].props.style({ pressed: false }).width >= 48,
-    'the checkbox owns a full touch target without relying on overlapping hit slop');
+  // The row is now flush along one baseline: an 18dp checkbox, the title, and a
+  // circular play target. Their 44dp floor comes from `hitSlop` rather than
+  // from padding, which is what let the visible box shrink to the title's edge.
+  const slop = controls[0].props.hitSlop;
+  assert.equal(controls[0].props.style({ pressed: false }).width, tokens.YanjiPaperLayout.taskCheckboxSize);
+  assert.ok(slop && slop.top >= 8 && slop.bottom >= 8,
+    'the checkbox keeps a full target through hit slop');
+  const play = controls[2].props.style({ pressed: false });
+  assert.equal(play.width, tokens.YanjiPaperLayout.compactActionHeight + 2);
+  assert.equal(play.height, tokens.YanjiPaperLayout.compactActionHeight + 2);
   assert.deepEqual(calls, ['toggle', 'edit', 'focus']);
   const completed = shared.YanjiTaskLedgerRow({ ...props, completed: true });
   assert.equal(nodes(completed, node => node.type === 'Pressable').length, 2);
@@ -578,7 +588,7 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
     'the goal tap routes to the settings page and does nothing else');
   assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
     'Today must not render its own goal modal');
-  assert.match(text(tree), /目标 06h 00m/, 'the metric still reports the stored goal');
+  assert.match(text(tree), /目标 6:00/, 'the metric still reports the stored goal');
 });
 
 test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
@@ -589,13 +599,15 @@ test('the journal slip is an unboxed timeline section so the plan keeps the read
   const journalHeading = headings.find(node => node.props.title === '记录此刻');
   assert.ok(journalHeading, 'the journal section has its own section heading');
 
-  // 写此刻 is a secondary invitation; 新建任务 keeps the section accent. The actions
-  // live in the headings' accessory slots, so they are read from that prop.
+  // Each section owns exactly one entry, in its heading: 「写一条」 for the journal
+  // and 「新建」 for the plan. Neither is repeated inside an empty state.
   const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
-  assert.equal(writeNow.props.tone, 'quiet', '写此刻 must not compete with the primary action');
+  assert.equal(writeNow.props.tone, 'quiet', '写一条 must not compete with the primary action');
+  assert.equal(writeNow.props.label, '写一条');
   const planHeading = headings.find(node => node.props.title === '今日计划');
   const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
   assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
+  assert.equal(planAdd.props.label, '新建');
 
 
   // When empty, it renders an unboxed empty state prompt, not a lifted hero card.
@@ -603,7 +615,8 @@ test('the journal slip is an unboxed timeline section so the plan keeps the read
   for (const card of cards) {
     assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
   }
-  assert.match(text(tree), /留一句想法，让今天有自己的注脚/);
+  assert.match(text(tree), /还没有安排今天的计划/);
+  assert.match(text(tree), /还没有记录，想到什么就写一条/);
 });
 
 test('the journal section renders one compact timeline row per note', () => {
@@ -824,7 +837,8 @@ test('a page holding real content says when that content may be behind Room', ()
   assert.equal(notice.props.actionLabel, '重新读取');
   assert.equal(notice.props.busy, false);
   // The numbers themselves stay on the page — a failure must not blank real data.
-  assert.match(text(tree), /已完成/);
+  // The day's round count now reads 「已完整结束 N 轮」 under the hero.
+  assert.match(text(tree), /已完整结束/);
   assert.match(text(tree), /2/);
 });
 
@@ -923,7 +937,7 @@ test('today plans precede collapsed history, whose sheet keeps truthful dates an
   assert.match(text(tree), /昨天的计划 尚未完成/);
   assert.match(text(tree), /10月13日的计划 尚未完成/);
   assert.match(text(tree), /复习操作系统文件管理/);
-  assert.match(text(tree), /已投入 20m \/ 预计 45m/);
+  assert.match(text(tree), /已投入 20m 预计 45m/);
 });
 
 test('dismissing pending history through back, backdrop or header never writes or loses rows', async () => {
