@@ -95,8 +95,12 @@ class TabLayoutInstrumentedTest {
         }
         scenario = ActivityScenario.launch(MainActivity::class.java)
         scenario.onActivity { it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-        await("three native RN scroll viewports mounted") {
-            root?.let { views(it).filterIsInstance<ScrollView>().count { scroll -> scroll.height > 0 } == 3 } == true
+        // App.tsx mounts a tab screen on its first visit, so only the launch tab
+        // owns a native ScrollView here. Waiting for all three would assert the
+        // eager startup rendering the startup perf work deliberately removed;
+        // tests that compare every pane mount the rest via [mountAllTabs].
+        await("launch tab native RN scroll viewport mounted") {
+            root?.let { views(it).filterIsInstance<ScrollView>().any { scroll -> scroll.height > 0 } } == true
         }
         await("launched activity window focused") { root?.hasWindowFocus() == true }
     }
@@ -105,6 +109,7 @@ class TabLayoutInstrumentedTest {
     fun nativeScrollViewCoordinatesCoincide() {
         // Uses native ScrollViews instead of testIDs, so it also detects the
         // original shipped defect before installing a corrected app bundle.
+        mountAllTabs()
         onMain {
             val viewports = views(root!!).filterIsInstance<ScrollView>().map { bounds(it) }.toList()
             assertEquals(3, viewports.size)
@@ -169,6 +174,7 @@ class TabLayoutInstrumentedTest {
 
     @Test
     fun allPanesFillTheSameSafeAreaWithoutTabTranslation() {
+        mountAllTabs()
         val content = onMain { bounds(required("tab-content")) }
         val mounted = onMain { tabs.associateWith { required("pane-$it") } }
         onMain {
@@ -546,6 +552,15 @@ class TabLayoutInstrumentedTest {
         await("activity window focused") { root?.hasWindowFocus() == true }
         onView(testId("tab-$tab")).perform(click())
         await("$tab activated") { required("pane-$tab").alpha == 1f }
+        // The shell mounts a tab screen on its first visit (App.tsx), so the
+        // pane wrapper can be active one frame before its page content exists.
+        await("$tab content mounted") { find("scroll-$tab") != null }
+    }
+
+    /** Visits every tab once so each lazily-mounted page has mounted. */
+    private fun mountAllTabs() {
+        tabs.forEach { select(it) }
+        select(tabs.first())
     }
 
     private fun testId(id: String) = object : TypeSafeMatcher<View>() {
