@@ -26,6 +26,15 @@ test('calculateTargetSlotIndex maps row coordinates to tab slots and rejects off
       PanResponder: { create: config => config },
     },
     'react-native-blur-overlay': 'BlurOverlay',
+    // The dock draws its specular rim with SVG primitives; the harness only
+    // needs them to be constructible, not to render.
+    'react-native-svg': {
+      default: 'Svg',
+      Defs: 'Defs',
+      LinearGradient: 'LinearGradient',
+      Rect: 'Rect',
+      Stop: 'Stop',
+    },
     'react-native-reanimated': {
       useReducedMotion: () => false,
     },
@@ -64,6 +73,7 @@ test('calculateTargetSlotIndex maps row coordinates to tab slots and rejects off
         labelGap: 3,
         light: { backdrop: '', border: '', tint: '' },
         dark: { backdrop: '', border: '', tint: '' },
+        rim: { highlight: '', shade: '', width: 1 },
       },
     },
     './useBottomTabLayout': { useBottomTabLayout: () => ({ height: 60, bottom: 16 }) },
