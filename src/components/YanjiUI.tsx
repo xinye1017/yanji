@@ -1352,8 +1352,12 @@ export function YanjiTaskLedgerRow({
           </View>
         </Pressable>
         {!completed ? (
-          /* A single circular play target, centred on the row. The lead pending task
-             carries an ink-filled circle with white triangle; others carry hairline subtle border. */
+          /* A single circular play target, centred on the row. It borrows the
+             Focus page's selected-subject card: a light brand wash inside a brand
+             hairline, with the accent-coloured glyph. The lead pending task is
+             the one this page invites you to start, so it carries the full accent
+             rim and a heavier glyph; the rest stay a step quieter in the same
+             family rather than falling back to neutral ink. */
           <Pressable
             onPress={onStartFocus}
             accessibilityRole="button"
@@ -1364,15 +1368,15 @@ export function YanjiTaskLedgerRow({
               width: layout.compactActionHeight + 2,
               height: layout.compactActionHeight + 2,
               borderRadius: (layout.compactActionHeight + 2) / 2,
-              borderWidth: isLead ? 0 : layout.hairlineWidth,
-              borderColor: colors.hairline,
-              backgroundColor: isLead ? colors.ink : 'transparent',
+              borderWidth: isLead ? 1 : layout.hairlineWidth,
+              borderColor: isLead ? colors.brand : colors.brandSubtle,
+              backgroundColor: colors.brandSubtle,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <YanjiIcon name="play" size={11} color={isLead ? colors.canvas : colors.secondary} />
+            <YanjiIcon name="play" size={11} color={isLead ? colors.brandInk : colors.brand} />
           </Pressable>
         ) : null}
       </View>

@@ -497,15 +497,23 @@ function WeekFilmstrip({ cells, onSelect }: {
       accessibilityRole="button"
       accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
       accessibilityState={{ selected: cell.isSelected, disabled: cell.isFuture }}
+      // The selected day follows the Focus page's selected-subject card: a light
+      // brand wash with a brand hairline, so the mark is the same accent family
+      // everywhere instead of an ink-filled block on a paper page.
       style={({ pressed }) => ({
         flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
         alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
-        backgroundColor: cell.isSelected ? colors.ink : 'transparent',
+        backgroundColor: cell.isSelected ? colors.brandSubtle : 'transparent',
+        borderWidth: cell.isSelected ? 1 : 0,
+        borderColor: cell.isSelected ? colors.brand : 'transparent',
         opacity: pressed ? 0.65 : 1,
       })}>
-      <Text style={[typography.captionMeta, { color: cell.isSelected ? colors.canvas : colors.secondary }]}>{cell.weekdayLabel}</Text>
+      <Text style={[typography.captionMeta, {
+        color: cell.isSelected ? colors.brandInk : colors.secondary,
+        fontWeight: cell.isSelected ? '700' : '500',
+      }]}>{cell.weekdayLabel}</Text>
       <Text style={[typography.bodyPrimary, {
-        color: cell.isSelected ? colors.canvas : cell.isFuture ? colors.secondary : colors.ink,
+        color: cell.isSelected ? colors.brandInk : cell.isFuture ? colors.secondary : colors.ink,
         fontWeight: cell.isFuture ? '500' : '700',
         marginTop: YanjiSpacing.xs,
       }]}>{cell.dayOfMonth}</Text>
