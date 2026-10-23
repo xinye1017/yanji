@@ -58,7 +58,7 @@ export const YanjiThemeTokens = {
     full: 9999,
   },
   cardRules: {
-    borderWidth: 1,
+    borderWidth: 0.5,
     hasBorderStroke: true,
     plainBorderWidth: 0,
   },

@@ -47,7 +47,7 @@ const CATEGORY_OPTIONS: readonly { value: NoteCategory; label: string }[] = [
 function dateLabel(iso: string): string {
   const parts = parseIsoDate(iso);
   const weekday = weekdayLabelOf(iso);
-  return parts && weekday ? `${parts.month}月${parts.day}日 · ${weekday}` : iso;
+  return parts && weekday ? `${parts.month}月${parts.day}日 ${weekday}` : iso;
 }
 
 interface RecordMomentModalProps {

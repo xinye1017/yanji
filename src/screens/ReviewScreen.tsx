@@ -352,9 +352,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           switcher rides along as the trailing slot. */}
       <YanjiEditorialHeader
         eyebrow={view === 'trend'
-          ? '数据洞察 · 真实记录沉淀'
-          : `${selectedDate.getFullYear()} 年 ${selectedDate.getMonth() + 1} 月 · 第 ${weekNumberOfYear(selectedDate)} 周`}
-        title="备考手账"
+          ? '趋势分析'
+          : `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月 第${weekNumberOfYear(selectedDate)}周`}
+        title="学习回顾"
         trailing={
           <YanjiPaperSegmentedControl
             value={view}
@@ -1013,7 +1013,7 @@ function TrendSummary({
             key={slice.subjectId}
             label={slice.subjectName}
             color={slice.subjectColor || colors.secondary}
-            metaText={`${formatDuration(slice.minutes * 60)} · ${formatPercent(slice.share)}`}
+            metaText={`${formatDuration(slice.minutes * 60)} (${formatPercent(slice.share)})`}
             ratio={slice.share}
             showBar={false}
           />

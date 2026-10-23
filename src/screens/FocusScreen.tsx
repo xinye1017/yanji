@@ -112,7 +112,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       if (Animated && Animated.timing) {
         Animated.timing(pauseAnim, {
           toValue: 1,
-          duration: 350,
+          duration: 250,
           easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
           useNativeDriver: false,
         }).start();
@@ -121,7 +121,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       if (Animated && Animated.timing) {
         Animated.timing(pauseAnim, {
           toValue: 0,
-          duration: 280,
+          duration: 250,
           easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
           useNativeDriver: false,
         }).start(({ finished }) => {
@@ -140,7 +140,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       if (Animated && Animated.timing) {
         Animated.timing(immersionFade, {
           toValue: 1,
-          duration: 320,
+          duration: 250,
           easing: Easing?.out ? Easing.out(Easing.cubic) : undefined,
           useNativeDriver: true,
         }).start();
@@ -301,7 +301,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     if (Animated && Animated.timing) {
       Animated.timing(transitionAnim, {
         toValue: 1,
-        duration: 320,
+        duration: 250,
         easing: Easing?.out ? Easing.out(Easing.cubic) : undefined,
         useNativeDriver: true,
       }).start();
@@ -343,7 +343,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     if ((action === 'complete' || action === 'discard') && Animated && Animated.timing) {
       Animated.timing(immersionFade, {
         toValue: 0,
-        duration: 220,
+        duration: 250,
         useNativeDriver: true,
       }).start();
     }
@@ -472,7 +472,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                           paddingHorizontal: YanjiSpacing.md,
                           borderRadius: paper.radius.compactCard,
                           backgroundColor: isActive ? paper.colors.brandSubtle : paper.colors.surface,
-                          borderWidth: 1.5,
+                          borderWidth: 0.5,
                           borderColor: isActive ? paper.colors.brand : 'transparent',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -584,7 +584,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       { color: paper.colors.brandInk, fontWeight: '700', flex: 1, marginHorizontal: YanjiSpacing.sm },
                     ]}
                   >
-                    关联任务 · {taskBinding.title}
+                    关联任务: {taskBinding.title}
                   </Text>
                   <Pressable
                     accessibilityRole="button"

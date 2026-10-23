@@ -48,29 +48,29 @@ export const YanjiTouch = {
  * Radius/Opacity, Android only understands `elevation`.
  */
 export const YanjiShadow = {
-  /** A card resting on the desk — subtle diffuse elevation. */
+  /** A card resting on the desk — flat and pure, relying on 0.5px hairline and surface steps rather than heavy shadow. */
   sheet: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
-      radius: 12,
-      offsetY: 2,
-      opacity: isDark ? 0.36 : 0.05,
-      elevation: 2,
+      radius: 4,
+      offsetY: 1,
+      opacity: isDark ? 0.18 : 0.03,
+      elevation: 0.5,
     }),
-  /** The tab bar and other sheets lifted clear of the desk. */
+  /** Floating modals & sheets — gentle, clean scrim-depth elevation. */
   floating: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
-      radius: 20,
-      offsetY: 6,
-      opacity: isDark ? 0.44 : 0.09,
-      elevation: 8,
+      radius: 12,
+      offsetY: 4,
+      opacity: isDark ? 0.30 : 0.06,
+      elevation: 3,
     }),
   /** Pressed feedback — a sheet pushed toward the desk. */
   pressed: (isDark: boolean): ViewStyle =>
     PlatformShadow(isDark, {
-      radius: 4,
-      offsetY: 1,
-      opacity: isDark ? 0.28 : 0.04,
-      elevation: 1,
+      radius: 2,
+      offsetY: 0.5,
+      opacity: isDark ? 0.12 : 0.02,
+      elevation: 0,
     }),
 } as const;
 
@@ -280,28 +280,15 @@ export const YanjiPaperImmersive = {
  */
 export const YanjiPaperTypography = {
   displayTimer: {
-    fontSize: 96,
-    lineHeight: 102,
-    /**
-     * The running clock is the immersive field's single focal point, so it is
-     * set ultra-light — the opposite of `displayDial`, which stays heavy for
-     * the ready-state dial.
-     *
-     * The weight rides on the *family*, not `fontWeight`: RN resolves a named
-     * family through `TypefaceStyle.nearestStyle` (ReactFontManager.kt), which
-     * collapses every weight below 700 to NORMAL, and `sans-serif-medium` is
-     * itself the medium cut. Asking for `fontWeight: '300'` on that family
-     * would therefore still render at medium. `sans-serif-light` is the system
-     * family that actually carries the 300 cut, so `fontWeight` is left at the
-     * matching literal for intent and for Android's bold-text adjustment.
-     */
-    fontWeight: '300' as const,
-    fontFamily: 'sans-serif-light',
+    fontSize: 76,
+    lineHeight: 82,
+    fontWeight: '600' as const,
+    fontFamily: 'sans-serif-medium',
     fontVariant: ['tabular-nums'] as const,
   },
   displayDial: {
-    fontSize: 84,
-    lineHeight: 90,
+    fontSize: 64,
+    lineHeight: 70,
     fontWeight: '700' as const,
     fontFamily: 'sans-serif-medium',
     fontVariant: ['tabular-nums'] as const,
@@ -313,104 +300,79 @@ export const YanjiPaperTypography = {
     fontVariant: ['tabular-nums'] as const,
   },
   metricSub: {
-    fontSize: 28,
-    lineHeight: 36,
+    fontSize: 20,
+    lineHeight: 28,
     fontWeight: '700' as const,
     fontVariant: ['tabular-nums'] as const,
   },
   metricDaily: {
-    fontSize: 48,
-    lineHeight: 54,
+    fontSize: 44,
+    lineHeight: 52,
     fontWeight: '600' as const,
     fontVariant: ['tabular-nums'] as const,
   },
   metricSession: {
-    fontSize: 24,
-    lineHeight: 32,
-    fontWeight: '500' as const,
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '600' as const,
     fontVariant: ['tabular-nums'] as const,
   },
   titleGreeting: {
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 20,
+    lineHeight: 28,
     fontWeight: '600' as const,
-    fontFamily: 'serif',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
   },
   titleLedger: {
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 22,
     fontWeight: '600' as const,
   },
   titleEditorial: {
-    fontSize: 22,
-    lineHeight: 31,
-    fontWeight: '700' as const,
-    fontFamily: 'serif',
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '600' as const,
   },
   titleSection: {
-    fontSize: 14,
-    lineHeight: 21,
-    /**
-     * Section headings sit at the heaviest cut the system face offers, so a
-     * group title outranks the 500-weight body copy beneath it by weight as
-     * well as by size.
-     *
-     * 900 is a real cut here, not a synonym for bold: the device ships a
-     * variable Han face with a 100–900 `wght` axis, and on API 28+ React
-     * Native resolves a family-less weight through `Typeface.create(base,
-     * weight, italic)`, which keeps the exact value. (The 700-and-above
-     * collapse to BOLD lives in `TypefaceStyle.nearestStyle`, which only runs
-     * on the *named-family* path — so this must stay family-less to hold 900.)
-     */
-    fontWeight: '900' as const,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700' as const,
   },
-  /**
-   * A settings group's heading. There the group title is the page's primary
-   * structure rather than a caption inside a content block, so it sits one step
-   * above `titleSection` at the same 900 cut.
-   */
   titleGroup: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '900' as const,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700' as const,
   },
   bodyPrimary: {
-    fontSize: 14,
-    lineHeight: 23,
-    fontWeight: '500' as const,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400' as const,
   },
   bodyTask: {
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 22,
     fontWeight: '500' as const,
   },
   bodyJournal: {
-    fontSize: 14,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '400' as const,
     fontFamily: 'serif',
   },
-  /**
-   * The capture page's writing face. One step larger than `bodyJournal` and
-   * set on a looser line so a sentence typed in a hurry still reads as prose
-   * rather than a form field.
-   */
   bodyWriting: {
-    fontSize: 16,
-    lineHeight: 27,
+    fontSize: 15,
+    lineHeight: 24,
     fontWeight: '400' as const,
     fontFamily: 'serif',
   },
   bodyExcerpt: {
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 22,
     fontWeight: '600' as const,
-    fontFamily: 'serif',
   },
   captionMeta: {
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
     fontWeight: '500' as const,
     fontVariant: ['tabular-nums'] as const,
   },
@@ -428,7 +390,7 @@ export const YanjiPaperLayout = {
   borderlessSegmentPadding: 2,
   /** Visible subject chip inside a full-height touch target. */
   subjectChipHeight: 32,
-  hairlineWidth: 1,
+  hairlineWidth: 0.5,
   vernierTickWidth: 14,
   vernierMinHeight: 96,
   vernierMinorTickHeight: 10,

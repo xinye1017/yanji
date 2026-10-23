@@ -249,7 +249,7 @@ export function ExamDateSheet({
           accessibilityLiveRegion="polite"
           style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'] }]}
         >
-          {formatExamDate(selected)}{selectedWeekday ? ` · ${selectedWeekday}` : ''}
+          {formatExamDate(selected)}{selectedWeekday ? ` ${selectedWeekday}` : ''}
         </Text>
       </View>
 

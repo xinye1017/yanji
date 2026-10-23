@@ -536,7 +536,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
               {goalSeconds !== null && goalSeconds > 0 ? (
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  目标 {goalClock(goalSeconds)} ·{' '}
+                  目标 {goalClock(goalSeconds)} 
                   <Text style={{ color: colors.ink, fontWeight: '600' }}>{snapshot ? `${Math.round(effectiveSeconds / goalSeconds * 100)}%` : '—'}</Text>
                 </Text>
               ) : (
@@ -565,11 +565,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
               ))}
             </View>
           ) : <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
-            {snapshot ? '按自己的步调开始今天的第一轮专注。' : '正在读取今日记录，可点击下方重新读取。'}
+            {snapshot ? '暂无专注记录' : '正在读取今日记录…'}
           </Text>}
           {selection?.kind === 'subject' ? (
             <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-              {selection.subjectName} · {duration(selection.seconds)}
+              {selection.subjectName}  {duration(selection.seconds)}
             </Text>
           ) : null}
           {!snapshot ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}

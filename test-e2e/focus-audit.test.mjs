@@ -479,7 +479,7 @@ test('ready subject selection uses clean brand border and indicator underline wi
     assert.equal(cat.props.accessibilityState.selected, true);
     const catStyle = typeof cat.props.style === 'function' ? cat.props.style({ pressed: false }) : cat.props.style;
     assert.equal(catStyle.borderColor, h.paper.colors.brand);
-    assert.equal(catStyle.borderWidth, 1.5);
+    assert.equal(catStyle.borderWidth, tokens.YanjiPaperLayout.hairlineWidth);
     assert.equal(findAll(cat, n => n.props?.style?.backgroundColor === subjects[0].colorHex).length, 0);
 
     // Level 2 sub-subject check

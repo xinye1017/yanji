@@ -852,7 +852,7 @@ export function YanjiEmptyLedgerRow({
           width: layout.timelineNodeSize,
           height: layout.timelineNodeSize,
           borderRadius: layout.timelineNodeSize / 2,
-          borderWidth: layout.hairlineWidth * 1.5,
+          borderWidth: layout.hairlineWidth,
           borderColor: colors.secondary,
         }}
       />
@@ -2019,7 +2019,7 @@ export function YanjiTextInput({
       accessibilityLabel={accessibilityLabel ?? placeholder}
       editable={editable}
       style={[
-        {
+        ({
           backgroundColor: page ? 'transparent' : paper.colors.subtle,
           ...(page ? { padding: 0 } : {
             borderRadius: paper.radius.surface,
@@ -2032,7 +2032,7 @@ export function YanjiTextInput({
           lineHeight: type.lineHeight,
           ...('fontFamily' in type ? { fontFamily: type.fontFamily } : {}),
           textAlignVertical: multiline ? 'top' : 'center',
-        },
+        } as TextStyle),
         style,
       ]}
     />

@@ -326,7 +326,7 @@ export function BackupDataSection(): React.JSX.Element {
                   {preview.fileName}
                 </Text>
                 <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-                  格式版本 {preview.schemaVersion} · 应用版本 {preview.appVersionName} · 导出时间{' '}
+                  格式版本 {preview.schemaVersion}  应用版本 {preview.appVersionName}  导出时间 
                   {formatExportTime(preview.exportedAt)}
                 </Text>
               </View>

@@ -299,7 +299,7 @@ export function SubjectsSheet({
                               borderRadius: radius.compactCard,
                               paddingHorizontal: YanjiSpacing.sm,
                               paddingVertical: 4,
-                              borderWidth: 1,
+                              borderWidth: 0.5,
                               borderColor: colors.brand,
                             },
                           ]}
@@ -375,7 +375,7 @@ export function SubjectsSheet({
                                     borderRadius: radius.compactCard,
                                     paddingHorizontal: YanjiSpacing.sm,
                                     paddingVertical: 4,
-                                    borderWidth: 1,
+                                    borderWidth: 0.5,
                                     borderColor: colors.brand,
                                   },
                                 ]}
@@ -456,7 +456,7 @@ export function SubjectsSheet({
                               borderRadius: radius.compactCard,
                               paddingHorizontal: YanjiSpacing.sm,
                               paddingVertical: 4,
-                              borderWidth: 1,
+                              borderWidth: 0.5,
                               borderColor: colors.brand,
                             },
                           ]}
@@ -520,7 +520,7 @@ export function SubjectsSheet({
                         borderRadius: radius.compactCard,
                         paddingHorizontal: YanjiSpacing.md,
                         paddingVertical: 8,
-                        borderWidth: 1,
+                        borderWidth: 0.5,
                         borderColor: colors.brand,
                       },
                     ]}
@@ -556,7 +556,7 @@ export function SubjectsSheet({
                     minHeight: layout.rowMinHeight,
                     paddingVertical: YanjiSpacing.md,
                     borderRadius: radius.surface,
-                    borderWidth: 1,
+                    borderWidth: 0.5,
                     borderStyle: 'dashed',
                     borderColor: colors.hairline,
                     backgroundColor: colors.surface,

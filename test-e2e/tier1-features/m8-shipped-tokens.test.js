@@ -142,7 +142,7 @@ export function registerShippedTokenTests() {
     });
 
     it('paper layout keeps a shared hairline and legible section rhythm', () => {
-      assertEqual(tokens.YanjiPaperLayout.hairlineWidth, 1, 'Shared hairline width must be 1');
+      assertEqual(tokens.YanjiPaperLayout.hairlineWidth, 0.5, 'Shared hairline width must be 0.5');
       assert(tokens.YanjiPaperLayout.sectionGap >= tokens.YanjiSpacing.xl, 'Page sections need a legible rhythm');
       assert(
         tokens.YanjiPaperTypography.displayTimer.fontSize > tokens.YanjiPaperTypography.titleEditorial.fontSize,

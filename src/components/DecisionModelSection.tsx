@@ -238,7 +238,7 @@ export function YanjiDecisionModelSection({
                 }}
               >
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  API Key{hasKey ? ' · 已保存' : ' · 未配置'}
+                  API Key: {hasKey ? '已保存' : '未配置'}
                 </Text>
                 {hasKey ? (
                   <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} disabled={savingAi} />
