@@ -24,15 +24,15 @@ export const YanjiLiquidGlass = {
   saturation: 1.6,
   light: {
     /**
-     * Lifted off the paper, not matched to it.
+     * A touch under the paper, so the lens has somewhere to shine.
      *
-     * The lens composites an opaque blur of what is behind it, so a tint equal to
-     * the canvas cancels the blur out: blurred paper tinted toward paper is just
-     * paper again, and the dock reads as a white rounded rectangle. A slightly
-     * brighter veil makes the surface catch more light than the page under it,
-     * which is what a real sheet of glass does when it sits on a desk.
+     * The shader adds its edge highlight *after* tinting, and clamps at white.
+     * Tinting toward white left the interior at 251/255 — four levels of
+     * headroom — so the highlight had nowhere to go and the dock read as a flat
+     * white card. Sitting the body just below the canvas (238 vs 247) leaves
+     * real room for the lit rim to show, which is what makes it look like glass.
      */
-    tint: 'rgba(255,255,255,0.46)',
+    tint: 'rgba(226,223,217,0.34)',
     /**
      * The dock's own veil. It used to be 85% opaque, which is why the glass
      * read as a solid white slab: the veil is painted under the overlay, so it
@@ -46,9 +46,8 @@ export const YanjiLiquidGlass = {
     border: 'rgba(0,0,0,0.08)',
   },
   dark: {
-    /** paper dark slate surface for contrast against deep canvas */
-    /** Dark lifts toward its own surface instead: a lens over a dark page has to read as lit glass, not a hole. */
-    tint: 'rgba(64,66,72,0.42)',
+    /** Same rule as light: sit a step under the surface so the rim highlight is visible. */
+    tint: 'rgba(46,44,42,0.38)',
     /**
      * Dark needs more veil than light: a clear lens over a dark page turns into
      * a hole the labels float in. 62% keeps the dock a surface while still
@@ -58,23 +57,7 @@ export const YanjiLiquidGlass = {
     /** Hairline that separates a dark veil from a dark page. */
     border: 'rgba(255,255,255,0.16)',
   },
-  /**
-   * The specular rim — the fourth layer of a real glass surface.
-   *
-   * Blur and refraction alone read as frosted plastic. What makes a lens look
-   * like glass is the light it catches at its own edge: a bright arc where the
-   * surface turns away from the viewer, fading to nothing where it faces them.
-   * Painted as a gradient stroke over the rim, above the blur and below the
-   * glyphs, so it never tints the icons.
-   */
-  rim: {
-    /** The lit end of the arc, on the upper-left where the light comes from. */
-    highlight: 'rgba(255,255,255,0.55)',
-    /** The unlit end: a trace of the paper, so the arc does not stop dead. */
-    shade: 'rgba(255,255,255,0.06)',
-    /** Edge width, in dp. Wider than the hairline: it is a highlight, not a rule. */
-    width: 1.25,
-  },
+
 } as const;
 
 /** Enough room to scroll the final action fully above the glass, at any font size. */

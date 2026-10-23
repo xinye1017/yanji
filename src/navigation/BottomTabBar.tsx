@@ -7,10 +7,9 @@
  * (see App.tsx), so `activeTab` — never a remount — drives the selected state.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useNavigationActions, useNavigationState, TABS } from './NavigationShell';
 import type { TabKey } from './NavigationShell';
@@ -58,7 +57,6 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
 
   const index = Math.max(0, TABS.findIndex(tab => tab.key === activeTab));
 
-  const [dockWidth, setDockWidth] = useState(0);
   const isDraggingRef = useRef(false);
   const rowRef = useRef<React.ElementRef<typeof View>>(null);
   const rowPageXRef = useRef<number>(theme.spacing.lg);
@@ -134,7 +132,6 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
   return (
     <View
       testID="bottom-tab-bar"
-      onLayout={event => setDockWidth(event.nativeEvent.layout.width)}
       pointerEvents={visible ? 'auto' : 'none'}
       accessibilityElementsHidden={!visible}
       importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
@@ -156,7 +153,14 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         visible={visible}
         blurMode="glass"
         blurTargetId={YanjiLiquidGlass.targetId}
-        glassVariant="clear"
+        // The variant follows the theme, because the milky lift only works on
+        // paper. `regular` lifts the blur 30% toward white, which over a light
+        // page reads as frosted glass but over a dark one turns the dock into a
+        // grey slab (the page's 27 becomes 79). Dark therefore uses `clear`,
+        // which applies no lift: the dock stays close to the page it floats on
+        // and the rim highlight does the work of saying "glass". iOS draws the
+        // same distinction between its light and dark materials.
+        glassVariant={theme.isDark ? 'clear' : 'regular'}
         glassTint={material.tint}
         blurRadius={YanjiLiquidGlass.blurRadius}
         downsampling={YanjiLiquidGlass.downsampling}
@@ -226,42 +230,6 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         </View>
       </BlurOverlay>
 
-      {/* The specular rim: the layer that separates glass from frosted plastic.
-          A gradient stroke tracing the capsule's own edge, bright at the
-          upper-left where the light is and fading to a trace around the rest.
-          Drawn above the blur and below the glyphs, so it lights the material
-          and never the icons; non-interactive, so it cannot swallow a tab
-          press. A real glass surface catches light exactly here, which is what
-          blur and refraction on their own cannot fake. */}
-      {dockWidth > 0 ? (
-        <Svg
-          pointerEvents="none"
-          style={StyleSheet.absoluteFill}
-          width={dockWidth}
-          height={height}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          <Defs>
-            <LinearGradient id="yanji-dock-rim" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={YanjiLiquidGlass.rim.highlight} />
-              <Stop offset="0.5" stopColor={YanjiLiquidGlass.rim.shade} />
-              <Stop offset="1" stopColor={YanjiLiquidGlass.rim.shade} />
-            </LinearGradient>
-          </Defs>
-          <Rect
-            x={YanjiLiquidGlass.rim.width / 2}
-            y={YanjiLiquidGlass.rim.width / 2}
-            width={dockWidth - YanjiLiquidGlass.rim.width}
-            height={height - YanjiLiquidGlass.rim.width}
-            rx={(height - YanjiLiquidGlass.rim.width) / 2}
-            ry={(height - YanjiLiquidGlass.rim.width) / 2}
-            fill="none"
-            stroke="url(#yanji-dock-rim)"
-            strokeWidth={YanjiLiquidGlass.rim.width}
-          />
-        </Svg>
-      ) : null}
     </View>
   );
 }
