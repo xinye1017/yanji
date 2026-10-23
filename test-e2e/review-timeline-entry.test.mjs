@@ -404,10 +404,20 @@ test('note rows keep favorite, resolution, category correction and editing in th
     'delete only opens the existing confirmation');
 });
 
-/** The three big numbers in the summary strip, in column order. */
+/**
+ * The three summary numbers, in column order.
+ *
+ * Read by the summary metric size rather than the hero size: these three sit in
+ * one row and are deliberately a step smaller than a single hero number.
+ */
 const summaryNumbers = tree => plain(nodes(tree, node => node.type === 'Text' &&
-  node.props.style?.[0]?.fontSize === theme.paper.typography.metricHero.fontSize)
+  node.props.style?.[0]?.fontSize === theme.paper.typography.metricSummary.fontSize)
   .map(node => text(node)));
+
+/** The quiet denominators that share the row with their number. */
+const summaryTails = tree => plain(nodes(tree, node => node.type === 'Text' &&
+  node.props.style?.[0]?.fontSize === theme.paper.typography.captionMeta.fontSize)
+  .map(node => text(node)).filter(value => value.startsWith('/')));
 
 test('the day summary is exactly two rows per metric: label, then one big number', () => {
   const tree = screenHarness(snapshot({
@@ -423,7 +433,10 @@ test('the day summary is exactly two rows per metric: label, then one big number
   for (const label of ['专注时长', '完成任务', '专注次数']) {
     assert.ok(text(tree).includes(label), `the summary names ${label}`);
   }
-  assert.deepEqual(summaryNumbers(tree), ['30', '1/2', '1']);
+  // The denominator is no longer set at the number's size: 「1」 is the answer,
+  // 「/2」 the context it is measured against.
+  assert.deepEqual(summaryNumbers(tree), ['30', '1', '1']);
+  assert.deepEqual(summaryTails(tree), ['/2'], 'the denominator rides the row at caption size');
 
   const units = plain(nodes(tree, node => node.type === 'Text' &&
     node.props.style?.[0]?.fontSize === theme.paper.typography.bodyPrimary.fontSize &&
@@ -439,7 +452,8 @@ test('the day summary is exactly two rows per metric: label, then one big number
 
 test('zero data and a loading snapshot stay truthful in the summary', () => {
   const empty = screenHarness(snapshot({ totalDurationSeconds: 0, focusParticipationCount: 0 })).render();
-  assert.deepEqual(summaryNumbers(empty), ['0', '0/0', '0']);
+  assert.deepEqual(summaryNumbers(empty), ['0', '0', '0']);
+  assert.deepEqual(summaryTails(empty), ['/0']);
 
   const loading = screenHarness(null).render();
   assert.deepEqual(summaryNumbers(loading), ['—', '—', '—']);
@@ -450,12 +464,12 @@ test('the summary renders whichever day\'s snapshot is selected', () => {
   const first = screenHarness(snapshot({
     totalDurationSeconds: 600, focusCount: 1,
   })).render();
-  assert.deepEqual(summaryNumbers(first), ['10', '0/0', '1']);
+  assert.deepEqual(summaryNumbers(first), ['10', '0', '1']);
 
   const second = screenHarness(snapshot({
     totalDurationSeconds: 5400, focusCount: 4,
   })).render();
-  assert.deepEqual(summaryNumbers(second), ['90', '0/0', '4']);
+  assert.deepEqual(summaryNumbers(second), ['90', '0', '4']);
 });
 
 

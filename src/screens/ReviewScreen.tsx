@@ -348,23 +348,23 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       contentContainerStyle={{
         paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
       }}>
-      {/* AB-06 & AB-07 share one header: the eyebrow names the window, the
-          switcher rides along as the trailing slot. */}
-      <YanjiEditorialHeader
-        eyebrow={view === 'trend'
-          ? '趋势分析'
-          : `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月 第${weekNumberOfYear(selectedDate)}周`}
-        title="学习回顾"
-        trailing={
-          <YanjiPaperSegmentedControl
-            value={view}
-            options={VIEWS}
-            onChange={setView}
-            accessibilityLabel="回顾视图"
-            compact
-          />
-        }
-      />
+      {/* The page title stands alone: the window (year / week) is already spelled
+          out by the filmstrip and the period bar below, so an eyebrow above the
+          title only repeated it. The view switch rides the right edge as a
+          borderless capsule. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 10 }}>
+        <Text accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink }]}>
+          备考手账
+        </Text>
+        <YanjiPaperSegmentedControl
+          value={view}
+          options={VIEWS}
+          onChange={setView}
+          accessibilityLabel="回顾视图"
+          compact
+          borderless
+        />
+      </View>
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
       {staleRead ? (
@@ -555,7 +555,18 @@ function DaySummary({ snapshot }: {
   // Two rows per column only: the metric name, then the number that carries the
   // page's weight. Units ride the number's baseline at body size so a long value
   // can shrink (`adjustsFontSizeToFit`) without knocking the row out of line.
-  const cells: ReadonlyArray<{ label: string; value: string; unit: string | null; spoken: string }> = [
+  //
+  // 「完成任务」 splits its fraction: 「0」 is the number the reader came for,
+  // 「/1」 is the denominator it is measured against. Both used to be set at the
+  // hero size, which made "out of how many" shout as loudly as the answer.
+  const cells: ReadonlyArray<{
+    label: string;
+    value: string;
+    /** The small, quiet tail of a value — a denominator, never the answer. */
+    tail?: string;
+    unit: string | null;
+    spoken: string;
+  }> = [
     {
       label: '专注时长',
       value: snapshot ? durationMetricMinutes(snapshot.totalDurationSeconds) : '—',
@@ -564,7 +575,8 @@ function DaySummary({ snapshot }: {
     },
     {
       label: '完成任务',
-      value: snapshot ? `${completed}/${totalTasks}` : '—',
+      value: snapshot ? `${completed}` : '—',
+      tail: snapshot ? `/${totalTasks}` : undefined,
       unit: null,
       spoken: snapshot ? `完成任务 ${completed}/${totalTasks}` : '正在读取任务',
     },
@@ -591,12 +603,17 @@ function DaySummary({ snapshot }: {
         alignItems: 'baseline',
         justifyContent: 'center',
         marginTop: YanjiSpacing.xs,
-        minHeight: typography.metricHero.lineHeight,
+        minHeight: typography.metricSummary.lineHeight,
       }}>
         <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
-          style={[typography.metricHero, { color: colors.ink }]}>
+          style={[typography.metricSummary, { color: colors.ink }]}>
           {cell.value}
         </Text>
+        {cell.tail ? (
+          <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.muted }]}>
+            {cell.tail}
+          </Text>
+        ) : null}
         {cell.unit ? <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 2 }]}>{cell.unit}</Text> : null}
       </View>
     </View>)}

@@ -299,6 +299,18 @@ export const YanjiPaperTypography = {
     fontWeight: '700' as const,
     fontVariant: ['tabular-nums'] as const,
   },
+  /**
+   * A summary metric — the three numbers on 回顾. One step under `metricHero`:
+   * three of these sit side by side, so the hero size made them compete with the
+   * page title instead of reading as a row of facts.
+   */
+  metricSummary: {
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: '700' as const,
+    fontFamily: 'serif',
+    fontVariant: ['tabular-nums'] as const,
+  },
   metricSub: {
     fontSize: 20,
     lineHeight: 28,
