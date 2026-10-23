@@ -52,6 +52,7 @@ test('App shell reconciles a foreground transition that happened before its list
   const mocks = {
     react: {
       useEffect: fn => effects.push(fn),
+      useLayoutEffect: () => {},
       useState: initial => {
         const updates = []; states.push(updates);
         return [typeof initial === 'function' ? initial() : initial, value => updates.push(value)];
@@ -121,6 +122,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
     const mocks = {
       react: {
         useEffect: () => {},
+        useLayoutEffect: () => {},
         useState: initial => [typeof initial === 'function' ? initial() : initial, dummy],
       },
       'react-native': {
@@ -301,14 +303,23 @@ test('a hydration response cannot roll the display back after a newer native tic
   assert.equal(f.observers[1].get()?.elapsedSeconds, 22);
 });
 function fixture(overrides = {}) {
-  const reads = { daily: [], review: [], settings: 0, exam: 0 };
-  const coordinator = new DataRefreshCoordinator({
+  const reads = { daily: [], review: [], reviewBatches: [], settings: 0, exam: 0 };
+  const loaders = {
     getDailySnapshot: async date => { reads.daily.push(date); return daily(date); },
     getReviewOverview: async (...args) => { reads.review.push(args); return { totalSeconds: 0 }; },
     getUserSettings: async () => { reads.settings++; return { examDate: '' }; },
     getExamCountdown: async () => { reads.exam++; return { examDate: '', daysRemaining: 0 }; },
     ...overrides,
+  };
+  // The coordinator reads windows in batches; a single-window override still
+  // drives the batch so each test keeps expressing its own scenario.
+  loaders.getReviewOverviews = overrides.getReviewOverviews ?? (async requests => {
+    reads.reviewBatches.push(requests);
+    return Promise.all(requests.map(request => loaders.getReviewOverview(
+      request.scope, request.periodsBack, request.anchorDate
+    )));
   });
+  const coordinator = new DataRefreshCoordinator(loaders);
   return { coordinator, reads };
 }
 
@@ -384,22 +395,21 @@ test('a second launch payload cannot roll back an already refreshed snapshot', a
   assert.deepEqual(reads.daily, ['2026-10-10', '2026-10-10']);
 });
 
-test('a remounted root can seed the same launch payload again after the cache was released', async () => {
-  // Activity exit and re-entry in one process: the React tree remounts and hands
-  // the same host payload to a cache that a previous unmount already released.
-  // A once-only latch would leave that mount with neither the preheated snapshot
-  // nor a read, which is exactly the stuck 「正在读取」 state on device.
+test('a remounted root keeps the real read instead of re-seeding the process-start payload', async () => {
+  // Activity exit and re-entry in one process: the React tree remounts. A real
+  // read (or the trusted cold-start payload) must survive as a warm cache; the
+  // older process-start payload must never overwrite it.
   const { coordinator, reads } = fixture();
   coordinator.seed(launchProperties('2026-10-10'));
   assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
 
-  // The reader goes away and its retained date is pruned, emptying the cache.
   coordinator.setDailyReader('today', '2026-10-10');
   await settle();
   coordinator.setDailyReader('today', null);
-  assert.equal(coordinator.getDailySnapshot('2026-10-10'), null);
+  assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600,
+    'the first frame value is retained as a warm cache');
 
-  // The remounted root re-seeds the same payload and paints real data again.
+  // The remounted root re-seeds the same payload; the retained value wins.
   coordinator.seed(launchProperties('2026-10-10'));
   assert.equal(coordinator.getDailySnapshot('2026-10-10').totalDurationSeconds, 3600);
   assert.equal(reads.settings, 0, 'the settings slot was never released, so it is not re-seeded');
@@ -622,8 +632,15 @@ function dataHookFixture() {
       getDailySnapshot: date => {
         const read = deferred(); reads.daily.push({ date, ...read }); return read.promise;
       },
-      getReviewOverview: (...args) => {
-        const read = deferred(); reads.review.push({ args, ...read }); return read.promise;
+      getReviewOverviews: requests => {
+        const read = deferred();
+        reads.review.push({
+          args: requests,
+          promise: read.promise,
+          resolve: value => read.resolve(Array.isArray(value) ? value : requests.map(() => value)),
+          reject: read.reject,
+        });
+        return read.promise;
       },
     } },
   });
@@ -671,10 +688,10 @@ test('mounted daily hook retains loaded content through hiding, invalidation and
   assert.equal(f.reads.daily.length, 2);
   unsubscribe();
   detach();
-  assert.equal(coordinator.getDailySnapshot(date), null, 'unmount releases the retained date');
+  assert.ok(coordinator.getDailySnapshot(date), 'unmount retains the value as a warm cache');
 });
 
-test('mounted Review overview stays available while hidden and releases obsolete windows', async () => {
+test('mounted Review overview stays available while hidden and keeps obsolete windows warm', async () => {
   const f = dataHookFixture();
   const request = { scope: 'CALENDAR_WEEK', periodsBack: 0, anchorDate: '2026-10-10' };
   const coordinator = f.hooks.dataRefreshCoordinator;
@@ -692,25 +709,68 @@ test('mounted Review overview stays available while hidden and releases obsolete
   assert.equal(f.observer().get(), shown);
   assert.equal(f.reads.review.length, 1, 'hidden overview is retained without a query');
   unsubscribe();
-  assert.equal(coordinator.getReviewOverview(request), null);
+  assert.equal(coordinator.getReviewOverview(request).totalSeconds, 600,
+    'the released window is retained as a warm cache instead of blanking');
 });
 
-test('daily subscriptions retain only dates still mounted while Review browses history', async () => {
+test('daily warm cache keeps the most recent dates while Review browses history', async () => {
   const { coordinator } = fixture();
   let unsubscribe = () => {};
-  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06']) {
+  const dates = [
+    '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06',
+    '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12',
+  ];
+  for (const date of dates) {
     unsubscribe();
     unsubscribe = coordinator.subscribeDailySnapshot(date, () => {});
     coordinator.setDailyReader('review', date);
     await settle();
   }
-  coordinator.setDailyReader('review', null);
-  for (const date of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']) {
-    assert.equal(coordinator.getDailySnapshot(date), null, 'obsolete dates are released');
-  }
-  assert.ok(coordinator.getDailySnapshot('2026-10-06'));
   unsubscribe();
-  assert.equal(coordinator.getDailySnapshot('2026-10-06'), null);
+  coordinator.setDailyReader('review', null);
+  // 热缓存有界：最近 10 天保留（往回翻立刻命中），更早的两天按 FIFO 淘汰。
+  assert.equal(coordinator.getDailySnapshot('2026-10-01'), null, 'the oldest date is evicted');
+  assert.equal(coordinator.getDailySnapshot('2026-10-02'), null, 'the second oldest date is evicted');
+  for (const date of dates.slice(2)) {
+    assert.ok(coordinator.getDailySnapshot(date), `${date} stays warm for instant back-and-forth`);
+  }
+  unsubscribe();
+});
+
+test('prefetch batches neighbouring windows and a switch finds them already loaded', async () => {
+  const { coordinator, reads } = fixture();
+  const todayWindow = { scope: 'TODAY', periodsBack: 0, anchorDate: '2026-10-10' };
+  const nextWindow = { scope: 'TODAY', periodsBack: 0, anchorDate: '2026-10-11' };
+
+  await coordinator.prefetchReviewOverviews([todayWindow, nextWindow]);
+  assert.equal(reads.reviewBatches.length, 1, 'two windows share one batched native call');
+  assert.equal(
+    reads.reviewBatches[0].map(request => request.anchorDate).join(','),
+    '2026-10-10,2026-10-11'
+  );
+  assert.equal(coordinator.getReviewOverview(nextWindow).totalSeconds, 0,
+    'the prefetched window is readable synchronously, before any page mounts');
+
+  coordinator.setReviewReader('review', [nextWindow]);
+  await settle();
+  assert.equal(reads.reviewBatches.length, 1,
+    'a fresh prefetched window costs no read when the page switches to it');
+});
+
+test('a prefetched window is shown while a data change revalidates it', async () => {
+  const { coordinator, reads } = fixture();
+  const nextWindow = { scope: 'TODAY', periodsBack: 0, anchorDate: '2026-10-11' };
+  await coordinator.prefetchReviewOverviews([nextWindow]);
+  assert.equal(coordinator.getReviewOverview(nextWindow).totalSeconds, 0);
+
+  coordinator.enqueueDataChanged('sessions');
+  await settle();
+  assert.equal(coordinator.getReviewOverview(nextWindow).totalSeconds, 0,
+    'the warm value stays on screen while the invalidated window is re-read');
+
+  coordinator.setReviewReader('review', [nextWindow]);
+  await settle();
+  assert.equal(reads.reviewBatches.length, 2, 'the dirty prefetched window is revalidated once');
 });
 
 test('changing Review scope prevents an obsolete overview from replacing the new scope', async () => {

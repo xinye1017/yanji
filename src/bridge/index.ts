@@ -78,6 +78,19 @@ export interface NoteEntry {
  */
 export type ReviewScope = 'TODAY' | 'CALENDAR_WEEK' | 'CALENDAR_MONTH';
 
+/**
+ * 一个回顾趋势窗口的请求。
+ *
+ * - `scope`：窗口粒度；
+ * - `periodsBack`：自然周 / 自然月往回翻几期（`TODAY` 恒为 0）；
+ * - `anchorDate`：窗口锚点日期（`yyyy-MM-dd`）；决定是哪一天 / 哪一周 / 哪一月。
+ */
+export interface ReviewOverviewRequest {
+  scope: ReviewScope;
+  periodsBack: number;
+  anchorDate: string;
+}
+
 /** 窗口里的一天。日历视图里今天之后的格子 `isFuture` 为 true 且时长恒为 0。 */
 export interface ReviewPeriodDay {
   /** ISO date `yyyy-MM-dd`，本地日历。 */
@@ -367,6 +380,16 @@ interface YanjiDataModuleNative {
     periodsBack: number,
     anchorDate?: string | null
   ): Promise<ReviewOverview>;
+  /**
+   * 批量读取多个回顾窗口：一次桥调用、一次区间扫描。
+   *
+   * 返回数组与请求顺序严格一致；任一请求非法时整体 reject，不做部分成功，
+   * 避免页面把错位的结果当成自己的窗口。
+   *
+   * 页面用它预取相邻日期与当前窗口的环比窗口；批量把多个窗口合并成一个区间并集，
+   * 每张表只扫一次，是「切换日期首帧就有数」的数据来源。
+   */
+  getReviewOverviews(requests: ReviewOverviewRequest[]): Promise<ReviewOverview[]>;
   /**
    * 编辑一条已完成专注的随笔。模考暂不支持（原生 reject `E_UNSUPPORTED`）。
    * 空内容 reject `E_EMPTY_NOTE`；找不到会话 reject `E_SESSION_NOT_FOUND`。

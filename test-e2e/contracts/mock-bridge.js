@@ -555,6 +555,14 @@ export class MockYanjiBridge {
     };
   }
 
+  /** 批量概览：契约要求返回数组与请求顺序严格一致。 */
+  async getReviewOverviews(requests) {
+    if (!Array.isArray(requests)) throw new Error('Review requests must be an array');
+    return Promise.all(requests.map(request => this.getReviewOverview(
+      request?.scope, request?.periodsBack ?? 0, request?.anchorDate ?? null
+    )));
+  }
+
   /** 编辑一条已完成记录的随笔。空内容 / 找不到会话都必须是硬失败，不做静默回落。 */
   async updateSessionNote(sessionId, isExam, note) {
     const cleanNote = typeof note === 'string' ? note.trim() : '';

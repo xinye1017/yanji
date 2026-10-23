@@ -11,8 +11,7 @@ const getSettingsSnapshot = () => dataRefreshCoordinator.getSettingsSnapshot();
 
 export const dataRefreshCoordinator = new DataRefreshCoordinator({
   getDailySnapshot: date => YanjiDataNative.getDailySnapshot(date),
-  getReviewOverview: (scope, periodsBack, anchorDate) =>
-    YanjiDataNative.getReviewOverview(scope, periodsBack, anchorDate),
+  getReviewOverviews: requests => YanjiDataNative.getReviewOverviews(requests),
   getUserSettings: () => YanjiDataNative.getUserSettings(),
   getExamCountdown: () => YanjiDataNative.getExamCountdown(),
 });
@@ -131,6 +130,23 @@ export function refreshReviewOverview(request: ReviewRequestKey): Promise<void> 
 
 export function refreshSettingsSnapshot(): Promise<void> {
   return dataRefreshCoordinator.refreshSettings();
+}
+
+/**
+ * 预取相邻日期的每日快照，供回顾页日期切换时首帧直接出数。
+ *
+ * 结果进入协调器的热缓存；页面真正切过去时 `useDailySnapshot` 会同步命中，
+ * 不会先渲染一屏空值。
+ */
+export function prefetchDailySnapshots(dates: ReadonlyArray<string>): Promise<void> {
+  return dataRefreshCoordinator.prefetchDailySnapshots(dates);
+}
+
+/** 预取回顾窗口（当前 / 环比 / 相邻日期），批量合并为一次原生读取。 */
+export function prefetchReviewOverviews(
+  requests: ReadonlyArray<ReviewRequestKey>
+): Promise<void> {
+  return dataRefreshCoordinator.prefetchReviewOverviews(requests);
 }
 
 /**

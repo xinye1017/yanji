@@ -12,15 +12,14 @@ import com.example.yanji.data.StudyTaskNotCarryableException
 import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.YanjiRepository
-import com.example.yanji.data.YanjiTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -451,112 +450,80 @@ class YanjiDataModule(
             promise.reject("E_INVALID_SCOPE", "Unknown review scope: $scope")
             return
         }
-        val effectivePeriodsBack = when (scope) {
-            BridgeMappers.SCOPE_TODAY -> 0L
-            else -> periodsBack.toLong().coerceAtLeast(0L)
-        }
-        // 窗口在协程外算好：只需要本地日历推进，没有 IO，也就没有挂起语义。
-        val window = reviewWindow(scope, effectivePeriodsBack, anchorDate)
-
-        // `scope` 这个形参遮住了协程域，必须写全名，否则下面 launch 的对象是 String。
-        this.scope.launch {
-            val range = window.range
-            val focusSessions = repository.observeFocusSessionsInRange(range.startInclusive, range.endExclusive).first()
-            val examSessions = repository.observeExamSessionsInRange(range.startInclusive, range.endExclusive).first()
-            val focusTotals = repository.observeFocusSubjectTotals(range.startInclusive, range.endExclusive).first()
-            val examTotals = repository.observeExamSubjectTotals(range.startInclusive, range.endExclusive).first()
-
-            val windowKeys = window.dates.toSet()
-            val daySecondsByDate = LinkedHashMap<String, Long>()
-            window.dates.forEach { daySecondsByDate[it] = 0L }
-            val subjectSecondsByDate = LinkedHashMap<String, MutableList<BridgeMappers.SubjectSecondsSlice>>()
-
-            // 专注取 durationSeconds、模考取 actualDurationSeconds，统一成 (日期, 桶, 秒数)。
-            fun accumulate(startTime: Long, subjectId: String, subjectName: String, seconds: Long) {
-                val date = YanjiTime.localDate(startTime).format(YanjiTime.isoDateFormatter)
-                if (date !in windowKeys) return
-                daySecondsByDate[date] = (daySecondsByDate[date] ?: 0L) + seconds
-                val (bucketId, displayName) = BridgeMappers.subjectBucket(subjectId, subjectName)
-                subjectSecondsByDate.getOrPut(date) { mutableListOf() }
-                    .add(BridgeMappers.SubjectSecondsSlice(bucketId, displayName, seconds))
-            }
-
-            focusSessions.forEach { accumulate(it.startTime, it.subjectId, it.subjectName, it.durationSeconds) }
-            examSessions.forEach {
-                accumulate(it.startTime, it.subjectId, it.subjectName, it.actualDurationSeconds)
-            }
-
-            // 窗口内各展示桶的合计秒数（DAO 的 GROUP BY 行，已按 status='COMPLETED' 过滤）
-            val subjectTotals = (focusTotals + examTotals).map { row ->
-                val (bucketId, displayName) = BridgeMappers.subjectBucket(row.subjectId, row.subjectName)
-                BridgeMappers.SubjectSecondsSlice(bucketId, displayName, row.durationSeconds)
-            }
-
-            val overview = BridgeMappers.reviewOverviewFields(
-                scope = scope,
-                periodsBack = effectivePeriodsBack.toInt(),
-                windowDates = window.dates,
-                todayIso = YanjiTime.todayIso(),
-                daySecondsByDate = daySecondsByDate,
-                subjectSecondsByDate = subjectSecondsByDate,
-                subjectTotals = subjectTotals,
-                examCount = examSessions.count { it.status.name == "COMPLETED" }
-            )
-            promise.resolve(reviewOverviewMap(overview))
-        }
+        readReviewOverviews(
+            listOf(ReviewOverviewReader.Request(scope, periodsBack.toLong(), anchorDate)),
+            promise
+        )
     }
 
-    /** 回顾窗口 = 一个 [com.example.yanji.data.EpochRange] + 窗口内的本地日期键。 */
-    private data class ReviewWindow(
-        val range: com.example.yanji.data.EpochRange,
-        val dates: List<String>
-    )
+    /**
+     * 批量回顾概览：一次桥调用、一次区间扫描拿到多个窗口。
+     *
+     * 回顾页切换日期时同时需要「当前窗口 / 环比窗口 / 所选日所在自然周」，日期预取
+     * 还要再读前后两个锚点。逐个窗口走 [getReviewOverview] 会产生 N 次桥往返与
+     * 4N 条 Room 查询；批量接口把窗口合并成区间并集，每张表只扫一次，
+     * 返回顺序与请求顺序严格一致。
+     *
+     * 任一请求的 `scope` 不在白名单内即整体 reject：部分成功会让页面拿到与请求
+     * 错位的数组，比直接失败更难排查。
+     */
+    @ReactMethod
+    fun getReviewOverviews(requests: com.facebook.react.bridge.ReadableArray, promise: Promise) {
+        val specs = ArrayList<ReviewOverviewReader.Request>(requests.size())
+        for (index in 0 until requests.size()) {
+            val map = requests.getMap(index)
+            if (map == null) {
+                promise.reject("E_INVALID_REVIEW_REQUEST", "Review request #$index is null")
+                return
+            }
+            val scope = map.getString("scope") ?: ""
+            if (scope !in BridgeMappers.REVIEW_SCOPES) {
+                promise.reject("E_INVALID_SCOPE", "Unknown review scope: $scope")
+                return
+            }
+            val periodsBack = if (map.hasKey("periodsBack")) map.getDouble("periodsBack") else 0.0
+            val anchorDate = if (map.hasKey("anchorDate")) map.getString("anchorDate") else null
+            specs.add(ReviewOverviewReader.Request(scope, periodsBack.toLong(), anchorDate))
+        }
+        readReviewOverviews(specs, promise)
+    }
 
     /**
-     * scope → 窗口。日期键与 DAO 查询区间来自同一套日历推进，二者不会错位。
-     * 当传入 anchorDate 时，窗口落在该日期：单日 / 该周 / 该月。
+     * 读取并聚合多个窗口。
+     *
+     * 聚合（逐条记录按窗口过滤、按科目分桶、排序）是 O(记录数) 的纯计算，必须离开
+     * 主线程：旧实现把这一步留在 `Dispatchers.Main.immediate` 上，月度窗口数据一多，
+     * 一次日期切换就会阻塞 UI 线程。Room 扫描本身在 [YanjiRepository.readCompletedStatsRows]
+     * 的 IO 事务里完成，这里只负责把计算放到 Default。
      */
-    private fun reviewWindow(scope: String, periodsBack: Long, anchorDate: String? = null): ReviewWindow {
-        val anchorLocalDate = anchorDate?.let { dateStr ->
+    private fun readReviewOverviews(
+        requests: List<ReviewOverviewReader.Request>,
+        promise: Promise
+    ) {
+        if (requests.isEmpty()) {
+            promise.resolve(Arguments.createArray())
+            return
+        }
+        this.scope.launch {
             try {
-                java.time.LocalDate.parse(dateStr, YanjiTime.isoDateFormatter)
-            } catch (_: Exception) {
-                null
-            }
-        } ?: YanjiTime.today()
-        val zoneId = java.time.ZoneId.systemDefault()
-
-        return when (scope) {
-            BridgeMappers.SCOPE_TODAY -> {
-                val range = com.example.yanji.data.EpochRange(
-                    anchorLocalDate.atStartOfDay(zoneId).toInstant().toEpochMilli(),
-                    anchorLocalDate.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
-                )
-                ReviewWindow(range, BridgeMappers.rollingWindowDates(anchorLocalDate, 1))
-            }
-            BridgeMappers.SCOPE_CALENDAR_WEEK -> {
-                val monday = anchorLocalDate.minusWeeks(periodsBack)
-                    .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
-                val sunday = monday.plusDays(6L)
-                val range = com.example.yanji.data.EpochRange(
-                    monday.atStartOfDay(zoneId).toInstant().toEpochMilli(),
-                    sunday.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
-                )
-                ReviewWindow(range, BridgeMappers.rollingWindowDates(monday, 7))
-            }
-            BridgeMappers.SCOPE_CALENDAR_MONTH -> {
-                val first = anchorLocalDate.minusMonths(periodsBack).withDayOfMonth(1)
-                val last = first.withDayOfMonth(first.lengthOfMonth())
-                val range = com.example.yanji.data.EpochRange(
-                    first.atStartOfDay(zoneId).toInstant().toEpochMilli(),
-                    last.plusDays(1L).atStartOfDay(zoneId).toInstant().toEpochMilli()
-                )
-                ReviewWindow(
-                    range,
-                    BridgeMappers.rollingWindowDates(first, first.lengthOfMonth())
+                // 连 WritableMap 装配也留在 Default：批量预取一次可能返回近十个窗口，
+                // 在主线程拼装数组与每日分布只会白白占用首帧之后的 UI 时间。
+                val payload = withContext(Dispatchers.Default) {
+                    val overviews = ReviewOverviewReader.read(repository, requests)
+                    Arguments.createArray().apply {
+                        overviews.forEach { pushMap(reviewOverviewMap(it)) }
+                    }
+                }
+                promise.resolve(payload)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject(
+                    "E_REVIEW_OVERVIEW",
+                    error.message ?: "Failed to read review overview",
+                    error
                 )
             }
-            else -> throw IllegalArgumentException("Unsupported review scope: $scope")
         }
     }
 

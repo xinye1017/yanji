@@ -1,6 +1,8 @@
 package com.example.yanji
 
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.yanji.bridge.LaunchPreheat
 import com.facebook.react.ReactActivity
@@ -21,7 +23,13 @@ class MainActivity : ReactActivity() {
         val splashScreen = installSplashScreen()
         // 宿主在 Application.onCreate 就开始预热了；这里只做有界等待，让首帧直接拿到
         // 真实数据。等待期间系统启动窗口仍在显示，用户看到的是「启动中」而不是空页面。
+        val waitStartedAt = SystemClock.elapsedRealtime()
         LaunchPreheat.awaitSettled()
+        Log.i(
+            "YanjiStartup",
+            "preheat wait ${SystemClock.elapsedRealtime() - waitStartedAt}ms, " +
+                "settled=${LaunchPreheat.hasSettled}, props=${LaunchPreheat.launchProperties != null}"
+        )
         super.onCreate(savedInstanceState)
         // 万一等待超时（异常慢的盘上），启动画面继续持有到预热真正结束，
         // 避免首页先闪一屏「正在读取」。

@@ -4,15 +4,16 @@
  * Composition order (outermost -> innermost):
  *   YanjiThemeProvider      resolves light/dark from the native preference
  *     NavigationProvider    three-tab shell state + overlay state
- *       AppShell            keeps every tab screen mounted and overlays
- *                           secondary layers (settings / task editor) on top
+ *       AppShell            mounts each tab on first visit and keeps it mounted,
+ *                           then overlays secondary layers (settings / task editor)
  *
- * The three tab screens stay mounted and share one full-size content area for
- * the whole session. Inactive panes are transparent and isolated
- * from touch and accessibility, so a Record Moment draft, the Focus
- * subject/duration choice and the Review date all survive a tab switch. The
- * running focus session is owned by the Kotlin business layer, so switching
- * tabs can never interrupt the timer.
+ * A tab screen is mounted the first time it becomes active and stays mounted for
+ * the rest of the session. Inactive panes are transparent and isolated from touch
+ * and accessibility, so a Record Moment draft, the Focus subject/duration choice
+ * and the Review date all survive a tab switch. Deferring the first mount keeps
+ * the Focus dial and Review charts out of the cold-start first-frame budget,
+ * where only Today is visible anyway. The running focus session is owned by the
+ * Kotlin business layer, so switching tabs can never interrupt the timer.
  *
  * The props are the host's launch options: `MainActivity.getLaunchOptions()`
  * hands over today's snapshot, read before the first frame, so Today never
@@ -20,13 +21,14 @@
  * then falls back to the regular bridged reads.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { AppState, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurTarget } from 'react-native-blur-overlay';
 import { YanjiLiquidGlass } from './src/theme/liquidGlass';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
 import { NavigationProvider, useNavigationActions, useNavigationState } from './src/navigation/NavigationShell';
+import type { TabKey } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -73,6 +75,21 @@ function AppShell(): React.JSX.Element {
   const { closeSettings, closeTaskEditor, selectTab } = useNavigationActions();
   const [foreground, setForeground] = useState(() => AppState.currentState === 'active');
   const [foregroundRevision, setForegroundRevision] = useState(0);
+  /**
+   * 首次进入某个 Tab 时才挂载它的页面。
+   *
+   * 三个页面都会保持挂载（状态、滚动位置与草稿不丢），但没有理由在启动瞬间
+   * 把所有三个完整页面树都渲染一遍：专注页的圆环 / 刻度盘与回顾页的图表在用户
+   * 还停留在启动画面时就消耗了首帧预算。挂载后它们与旧行为完全一致。
+   */
+  const [mountedTabs, setMountedTabs] = useState<ReadonlySet<TabKey>>(
+    () => new Set<TabKey>([activeTab])
+  );
+  useLayoutEffect(() => {
+    setMountedTabs(previous =>
+      previous.has(activeTab) ? previous : new Set(previous).add(activeTab)
+    );
+  }, [activeTab]);
   // Session listeners are low-frequency native state transitions, never second ticks.
   // Paused sessions remain immersive; another tab must keep the glass dock visible.
   const activeSession = useActiveSession(foreground && activeTab === 'focus' && !settingsOpen);
@@ -160,16 +177,22 @@ function AppShell(): React.JSX.Element {
         {/* Keep the safe-area padding outside the absolute-positioning parent. */}
         <View testID="tab-content" style={{ flex: 1 }}>
           <TabPane testID="pane-today" active={foreground && !settingsOpen && activeTab === 'today'}>
-            <TodayScreen
-              visible={foreground && !settingsOpen && activeTab === 'today'}
-              foregroundRevision={foregroundRevision}
-            />
+            {mountedTabs.has('today') ? (
+              <TodayScreen
+                visible={foreground && !settingsOpen && activeTab === 'today'}
+                foregroundRevision={foregroundRevision}
+              />
+            ) : null}
           </TabPane>
           <TabPane testID="pane-focus" active={foreground && !settingsOpen && activeTab === 'focus'}>
-            <FocusScreen visible={foreground && !settingsOpen && activeTab === 'focus'} />
+            {mountedTabs.has('focus') ? (
+              <FocusScreen visible={foreground && !settingsOpen && activeTab === 'focus'} />
+            ) : null}
           </TabPane>
           <TabPane testID="pane-review" active={foreground && !settingsOpen && activeTab === 'review'}>
-            <ReviewScreen visible={foreground && !settingsOpen && activeTab === 'review'} />
+            {mountedTabs.has('review') ? (
+              <ReviewScreen visible={foreground && !settingsOpen && activeTab === 'review'} />
+            ) : null}
           </TabPane>
         </View>
       </BlurTarget>

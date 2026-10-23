@@ -19,6 +19,7 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
+  prefetchDailySnapshots, prefetchReviewOverviews,
   refreshDailySnapshot, refreshReviewOverview,
   useDailyReadFailed, useDailySnapshot,
   useReviewDataVisibility, useReviewOverview, useReviewReadFailed, useSettingsSnapshot,
@@ -129,6 +130,57 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     ),
     [date, today, weekOverview]
   );
+
+  /**
+   * 预取计划：让「切日期」的第一帧就命中真实数据。
+   *
+   * 一次切日期需要当前窗口、环比窗口和所选日所在自然周；再往前/后各预取一个锚点，
+   * 用户按下 ‹ / › 时目标窗口已经在热缓存里。所有窗口由原生侧合并成一次区间扫描，
+   * 不是 N 次独立查询。
+   *
+   * 每日快照只为「下一步可能点到的日期」预取：时间线按天翻，趋势图的当日视图
+   * 还要画小时分布；其他粒度下当前日期已由页面读取，不必重复。
+   */
+  const prefetchPlan = useMemo(() => {
+    const previousAnchor = scope === 'TODAY'
+      ? shiftIsoDate(date, -1)
+      : scope === 'CALENDAR_WEEK' ? shiftIsoDate(date, -7) : shiftMonthAnchor(date, -1);
+    const nextAnchor = scope === 'TODAY'
+      ? stepForwardWithinToday(shiftIsoDate(date, 1), today)
+      : scope === 'CALENDAR_WEEK'
+        ? stepForwardWithinToday(shiftIsoDate(date, 7), today)
+        : stepMonthForwardWithinToday(date, today);
+    const anchors = [date, previousAnchor, nextAnchor]
+      .filter((anchor, index, all) => all.indexOf(anchor) === index);
+    const requests = new Map<string, { scope: ReviewScope; periodsBack: number; anchorDate: string }>();
+    anchors.forEach(anchor => {
+      [
+        { scope, periodsBack: 0, anchorDate: anchor },
+        previousWindowArgs(scope, anchor),
+        // 时间线的周点阵读的是所选日所在的自然周；一并预取，切回时间线也不闪空。
+        { scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: anchor },
+      ].forEach(request => {
+        requests.set(`${request.scope}:${request.periodsBack}:${request.anchorDate}`, request);
+      });
+    });
+    const dailyDates = view === 'timeline'
+      ? [shiftIsoDate(date, -1), date, stepForwardWithinToday(shiftIsoDate(date, 1), today)]
+      : scope === 'TODAY' ? anchors : [date];
+    return {
+      requests: [...requests.values()],
+      dailyDates: dailyDates.filter((item, index, all) => all.indexOf(item) === index),
+    };
+  }, [date, scope, today, view]);
+
+  useEffect(() => {
+    if (!visible) return;
+    // 排到下一拍执行：当前帧先画完，连续切换只保留最后一次计划，避免拖动日期时堆积请求。
+    const timer = setTimeout(() => {
+      void prefetchReviewOverviews(prefetchPlan.requests);
+      void prefetchDailySnapshots(prefetchPlan.dailyDates);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [visible, prefetchPlan]);
 
   /**
    * Re-reads what the banner is complaining about.

@@ -1,6 +1,8 @@
 package com.example.yanji
 
 import android.app.Application
+import android.os.SystemClock
+import android.util.Log
 import com.example.yanji.bridge.LaunchPreheat
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.bridge.YanjiPackage
@@ -65,5 +67,24 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
         // 预热必须在 Repository 就绪之后立刻开始：它读的正是 Repository 背后的同一份 Room
         // 数据，Activity 的首帧会等它（见 MainActivity.onCreate）。
         LaunchPreheat.start()
+        // 同时把 JS 引擎也提前拉起来。ReactHost.start() 按 RN 官方语义就是
+        // 「在首个 surface 需要渲染前，先在后台创建 ReactInstance 并执行 bundle」：
+        // 它不挂载任何视图，真正的 initialProperties 仍在 createSurface 时交给根组件。
+        //
+        // 这一步把原本串行的两段时间并行掉：以前 Activity 会先阻塞等待 Room 预热
+        // （最多 1s），之后才开始加载 Hermes 与 bundle；现在 JS 启动与 Room 预热同时进行，
+        // 启动画面停留时间由「预热 + RN 启动」缩短为两者中较慢的那个。
+        val startedAt = SystemClock.elapsedRealtime()
+        try {
+            reactHost.start()
+            Log.i(TAG, "ReactHost preload requested at +${SystemClock.elapsedRealtime() - startedAt}ms")
+        } catch (error: Exception) {
+            // 预加载失败不改变语义：Activity 创建 surface 时仍会按正常路径重试并暴露真实错误。
+            Log.w(TAG, "ReactHost preload failed; the activity will start it normally", error)
+        }
+    }
+
+    private companion object {
+        const val TAG = "YanjiStartup"
     }
 }

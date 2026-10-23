@@ -6,11 +6,12 @@
  * from the Today screen top-right header. Achievements, check-ins, mascots and
  * rankings are removed from primary navigation entirely.
  *
- * State discipline: the three tab screens stay mounted for the whole session
- * (App.tsx stacks them with absoluteFill and isolates inactive panes), so tab switches
- * preserve in-progress input. Settings and the task editor are overlay layers
- * on top of that mounted content, never route replacements. Android back
- * dismisses the topmost overlay before it is allowed to leave the app.
+ * State discipline: each tab screen is mounted on its first visit and stays
+ * mounted for the rest of the session (App.tsx stacks the panes with absoluteFill
+ * and isolates inactive ones), so tab switches preserve in-progress input. Settings
+ * and the task editor are overlay layers on top of that mounted content, never
+ * route replacements. Android back dismisses the topmost overlay before it is
+ * allowed to leave the app.
  *
  * The running focus session itself lives in the Kotlin business layer
  * (ActiveSessionCoordinator), never in React state, so switching tabs can

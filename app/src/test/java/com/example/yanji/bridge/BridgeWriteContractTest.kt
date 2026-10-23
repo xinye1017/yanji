@@ -92,6 +92,11 @@ class BridgeWriteContractTest {
         assertFalse("collectFirst 必须保持删除状态", code.contains("collectFirst"))
         assertFalse("FirstEmissionException 必须保持删除状态", code.contains("FirstEmissionException"))
         assertFalse("不得引入在 collector 里 throw 来中断采集的写法", code.contains("throw FirstEmission"))
-        assertTrue("必须保留 kotlinx.coroutines.flow.first 导入", code.contains("import kotlinx.coroutines.flow.first"))
+        // 回顾概览已改为一次性的批量投影读取（仓库层 suspend 事务），
+        // 不再需要 Flow 的 `.first()`；关键是仍然不靠 collector 抛异常来结束采集。
+        assertTrue(
+            "回顾概览必须走一次性的批量读取器",
+            code.contains("ReviewOverviewReader.read(repository, requests)")
+        )
     }
 }

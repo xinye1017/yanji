@@ -3,16 +3,12 @@ import type {
   DailySnapshot,
   ExamCountdown,
   ReviewOverview,
-  ReviewScope,
+  ReviewOverviewRequest,
   UserSettings,
   YanjiLaunchProperties,
 } from '../bridge';
 
-export interface ReviewRequestKey {
-  scope: ReviewScope;
-  periodsBack: number;
-  anchorDate: string;
-}
+export type ReviewRequestKey = ReviewOverviewRequest;
 
 interface SettingsSnapshot {
   settings: UserSettings;
@@ -21,11 +17,7 @@ interface SettingsSnapshot {
 
 interface DataRefreshLoaders {
   getDailySnapshot(date: string): Promise<DailySnapshot>;
-  getReviewOverview(
-    scope: ReviewScope,
-    periodsBack: number,
-    anchorDate: string
-  ): Promise<ReviewOverview>;
+  getReviewOverviews(requests: ReviewOverviewRequest[]): Promise<ReviewOverview[]>;
   getUserSettings(): Promise<UserSettings>;
   getExamCountdown(): Promise<ExamCountdown>;
 }
@@ -37,11 +29,35 @@ function reviewRequestId(request: ReviewRequestKey): string {
 }
 
 /**
+ * 保留多少份「已经没人看」的快照作为热缓存。
+ *
+ * 回顾页一次切日期要三个窗口（当前 / 环比 / 所选日所在周），预取还会额外读前后
+ * 两个锚点。保留最近若干份，往回翻再翻回来就是同步命中；上限存在的原因是
+ * `DailySnapshot` 自带当天的专注 / 计划 / 随笔明细，不能无界积累。
+ */
+const RETAINED_DAILY_LIMIT = 10;
+const RETAINED_REVIEW_LIMIT = 24;
+
+/**
  * Coordinates the app's Room-backed reads. This module has no React Native
  * imports so the same source can be exercised from Node.
+ *
+ * 快照的生命周期分三层，目的只有一个：页面切到某个日期 / 窗口时第一帧就有数据。
+ *
+ *  1. **live**：仍有读取方（可见页面或已挂载页面的订阅）在看的条目；
+ *  2. **retained**：读取方离开后降级保留的热缓存；再次挂载直接命中，同时在
+ *     dirty 时并行刷新（stale-while-revalidate）；
+ *  3. **prefetched**：页面为相邻日期主动预取的结果，从未被读过也可以直接命中。
+ *
+ * 三层都共享同一份失效事实（`dailyDirty` / `reviewDirty`）：Room 表一变，
+ * 已保留的条目一律标脏，下一次可见读取会用真实数据覆盖，绝不把旧快照当最终答案。
  */
 export class DataRefreshCoordinator {
   private readonly dailyValues = new Map<string, DailySnapshot>();
+  private readonly dailyRetained = new Map<string, DailySnapshot>();
+  private readonly dailyRetainedDirty = new Set<string>();
+  /** Dates whose live value came from the launch payload and has not been confirmed by a read. */
+  private readonly dailySeeded = new Set<string>();
   private readonly dailyListeners = new Map<string, Set<Listener>>();
   private readonly dailyReaders = new Map<string, string>();
   private readonly dailyDirty = new Set<string>();
@@ -59,6 +75,8 @@ export class DataRefreshCoordinator {
   private readonly dailyReadFailed = new Set<string>();
 
   private readonly reviewValues = new Map<string, ReviewOverview>();
+  private readonly reviewRetained = new Map<string, ReviewOverview>();
+  private readonly reviewRetainedDirty = new Set<string>();
   private readonly reviewRequests = new Map<string, ReviewRequestKey>();
   private readonly reviewListeners = new Map<string, Set<Listener>>();
   private readonly reviewReaders = new Map<string, string[]>();
@@ -115,9 +133,9 @@ export class DataRefreshCoordinator {
    *
    * 日期对不上的快照（跨过午夜）直接丢弃——宁可按原路径重新读。
    *
-   * 只填**空槽**：缓存里已经有值，说明桥接读已经回来过，那才是更新的数据。
-   * 因此重复调用是幂等的，不需要「一生只 seed 一次」的门闩（那个门闩反而会让
-   * Activity 重挂载后的新根组件既拿不到预热数据、也不再触发读取）。
+   * 只填**空槽**：内存里已经有值（包括已保留的热缓存），说明那是本进程真实读回来的，
+   * 比进程启动时的载荷更新。因此重复调用是幂等的，不需要「一生只 seed 一次」的门闩
+   * （那个门闩反而会让 Activity 重挂载后的新根组件既拿不到预热数据、也不再触发读取）。
    *
    * 新鲜度分两种情况，因为宿主载荷只读一次（`Application.onCreate`），之后不会更新：
    *  - **本进程首次播种**：载荷与 Room 的偏差只有启动那一瞬，可信。保持不脏，
@@ -138,9 +156,10 @@ export class DataRefreshCoordinator {
     const stale = this.hasSeeded;
     this.hasSeeded = true;
 
-    // 只填空槽：已有值说明桥接读回来过，那才是更新的数据，绝不用旧载荷覆盖它。
-    if (date && daily && daily.date === date && !this.dailyValues.has(date)) {
+    // 只填空槽：已有值说明本进程真实读过，绝不用旧载荷覆盖它。
+    if (date && daily && daily.date === date && !this.hasDailyValue(date)) {
       this.dailyValues.set(date, daily);
+      this.dailySeeded.add(date);
       if (stale) this.dailyDirty.add(date);
       else this.dailyDirty.delete(date);
     }
@@ -151,7 +170,7 @@ export class DataRefreshCoordinator {
   }
 
   getDailySnapshot(date: string): DailySnapshot | null {
-    return this.dailyValues.get(date) ?? null;
+    return this.dailyValues.get(date) ?? this.dailyRetained.get(date) ?? null;
   }
 
   /**
@@ -193,8 +212,26 @@ export class DataRefreshCoordinator {
     return Promise.resolve();
   }
 
+  /**
+   * 预取若干日期的每日快照。
+   *
+   * 只为「下一步可能切到」的日期服务：当前日期正在被读取时不会重复发请求，
+   * 已经新鲜的数据也不会重读。失败不产生失败横幅——页面真正切过去时还会按
+   * 正常的可见读取路径重试一次。
+   */
+  async prefetchDailySnapshots(dates: ReadonlyArray<string>): Promise<void> {
+    if (!this.foreground) return;
+    const wanted: string[] = [];
+    for (const date of dates) {
+      if (this.isDailyFresh(date) || this.dailyInFlight.has(date) || wanted.includes(date)) continue;
+      wanted.push(date);
+    }
+    await Promise.all(wanted.map(date => this.startDailyRead(date)));
+  }
+
   getReviewOverview(request: ReviewRequestKey): ReviewOverview | null {
-    return this.reviewValues.get(reviewRequestId(request)) ?? null;
+    const id = reviewRequestId(request);
+    return this.reviewValues.get(id) ?? this.reviewRetained.get(id) ?? null;
   }
 
   /** Whether the last completed read for this window failed (see `getDailyReadFailed`). */
@@ -229,11 +266,12 @@ export class DataRefreshCoordinator {
     }
     if (nextIds.length > 0) {
       this.reviewReaders.set(readerId, nextIds);
-      for (const id of nextIds) {
-        if (this.reviewDirty.has(id) || !this.reviewValues.has(id)) {
-          void this.ensureReview(id);
-        }
-      }
+      // 一次切换涉及的三个窗口合并成一次桥调用：它们共享同一次区间扫描。
+      // 已经有新鲜值（预取命中）的窗口不再重读。后台注册只登记不读取，
+      // 由 `handleForeground` 在回到前台的那次跳变上补读。
+      if (!this.foreground) return;
+      const wanted = nextIds.filter(id => !this.isReviewFresh(id) && !this.reviewInFlight.has(id));
+      if (wanted.length > 0) void this.readReviewIds(wanted);
     }
   }
 
@@ -244,6 +282,27 @@ export class DataRefreshCoordinator {
     if (this.isReviewVisible(id)) return this.ensureReview(id);
     this.pruneReview(id);
     return Promise.resolve();
+  }
+
+  /**
+   * 预取若干回顾窗口（相邻日期、环比窗口等）。
+   *
+   * 这是「切日期第一帧直接出数」的关键：预取结果进入热缓存，页面下一次渲染时
+   * `getReviewOverview` 同步命中，不会先画一个「—」再等桥回来。批量接口把
+   * 所有预取窗口合并成一个区间并集，每张表只扫一次。
+   *
+   * 已经在读取中的窗口不会重复请求；已经新鲜（未失效）的窗口不会重读。
+   */
+  async prefetchReviewOverviews(requests: ReadonlyArray<ReviewRequestKey>): Promise<void> {
+    if (!this.foreground) return;
+    const wanted: string[] = [];
+    for (const request of requests) {
+      const id = reviewRequestId(request);
+      this.reviewRequests.set(id, request);
+      if (this.isReviewFresh(id) || this.reviewInFlight.has(id) || wanted.includes(id)) continue;
+      wanted.push(id);
+    }
+    if (wanted.length > 0) await this.readReviewIds(wanted);
   }
 
   getSettingsSnapshot(): SettingsSnapshot | null {
@@ -309,7 +368,11 @@ export class DataRefreshCoordinator {
 
     if (events.has('sessions') || events.has('subjects')) {
       for (const id of this.knownReviewIds()) this.invalidateReview(id);
-      for (const id of this.visibleReviewIds()) void this.ensureReview(id);
+      if (this.foreground) {
+        const viewable = [...this.visibleReviewIds()]
+          .filter(id => !this.isReviewFresh(id) && this.reviewRequests.has(id));
+        if (viewable.length > 0) void this.readReviewIds(viewable);
+      }
     }
 
     if (events.has('settings')) {
@@ -327,23 +390,42 @@ export class DataRefreshCoordinator {
    * just started.
    */
   private handleForeground(): void {
-    for (const date of this.visibleDailyDates()) {
-      this.invalidateDaily(date);
-      void this.ensureDaily(date);
-    }
-    for (const id of this.visibleReviewIds()) {
-      this.invalidateReview(id);
-      void this.ensureReview(id);
-    }
+    // 后台期间可能错过了 Room 变更通知：所有保留条目（含热缓存）先标脏，
+    // 但只对当前可见的条目立即重读；不可见的等下次挂载时再刷新。
+    for (const date of this.knownDailyDates()) this.invalidateDaily(date);
+    for (const date of this.visibleDailyDates()) void this.ensureDaily(date);
+    for (const id of this.knownReviewIds()) this.invalidateReview(id);
+    const viewable = [...this.visibleReviewIds()]
+      .filter(id => !this.isReviewFresh(id) && this.reviewRequests.has(id));
+    if (viewable.length > 0) void this.readReviewIds(viewable);
     if (this.settingsReaders.size > 0) {
       this.invalidateSettings();
       void this.ensureSettings();
     }
   }
 
-  private async ensureDaily(date: string): Promise<void> {
-    if (!this.foreground || !this.isDailyVisible(date)) return;
-    if (!this.dailyDirty.has(date) && this.dailyValues.has(date)) return;
+  private hasDailyValue(date: string): boolean {
+    return this.dailyValues.has(date) || this.dailyRetained.has(date);
+  }
+
+  private isDailyFresh(date: string): boolean {
+    if (this.dailyValues.has(date) && !this.dailyDirty.has(date)) return true;
+    return this.dailyRetained.has(date) && !this.dailyRetainedDirty.has(date);
+  }
+
+  private ensureDaily(date: string): Promise<void> {
+    if (!this.foreground || !this.isDailyVisible(date)) return Promise.resolve();
+    if (this.isDailyFresh(date)) return Promise.resolve();
+    const existing = this.dailyInFlight.get(date);
+    if (existing) return existing;
+    return this.startDailyRead(date);
+  }
+
+  /**
+   * 启动一次真实读取。可见读取与预取共用同一个 in-flight 槽位，
+   * 因此两者不会对同一个日期各发一次请求。
+   */
+  private startDailyRead(date: string): Promise<void> {
     const existing = this.dailyInFlight.get(date);
     if (existing) return existing;
 
@@ -352,6 +434,9 @@ export class DataRefreshCoordinator {
       .then(snapshot => {
         if ((this.dailyVersions.get(date) ?? 0) !== version) return;
         this.dailyValues.set(date, snapshot);
+        this.dailySeeded.delete(date);
+        this.dailyRetained.delete(date);
+        this.dailyRetainedDirty.delete(date);
         this.dailyDirty.delete(date);
         // A real read landed, so the value is trustworthy again — and pages that
         // showed 「数据可能不是最新」 must be told to take the banner down.
@@ -378,42 +463,75 @@ export class DataRefreshCoordinator {
     return request;
   }
 
-  private async ensureReview(id: string): Promise<void> {
-    if (!this.foreground || !this.isReviewVisible(id)) return;
-    const requestKey = this.reviewRequests.get(id);
-    if (!requestKey) return;
-    if (!this.reviewDirty.has(id) && this.reviewValues.has(id)) return;
+  private isReviewFresh(id: string): boolean {
+    if (this.reviewValues.has(id) && !this.reviewDirty.has(id)) return true;
+    return this.reviewRetained.has(id) && !this.reviewRetainedDirty.has(id);
+  }
+
+  private ensureReview(id: string): Promise<void> {
+    if (!this.foreground || !this.isReviewVisible(id)) return Promise.resolve();
+    if (!this.reviewRequests.has(id)) return Promise.resolve();
+    if (this.isReviewFresh(id)) return Promise.resolve();
     const existing = this.reviewInFlight.get(id);
     if (existing) return existing;
+    return this.readReviewIds([id]);
+  }
 
-    const version = this.reviewVersions.get(id) ?? 0;
-    const request = this.loaders.getReviewOverview(
-      requestKey.scope,
-      requestKey.periodsBack,
-      requestKey.anchorDate
-    )
-      .then(overview => {
-        if ((this.reviewVersions.get(id) ?? 0) !== version) return;
-        this.reviewValues.set(id, overview);
-        this.reviewDirty.delete(id);
-        this.reviewReadFailed.delete(id);
-        this.notify(this.reviewListeners, id);
+  /**
+   * 批量读取一组窗口。所有窗口在同一次原生调用里共享一次区间扫描，
+   * 每个 id 仍按自己的版本号判断结果是否已经过期。
+   */
+  private readReviewIds(ids: ReadonlyArray<string>): Promise<void> {
+    const entries = ids
+      // 已经在读的窗口不重复发请求：失效已经由版本号记录，旧读取完成时
+      // 会因为版本不匹配被丢弃，并在 finally 里按需补一次新读取。
+      .filter(id => !this.reviewInFlight.has(id))
+      .map(id => ({
+        id,
+        request: this.reviewRequests.get(id),
+        version: this.reviewVersions.get(id) ?? 0,
+      }))
+      .filter((entry): entry is { id: string; request: ReviewRequestKey; version: number } =>
+        entry.request !== undefined
+      );
+    if (entries.length === 0) return Promise.resolve();
+
+    const request = this.loaders
+      .getReviewOverviews(entries.map(entry => entry.request))
+      .then(overviews => {
+        entries.forEach((entry, index) => {
+          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version) return;
+          const overview = overviews[index];
+          if (!overview) return;
+          this.reviewValues.set(entry.id, overview);
+          this.reviewRetained.delete(entry.id);
+          this.reviewRetainedDirty.delete(entry.id);
+          this.reviewDirty.delete(entry.id);
+          this.reviewReadFailed.delete(entry.id);
+          this.notify(this.reviewListeners, entry.id);
+        });
       })
       .catch(() => {
-        if ((this.reviewVersions.get(id) ?? 0) !== version) return;
-        this.reviewDirty.add(id);
-        this.reviewReadFailed.add(id);
-        this.notify(this.reviewListeners, id);
+        entries.forEach(entry => {
+          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version) return;
+          this.reviewDirty.add(entry.id);
+          this.reviewReadFailed.add(entry.id);
+          this.notify(this.reviewListeners, entry.id);
+        });
       })
       .finally(() => {
-        if (this.reviewInFlight.get(id) === request) this.reviewInFlight.delete(id);
-        if ((this.reviewVersions.get(id) ?? 0) !== version && this.isReviewVisible(id)) {
-          void this.ensureReview(id);
-        } else {
-          this.pruneReview(id);
-        }
+        entries.forEach(entry => {
+          if (this.reviewInFlight.get(entry.id) === request) this.reviewInFlight.delete(entry.id);
+        });
+        entries.forEach(entry => {
+          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version && this.isReviewVisible(entry.id)) {
+            void this.ensureReview(entry.id);
+          } else {
+            this.pruneReview(entry.id);
+          }
+        });
       });
-    this.reviewInFlight.set(id, request);
+    entries.forEach(entry => this.reviewInFlight.set(entry.id, request));
     return request;
   }
 
@@ -449,11 +567,13 @@ export class DataRefreshCoordinator {
   private invalidateDaily(date: string): void {
     this.dailyVersions.set(date, (this.dailyVersions.get(date) ?? 0) + 1);
     this.dailyDirty.add(date);
+    if (this.dailyRetained.has(date)) this.dailyRetainedDirty.add(date);
   }
 
   private invalidateReview(id: string): void {
     this.reviewVersions.set(id, (this.reviewVersions.get(id) ?? 0) + 1);
     this.reviewDirty.add(id);
+    if (this.reviewRetained.has(id)) this.reviewRetainedDirty.add(id);
   }
 
   private invalidateSettings(): void {
@@ -464,6 +584,7 @@ export class DataRefreshCoordinator {
   private knownDailyDates(): Set<string> {
     return new Set([
       ...this.dailyValues.keys(),
+      ...this.dailyRetained.keys(),
       ...this.dailyReaders.values(),
       ...this.dailyListeners.keys(),
       ...this.dailyInFlight.keys(),
@@ -477,6 +598,7 @@ export class DataRefreshCoordinator {
   private knownReviewIds(): Set<string> {
     return new Set([
       ...this.reviewValues.keys(),
+      ...this.reviewRetained.keys(),
       ...Array.from(this.reviewReaders.values()).flat(),
       ...this.reviewListeners.keys(),
       ...this.reviewInFlight.keys(),
@@ -520,6 +642,13 @@ export class DataRefreshCoordinator {
     if (this.isDailyVisible(date) || this.dailyListeners.has(date) || this.dailyInFlight.has(date)) {
       return;
     }
+    const value = this.dailyValues.get(date);
+    if (value) {
+      // 启动载荷不是本进程的读取结果：降级为热缓存时必须标脏，
+      // 让下一次挂载用真实读取确认，而不是把进程启动时的快照当成最终答案。
+      this.retainDaily(date, value, this.dailyDirty.has(date) || this.dailySeeded.has(date));
+    }
+    this.dailySeeded.delete(date);
     this.dailyValues.delete(date);
     this.dailyDirty.delete(date);
     this.dailyVersions.delete(date);
@@ -528,15 +657,52 @@ export class DataRefreshCoordinator {
     this.dailyReadFailed.delete(date);
   }
 
+  private retainDaily(date: string, snapshot: DailySnapshot, dirty: boolean): void {
+    // delete + set 把该条移到 Map 尾部，淘汰时从最旧的一份开始。
+    this.dailyRetained.delete(date);
+    this.dailyRetained.set(date, snapshot);
+    if (dirty) this.dailyRetainedDirty.add(date);
+    else this.dailyRetainedDirty.delete(date);
+    while (this.dailyRetained.size > RETAINED_DAILY_LIMIT) {
+      const oldest = this.dailyRetained.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.dailyRetained.delete(oldest);
+      this.dailyRetainedDirty.delete(oldest);
+    }
+  }
+
   private pruneReview(id: string): void {
     if (this.isReviewVisible(id) || this.reviewListeners.has(id) || this.reviewInFlight.has(id)) {
       return;
     }
+    const value = this.reviewValues.get(id);
+    if (value) {
+      this.retainReview(id, value, this.reviewDirty.has(id));
+    } else {
+      // No value ever landed (or it was already released): the request key is no
+      // longer needed and would otherwise grow with every window the user browses.
+      this.reviewRequests.delete(id);
+    }
     this.reviewValues.delete(id);
     this.reviewDirty.delete(id);
     this.reviewVersions.delete(id);
-    this.reviewRequests.delete(id);
+    // Keep `reviewRequests` only for retained entries: it is the key needed to
+    // refresh the window if a later mount finds it dirty.
     this.reviewReadFailed.delete(id);
+  }
+
+  private retainReview(id: string, overview: ReviewOverview, dirty: boolean): void {
+    this.reviewRetained.delete(id);
+    this.reviewRetained.set(id, overview);
+    if (dirty) this.reviewRetainedDirty.add(id);
+    else this.reviewRetainedDirty.delete(id);
+    while (this.reviewRetained.size > RETAINED_REVIEW_LIMIT) {
+      const oldest = this.reviewRetained.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.reviewRetained.delete(oldest);
+      this.reviewRetainedDirty.delete(oldest);
+      this.reviewRequests.delete(oldest);
+    }
   }
 
   private notify(listeners: Map<string, Set<Listener>>, key: string): void {

@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
+import androidx.room.withTransaction
 import java.time.LocalDate
 import java.util.UUID
 
@@ -70,20 +71,26 @@ class YanjiRepository private constructor() {
     @Volatile
     private var cachedAiApiKey: String = ""
 
+    /** 决策模型凭据是否存在的内存镜像（Keystore 解密在启动时只做一次）。 */
+    @Volatile
+    private var cachedHasDecisionApiKey: Boolean? = null
+
     /**
-     * 冷启动预热用的就绪信号：设置与学科的首次 DB 快照都已回灌进内存镜像。
+     * 冷启动预热用的就绪信号：设置、学科与凭据都已就绪。
      *
      * `settings` / `SubjectCatalog` 都是异步回灌的，没等它们就同步读出来的
-     * 「目标小时数」和「学科名」是默认值而不是用户真实配置。
+     * 「目标小时数」和「学科名」是默认值而不是用户真实配置；`hasDecisionApiKey`
+     * 需要一次 Keystore 解密，不等它就会把「已配置密钥」误报成未配置。
      */
     private val settingsHydrated = CompletableDeferred<Unit>()
     private val subjectsHydrated = CompletableDeferred<Unit>()
+    private val secretsHydrated = CompletableDeferred<Unit>()
 
     /**
      * 等待内存镜像与 DB 对齐。预热（见 `bridge/LaunchPreheat`）读快照前必须调用。
      */
     suspend fun awaitHydration() {
-        awaitAll(settingsHydrated, subjectsHydrated)
+        awaitAll(settingsHydrated, subjectsHydrated, secretsHydrated)
     }
 
     private val _subjects = MutableStateFlow(SubjectCatalog.all)
@@ -271,33 +278,10 @@ class YanjiRepository private constructor() {
         }
 
         repoScope.launch {
-            // 升级路径上从 v7 抢救出来的明文 API Key → Keystore 加密存储，随后删除明文文件。
-            // 移入后台 IO 协程执行，避免在冷启动主线程阻塞读取 Keystore 与磁盘。
-            val apiKey = withContext(Dispatchers.IO) {
-                secretStore?.migrateLegacyApiKeyIfPresent()
-                secretStore?.readAiApiKey().orEmpty()
-            }
-            cachedAiApiKey = apiKey
-            _settings.update { it.copy(aiApiKey = apiKey) }
-
-            // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
-            // 「没有学习记录」是合法业务状态，不能与「首次安装」混为一谈。
-            AppInitializer(db.userSettingsDao()).initialize()
-            // 早期删除承接副本时只删了副本，可能留下指向不存在任务的来源链接。
-            // 启动时幂等清理悬空链接，让原计划重新可见，同时保留其日期、完成状态和历史专注。
-            db.studyTaskDao().releaseDanglingCarryOverLinks(System.currentTimeMillis())
-            // Collect real-time DB changes
-            // NOTE: The DB is the source of truth. The in-memory StateFlows are a cache for
-            // synchronous reads from the UI. We unconditionally overwrite the cache with the
-            // latest DB snapshot. This means a user-initiated write that has not yet landed
-            // in the DB may briefly be overwritten by an in-flight DB emission, but the DB
-            // will re-emit once the write completes and the UI will converge. This is a
-            // known tradeoff: simpler than a merge-by-id strategy, and matches the previous
-            // behavior. The inconsistency window is sub-frame and only visible under
-            // rapid parallel writes.
-            // 专注/模考、日记的 DB 订阅由各自的 Store 负责
-            timerStore.bind(db)
-            noteStore.bind(db)
+            // 顺序即启动性能：预热只等「设置 / 学科 / 凭据」三件事，因此先把它们的
+            // DB 订阅挂上，而不是排在全表镜像与维护任务之后。Room 的查询线程池是
+            // 有限的（默认 4 条），先提交的查询先执行；把全表订阅放在前面会让冷启动
+            // 的 Room 就绪时间被 Focus/Note 全表读取挤占。
             launch {
                 db.userSettingsDao().getSettings().collect { entity ->
                     if (entity != null) {
@@ -307,7 +291,6 @@ class YanjiRepository private constructor() {
                     settingsHydrated.complete(Unit)
                 }
             }
-            checkInStore.bind(db)
             launch {
                 // 学科的 DB 订阅：内存镜像与 StateFlow 同步刷新。
                 // 表为空时不覆盖默认值——「用户删光学科」是合法状态，但首帧仍需有内容可展示。
@@ -320,6 +303,30 @@ class YanjiRepository private constructor() {
                     subjectsHydrated.complete(Unit)
                 }
             }
+
+            // Keystore 解密与 DB 回灌并行：它只影响设置载荷里的凭据标记，不该把
+            // 设置 / 学科的首次查询挡在后面。失败也必须释放就绪信号，否则预热会等到超时。
+            launch {
+                try {
+                    val apiKey = withContext(Dispatchers.IO) {
+                        secretStore?.migrateLegacyApiKeyIfPresent()
+                        secretStore?.readAiApiKey().orEmpty()
+                    }
+                    cachedAiApiKey = apiKey
+                    cachedHasDecisionApiKey = withContext(Dispatchers.IO) {
+                        secretStore?.readDecisionApiKey()?.isNotBlank() == true
+                    }
+                    _settings.update { it.copy(aiApiKey = apiKey) }
+                } finally {
+                    secretsHydrated.complete(Unit)
+                }
+            }
+
+            // 以下都不是首帧依赖：全表内存镜像、维护任务与成就重算。
+            // 它们仍在同一 IO 域并发执行，但已经不会再阻挡预热。
+            timerStore.bind(db)
+            noteStore.bind(db)
+            checkInStore.bind(db)
             launch {
                 db.achievementDao().getAllFlow().collect { entities ->
                     _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
@@ -331,6 +338,14 @@ class YanjiRepository private constructor() {
                 db.aiAnalysisDao().getAll().collect { entities ->
                     _aiAnalyses.value = entities.map { it.toDomainModel() }
                 }
+            }
+            launch {
+                // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
+                // 「没有学习记录」是合法业务状态，不能与「首次安装」混为一谈。
+                AppInitializer(db.userSettingsDao()).initialize()
+                // 早期删除承接副本时只删了副本，可能留下指向不存在任务的来源链接。
+                // 启动时幂等清理悬空链接，让原计划重新可见，同时保留其日期、完成状态和历史专注。
+                db.studyTaskDao().releaseDanglingCarryOverLinks(System.currentTimeMillis())
             }
             launch {
                 reconcileAchievements()
@@ -504,33 +519,24 @@ class YanjiRepository private constructor() {
 
     suspend fun getExamSessionByIdFromDb(id: String): ExamSessionEntity? = timerStore.getExamSessionByIdFromDb(id)
 
-    /** Range-bounded statistics sources. These queries use the startTime indexes and never
-     * materialize the full Focus/Exam history for week, month, or day views. */
-    internal fun observeFocusSessionsInRange(
+    /**
+     * 回顾窗口聚合所需的已完成记录投影。
+     *
+     * 一次读事务取完两种表：批量窗口（当前 + 环比 + 邻近日期）共享同一次区间扫描，
+     * 不再为每个窗口各发四条第 SQL。投影只含聚合需要的列，`startTime` 索引即可覆盖过滤。
+     */
+    internal suspend fun readCompletedStatsRows(
         startInclusive: Long,
         endExclusive: Long
-    ): Flow<List<FocusSession>> = requireDatabase().focusSessionDao()
-        .observeCompletedInRange(startInclusive, endExclusive)
-        .map { rows -> rows.map(FocusSessionEntity::toDomainModel) }
-
-    internal fun observeExamSessionsInRange(
-        startInclusive: Long,
-        endExclusive: Long
-    ): Flow<List<ExamSession>> = requireDatabase().examSessionDao()
-        .observeCompletedInRange(startInclusive, endExclusive)
-        .map { rows -> rows.map(ExamSessionEntity::toDomainModel) }
-
-    internal fun observeFocusSubjectTotals(
-        startInclusive: Long,
-        endExclusive: Long
-    ): Flow<List<StudySubjectAggregateRow>> = requireDatabase().focusSessionDao()
-        .observeSubjectTotals(startInclusive, endExclusive)
-
-    internal fun observeExamSubjectTotals(
-        startInclusive: Long,
-        endExclusive: Long
-    ): Flow<List<StudySubjectAggregateRow>> = requireDatabase().examSessionDao()
-        .observeSubjectTotals(startInclusive, endExclusive)
+    ): CompletedStatsRows = withContext(Dispatchers.IO) {
+        val db = requireDatabase()
+        db.withTransaction {
+            CompletedStatsRows(
+                focus = db.focusSessionDao().getCompletedStatsRows(startInclusive, endExclusive),
+                exams = db.examSessionDao().getCompletedStatsRows(startInclusive, endExclusive)
+            )
+        }
+    }
 
     internal fun observeStudyDuration(
         startInclusive: Long,
@@ -590,8 +596,14 @@ class YanjiRepository private constructor() {
     fun saveDecisionApiKey(key: String): Boolean {
         val store = secretStore ?: return false
         return when (store.saveDecisionApiKey(key)) {
-            SecretWriteResult.Saved,
-            SecretWriteResult.Cleared -> true
+            SecretWriteResult.Saved -> {
+                cachedHasDecisionApiKey = true
+                true
+            }
+            SecretWriteResult.Cleared -> {
+                cachedHasDecisionApiKey = false
+                true
+            }
             is SecretWriteResult.Failure -> false
         }
     }
@@ -603,13 +615,28 @@ class YanjiRepository private constructor() {
         val store = secretStore ?: return false
         return when (store.clearDecisionApiKey()) {
             SecretWriteResult.Saved,
-            SecretWriteResult.Cleared -> true
+            SecretWriteResult.Cleared -> {
+                cachedHasDecisionApiKey = false
+                true
+            }
             is SecretWriteResult.Failure -> false
         }
     }
 
-    fun hasDecisionApiKey(): Boolean =
-        getDecisionApiKey().isNotBlank()
+    /**
+     * 决策模型凭据是否存在。
+     *
+     * 读缓存而不是每次解密 Keystore：这个方法被 `getUserSettings` 与冷启动预热载荷
+     * 反复调用，一次 Keystore 解密足以让启动多出几十毫秒。缓存值在启动时读一次，
+     * 并在保存 / 清除凭据时同步更新；若在就绪信号之前被调用（极早的桥接读取），
+     * 退回一次同步解密，行为与缓存化之前一致。
+     */
+    fun hasDecisionApiKey(): Boolean {
+        cachedHasDecisionApiKey?.let { return it }
+        val resolved = secretStore?.readDecisionApiKey()?.isNotBlank() == true
+        cachedHasDecisionApiKey = resolved
+        return resolved
+    }
 
     /**
      * 保存用户设置。
@@ -785,6 +812,12 @@ class StudyTaskNotCarryableException : IllegalStateException("Task is not carrya
 data class StudyTaskWithActualSeconds(
     val task: StudyTask,
     val actualSeconds: Long
+)
+
+/** 一次区间扫描得到的已完成专注 / 模考最小投影，供回顾窗口聚合共享。 */
+internal data class CompletedStatsRows(
+    val focus: List<FocusStatsRow>,
+    val exams: List<ExamStatsRow>
 )
 
 /**

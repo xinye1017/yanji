@@ -13,6 +13,27 @@ data class StudySubjectAggregateRow(
 )
 
 /**
+ * 回顾窗口聚合所需的最小专注投影。
+ *
+ * 只取四列而不是整行：区间可能覆盖整月甚至跨月，整行 `SELECT *` 会把 `note`、
+ * `mode` 等与统计无关的字符串一起搬过 CursorWindow，纯属浪费。
+ */
+data class FocusStatsRow(
+    val startTime: Long,
+    val subjectId: String,
+    val subjectName: String,
+    val durationSeconds: Long
+)
+
+/** 回顾窗口聚合所需的最小模考投影；口径与 [FocusStatsRow] 相同。 */
+data class ExamStatsRow(
+    val startTime: Long,
+    val subjectId: String,
+    val subjectName: String,
+    val actualDurationSeconds: Long
+)
+
+/**
  * 计划 id → 已投入秒数。聚合留在 SQLite，UI 只拿结果做「实际 / 计划」对照。
  *
  * 不按日期过滤：关联本身就是精确的，一条计划只属于某一天，它的时段全算它的。
@@ -48,23 +69,18 @@ interface FocusSessionDao {
     fun getByIdFlow(id: String): Flow<FocusSessionEntity?>
 
     @Query(
-        "SELECT * FROM focus_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "ORDER BY startTime DESC"
+        "SELECT startTime, subjectId, subjectName, durationSeconds FROM focus_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive"
     )
-    fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<FocusSessionEntity>>
-
-    @Query(
-        "SELECT * FROM focus_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "ORDER BY startTime DESC"
-    )
-    suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
+    suspend fun getCompletedStatsRows(
+        startInclusive: Long,
+        endExclusive: Long
+    ): List<FocusStatsRow>
 
     /**
      * 与 [startInclusive, endExclusive) 有交集的已完成专注。
      *
-     * 与 [getCompletedInRange] 的「按开始时间归属」不同，这里按时间区间相交：
+     * 与「按开始时间归属」的统计查询不同，这里按时间区间相交：
      * 一条 23:40→00:10 的专注会同时出现在前一天和后一天的查询里。每日快照只用
      * 它计算「参与次数」；时间轴与总时长仍按开始日期归属，因此同一条历史记录
      * 只显示一次、只累计一次。
@@ -79,19 +95,6 @@ interface FocusSessionDao {
             "ORDER BY startTime DESC"
     )
     suspend fun getCompletedOverlapping(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
-
-    @Query(
-        "SELECT subjectId, subjectName, " +
-            "COALESCE(SUM(durationSeconds), 0) AS durationSeconds, " +
-            "COUNT(*) AS sessionCount, COALESCE(MAX(durationSeconds), 0) AS longestSessionSeconds " +
-            "FROM focus_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "GROUP BY subjectId, subjectName"
-    )
-    fun observeSubjectTotals(
-        startInclusive: Long,
-        endExclusive: Long
-    ): Flow<List<StudySubjectAggregateRow>>
 
     @Query(
         "SELECT COALESCE(SUM(durationSeconds), 0) FROM focus_sessions " +
@@ -147,13 +150,7 @@ interface ExamSessionDao {
     @Query("SELECT * FROM exam_sessions WHERE id = :id LIMIT 1")
     fun getByIdFlow(id: String): Flow<ExamSessionEntity?>
 
-    @Query(
-        "SELECT * FROM exam_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "ORDER BY startTime DESC"
-    )
-    fun observeCompletedInRange(startInclusive: Long, endExclusive: Long): Flow<List<ExamSessionEntity>>
-
+    /** 每日快照按开始时间归属读取窗口内的完整模考行。 */
     @Query(
         "SELECT * FROM exam_sessions " +
             "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
@@ -162,17 +159,13 @@ interface ExamSessionDao {
     suspend fun getCompletedInRange(startInclusive: Long, endExclusive: Long): List<ExamSessionEntity>
 
     @Query(
-        "SELECT subjectId, subjectName, " +
-            "COALESCE(SUM(actualDurationSeconds), 0) AS durationSeconds, " +
-            "COUNT(*) AS sessionCount, COALESCE(MAX(actualDurationSeconds), 0) AS longestSessionSeconds " +
-            "FROM exam_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
-            "GROUP BY subjectId, subjectName"
+        "SELECT startTime, subjectId, subjectName, actualDurationSeconds FROM exam_sessions " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive"
     )
-    fun observeSubjectTotals(
+    suspend fun getCompletedStatsRows(
         startInclusive: Long,
         endExclusive: Long
-    ): Flow<List<StudySubjectAggregateRow>>
+    ): List<ExamStatsRow>
 
     @Query(
         "SELECT COALESCE(SUM(actualDurationSeconds), 0) FROM exam_sessions " +
