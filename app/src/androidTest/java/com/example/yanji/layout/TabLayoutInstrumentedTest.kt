@@ -348,13 +348,13 @@ class TabLayoutInstrumentedTest {
         Log.i("YanjiLayoutTest", "Native timer continued across tabs: elapsed=$elapsed -> ${FocusTimerService.elapsedSecondsForUi.value}")
         onMain { assertEquals(bounds(required("tab-content")), bounds(required("pane-focus"))) }
         await("running focus controls mounted") { find("focus-running") != null }
-        onView(withContentDescription("暂停专注")).perform(scrollTo(), click())
+        clickImmersive("暂停专注")
         await("test session paused") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
-        onView(withContentDescription("继续专注")).perform(scrollTo(), click())
+        clickImmersive("继续专注")
         await("test session resumed") { ActiveSessionCoordinator.active.value?.paused == false && find("focus-running") != null }
-        onView(withContentDescription("暂停专注")).perform(scrollTo(), click())
+        clickImmersive("暂停专注")
         await("test session paused again") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
-        onView(withContentDescription("放弃本轮")).perform(scrollTo(), click())
+        clickImmersive("放弃本轮")
         await("discard confirmation dialog opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withText("确认放弃"))
         onView(withText("确认放弃")).inRoot(isDialog()).perform(click())
@@ -561,6 +561,18 @@ class TabLayoutInstrumentedTest {
     private fun mountAllTabs() {
         tabs.forEach { select(it) }
         select(tabs.first())
+    }
+
+    /**
+     * Clicks an immersion-field control. The running/paused field is a fixed
+     * full-height column with no ScrollView (its actions are always on screen),
+     * so Espresso's [scrollTo] precondition would reject the view outright.
+     */
+    private fun clickImmersive(label: String) {
+        await("immersion control 「$label」 mounted") {
+            root?.let { views(it).any { view -> view.contentDescription?.toString() == label } } == true
+        }
+        onView(withContentDescription(label)).perform(click())
     }
 
     private fun testId(id: String) = object : TypeSafeMatcher<View>() {
