@@ -346,7 +346,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       accessibilityElementsHidden={timelineMenu !== null}
       importantForAccessibility={timelineMenu ? 'no-hide-descendants' : 'auto'}
       contentContainerStyle={{
-        paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding,
+        // The Focus page sets the page-top rhythm for all three tabs.
+        paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: contentPadding,
       }}>
       {/* The page title stands alone: the window (year / week) is already spelled
           out by the filmstrip and the period bar below, so an eyebrow above the

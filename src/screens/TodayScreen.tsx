@@ -513,7 +513,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
         // TalkBack too, so the modal panel is the only thing being read.
         accessibilityElementsHidden={momentMenu !== null || carryOverOpen}
         importantForAccessibility={momentMenu || carryOverOpen ? 'no-hide-descendants' : 'auto'}
-        contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
+        // Same distance from the status bar as the Focus page's header: the three
+        // tabs share one page-top rhythm, so switching tabs never shifts the
+        // headline down or up.
+        contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: contentPadding }}>
         {/* The greeting owns the top-left at Serif headline size; the date and exam
             countdown stack on the right as a clean text card that taps to open settings. */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: layout.sectionGap }}>
