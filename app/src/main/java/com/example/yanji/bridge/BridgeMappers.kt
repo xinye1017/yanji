@@ -271,9 +271,8 @@ object BridgeMappers {
      *
      * 只看 `subjectName` 无法把自定义 id 归到大类里（`SubjectCatalog` 的推断依赖 id
      * 查表 + name 兜底两条线索），因此调用方少传一个参数就会产出一个「第二事实来源」。
-     * 与 [com.example.yanji.data.StudyStatisticsRepository] 的
-     * `buildNamedDistribution` / `buildSubjectDistributionFromAggregates` /
-     * [com.example.yanji.data.study.StudyStats] 同口径。
+     * 与 `StudyStatisticsRepository.kt` 里的 `buildNamedSessionDistribution`（每日快照的
+     * 科目分桶）以及 [com.example.yanji.data.study.StudyStats] 同口径。
      *
      * @return `(bucketId, 展示名)`，展示名 = `SubjectCatalog.displayName(bucketId) ?: subjectName`。
      */
@@ -328,7 +327,7 @@ object BridgeMappers {
 
     /**
      * 展示桶的配色：直接桶回落到所属大类，再回落到兜底中性灰。
-     * 与 `StudyStatisticsRepository.getSubjectColor` 同口径。
+     * 与 `StudyStatisticsRepository.kt` 的 `resolveStudySubjectColor` 同口径。
      */
     fun subjectColorHex(bucketId: String, subjectName: String): String {
         val directId = bucketId.removeSuffix(SubjectCatalog.UNCLASSIFIED_SUFFIX)

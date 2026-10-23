@@ -6,9 +6,29 @@ import androidx.room.PrimaryKey
 import com.example.yanji.data.*
 import org.json.JSONArray
 
+/**
+ * 专注记录。三个索引各有明确职责，缺一都会让某条常驻查询退化（实测见 IndexChoiceScratch 结论）：
+ *
+ *  - `startTime`：按区间取**整行**的查询（每日快照的跨午夜相交、AI 诊断的 since 扫描）。
+ *  - `(status, startTime, subjectId, subjectName, durationSeconds)`：统计聚合的**覆盖索引**。
+ *    统计查询一律 `status='COMPLETED' AND startTime ∈ [a,b)`，原单列索引只能定位区间、
+ *    每行仍要回表取 status 与时长；覆盖索引让扫描完全在索引里完成，实测月度窗口
+ *    从 1.84ms 降到 0.73ms、SUM 从 668us 降到 215us。
+ *    前两列与 `(status, startTime)` 等价，因此无需再单独建那条复合索引。
+ *  - `(taskId, status, durationSeconds)`：计划用时聚合与 LEFT JOIN 的**必需**索引。
+ *    缺它时 `GROUP BY taskId` 是全表扫描，JOIN 只能依赖 SQLite 临时创建的
+ *    AUTOMATIC PARTIAL COVERING INDEX（每次查询重建），实测 13.97ms → 0.70ms。
+ *
+ * 三条索引合计的写入代价约 +3ms/3000 行插入（约 +0.9µs/行），相对一次专注落库的
+ * 事务与 WAL 提交可忽略。
+ */
 @Entity(
     tableName = "focus_sessions",
-    indices = [Index("startTime")]
+    indices = [
+        Index("startTime"),
+        Index(value = ["status", "startTime", "subjectId", "subjectName", "durationSeconds"]),
+        Index(value = ["taskId", "status", "durationSeconds"])
+    ]
 )
 data class FocusSessionEntity(
     @PrimaryKey val id: String,

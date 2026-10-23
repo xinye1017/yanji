@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 24
+    private val CURRENT_VERSION = 25
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -192,7 +192,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_20_21,
         YanjiDatabase.MIGRATION_21_22,
         YanjiDatabase.MIGRATION_22_23,
-        YanjiDatabase.MIGRATION_23_24
+        YanjiDatabase.MIGRATION_23_24,
+        YanjiDatabase.MIGRATION_24_25
     )
 
     /**
@@ -268,6 +269,18 @@ class YanjiMigrationTest {
         assertTrue(
             "chat_messages.sessionId 索引缺失",
             "index_chat_messages_sessionId" in db.indexNames("chat_messages")
+        )
+
+        // 5.2) v25 的两条索引：缺任一条对应查询就会退化成全表扫描，
+        //      Room 的 TableInfo 校验也会直接失败，这里提前给出可定位的断言。
+        val focusIndices = db.indexNames("focus_sessions")
+        assertTrue(
+            "focus_sessions 统计覆盖索引缺失：$focusIndices",
+            "index_focus_sessions_status_startTime_subjectId_subjectName_durationSeconds" in focusIndices
+        )
+        assertTrue(
+            "focus_sessions 计划用时索引缺失：$focusIndices",
+            "index_focus_sessions_taskId_status_durationSeconds" in focusIndices
         )
 
         // 5.5) v10 的 blockers 列存在且旧行回填空串

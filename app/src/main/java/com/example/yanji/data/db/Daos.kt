@@ -3,15 +3,6 @@ package com.example.yanji.data.db
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
-/** Room projection used by statistics screens; aggregation stays in SQLite. */
-data class StudySubjectAggregateRow(
-    val subjectId: String,
-    val subjectName: String,
-    val durationSeconds: Long,
-    val sessionCount: Int,
-    val longestSessionSeconds: Long
-)
-
 /**
  * 回顾窗口聚合所需的最小专注投影。
  *

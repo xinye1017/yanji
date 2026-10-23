@@ -81,7 +81,7 @@ data class QuickStartPreset(
    * 刻意不承担通用 Todo 职责：没有优先级、提醒、重复规则、截止时间或子任务。
    *
    * 字段全 val、无集合字段，是只读不可变的扁平数据类；含 List/Map 的领域模型
-   * （如 NoteEntry、DayBarData）则不是。
+ * （如 NoteEntry）则不是。
 
  */
 @Serializable
@@ -278,7 +278,7 @@ data class ExamSession(
  * 日记条目。
  *
  * **不持有学习时长**：某一天的学习时长唯一事实来源是 FocusSession + ExamSession 的实时聚合
- * （见 [StudyStatisticsRepository.getDailyStudySummary]）。历史上这里曾冗余保存
+ * （见 `DailySnapshotReader` 与 `BridgeMappers.reviewOverviewFields`）。历史上这里曾冗余保存
  * `studyDurationSeconds`，导致"真实统计为 0"时回退到陈旧副本、同一指标出现两个事实来源。
  */
 @Serializable

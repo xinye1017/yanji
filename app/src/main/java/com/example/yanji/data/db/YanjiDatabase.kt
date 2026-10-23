@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -697,6 +697,36 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v24 → v25：为 `focus_sessions` 补两条索引，消除统计与计划用时的全表扫描。
+         *
+         * 索引名与 `25.json` 逐字一致（Room 的 TableInfo 校验会比对索引名与列序）。
+         *
+         *  - `(status, startTime, subjectId, subjectName, durationSeconds)`：统计聚合的覆盖索引。
+         *    统计一律 `status='COMPLETED' AND startTime ∈ [a,b)`，原来的单列 `startTime`
+         *    只能定位区间、每行仍需回表；覆盖索引把扫描留在索引里（月度窗口 1.84ms → 0.73ms）。
+         *  - `(taskId, status, durationSeconds)`：`GROUP BY taskId` 与计划 LEFT JOIN 的必需索引。
+         *    缺它时前者全表扫描、后者每次查询都要现场建 AUTOMATIC PARTIAL COVERING INDEX
+         *    （实测 13.97ms → 0.70ms）。
+         *
+         * 纯 `CREATE INDEX`：不重建表、不动任何业务数据，老设备（SQLite 3.9）同样可用。
+         * 索引由 SQLite 在首次查询时按需填充，因此升级本身不会产生一次性长卡顿。
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "`index_focus_sessions_status_startTime_subjectId_subjectName_durationSeconds` " +
+                        "ON `focus_sessions` (`status`, `startTime`, `subjectId`, `subjectName`, `durationSeconds`)"
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "`index_focus_sessions_taskId_status_durationSeconds` " +
+                        "ON `focus_sessions` (`taskId`, `status`, `durationSeconds`)"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -726,13 +756,36 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_20_21,
             MIGRATION_21_22,
             MIGRATION_22_23,
-            MIGRATION_23_24
+            MIGRATION_23_24,
+            MIGRATION_24_25
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {
             runCatching {
                 File(context.applicationContext.noBackupFilesDir, SecretStore.LEGACY_FILE_NAME)
                     .writeText(value)
+            }
+        }
+
+        /**
+         * 打开数据库时补齐查询统计信息。
+         *
+         * **为什么必须有这一步**：`PRAGMA optimize` 会为统计缺失的表执行一次有界分析
+         * （写入 `sqlite_stat1`）。缺它时优化器只能靠启发式猜选择率，
+         * 实测在 3,000 行、三成挂计划的真实分布下会为
+         * `observeTaskActualSeconds`（Today 页常驻 Flow）选中 `status` 前缀索引，
+         * 于是它退化成「扫描全部 COMPLETED 行 + 临时 B-tree 分组」——
+         * 而 `focus_sessions` 每写一次它就重跑一次。补齐统计后同一条查询
+         * 走 `index_focus_sessions_taskId_status_durationSeconds` 且不再需要临时 B-tree。
+         * 该行为已由 `QueryPlanGuardTest` 钉住。
+         *
+         * **为什么要 runCatching**：老设备（minSdk 24 的 SQLite 3.9）不认识这个 pragma，
+         * 统计信息只是优化项，**绝不允许**它让数据库打不开——取不到就退回启发式计划，
+         * 与本次改动之前的行为一致。
+         */
+        private val optimizeStatisticsCallback = object : RoomDatabase.Callback() {
+            override fun onOpen(connection: SQLiteConnection) {
+                runCatching { connection.exec("PRAGMA optimize") }
             }
         }
 
@@ -745,6 +798,7 @@ abstract class YanjiDatabase : RoomDatabase() {
                     "yanji_study.db"
                 )
                 .addMigrations(*migrations(appContext))
+                .addCallback(optimizeStatisticsCallback)
                 .build()
                 .also { instance = it }
             }

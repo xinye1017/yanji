@@ -101,14 +101,6 @@ object YanjiTime {
         )
     }
 
-    fun rangeFor(range: StudyTimeRange, clock: Clock = Clock.systemDefaultZone()): EpochRange = when (range) {
-        StudyTimeRange.TODAY -> dayRange(today(clock), clock.zone)
-        StudyTimeRange.WEEK -> weekRange(clock = clock, zoneId = clock.zone)
-        StudyTimeRange.MONTH -> monthRange(clock = clock, zoneId = clock.zone)
-        StudyTimeRange.ALL -> EpochRange(0L, Long.MAX_VALUE)
-        StudyTimeRange.YEAR -> currentYearRange(clock, clock.zone)
-    }
-
     fun formatTime(epochMs: Long, zoneId: ZoneId = ZoneId.systemDefault()): String =
         Instant.ofEpochMilli(epochMs).atZone(zoneId).format(timeFormatter)
 

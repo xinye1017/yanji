@@ -9,7 +9,6 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.StudyTaskNotCarryableException
-import com.example.yanji.data.StudyStatisticsRepository
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.YanjiRepository
 import kotlinx.coroutines.CancellationException
@@ -26,8 +25,7 @@ import java.util.UUID
  * 「研迹」React Native ↔ Kotlin 数据桥接模块。
  *
  * 职责边界：**不绕过 Repository 直接管理 Room**（AGENTS.md §七）。
- * 所有读写都经过 [YanjiRepository] / [StudyStatisticsRepository]，
- * JS 侧拿到的永远是与原生业务层同一口径的真实本地数据。
+ * 所有读写都经过 [YanjiRepository]，JS 侧拿到的永远是与原生业务层同一口径的真实本地数据。
  *
  * 事件：
  * - `onDataChanged`：`{ type: 'tasks' | 'notes' | 'sessions' | 'settings' }`
@@ -434,7 +432,7 @@ class YanjiDataModule(
      *  - `CALENDAR_MONTH`：自然月，`periodsBack` = 往回翻几个月（0 = 本月）。
      *
      * 自然周边界必须落到周一（`previousOrSame(MONDAY)`，与
-     * `StudyStatisticsRepository.buildWeeklyStudySummary` 同一写法），
+     * `ReviewOverviewReader.windowOf` 同一写法），
      * 拿 7 天滚动凑会让「上周」和本周的数据整块重叠。
      *
      * 科目分布按展示桶归一：**`row.subjectId` 与 `row.subjectName` 必须成对传入**
@@ -528,7 +526,7 @@ class YanjiDataModule(
     /**
      * 编辑某次专注的随笔。
      *
-     * 模考**没有**可编辑随笔（`StudyStatisticsRepository.updateSessionNote` 对 exam 是
+     * 模考**没有**可编辑随笔（[YanjiRepository] 侧的 focus-session 更新路径对 exam 是
      * no-op），因此显式 reject 而不是静默 `resolve(true)` —— 静默成功会让用户以为存上了。
      *
      * 纯空白随笔一律拒绝（与 [saveQuickNote] 同一先例）：把空白写进库等于制造一条
