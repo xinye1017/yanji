@@ -230,10 +230,14 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
   f.setSession(null);
   assert.equal(f.render().visible, true, 'a completed/absent native session restores the dock');
 
+  f.nav.taskEditorOpen = true;
+  assert.equal(f.render().visible, false, 'the task editor covers the dock and stops its sampling');
+  f.nav.taskEditorOpen = false;
+
   f.setSession(session(60));
   f.nav.settingsOpen = true;
   assert.deepEqual(f.render(), {
-    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    visible: false, barStyle: 'dark-content', backdrop: '#paper',
     activePanes: [], readerGate: false,
   });
   f.nav.settingsOpen = false;
@@ -242,10 +246,10 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
   const background = harness('background');
   background.setSession(session(60));
   assert.deepEqual(background.render(), {
-    visible: true, barStyle: 'dark-content', backdrop: '#paper',
+    visible: false, barStyle: 'dark-content', backdrop: '#paper',
     activePanes: [], readerGate: false,
   });
-  assert.equal(f.sessionReaderGates.length, 9, 'one low-frequency session read per AppShell render');
+  assert.equal(f.sessionReaderGates.length, 10, 'one low-frequency session read per AppShell render');
 });
 
 test('native timer subscriptions are shared and ticks notify only visible clock readers', async () => {

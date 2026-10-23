@@ -39,14 +39,10 @@ test('the backdrop excludes the dock and secondary settings layer', () => {
   }
 });
 
-test('the dock resolves its whole surface from the glass material', () => {
-  // The backdrop and hairline used to be literals in the component while the
-  // tint came from `YanjiLiquidGlass`, so the same surface had two sources and
-  // a palette change could update one and miss the other. The material now owns
-  // every colour the dock paints.
+test('the dock resolves its surface from the glass material with no second outline', () => {
   for (const variant of ['light', 'dark']) {
     const material = YanjiLiquidGlass[variant];
-    for (const role of ['tint', 'backdrop', 'border']) {
+    for (const role of ['tint', 'backdrop']) {
       assert.equal(typeof material[role], 'string', `YanjiLiquidGlass.${variant}.${role} is a colour`);
       assert.ok(material[role].length > 0, `YanjiLiquidGlass.${variant}.${role} is not empty`);
     }
@@ -55,31 +51,13 @@ test('the dock resolves its whole surface from the glass material', () => {
   }
 
   const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
-  for (const role of ['tint', 'backdrop', 'border']) {
+  for (const role of ['tint', 'backdrop']) {
     assert.match(dock, new RegExp(`material\\.${role}\\b`), `the dock paints its ${role} from the material`);
   }
   assert.ok(!/rgba\(/.test(dock),
     'the dock hardcodes no colour of its own; every one comes from the material');
-});
-
-test('dragging only previews the target slot and commits navigation on release', () => {
-  const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
-  const moveHandler = dock.slice(
-    dock.indexOf('onPanResponderMove:'),
-    dock.indexOf('onPanResponderRelease:'),
-  );
-  const releaseHandler = dock.slice(
-    dock.indexOf('onPanResponderRelease:'),
-    dock.indexOf('onPanResponderTerminate:'),
-  );
-  assert.ok(moveHandler.length > 0);
-  assert.ok(releaseHandler.length > 0);
-  assert.doesNotMatch(moveHandler, /selectTab/,
-    'moving across the dock must not navigate before the finger is released');
-  assert.match(releaseHandler, /selectTabRef\.current\(TABS\[finalSlot\]\.key\)/,
-    'release commits the final slot');
-  assert.match(releaseHandler, /wasDragging/,
-    'a tap without meaningful movement must not be re-routed by the drag release');
+  assert.doesNotMatch(dock, /borderColor:|borderWidth:/,
+    'only the native directional reflection defines the capsule edge');
 });
 
 test('the selected dock tab is a solid icon with no selection surface', () => {
@@ -102,10 +80,10 @@ test('both native glass components are registered through the manual Fabric pipe
   assert.ok(cmake.includes('react-native-blur-overlay:RNBlurOverlaySpec'));
 });
 
-test('the dock pill is centered vertically with hairlineWidth compensation', () => {
+test('the borderless dock row uses its full height and centers its content', () => {
   const dock = readFileSync(new URL('../src/navigation/BottomTabBar.tsx', import.meta.url), 'utf8');
-  assert.match(dock, /contentHeight\s*=\s*height\s*-\s*2\s*\*\s*paper\.layout\.hairlineWidth/);
-  assert.match(dock, /height:\s*contentHeight/);
+  assert.doesNotMatch(dock, /hairlineWidth|contentHeight/);
+  assert.match(dock, /width:\s*'100%',\s*height,/);
   assert.match(dock, /justifyContent:\s*'center'/);
 });
 

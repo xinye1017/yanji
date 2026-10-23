@@ -204,7 +204,7 @@ function AppShell(): React.JSX.Element {
         </View>
       </BlurTarget>
 
-      <BottomTabBar visible={!focusImmersive} />
+      <BottomTabBar visible={foreground && !settingsOpen && !taskEditorOpen && !focusImmersive} />
 
       {settingsOpen ? (
         <View

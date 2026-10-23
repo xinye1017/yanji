@@ -1,8 +1,28 @@
 diff --git a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
-index 7b20fde..f30b014 100644
+index 7b20fde..faff1fc 100644
 --- a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
 +++ b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/Glass.java
-@@ -187,7 +187,16 @@ final class Glass {
+@@ -83,7 +83,7 @@ final class Glass {
+           + "  if (uPress < 0.001) { return 0.0; }\n"
+           + "  float2 tp = coord - uTouch;\n"
+           + "  float sigma = max(min(uSize.x, uSize.y), 1.0);\n"
+-          + "  return uPress * 0.22 * exp(-dot(tp, tp) / (sigma * sigma * 0.35));\n"
++          + "  return uPress * 0.06 * exp(-dot(tp, tp) / (sigma * sigma * 0.35));\n"
+           + "}\n"
+           + "\n"
+           + "half4 main(float2 coord) {\n"
+@@ -129,7 +129,9 @@ final class Glass {
+           + "      * pow(clamp(1.0 - (inside - uLine) / uGlow, 0.0, 1.0), 1.5);\n"
+           + "  float spec = (hair * 0.70 * (lobeF + lobeB) + glow * 0.10 * lobeF)\n"
+           + "      * uSpecular * (1.0 + 0.8 * uPress);\n"
+-          + "  col.rgb = min(col.rgb + half3(spec) * col.a, half3(col.a));\n"
++          // Reflect within the available headroom instead of clipping the
++          // pale paper background into a hard white corner.
++          + "  col.rgb = mix(col.rgb, half3(col.a), half(clamp(spec, 0.0, 1.0)));\n"
+           + "  return col;\n"
+           + "}\n";
+
+@@ -187,7 +189,16 @@ final class Glass {
      shader.setFloatUniform("uDispersion", dispersion);
      // Light from the upper left, about 30 degrees above horizontal, as iOS has it.
      shader.setFloatUniform("uLight", 0.866f, 0.5f);
@@ -20,3 +40,65 @@ index 7b20fde..f30b014 100644
      shader.setFloatUniform("uLine", line);
      shader.setFloatUniform("uGlow", glow);
      shader.setFloatUniform(
+@@ -196,7 +207,10 @@ final class Glass {
+         Color.green(tint) / 255f,
+         Color.blue(tint) / 255f,
+         Color.alpha(tint) / 255f);
+-    shader.setFloatUniform("uLift", lift);
++    // Regular is a legible material, not a light theme. Keep an explicitly
++    // dark-tinted surface dark instead of adding the upstream white veil.
++    final float liftStrength = Color.alpha(tint) == 0 ? 1f : tintLight;
++    shader.setFloatUniform("uLift", lift * liftStrength);
+     shader.setFloatUniform("uPress", press);
+     shader.setFloatUniform("uTouch", touchX, touchY);
+     cached = RenderEffect.createRuntimeShaderEffect(shader, "content");
+diff --git a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/LiveBlur.java b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/LiveBlur.java
+index f5eea60..7950d30 100644
+--- a/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/LiveBlur.java
++++ b/node_modules/react-native-blur-overlay/android/src/main/java/com/bluroverly/LiveBlur.java
+@@ -159,23 +159,19 @@ final class LiveBlur {
+   private static final float GLASS_MAX_INPUT_SCALE = 0.5f;
+
+   /**
+-   * The lens band, in dp: 24, as Kyant0/AndroidLiquidGlass's bottom tab bar
+-   * has it, clamped to 0.4 of the short side so a small overlay is not all
+-   * edge. Absolute rather than a fraction of the pane, because a real sheet of
+-   * glass has a physical edge and a bigger pane does not get a bigger one.
++   * A narrow physical edge leaves the navigation's centre visually quiet.
++   * Clamp small controls too, rather than turning their whole body into a lens.
+    */
+   private static float glassBand(int width, int height, float density) {
+-    return Math.min(24f * density, Math.min(width, height) * 0.4f);
++    return Math.min(10f * density, Math.min(width, height) * 0.2f);
+   }
+
+   /**
+-   * How far the border reaches in. QWEA0/Liquid-Glass-Android defaults to about
+-   * 3.3x its band (160px over 48px): that is what squeezes whole rows of content
+-   * into the rim. 2.5x here, and never more than 0.7 of the short side, so a
+-   * tab bar folds in its own opposite half rather than sampling past it.
++   * Enough inward displacement to show real refraction without folding a
++   * second row of text into the rim of a 60dp dock.
+    */
+   private static float glassPull(int width, int height, float density) {
+-    return Math.min(glassBand(width, height, density) * 2.5f, Math.min(width, height) * 0.7f);
++    return Math.min(glassBand(width, height, density) * 1.4f, Math.min(width, height) * 0.24f);
+   }
+
+   // The glass-only style: `glassVariant`, `glassTint` and a press, set from
+@@ -255,12 +251,12 @@ final class LiveBlur {
+                 corner * inputScale,
+                 band,
+                 glassPull(width, height, density) * inputScale,
+-                // QWEA0 defaults to 0.10 and its hero shot uses 0.16.
+-                0.15f,
++                // Subtle dispersion keeps coloured content from making rainbow rims.
++                0.025f,
+                 // Clear glass gets a brighter rim, as QWEA0's clear material
+                 // does; its lighter blur is the JS side's, where the variant
+                 // picks the default radius.
+-                glassClear ? 1.9f : 1.6f,
++                glassClear ? 1.2f : 0.9f,
+                 // Below a capture pixel on purpose: antialiased, it reads thinner
+                 // than the 1dp a whole pixel would be at half resolution.
+                 0.75f * density * inputScale,

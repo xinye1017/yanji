@@ -1,18 +1,29 @@
 # Native glass material correction
 
-`react-native-blur-overlay+3.2.1.patch` fixes the Android glass shader's bright
-white corner reflections on dark materials. Upstream adds specular light after
-the body tint, so darkening `glassTint` alone cannot correct the rim.
+`react-native-blur-overlay+3.2.1.patch` adjusts the Android lens for the app's
+navigation dock. It keeps real background blur and refraction, with a quiet
+centre and a narrow directional edge instead of a white outline.
 
-The patch derives reflection strength from that same tint's brightness and
-opacity, attenuating the rim on dark glass while preserving light and untinted
-glass. It changes only the cached `uSpecular` uniform; live blur, refraction,
-geometry and shader caching remain intact. The app's material colours still
-come from `src/theme/liquidGlass.ts`.
+`Glass.java` derives reflection strength and white lift from the tint's
+brightness, so `regular` remains usable in dark mode, and reduces touch bloom.
+Reflection blends toward white within the sampled colour's remaining range,
+instead of adding light until the corners clip to white.
+`LiveBlur.java` narrows the lens band to 10dp, limits its inward displacement
+to about 14dp, and reduces dispersion and reflection. Captures, shader caching
+and the library's platform support remain intact. The app's material colours
+and sampling settings come from `src/theme/liquidGlass.ts`; opaque high contrast
+uses the existing semantic paper surface.
 
 `npm install` / `npm ci` applies the patch via `postinstall` and fails if it no
 longer applies. When upgrading this library, check the upstream implementation
 and both theme appearances before updating or removing the patch.
+
+When regenerating on Windows, include only the edited Java sources so Gradle's
+generated build paths cannot enter the patch or exceed Git's path limit:
+
+```powershell
+npx patch-package react-native-blur-overlay --include '(Glass|LiveBlur)[.]java$'
+```
 
 # Heroicons even-odd fill correction
 

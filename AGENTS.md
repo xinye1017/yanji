@@ -30,6 +30,8 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 
 **原生构建并发**：Gradle worker 数由 `gradle.properties` 限制；各 Android 模块的 CMake/Ninja 编译任务池由根 `build.gradle.kts` 统一限制。不得为了提速覆盖这些限制，避免多 ABI 构建同时启动数十个 `clang++` 导致内存耗尽。
 
+**导航玻璃材质边界**：布局、染色与采样设置集中在 `src/theme/liquidGlass.ts`；Android 的边缘折射、色散及随染色明度调整的提亮/反射由 `patches/react-native-blur-overlay+3.2.1.patch` 维护，更新方式见 `patches/README.md`。`regular` / `clear` 是材质用途，不对应浅色 / 深色主题；外层容器底色也不等同于玻璃采样结果的遮罩。导航的系统无障碍偏好订阅集中在 `src/navigation/useNavigationAccessibility.ts`。
+
 **每日数据与订阅边界**：Today / Review 通过 `getDailySnapshot(date)` 共用一次 Room 事务读取，契约以 `src/bridge/index.ts` 与 `DailySnapshotReader.kt` 为准；任务实际用时按任务关联累计，不能按专注日期截断跨日贡献。数据失效事件仅来自 Room 表变更，RN 刷新协调器合并事件并限制隐藏页/后台查询。计时的低频会话快照与每秒 tick 分开订阅，tick 只更新可见计时组件，不能回到页面根状态驱动整页重渲染。
 
 **手动备份与恢复边界**：设置页通过 `YanjiBackupModule` 使用系统文件选择器；`BackupDocumentWorkflow` 只暂存已校验的内容并返回预览，用户确认后才交给 `BackupStore` 执行恢复。导出须等文件写入和关闭完成，恢复须等 Room 事务提交；导入前快照失败则拒绝写库。活动计时与恢复互斥，预览中必须明确空类别也会清空本机对应记录。API 密钥始终排除，完整导出、恢复与失败回滚测试使用独立数据库，不能拿日常真机数据库做破坏性验证。

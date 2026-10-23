@@ -3,22 +3,22 @@
  *
  * Visual language: a floating glass lens over the real page, with the selected
  * destination marked by its solid Heroicon and stronger label. Lifecycle: the
- * bar is mounted for the whole session next to the three always-mounted screens
+ * bar is mounted for the whole session next to the retained screen panes
  * (see App.tsx), so `activeTab` — never a remount — drives the selected state.
  */
 
-import React, { useEffect, useMemo, useRef } from 'react';
-import { LayoutChangeEvent, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import BlurOverlay from 'react-native-blur-overlay';
-import { useReducedMotion } from 'react-native-reanimated';
 import { useNavigationActions, useNavigationState, TABS } from './NavigationShell';
 import type { TabKey } from './NavigationShell';
 import { YanjiIcon } from '../components/YanjiUI';
 import type { YanjiIconName } from '../components/icons';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { YanjiRadius, YanjiTouch } from '../theme/tokens';
 import { YanjiLiquidGlass } from '../theme/liquidGlass';
 import { useBottomTabLayout } from './useBottomTabLayout';
+import { useNavigationAccessibility } from './useNavigationAccessibility';
 
 /** Tab glyph, kept here rather than in the shared registry: it is navigation-local. */
 const TAB_ICONS: Record<TabKey, YanjiIconName> = {
@@ -28,7 +28,7 @@ const TAB_ICONS: Record<TabKey, YanjiIconName> = {
 };
 
 /** Inset keeps glyphs clear of the capsule rim; slots span the padded row. */
-const CAPSULE_PADDING = YanjiSpacing.xs;
+const CAPSULE_PADDING = YanjiLiquidGlass.padding;
 
 /**
  * Maps the finger's horizontal coordinate within the row to a valid tab slot
@@ -50,84 +50,70 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
   const theme = useYanjiTheme();
   const { paper } = theme;
   const { height, bottom } = useBottomTabLayout();
-  const reduceMotion = useReducedMotion();
+  const { reduceMotion, highContrast } = useNavigationAccessibility();
   const material = theme.isDark ? YanjiLiquidGlass.dark : YanjiLiquidGlass.light;
   const { activeTab } = useNavigationState();
   const { selectTab } = useNavigationActions();
 
   const index = Math.max(0, TABS.findIndex(tab => tab.key === activeTab));
 
-  const isDraggingRef = useRef(false);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const rowRef = useRef<React.ElementRef<typeof View>>(null);
-  const rowPageXRef = useRef<number>(theme.spacing.lg);
-  const slotWidthRef = useRef(0);
-  const activeSlotRef = useRef(index);
+  const rowBoundsRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const selectTabRef = useRef(selectTab);
-
-  useEffect(() => {
-    activeSlotRef.current = index;
-  }, [index]);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
 
   useEffect(() => {
     selectTabRef.current = selectTab;
   }, [selectTab]);
 
-  const onRowLayout = (event: LayoutChangeEvent) => {
-    const rowWidth = event.nativeEvent.layout.width;
-    const next = (rowWidth - 2 * CAPSULE_PADDING) / TABS.length;
-    if (next > 0) {
-      slotWidthRef.current = next;
-    }
-    rowRef.current?.measure((_x: number, _y: number, _w: number, _h: number, pageX: number) => {
-      if (typeof pageX === 'number' && !isNaN(pageX)) {
-        rowPageXRef.current = pageX;
+  useEffect(() => {
+    setPreviewIndex(null);
+  }, [visible, index]);
+
+  const onRowLayout = () => {
+    rowRef.current?.measure((_x, _y, width, rowHeight, pageX, pageY) => {
+      if ([width, rowHeight, pageX, pageY].every(Number.isFinite)) {
+        rowBoundsRef.current = { x: pageX, y: pageY, width, height: rowHeight };
       }
     });
   };
 
   const panResponder = useMemo(() => {
-    const getRowX = (screenX: number) => (
-      screenX - rowPageXRef.current - CAPSULE_PADDING
-    );
-    const getSlotAreaWidth = () => slotWidthRef.current * TABS.length;
+    const targetSlot = (screenX: number, screenY: number) => {
+      const bounds = rowBoundsRef.current;
+      if (!visibleRef.current || screenY < bounds.y || screenY >= bounds.y + bounds.height) {
+        return null;
+      }
+      const width = bounds.width - 2 * CAPSULE_PADDING;
+      return calculateTargetSlotIndex(
+        screenX - bounds.x - CAPSULE_PADDING, width, width / TABS.length, TABS.length,
+      );
+    };
 
     return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        isDraggingRef.current = false;
+      // Pressable owns taps and accessibility activation. Only an intentional
+      // horizontal drag cancels its press and transfers ownership to the row.
+      onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) => visibleRef.current
+        && Math.abs(dx) > YanjiLiquidGlass.dragThreshold && Math.abs(dx) > Math.abs(dy),
+      onPanResponderGrant: (_evt, gestureState) => {
+        setPreviewIndex(targetSlot(gestureState.moveX, gestureState.moveY));
       },
       onPanResponderMove: (_evt, gestureState) => {
-        const sw = slotWidthRef.current;
-        if (sw <= 0) return;
-
-        if (Math.hypot(gestureState.dx, gestureState.dy) > 4) {
-          isDraggingRef.current = true;
-        }
+        setPreviewIndex(targetSlot(gestureState.moveX, gestureState.moveY));
       },
       onPanResponderRelease: (_evt, gestureState) => {
-        const sw = slotWidthRef.current;
-        const wasDragging = isDraggingRef.current;
-        isDraggingRef.current = false;
-
-        if (sw <= 0) return;
-
-        const finalX = gestureState.moveX || (gestureState.x0 + gestureState.dx);
-        const finalSlot = wasDragging
-          ? calculateTargetSlotIndex(getRowX(finalX), getSlotAreaWidth(), sw, TABS.length)
-          : calculateTargetSlotIndex(getRowX(gestureState.x0), getSlotAreaWidth(), sw, TABS.length);
+        const finalSlot = targetSlot(gestureState.moveX, gestureState.moveY);
+        setPreviewIndex(null);
         if (finalSlot === null) return;
-
-        activeSlotRef.current = finalSlot;
         selectTabRef.current(TABS[finalSlot].key);
       },
       onPanResponderTerminate: () => {
-        isDraggingRef.current = false;
+        setPreviewIndex(null);
       },
     });
   }, []);
-
-  const contentHeight = height - 2 * paper.layout.hairlineWidth;
 
   return (
     <View
@@ -143,8 +129,6 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         height,
         borderRadius: height / 2,
         backgroundColor: material.backdrop,
-        borderWidth: paper.layout.hairlineWidth,
-        borderColor: material.border,
         justifyContent: 'center',
         ...theme.shadow.floating(theme.isDark),
       }, { opacity: visible ? 1 : 0 }]}
@@ -153,20 +137,15 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         visible={visible}
         blurMode="glass"
         blurTargetId={YanjiLiquidGlass.targetId}
-        // The variant follows the theme, because the milky lift only works on
-        // paper. `regular` lifts the blur 30% toward white, which over a light
-        // page reads as frosted glass but over a dark one turns the dock into a
-        // grey slab (the page's 27 becomes 79). Dark therefore uses `clear`,
-        // which applies no lift: the dock stays close to the page it floats on
-        // and the rim highlight does the work of saying "glass". iOS draws the
-        // same distinction between its light and dark materials.
-        glassVariant={theme.isDark ? 'clear' : 'regular'}
-        glassTint={material.tint}
+        // Navigation needs the regular material in both themes. Our native
+        // patch derives white lift and reflection from the tint's brightness.
+        glassVariant="regular"
+        glassTint={highContrast ? paper.colors.elevated : material.tint}
         blurRadius={YanjiLiquidGlass.blurRadius}
         downsampling={YanjiLiquidGlass.downsampling}
         maxUpdateFps={YanjiLiquidGlass.maxUpdateFps}
-        saturation={YanjiLiquidGlass.saturation}
-        interactive={!reduceMotion}
+        saturation={highContrast ? 1 : YanjiLiquidGlass.saturation}
+        interactive={!reduceMotion && !highContrast}
         fadeDuration={0}
         style={[{ ...StyleSheet.absoluteFill, borderRadius: height / 2, overflow: 'hidden' }]}
       >
@@ -177,7 +156,7 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
           style={{
             flexDirection: 'row',
             width: '100%',
-            height: contentHeight,
+            height,
             borderRadius: YanjiRadius.full,
             padding: CAPSULE_PADDING,
             overflow: 'hidden',
@@ -185,9 +164,9 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
         >
           {TABS.map((tab, tabIndex) => {
             const isActive = tabIndex === index;
-            const foreground = isActive && !theme.isDark
-              ? paper.colors.brandInk
-              : (isActive ? paper.colors.brand : paper.colors.ink);
+            const isPreview = previewIndex === tabIndex;
+            const foreground = isActive ? paper.colors.brandInk
+              : (isPreview || highContrast ? paper.colors.ink : paper.colors.secondary);
             return (
               <Pressable
                 key={tab.key}
@@ -196,15 +175,16 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
                 accessibilityLabel={tab.label}
-                style={{
+                style={({ pressed }) => ({
                   flex: 1,
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   paddingVertical: YanjiLiquidGlass.itemPadding,
                   borderRadius: YanjiRadius.full,
-                  minHeight: YanjiTouch.min,
-                }}
+                  minHeight: YanjiTouch.comfortable,
+                  opacity: pressed ? YanjiLiquidGlass.pressedOpacity : 1,
+                })}
               >
                 <YanjiIcon
                   name={TAB_ICONS[tab.key]}
@@ -217,7 +197,7 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
                     fontSize: YanjiLiquidGlass.labelSize,
                     lineHeight: YanjiLiquidGlass.labelLineHeight,
                     marginTop: YanjiLiquidGlass.labelGap,
-                    fontWeight: isActive ? '700' : '500',
+                    fontWeight: isActive ? '700' : (isPreview ? '600' : '500'),
                     color: foreground,
                     letterSpacing: 0.2,
                   }}
@@ -229,7 +209,6 @@ export function BottomTabBar({ visible = true }: { visible?: boolean }): React.J
           })}
         </View>
       </BlurOverlay>
-
     </View>
   );
 }
