@@ -174,8 +174,15 @@ function AppShell(): React.JSX.Element {
       <StatusBar barStyle={focusImmersive || theme.isDark ? 'light-content' : 'dark-content'} />
 
       <BlurTarget id={YanjiLiquidGlass.targetId} style={{ flex: 1, paddingTop: topInset }}>
-        {/* Keep the safe-area padding outside the absolute-positioning parent. */}
-        <View testID="tab-content" style={{ flex: 1 }}>
+        {/* The capture target paints the page canvas itself. A live glass overlay
+            records only this subtree, never the shell behind it, so a pane that is
+            momentarily empty — the commit where a tab is selected before its screen
+            mounts, or the frame where the old pane is already hidden — would
+            otherwise record transparent pixels. Blurring transparency yields black,
+            which the glass body turns into the grey band that flashed on every tab
+            switch. Giving the content area its own canvas keeps every capture
+            opaque. */}
+        <View testID="tab-content" style={{ flex: 1, backgroundColor: backdrop }}>
           <TabPane testID="pane-today" active={foreground && !settingsOpen && activeTab === 'today'}>
             {mountedTabs.has('today') ? (
               <TodayScreen
