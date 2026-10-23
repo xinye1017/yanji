@@ -468,20 +468,35 @@ interface StudyTaskDao {
     )
     fun observeByDate(date: String): Flow<List<StudyTaskEntity>>
 
+    /**
+     * 某一天的任务，带「这条计划累计投入」的已完成专注秒数。
+     *
+     * 投入按承接链汇总，而不是只按任务自己的 id：跨日承接会为今天新建一条
+     * 任务，历史专注仍挂在更早的 id 上，只按当前 id 求和会让今天这条计划在
+     * 承接后显示 0m，直到再专注一轮才「出现」之前的投入。完成时看到的合计
+     * 因此必须覆盖整条链，修改计划时间后刷新也不会丢掉这段历史。
+     */
     @Query(
-        "SELECT " +
+        "WITH RECURSIVE chain(rootId, id) AS (" +
+            "SELECT t0.id, t0.id FROM study_tasks AS t0 WHERE t0.date = :date " +
+            "UNION " +
+            "SELECT chain.rootId, source.id FROM study_tasks AS source " +
+            "JOIN chain ON source.carriedOverToId = chain.id" +
+        ") " +
+            "SELECT " +
             "t.id AS task_id, t.date AS task_date, t.subjectId AS task_subjectId, " +
             "t.subjectName AS task_subjectName, t.title AS task_title, " +
             "t.plannedMinutes AS task_plannedMinutes, t.isCompleted AS task_isCompleted, " +
             "t.carriedOverToId AS task_carriedOverToId, " +
             "t.createdAt AS task_createdAt, t.updatedAt AS task_updatedAt, " +
-            "COALESCE(SUM(f.durationSeconds), 0) AS actualSeconds " +
+            "COALESCE((" +
+                "SELECT SUM(f.durationSeconds) FROM focus_sessions AS f " +
+                "WHERE f.status = 'COMPLETED' AND f.taskId IN (" +
+                    "SELECT chain.id FROM chain WHERE chain.rootId = t.id" +
+                ")" +
+            "), 0) AS actualSeconds " +
             "FROM study_tasks AS t " +
-            "LEFT JOIN focus_sessions AS f " +
-            "ON f.taskId = t.id AND f.status = 'COMPLETED' " +
             "WHERE t.date = :date " +
-            "GROUP BY t.id, t.date, t.subjectId, t.subjectName, t.title, " +
-            "t.plannedMinutes, t.isCompleted, t.carriedOverToId, t.createdAt, t.updatedAt " +
             "ORDER BY t.isCompleted ASC, t.createdAt ASC"
     )
     suspend fun getByDateWithActualSeconds(date: String): List<StudyTaskActualSecondsRow>
@@ -565,6 +580,27 @@ interface StudyTaskDao {
 
     @Query("SELECT id FROM study_tasks WHERE carriedOverToId = :destinationId")
     suspend fun getDirectCarryOverSourceIds(destinationId: String): List<String>
+
+    /**
+     * 一条承接链上所有任务的已完成专注秒数合计。
+     *
+     * 承接会为今天新建一条任务（新 id），而历史专注始终挂在更早的 id 上，
+     * 所以「这条计划到现在一共投入了多久」不能只按当前 id 求和。
+     * 用递归 CTE 沿 carriedOverToId 反向遍历来源链（A→B→C 时从 C 能回到 A），
+     * 把链上每一条任务的已完成专注都计入；未完成时段与未绑定计划时段照旧排除。
+     */
+    @Query(
+        "WITH RECURSIVE chain(id) AS (" +
+            "SELECT id FROM study_tasks WHERE id = :taskId " +
+            "UNION " +
+            "SELECT source.id FROM study_tasks AS source " +
+            "JOIN chain ON source.carriedOverToId = chain.id" +
+        ") " +
+            "SELECT COALESCE(SUM(f.durationSeconds), 0) " +
+            "FROM focus_sessions AS f " +
+            "WHERE f.status = 'COMPLETED' AND f.taskId IN (SELECT id FROM chain)"
+    )
+    suspend fun getChainActualSeconds(taskId: String): Long
 
     /**
      * 目标任务已不存在说明已被用户删除，清理悬空来源任务，避免已删除的任务回到待处理区。

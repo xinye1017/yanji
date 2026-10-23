@@ -866,7 +866,15 @@ internal suspend fun carryStudyTaskToTodayInTransaction(
             updatedAt = timestamp
         )
         dao.insertCarryOver(destination)
-        StudyTaskWithActualSeconds(destination.toDomainModel(), actualSeconds = 0L)
+        // The copy is a new row, so its own focus sessions start empty. What the
+        // plan has already invested lives on the earlier ids in the chain, and
+        // that is what the Today page shows under the carried row until a new
+        // round adds to it. Reading it here keeps the first render truthful
+        // instead of claiming 0m for work that already happened.
+        StudyTaskWithActualSeconds(
+            task = destination.toDomainModel(),
+            actualSeconds = dao.getChainActualSeconds(destinationId)
+        )
     }
 }
 

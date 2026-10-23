@@ -172,10 +172,57 @@ class StudyTaskCarryOverQueriesTest {
         assertEquals(9_000L, destination.createdAt)
         assertEquals(9_000L, destination.updatedAt)
         assertEquals("today-copy", result.task.id)
-        assertEquals(0L, result.actualSeconds)
+        // The copy is a new row with no sessions of its own, but the plan already
+        // invested 900s on the source. Today must show that history straight
+        // away, not 0m until another round is focused.
+        assertEquals(900L, result.actualSeconds)
         assertEquals(
             0,
             dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size
+        )
+    }
+
+    @Test
+    fun todaysCopyReportsTheWholeChainsInvestedTimeAndSurvivesAPlanEdit() = isolatedDatabase { db ->
+        val dao = db.studyTaskDao()
+        // A plan carried twice: 2026-10-20 → 2026-10-21 → today. Focus time was
+        // recorded against the two earlier ids only, which is what happens in
+        // real use — the new copy never inherits those session rows.
+        dao.insert(task("day-1", "2026-10-20"))
+        dao.insert(task("day-2", "2026-10-21", carriedOverToId = null))
+        db.focusSessionDao().insert(focus("f1", "day-1", 600))
+        db.focusSessionDao().insert(focus("f2", "day-2", 900))
+        db.focusSessionDao().insert(focus("cancelled", "day-2", 3600, status = "CANCELLED"))
+        // Chain them the way the carry transaction does, then carry into today.
+        dao.linkCarryOverSource("day-1", "day-2", "2026-10-15", "2026-10-22", 5_000L)
+        val carried = carryStudyTaskToTodayInTransaction(
+            db = db,
+            taskId = "day-2",
+            today = today,
+            timestamp = 9_000L,
+            destinationId = "day-3"
+        )
+
+        assertEquals(1500L, carried.actualSeconds)
+
+        // The Today projection must report the same figure, so the row the user
+        // sees agrees with the value the carry returned.
+        val todaysRow = dao.getByDateWithActualSeconds("2026-10-22").single()
+        assertEquals("day-3", todaysRow.task.id)
+        assertEquals(1500L, todaysRow.actualSeconds)
+
+        // Editing the plan (its title / planned minutes) touches neither the
+        // chain nor the sessions, so the invested total has to survive the edit.
+        assertEquals(1, dao.updateDetails("day-3", "改过标题", 120, 10_000L))
+        val afterEdit = dao.getByDateWithActualSeconds("2026-10-22").single()
+        assertEquals(120, afterEdit.task.plannedMinutes)
+        assertEquals(1500L, afterEdit.actualSeconds)
+
+        // A fresh round on the copy adds to the same total rather than replacing it.
+        db.focusSessionDao().insert(focus("f3", "day-3", 300))
+        assertEquals(
+            1800L,
+            dao.getByDateWithActualSeconds("2026-10-22").single().actualSeconds
         )
     }
 
