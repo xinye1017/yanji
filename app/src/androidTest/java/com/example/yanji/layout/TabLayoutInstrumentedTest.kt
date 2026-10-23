@@ -554,7 +554,10 @@ class TabLayoutInstrumentedTest {
         await("$tab activated") { required("pane-$tab").alpha == 1f }
         // The shell mounts a tab screen on its first visit (App.tsx), so the
         // pane wrapper can be active one frame before its page content exists.
-        await("$tab content mounted") { find("scroll-$tab") != null }
+        // Assert on the pane's children rather than on a specific screen
+        // element: Focus swaps its ScrollView for the immersion field while a
+        // session runs, so a scroll-focus wait would never settle there.
+        await("$tab content mounted") { (find("pane-$tab") as? ViewGroup)?.childCount?.let { it > 0 } == true }
     }
 
     /** Visits every tab once so each lazily-mounted page has mounted. */
