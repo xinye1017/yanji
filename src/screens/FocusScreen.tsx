@@ -567,10 +567,23 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 </ScrollView>
               ) : null}
 
+            </View>
+
+            {/* The dial never moves. A linked plan used to push it down by the
+                height of its own chip, so starting a focus from a task shifted the
+                clock a few dozen dp — the one number the page exists to show.
+                The chip now reserves its own band above, whether or not it is
+                present. */}
+            <View
+              style={{
+                minHeight: YanjiSpacing.xl + 8,
+                justifyContent: 'flex-end',
+                alignSelf: 'stretch',
+              }}
+            >
               {taskBinding ? (
                 <View
                   style={{
-                    marginTop: YanjiSpacing.sm,
                     paddingLeft: YanjiSpacing.md,
                     paddingRight: YanjiSpacing.xs,
                     paddingVertical: YanjiSpacing.xs,
@@ -728,12 +741,15 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 </>
               ) : (
                 <>
+                  {/* The stopwatch placeholder owns exactly the same band as the
+                      rolling digits, so switching 倒计时 / 正计时 never moves the
+                      ruler below it. */}
                   <View
                     accessible
                     accessibilityRole="text"
                     accessibilityLabel="正向自由计时，不设上限"
                     style={{
-                      height: dialSlotHeight,
+                      height: dialSlotHeight + YanjiSpacing.xs * 2,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginVertical: YanjiSpacing.xs,

@@ -200,13 +200,16 @@ export function RollingTimeDisplay({
     includeFontPadding: false,
   };
 
+  // The unit sits *under* the digits' baseline rather than beside them: 「84 min」
+  // on one line made the block wider than the ruler beneath it, and dropping the
+  // unit to the lower right keeps the number itself the widest thing on the page.
+  const unitSize = Math.round(24 * effectiveScale);
   const unitStyle: TextStyle = {
     ...paper.typography.titleSection,
-    fontSize: Math.round(24 * effectiveScale),
-    lineHeight: slotHeight,
+    fontSize: unitSize,
+    lineHeight: Math.ceil(unitSize * 1.15),
     fontWeight: '500',
     color: paper.colors.secondary,
-    marginLeft: Math.round(6 * effectiveScale),
     includeFontPadding: false,
   };
 
@@ -219,7 +222,9 @@ export function RollingTimeDisplay({
       style={[
         {
           flexDirection: 'row',
-          alignItems: 'center',
+          // The digits stay centred in their slot; the unit is anchored to the
+          // baseline edge below, so it hangs off the number's lower right corner.
+          alignItems: 'flex-end',
           justifyContent: 'center',
           height: slotHeight,
         },
@@ -255,7 +260,12 @@ export function RollingTimeDisplay({
         color={inkColor}
         reducedMotion={reducedMotion}
       />
-      <Text allowFontScaling={false} style={[unitStyle, { textAlign: 'center' }]}>min</Text>
+      {/* Sits in the corner the digits leave empty: the number's baseline is the
+          bottom of its line box, and the unit is a small label tucked just under
+          the last stroke rather than a second word beside it. */}
+      <View style={{ justifyContent: 'flex-end', marginLeft: Math.round(2 * effectiveScale) }}>
+        <Text allowFontScaling={false} style={[unitStyle, { marginBottom: Math.round(slotHeight * 0.04) }]}>min</Text>
+      </View>
     </View>
   );
 }

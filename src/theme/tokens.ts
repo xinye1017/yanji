@@ -287,8 +287,8 @@ export const YanjiPaperTypography = {
     fontVariant: ['tabular-nums'] as const,
   },
   displayDial: {
-    fontSize: 64,
-    lineHeight: 70,
+    fontSize: 84,
+    lineHeight: 92,
     fontWeight: '700' as const,
     fontFamily: 'sans-serif-medium',
     fontVariant: ['tabular-nums'] as const,
