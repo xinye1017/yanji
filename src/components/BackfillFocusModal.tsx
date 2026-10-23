@@ -56,6 +56,20 @@ function clockText(hour: number, minute: number): string {
   return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
 }
 
+/**
+ * A default start time that is always in the past, rounded down to a quarter
+ * hour: "the last session I forgot to time" is much more often the one that
+ * just ended than a fixed hour of the day.
+ */
+function defaultStart(now: Date = new Date()): { hour: number; minute: number } {
+  const minute = Math.floor(now.getMinutes() / 15) * 15;
+  return { hour: now.getHours(), minute };
+}
+
+const DEFAULT_START = defaultStart();
+const defaultStartHour = DEFAULT_START.hour;
+const defaultStartMinute = DEFAULT_START.minute;
+
 interface BackfillFocusModalProps {
   visible: boolean;
   onClose: () => void;
@@ -80,8 +94,13 @@ export function BackfillFocusModal({
   const [tasks, setTasks] = useState<StudyTask[]>([]);
   const [day, setDay] = useState<string>(todayIso);
   const [subjectId, setSubjectId] = useState<string | null>(initialSubjectId);
-  const [hour, setHour] = useState(16);
-  const [minute, setMinute] = useState(30);
+  // Default to a session that has plausibly just ended, never a future clock
+  // time: a hard-coded 16:30 made the sheet refuse its own default save during
+  // any morning session, and the user had to correct a time they never chose.
+  // The clock is read once per open (see the effect below) so a sheet left open
+  // across a boundary cannot drift into the future either.
+  const [hour, setHour] = useState(defaultStartHour);
+  const [minute, setMinute] = useState(defaultStartMinute);
   const [duration, setDuration] = useState(50);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -95,6 +114,11 @@ export function BackfillFocusModal({
     setSaving(false);
     setTaskId(null);
     setDay(todayIso());
+    // Re-read the clock per open so the default start stays in the past even
+    // when the sheet is opened again hours later in the same process.
+    const start = defaultStart();
+    setHour(start.hour);
+    setMinute(start.minute);
     YanjiDataNative.getSubjects()
       .then(list => {
         const enabled = list.filter(subject => subject.enabled);

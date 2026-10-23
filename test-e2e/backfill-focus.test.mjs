@@ -122,7 +122,9 @@ test('补录提交的是开始时刻与时长，不是一段散文', async () =>
   const records = [];
   const h = harness({ records });
   const tree = await h.render();
-  // 默认就是今天 16:30 / 50 分钟；直接保存即验证默认字段。
+  // The default start must already have happened: saving without touching any
+  // field is the whole point of the sheet, and a fixed clock time made that
+  // impossible for every session earlier in the day than the hard-coded one.
   await saveButton(tree()).props.onPress();
   assert.equal(records.length, 1, '补录写下了一条真实的专注记录');
   const record = records[0];
@@ -130,9 +132,9 @@ test('补录提交的是开始时刻与时长，不是一段散文', async () =>
   assert.equal(record.durationMinutes, 50);
   assert.equal(record.taskId, null, '默认不关联计划');
   const start = new Date(record.startTime);
-  assert.equal(start.getHours(), 16);
-  assert.equal(start.getMinutes(), 30);
-  assert.equal(start.getDate(), 23, '默认补的是今天');
+  assert.ok(start.getTime() <= Date.now(), '默认开始时间不能落在未来');
+  assert.ok(Date.now() - start.getTime() < 60 * 60 * 1000, '默认补的是刚刚结束的一段专注');
+  assert.equal(start.getMinutes() % 15, 0, '默认时间对齐到整刻钟');
 });
 
 test('学科可以切换，关联计划是可选字段', async () => {
