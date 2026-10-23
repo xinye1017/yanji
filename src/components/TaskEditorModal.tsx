@@ -156,11 +156,14 @@ export function TaskEditorModal({
   const handleDelete = useCallback(async () => {
     if (!editingTask) return;
     setSaving(true);
+    setError(null);
     try {
       await YanjiDataNative.deleteTask(editingTask.id);
       onSaved?.();
       onClose();
-    } catch { setError('删除失败，请重试'); }
+    } catch {
+      setError('删除失败，请重试');
+    }
     finally { setSaving(false); }
   }, [editingTask, onSaved, onClose]);
 

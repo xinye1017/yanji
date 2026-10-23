@@ -1173,6 +1173,7 @@ export function YanjiTaskLedgerRow({
   onToggle,
   onEdit,
   onStartFocus,
+  onLongPress,
 }: {
   title: string;
   subjectName: string;
@@ -1186,6 +1187,7 @@ export function YanjiTaskLedgerRow({
   onToggle: () => void;
   onEdit: () => void;
   onStartFocus: () => void;
+  onLongPress?: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
@@ -1227,6 +1229,8 @@ export function YanjiTaskLedgerRow({
         </Pressable>
         <Pressable
           onPress={onEdit}
+          onLongPress={onLongPress}
+          delayLongPress={350}
           accessibilityRole="button"
           accessibilityLabel={`编辑任务：${title}`}
           style={({ pressed }) => ({

@@ -160,10 +160,8 @@ class YanjiDataModule(
     @ReactMethod
     fun deleteTask(taskId: String, promise: Promise) {
         scope.launchPersistedWrite(promise, "E_TASK_DELETE_FAILED") {
-            if (!repository.deleteStudyTask(taskId)) {
-                promise.reject("E_TASK_NOT_FOUND", "Task no longer exists")
-                return@launchPersistedWrite
-            }
+            repository.deleteStudyTask(taskId)
+            emitDataChanged("tasks")
             promise.resolve(true)
         }
     }

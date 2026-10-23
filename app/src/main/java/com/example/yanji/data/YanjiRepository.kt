@@ -484,7 +484,7 @@ class YanjiRepository private constructor() {
      */
     suspend fun deleteStudyTask(id: String): Boolean {
         val db = requireDatabase()
-        return db.useWriterConnection { transactor ->
+        val deleted = db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
                 deleteStudyTaskInTransaction(
                     db = db,
@@ -493,6 +493,10 @@ class YanjiRepository private constructor() {
                 )
             }
         }
+        if (deleted) {
+            db.invalidationTracker.refreshVersionsAsync()
+        }
+        return deleted
     }
 
     /**
