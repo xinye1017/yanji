@@ -16,7 +16,7 @@ const RHYTHM_HOURS = Array.from(
 );
 export function displayDate(date: string): string {
   const day = new Date(`${date}T12:00:00`);
-  return `${day.getMonth() + 1}月${day.getDate()}日 · 周${'日一二三四五六'[day.getDay()]}`;
+  return `${day.getMonth() + 1}月${day.getDate()}日 周${'日一二三四五六'[day.getDay()]}`;
 }
 
 export function greeting(hour: number): string {

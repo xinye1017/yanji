@@ -761,12 +761,12 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     }}
                   >
                     <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-                      正向计时待命中 · 随时开启
+                      正向计时待命
                     </Text>
                   </View>
 
                   <Text style={[paper.typography.captionMeta, { color: paper.colors.muted, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
-                    自由正向计时 · 不设上限
+                    自由正向计时
                   </Text>
                 </>
               )}

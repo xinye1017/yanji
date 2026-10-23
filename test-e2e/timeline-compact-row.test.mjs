@@ -195,7 +195,7 @@ test('every tag carries a fixed-width icon slot: bulb, question or clock', () =>
   const card = nodes(bulb, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.elevated)[0];
   assert.ok(card, 'the card container renders with elevated background');
 
-  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagIcon: 'doubt', tagTone: 'brand' });
+  const doubt = h.render({ tagLabel: '疑点 待解决', tagIcon: 'doubt', tagTone: 'brand' });
   assert.equal(tagIcon(doubt).props.name, 'doubt', '疑点 uses the circled question mark');
 
   const session = h.render({ tagLabel: '数据结构', tagIcon: 'clock3', tagTone: 'neutral', metaText: '30分钟' });
@@ -216,7 +216,7 @@ test('the clock sits on the page gutter, and the dot/chip follow the tag tone', 
   assert.ok(nodes(positive, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.positive)[0],
     '灵感 uses the green dot');
 
-  const doubt = h.render({ tagLabel: '疑点 · 待解决', tagTone: 'brand' });
+  const doubt = h.render({ tagLabel: '疑点 待解决', tagTone: 'brand' });
   assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brandSubtle)[0]);
   assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brand)[0]);
 

@@ -620,9 +620,9 @@ function Timeline({ entries, busyNote, onEditNote, onOpenMenu }: {
       isFirst={index === 0} isLast={index === entries.length - 1}
       busyNote={busyNote}
       onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
-    {entries.length > 0 ? <Text style={[typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm }]}>
-      按真实发生时刻排列；完成计划不标记未提供的完成时刻。
-    </Text> : null}
+
+
+
   </View>;
 }
 
@@ -652,7 +652,7 @@ function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu
     />;
   }
   const tagLabel = entry.category === 'DOUBT'
-    ? (entry.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
+    ? (entry.isResolved ? '疑点 已解决' : '疑点 待解决')
     : entry.category === 'INSPIRATION' ? '灵感' : null;
   return <TimelineCompactRow
     timeLabel={formatClockFromEpoch(entry.at)}
@@ -891,7 +891,7 @@ function TrendSummary({
               fontVariant: ['tabular-nums'],
             }}>
               {scope !== 'TODAY' && overview
-                ? `${formatDailyAverageDuration(overview.dailyAverageSeconds)}${goalDays ? ` · 达标 ${goalDays.reached}/${goalDays.elapsed} 天` : ''}`
+                ? `${formatDailyAverageDuration(overview.dailyAverageSeconds)}${goalDays ? `  达标 ${goalDays.reached}/${goalDays.elapsed} 天` : ''}`
                 : `日均 ${overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}`}
             </Text>
           </View>

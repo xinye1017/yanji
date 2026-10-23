@@ -81,9 +81,9 @@ function timeLabel(timestamp: number): string {
 function carryOverSourceLabel(sourceDate: string, today: string): string {
   const yesterday = new Date(`${today}T12:00:00`);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (sourceDate === localDay(yesterday)) return '昨天的计划 · 尚未完成';
+  if (sourceDate === localDay(yesterday)) return '昨天的计划 尚未完成';
   const source = new Date(`${sourceDate}T12:00:00`);
-  return `${source.getMonth() + 1}月${source.getDate()}日的计划 · 尚未完成`;
+  return `${source.getMonth() + 1}月${source.getDate()}日的计划 尚未完成`;
 }
 
 /**
@@ -479,7 +479,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   // `examCountdownText` already reads 「距初试 N 天」/「已过设定日期 N 天」, so the
   // badge only adds the year it belongs to rather than restating the count.
   const countdownLabel = countdown && countdownLocal
-    ? `${countdownExamDate.slice(0, 4)} 考研 · ${countdownLocal}`
+    ? `${countdownExamDate.slice(0, 4)} 考研 ${countdownLocal}`
     : null;
   const savedStatus = !snapshot ? '正在读取今日记录…'
     : goalSeconds && effectiveSeconds > goalSeconds ? `超出目标 +${compactDuration(effectiveSeconds - goalSeconds)}`
@@ -536,7 +536,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
               {goalSeconds !== null && goalSeconds > 0 ? (
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  目标 {goalClock(goalSeconds)} 
+                  {`目标 ${goalClock(goalSeconds)}  `}
                   <Text style={{ color: colors.ink, fontWeight: '600' }}>{snapshot ? `${Math.round(effectiveSeconds / goalSeconds * 100)}%` : '—'}</Text>
                 </Text>
               ) : (
@@ -682,7 +682,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               {latestNotes.map((note, index) => (
                 <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
-                  tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 · 已解决' : '疑点 · 待解决')
+                  tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 已解决' : '疑点 待解决')
                     : note.category === 'INSPIRATION' ? '灵感' : null}
                   tagIcon={note.category === 'INSPIRATION' ? 'inspiration'
                     : note.category === 'DOUBT' ? 'doubt' : undefined}
@@ -832,7 +832,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   </View>
                   {detail ? (
                     <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>
-                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)} · {detail.subjectName} · {duration(detail.seconds)}
+                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)}  {detail.subjectName}  {duration(detail.seconds)}
                     </Text>
                   ) : null}
                 </View>;
@@ -853,7 +853,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
               paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: insets.bottom + YanjiSpacing.lg,
             }, carryOverSheetStyle]}>
-              <YanjiPaperSheetHeading title={`待处理计划 · ${visibleCarryOverTasks.length} 项`}
+              <YanjiPaperSheetHeading title={`待处理计划 (${visibleCarryOverTasks.length} 项)`}
                 subtitle="保留原计划日期，选择接下来如何安排。" onClose={closeCarryOver} />
               <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
                 {carryOverReadFailed ? (
@@ -909,7 +909,7 @@ function LiveSessionReadout({ session, visible }: {
   const isPaused = session.isPaused || tick?.isPaused;
   return <View style={{ flexGrow: 1, flexBasis: paper.layout.activeSessionReadoutMinWidth }}>
     <Text style={[paper.typography.captionMeta, { color: isPaused ? paper.colors.secondary : paper.colors.brandInk }]}>
-      {session.subjectName} · {isPaused ? '已暂停' : '正在专注'}
+      {session.subjectName} {isPaused ? '已暂停' : '正在专注'}
     </Text>
     <View accessible accessibilityLabel={`${session.isCountdown ? '本轮剩余' : '本轮已持续'} ${clock(seconds)}，${isPaused ? '已暂停' : '正在专注'}`}
       accessibilityHint="本轮尚未计入今日已保存总量"

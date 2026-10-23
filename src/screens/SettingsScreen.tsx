@@ -313,7 +313,7 @@ export function SettingsScreen(): React.JSX.Element {
         <Text
           style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.md, textAlign: 'center' }]}
         >
-          研迹 · 学习数据默认保存在本机
+          学习数据默认保存在本机
         </Text>
       </ScrollView>
 

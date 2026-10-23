@@ -263,7 +263,7 @@ test('TodayScreen renders doubts inside 记录此刻 without redundant 今日疑
 
   const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].props.tagLabel, '疑点 · 待解决');
+  assert.equal(rows[0].props.tagLabel, '疑点 待解决');
   assert.equal(rows[0].props.tagTone, 'brand');
 });
 
@@ -303,12 +303,12 @@ test('ReviewScreen tags doubts/inspirations and resolves them through the anchor
   const tree = harness.render();
   const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
   const tags = rows.map(row => row.props.tagLabel);
-  assert.ok(tags.includes('疑点 · 待解决'), 'the doubt row carries its state tag');
+  assert.ok(tags.includes('疑点 待解决'), 'the doubt row carries its state tag');
   assert.ok(tags.includes('灵感'), 'the inspiration row carries its category tag');
   assert.deepEqual(rows.map(row => row.props.tagTone).sort(), ['brand', 'positive']);
 
   // The row itself no longer toggles resolution: the anchored menu does.
-  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
+  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 待解决');
   doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   const menu = nodes(harness.render(), node => node.type === 'TimelineActionPopover')[0];
   const resolve = menu.props.actions.find(action => action.label === '标记为已解决');

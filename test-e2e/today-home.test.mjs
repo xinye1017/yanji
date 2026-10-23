@@ -65,7 +65,7 @@ const shared = loadTypeScript('src/components/YanjiUI.tsx', {
 });
 
 test('Chinese dates and durations retain truthful zero and subminute values', () => {
-  assert.equal(logic.displayDate(date), '10月16日 · 周五');
+  assert.equal(logic.displayDate(date), '10月16日 周五');
   assert.match(logic.displayDate('2026-12-31'), /^12月31日/);
   assert.equal(logic.goalClock(21600), '06h 00m');
   assert.equal(logic.compactDuration(3599), '59m');
@@ -424,7 +424,7 @@ test('compact session reads countdown, stopwatch and pause ticks without adding 
     isCountdown: true, remainingSeconds: 1200, elapsedSeconds: 60,
   };
   harness.setActive(active);
-  assert.match(text(harness.render()), /概率论与数理统计 · 正在专注20:00本轮剩余/);
+  assert.match(text(harness.render()), /概率论与数理统计 正在专注20:00本轮剩余/);
   harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 61, isPaused: false });
   let tree = harness.render();
   assert.match(text(tree), /19:59本轮剩余/);
@@ -433,7 +433,7 @@ test('compact session reads countdown, stopwatch and pause ticks without adding 
   harness.setActive({ ...active, isCountdown: false });
   harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 3661, isPaused: true });
   tree = harness.render();
-  assert.match(text(tree), /概率论与数理统计 · 已暂停1:01:01已持续/);
+  assert.match(text(tree), /概率论与数理统计 已暂停1:01:01已持续/);
   const readout = nodes(tree, n => n.props.accessibilityHint === '本轮尚未计入今日已保存总量')[0];
   assert.match(readout.props.accessibilityLabel, /本轮已持续 1:01:01，已暂停/);
 });
@@ -805,7 +805,7 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   assert.ok(highlight, 'each coloured span is its own press target');
   highlight.props.onPress();
   const detailTree = harness.render();
-  assert.match(text(detailTree), /10:45—11:15 · 数据结构 · 30分钟/);
+  assert.match(text(detailTree), /10:45—11:15  数据结构  30分钟/);
 });
 
 
@@ -920,8 +920,8 @@ test('today plans precede collapsed history, whose sheet keeps truthful dates an
     'the scrim settles at full tone without moving');
   assert.equal(animatedLayers[1].props.style[1].transform[0].translateY, 0,
     'only the sheet settles at its resting position');
-  assert.match(text(tree), /昨天的计划 · 尚未完成/);
-  assert.match(text(tree), /10月13日的计划 · 尚未完成/);
+  assert.match(text(tree), /昨天的计划 尚未完成/);
+  assert.match(text(tree), /10月13日的计划 尚未完成/);
   assert.match(text(tree), /复习操作系统文件管理/);
   assert.match(text(tree), /已投入 20m \/ 预计 45m/);
 });

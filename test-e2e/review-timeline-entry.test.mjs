@@ -362,11 +362,11 @@ test('note rows keep favorite, resolution, category correction and editing in th
     ],
   }));
   const rows = harness.rows(harness.render());
-  assert.deepEqual(plain(rows.map(row => row.props.tagLabel).sort()), ['疑点 · 待解决', '灵感'].sort());
+  assert.deepEqual(plain(rows.map(row => row.props.tagLabel).sort()), ['疑点 待解决', '灵感'].sort());
   assert.deepEqual(plain(rows.map(row => row.props.tagIcon).sort()), ['doubt', 'inspiration']);
   assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['brand', 'positive']);
 
-  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 · 待解决');
+  const doubtRow = rows.find(row => row.props.tagLabel === '疑点 待解决');
   doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   let menu = harness.menu(harness.render());
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
