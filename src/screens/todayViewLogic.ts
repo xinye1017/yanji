@@ -20,10 +20,26 @@ export function displayDate(date: string): string {
 }
 
 export function greeting(hour: number): string {
-  if (hour >= 5 && hour < 11) return '上午好';
-  if (hour >= 11 && hour < 14) return '中午好';
-  if (hour >= 14 && hour < 18) return '下午好';
-  return '晚上好';
+  if (hour < 5 || hour >= 23) return '夜深了，收个尾。';
+  if (hour >= 5 && hour < 11) return '上午好。';
+  if (hour >= 11 && hour < 14) return '中午好。';
+  if (hour >= 14 && hour < 18) return '下午好。';
+  return '晚上好。';
+}
+
+export function legendDuration(seconds: number): string {
+  const minutes = Math.max(0, Math.floor(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${hours}:${String(remainder).padStart(2, '0')}`;
+}
+
+export function goalDelta(seconds: number): string {
+  const minutes = Math.max(0, Math.floor(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${minutes} 分钟`;
+  return rest ? `${hours} 小时 ${rest} 分` : `${hours} 小时`;
 }
 
 export function compactDuration(seconds: number): string {

@@ -106,6 +106,8 @@ export function TimelineCompactRow({
       <View style={{ flexDirection: 'row' }}>
         <View
           style={{
+            width: 40,
+            flexShrink: 0,
             marginTop: hasContent ? 10 : 0,
             height: hasContent ? 28 : 32,
             justifyContent: 'center',
@@ -255,7 +257,7 @@ export function TimelineCompactRow({
               <Text
                 numberOfLines={3}
                 ellipsizeMode="tail"
-                style={[typography.bodyPrimary, { color: colors.ink, lineHeight: 22 }]}
+                style={[typography.bodyPrimary, { color: colors.ink, lineHeight: 22, fontFamily: 'serif' }]}
               >
                 {title}
               </Text>

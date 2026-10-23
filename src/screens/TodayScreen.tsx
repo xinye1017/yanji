@@ -35,7 +35,7 @@ import {
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import {
   buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
-  greeting, hourRangeLabel, rhythmSummary, spectrumLegend,
+  greeting, hourRangeLabel, legendDuration, rhythmSummary, spectrumLegend,
   summarizeSubjects, taskMeta,
 } from './todayViewLogic';
 import { examCountdownText, todayIso } from '../state/settingsViewLogic';
@@ -356,6 +356,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
     () => rhythmSummary(rhythmBuckets, snapshot !== null, hourRangeLabel),
     [rhythmBuckets, snapshot],
   );
+  const peakHourText = useMemo(() => {
+    const measured = rhythmBuckets.filter(b => b.seconds > 0);
+    if (measured.length === 0) return null;
+    const peak = measured.reduce((max, b) => b.seconds > max.seconds ? b : max, measured[0]);
+    return `${String(peak.hour).padStart(2, '0')}—${String(peak.hour + 1).padStart(2, '0')}`;
+  }, [rhythmBuckets]);
   const rhythmToggleLabel = rhythmExpanded ? '收起今日学习节奏详情' : '展开今日学习节奏详情';
   const selectSegment = (next: NonNullable<Selection>) =>
     setSelection(current => current?.key === next.key ? null : next);
@@ -492,9 +498,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
   // where it used to answer in a different one (`+6h25m`).
   const savedStatus = !snapshot ? '正在读取今日记录…'
     : goalSeconds && effectiveSeconds > goalSeconds ? `超出目标 ${goalDelta(effectiveSeconds - goalSeconds)}`
-      : snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考`
-        : goalSeconds && effectiveSeconds === goalSeconds ? '目标已达成'
-          : goalSeconds && effectiveSeconds > 0 ? `距目标还差 ${goalDelta(goalSeconds - effectiveSeconds)}`
+      : goalSeconds && effectiveSeconds === goalSeconds ? '目标已达成'
+        : goalSeconds ? `距目标还差 ${goalDelta(goalSeconds - effectiveSeconds)}`
+          : snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考`
             : '';
 
   return (
@@ -508,36 +514,36 @@ export function TodayScreen({ visible, foregroundRevision }: {
         accessibilityElementsHidden={momentMenu !== null || carryOverOpen}
         importantForAccessibility={momentMenu || carryOverOpen ? 'no-hide-descendants' : 'auto'}
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
-        {/* The greeting owns the top-left at headline size; the date, the exam
-            countdown and the settings entry stack on the right. The date used to
-            be an eyebrow above the greeting, which spent the page's strongest
-            position on something the phone already puts in its status bar. */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: YanjiSpacing.md, paddingBottom: 10 }}>
+        {/* The greeting owns the top-left at Serif headline size; the date and exam
+            countdown stack on the right as a clean text card that taps to open settings. */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: 10 }}>
           <Text accessibilityRole="header"
-            style={[typography.titleEditorial, { color: colors.ink, flex: 1, fontWeight: '700' }]}>
+            style={[typography.titleGreeting, { color: colors.ink, flex: 1 }]}>
             {greeting(now.getHours())}
           </Text>
-          <View style={{ alignItems: 'flex-end', paddingTop: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
-              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600' }]}>
-                {displayDate(date)}
-              </Text>
-              <YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标"
-                size={32} iconSize={18} />
-            </View>
+          <Pressable
+            onPress={openSettings}
+            accessibilityRole="button"
+            accessibilityLabel={countdown && countdownLocal
+              ? `${displayDate(date)}，${countdownLocal}，点击打开设置与目标`
+              : `${displayDate(date)}，点击打开设置与目标`}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => ({ alignItems: 'flex-end', paddingTop: 4, flexShrink: 0, opacity: pressed ? 0.65 : 1 })}>
+            <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+              {displayDate(date)}
+            </Text>
             {countdown && countdownLocal ? (
-              <Pressable onPress={openSettings} accessibilityRole="button"
-                accessibilityLabel={`考试日期 ${countdown.examDate}，${countdown.daysRemaining >= 0 ? `距初试${countdown.daysRemaining}天` : '考试日期已过'}`}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
-                <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-                  {countdownLocal.includes('距初试')
-                    ? <>距初试 <Text style={{ color: colors.ink, fontWeight: '700' }}>{countdown.daysRemaining}</Text> 天</>
-                    : countdownLocal}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
+                {countdownLocal.includes('距初试')
+                  ? <>距初试 <Text style={{ color: colors.ink, fontWeight: '600' }}>{countdown.daysRemaining}</Text> 天</>
+                  : countdownLocal}
+              </Text>
+            ) : (
+              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
+                设置与目标
+              </Text>
+            )}
+          </Pressable>
         </View>
         <YanjiHairline />
 
@@ -565,31 +571,34 @@ export function TodayScreen({ visible, foregroundRevision }: {
             </Pressable>
           </View>
           <View accessible accessibilityLabel={snapshot ? `今日已保存专注 ${duration(effectiveSeconds)}` : '正在读取今日专注'}
-            style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
+            style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 3 }}>
             {snapshot ? <>
               <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600))}</Text>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, marginHorizontal: 7 }]}>小时</Text>
-              <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds % 3600 / 60)).padStart(2, '0')}</Text>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 7 }]}>分</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.secondary, marginLeft: 5, marginRight: 8, transform: [{ translateY: -4 }] }}>小时</Text>
+              <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor((effectiveSeconds % 3600) / 60)).padStart(2, '0')}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.secondary, marginLeft: 5, transform: [{ translateY: -4 }] }}>分</Text>
             </> : <Text style={[typography.metricDaily, { color: colors.ink }]}>—</Text>}
           </View>
-          {savedStatus ? <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2, marginBottom: YanjiSpacing.xs }]}>
-            {savedStatus}<Text style={{ color: colors.muted }}>{'  ·  '}</Text>
-            已完整结束 <Text style={{ color: colors.ink, fontWeight: '600' }}>{snapshot?.focusCount ?? 0}</Text> 轮
-          </Text> : null}
+          {savedStatus ? (
+            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 6, marginBottom: YanjiSpacing.xs }]}>
+              {savedStatus}
+              <Text style={{ color: colors.muted }}>{'   '}</Text>
+              已完整结束 <Text style={{ color: colors.ink, fontWeight: '600' }}>{snapshot?.focusCount ?? 0}</Text> 轮
+            </Text>
+          ) : null}
           <YanjiChronoSpectrum segments={subjects} totalSeconds={effectiveSeconds} goalSeconds={snapshot ? goalSeconds : null}
             accessibilityLabel={snapshot ? undefined : '正在读取今日专注'} />
           {legendItems.length > 0 ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: YanjiSpacing.md, marginTop: YanjiSpacing.xs }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 15, rowGap: 6, marginTop: 10 }}>
               {legendItems.map(item => (
                 <Pressable key={item.id}
                   onPress={() => selectSegment({ kind: 'subject', key: `subject:${item.id}`, subjectId: item.id, subjectName: item.label, seconds: item.seconds })}
                   accessibilityRole="button" accessibilityState={{ selected: selection?.kind === 'subject' && selection.subjectId === item.id }}
                   accessibilityLabel={`${item.label}，今日专注 ${duration(item.seconds)}`}
-                  style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
+                  style={({ pressed }) => ({ minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.65 : 1 })}>
                   <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: item.color }} />
                   <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.kind === 'subject' && selection.subjectId === item.id ? '700' : '500' }]}>
-                    {item.label} {compactDuration(item.seconds)}
+                    {item.label} <Text style={{ color: colors.ink, fontWeight: '600' }}>{legendDuration(item.seconds)}</Text>
                   </Text>
                 </Pressable>
               ))}
@@ -647,7 +656,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiPaperSectionHeading
           title="今日计划"
           titleStyle={typography.titleSection}
-          countText={snapshot ? `${completed.length}/${tasks?.length ?? 0}` : '—'}
+          countText={snapshot ? undefined : '—'}
           spaceBefore={YanjiSpacing.sm}
           spaceAfter={0}
           align="center"
@@ -664,6 +673,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           {[...pending, ...completed].map((task, index, rows) => (
             <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
               meta={taskMeta(task)} accentColor={task.subjectColor} completed={task.completed}
+              isLead={!task.completed && task.id === pending[0]?.id}
               isLast={index === rows.length - 1}
               busy={busyTask === task.id} disabled={busyTask !== null}
               onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)}
@@ -767,10 +777,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
               accessibilityHint={rhythmExpanded ? '收起专注时段详情' : '展开专注时段详情'}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
-              <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                {rhythmExpanded ? '收起详情' : '展开详情'}
-              </Text>
-              <YanjiIcon name={rhythmExpanded ? 'chevronUp' : 'chevronDown'} size={typography.captionMeta.fontSize + 3} color={colors.secondary} />
+              {rhythmExpanded ? (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>收起详情</Text>
+              ) : peakHourText ? (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                  最集中 <Text style={{ color: colors.ink, fontWeight: '600' }}>{peakHourText}</Text>
+                </Text>
+              ) : (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>展开详情</Text>
+              )}
             </Pressable>} />
           <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
             startLabel="06:00" endLabel="24:00"

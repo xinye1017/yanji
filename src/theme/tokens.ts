@@ -306,9 +306,10 @@ export const YanjiPaperTypography = {
     fontVariant: ['tabular-nums'] as const,
   },
   metricDaily: {
-    fontSize: 44,
-    lineHeight: 52,
-    fontWeight: '600' as const,
+    fontSize: 52,
+    lineHeight: 56,
+    fontWeight: '700' as const,
+    fontFamily: 'serif',
     fontVariant: ['tabular-nums'] as const,
   },
   metricSession: {
@@ -318,10 +319,10 @@ export const YanjiPaperTypography = {
     fontVariant: ['tabular-nums'] as const,
   },
   titleGreeting: {
-    fontSize: 20,
-    lineHeight: 28,
-    fontWeight: '600' as const,
-    letterSpacing: 0.2,
+    fontSize: 24,
+    lineHeight: 32,
+    fontWeight: '700' as const,
+    fontFamily: 'serif',
   },
   titleLedger: {
     fontSize: 15,
@@ -420,7 +421,7 @@ export const YanjiPaperLayout = {
    */
   rhythmBarGap: 3,
   /** Tall enough for an hour of study to have a readable slope, not a tick. */
-  rhythmChartHeight: 34,
+  rhythmChartHeight: 46,
   /**
    * The height a bar falls back to when an hour has a measurable amount that
    * rounds below a pixel — and the tick marking the current hour, which is only

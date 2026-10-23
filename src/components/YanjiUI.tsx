@@ -655,6 +655,7 @@ export function YanjiDayRhythmChart({
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
   const slots = rhythmSlots(buckets, currentHour, layout.rhythmChartHeight, layout.rhythmEmptyHeight);
+  const hasData = measuredRhythmHours(buckets) > 0;
   return (
     <View>
       <View
@@ -673,11 +674,11 @@ export function YanjiDayRhythmChart({
             style={{
               flex: 1,
               flexBasis: 0,
-              height: slot.height,
+              height: slot.height > 0 ? slot.height : (hasData ? 2 : 0),
               borderRadius: radius.tick,
               backgroundColor: slot.measured
                 ? buckets.find(bucket => bucket.hour === slot.hour)?.color ?? colors.secondary
-                : slot.isNow ? colors.secondary : 'transparent',
+                : slot.isNow ? colors.secondary : (hasData ? colors.subtle : 'transparent'),
             }}
           />
         ))}
@@ -689,10 +690,13 @@ export function YanjiDayRhythmChart({
         accessible
         accessibilityRole="text"
         accessibilityLabel={accessibilityLabel ?? `时间范围 ${startLabel} 至 ${endLabel}`}
-        style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}
       >
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{startLabel}</Text>
-        <Text style={[typography.captionMeta, { color: colors.secondary }]}>{endLabel}</Text>
+        {['06', '09', '12', '15', '18', '21', '24'].map(mark => (
+          <Text key={mark} style={[typography.captionMeta, { color: colors.secondary, fontSize: 11, fontVariant: ['tabular-nums'] }]}>
+            {mark}
+          </Text>
+        ))}
       </View>
     </View>
   );
@@ -1236,6 +1240,7 @@ export function YanjiTaskLedgerRow({
   meta,
   accentColor,
   completed,
+  isLead = false,
   isLast = false,
   busy = false,
   disabled = false,
@@ -1249,6 +1254,8 @@ export function YanjiTaskLedgerRow({
   meta: string;
   accentColor: string;
   completed: boolean;
+  /** First pending task carries the prominent filled play button. */
+  isLead?: boolean;
   /** The final row of a ledger drops its rule, so the list ends without a stray line. */
   isLast?: boolean;
   busy?: boolean;
@@ -1296,8 +1303,8 @@ export function YanjiTaskLedgerRow({
           <View style={{
             width: layout.taskCheckboxSize,
             height: layout.taskCheckboxSize,
-            borderWidth: completed ? 0 : layout.taskCheckboxStroke,
-            borderColor: completed ? colors.ink : accentColor,
+            borderWidth: completed ? 0 : 1.5,
+            borderColor: completed ? colors.ink : colors.muted,
             backgroundColor: completed ? colors.ink : 'transparent',
             borderRadius: radius.tag,
             justifyContent: 'center',
@@ -1335,9 +1342,8 @@ export function YanjiTaskLedgerRow({
           </View>
         </Pressable>
         {!completed ? (
-          /* A single circular play target, centred on the row. The old
-             「▶ 专注」 capsule competed with the row's own title for attention and
-             was the widest thing in a two-line ledger. */
+          /* A single circular play target, centred on the row. The lead pending task
+             carries an ink-filled circle with white triangle; others carry hairline subtle border. */
           <Pressable
             onPress={onStartFocus}
             accessibilityRole="button"
@@ -1348,14 +1354,15 @@ export function YanjiTaskLedgerRow({
               width: layout.compactActionHeight + 2,
               height: layout.compactActionHeight + 2,
               borderRadius: (layout.compactActionHeight + 2) / 2,
-              borderWidth: layout.hairlineWidth,
+              borderWidth: isLead ? 0 : layout.hairlineWidth,
               borderColor: colors.hairline,
+              backgroundColor: isLead ? colors.ink : 'transparent',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.6 : 1,
             })}
           >
-            <YanjiIcon name="play" size={11} color={colors.secondary} />
+            <YanjiIcon name="play" size={11} color={isLead ? colors.canvas : colors.secondary} />
           </Pressable>
         ) : null}
       </View>
