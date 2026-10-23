@@ -445,18 +445,18 @@ class TabLayoutInstrumentedTest {
         await("new task is visible after native table invalidation") { findText(ownedTaskTitle, "today") != null }
         onView(withContentDescription("开始专注：${task.title}")).perform(scrollTo(), click())
         await("Focus consumes the task preset") { required("pane-focus").alpha == 1f }
-        await("Task binding is shown") { findText("关联任务 · ${task.title}", "focus") != null }
+        await("Task binding is shown") { bindingRow(task.title) != null }
         onMain { assertTrue("Preset adopts the task's planned duration", selectedPreset(task.plannedMinutes)) }
         select("review")
         select("focus")
         onMain {
-            assertNotNull("Task binding survives tab switching", findText("关联任务 · ${task.title}", "focus"))
+            assertNotNull("Task binding survives tab switching", bindingRow(task.title))
             assertTrue("Task duration survives tab switching", selectedPreset(task.plannedMinutes))
         }
         // Clear the local binding before the owned row is deleted, so a later
         // submit can never carry a task id this test removed.
         onView(withContentDescription("取消关联任务")).perform(scrollTo(), click())
-        await("task binding cleared") { findText("关联任务 · ${task.title}", "focus") == null }
+        await("task binding cleared") { bindingRow(task.title) == null }
         assertNull("Preparing a preset does not start a native session", ActiveSessionCoordinator.active.value)
         Log.i("YanjiLayoutTest", "Task preset survives tab switching without starting or changing a study session")
     }
@@ -576,6 +576,18 @@ class TabLayoutInstrumentedTest {
         }
         "$tab pane=${pane?.javaClass?.simpleName}:children=${pane?.childCount}:alpha=${pane?.alpha}" +
             ":root=${pageRoot(tab) != null}:tags=$tags"
+    }
+
+    /**
+     * The Focus page row that shows the preset task. Matched on the task
+     * title alone: the surrounding copy (and the separator between it and the
+     * title) has changed twice during the design pass, while this test only
+     * cares that the binding itself survived the tab switch.
+     */
+    private fun bindingRow(title: String): TextView? = find("scroll-focus")?.let {
+        views(it).filterIsInstance<TextView>().firstOrNull {
+            previewOf(it.text.toString()).contains(title)
+        }
     }
 
     /** Visits every tab once so each lazily-mounted page has mounted. */
