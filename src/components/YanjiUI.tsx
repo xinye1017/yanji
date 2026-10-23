@@ -1282,7 +1282,11 @@ export function YanjiTaskLedgerRow({
           commitment sits 3dp down so it optically centres on the title's first line. */}
       <View style={{
         flexDirection: 'row', alignItems: 'flex-start', gap: 11,
-        paddingVertical: layout.taskRowPadding,
+        // The final row drops its trailing padding the same way it drops its
+        // rule: the ledger's bottom edge is then the section gap, not the gap
+        // plus a row's internal air.
+        paddingTop: layout.taskRowPadding,
+        paddingBottom: isLast ? 0 : layout.taskRowPadding,
       }}>
         <View style={{ width: 40, flexShrink: 0, paddingTop: 3 }}>
           <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>

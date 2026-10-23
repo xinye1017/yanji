@@ -516,7 +516,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: contentPadding }}>
         {/* The greeting owns the top-left at Serif headline size; the date and exam
             countdown stack on the right as a clean text card that taps to open settings. */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: layout.sectionGap }}>
           <Text accessibilityRole="header"
             style={[typography.titleGreeting, { color: colors.ink, flex: 1 }]}>
             {greeting(now.getHours())}
@@ -545,9 +545,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
         {/* One number answers "how is today going"; the goal rides the same
             top line with its state beside it, so the fact that used to repeat
             across four corners of this block is now said once. */}
-        {/* `.hero` in the design: 12dp above the label row, and no rule beneath —
-            the hairline belongs to the header, not between the hero and the plan. */}
-        <View style={{ paddingTop: 22, paddingBottom: 4 }}>
+        {/* One spacing rule for the page: two sections are `sectionGap` apart,
+            and a hairline is a divider that sits centred in that same gap on
+            each side instead of hugging whichever neighbour it happens to
+            follow. */}
+        <View style={{ paddingTop: layout.sectionGap, paddingBottom: layout.sectionGap }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: layout.gridGap }}>
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日专注</Text>
             <Pressable onPress={openGoal} accessibilityRole="button" accessibilityLabel="调整日常学习目标"
@@ -661,12 +663,11 @@ export function TodayScreen({ visible, foregroundRevision }: {
           title="今日计划"
           titleStyle={typography.titleSection}
           countText={snapshot ? undefined : '—'}
-          spaceBefore={YanjiSpacing.sm}
-          spaceAfter={0}
-          align="center"
+          spaceBefore={layout.sectionGap}
+          align="baseline"
           right={<YanjiTextAction label="新建" accessibilityLabel="添加任务" onPress={openTaskEditor} />}
         />
-        <View style={{ marginTop: -2 }}>
+        <View>
           {/* The empty state states what is missing and nothing else: the one
               way to add a task is the heading's 「新建」, so repeating an action
               inside the row would be a second entry point to the same sheet. */}
@@ -712,12 +713,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
         ) : null}
 
 
-        {/* The clock lives with its note; only the quiet spine sits outside. */}
-        <View style={{ marginTop: YanjiSpacing.sm }}>
+        {/* The clock lives with its note; only the quiet spine sits outside.
+            The heading owns the whole section gap, so the wrapper adds none. */}
+        <View>
           <YanjiPaperSectionHeading
             title="记录此刻"
             titleStyle={typography.titleSection}
             align="baseline"
+            spaceBefore={layout.sectionGap}
             right={
               <YanjiTextAction
                 label="写一条"
@@ -752,7 +755,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           ) : (
             /* No boxed invitation: the heading's 「写一条」 is the single entry,
                and the empty state only says what is not there yet. */
-            <Text style={[typography.captionMeta, { color: colors.secondary, paddingVertical: YanjiSpacing.sm }]}>
+            <Text style={[typography.captionMeta, { color: colors.secondary, paddingTop: YanjiSpacing.sm }]}>
               {snapshot ? '还没有记录，想到什么就写一条。' : '正在读取今日随笔…'}
             </Text>
           )}
@@ -766,20 +769,23 @@ export function TodayScreen({ visible, foregroundRevision }: {
             already answers "what is this?" without repeating the 06:00–24:00
             range that the axis labels already carry. Expanding is a named
             control, not just an arrow. */}
-        {/* `marginTop: sm` plus the heading's own 16dp keeps the 24dp section
-            gap this page already used, so adding a real heading does not also
-            add air. */}
-        <View style={{ marginTop: YanjiSpacing.sm }}>
+        {/* Same rule as the journal: the heading owns the section gap alone. */}
+        <View>
           <YanjiPaperSectionHeading
             title="今日学习节奏"
             titleStyle={typography.titleSection}
+            spaceBefore={layout.sectionGap}
             right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
               accessibilityRole="button"
               accessibilityLabel={rhythmToggleLabel}
               accessibilityState={{ expanded: rhythmExpanded }}
               accessibilityHint={rhythmExpanded ? '收起专注时段详情' : '展开专注时段详情'}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => ({ minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
+              // No 48dp floor here: a min-height on the heading accessory
+              // inflates the whole row, so this section reads as ~15dp further
+              // from the block above than the other headings do. hitSlop keeps
+              // the touch target while the glyph stays on the heading baseline.
+              hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
               {rhythmExpanded ? (
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>收起详情</Text>
               ) : peakHourText ? (
@@ -790,9 +796,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>展开详情</Text>
               )}
             </Pressable>} />
-          <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
-            startLabel="06:00" endLabel="24:00"
-            accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
+          {/* Same air under every heading: the chart body starts a step below
+              the title, like the plan rows and the journal timeline do. */}
+          <View style={{ marginTop: YanjiSpacing.sm }}>
+            <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
+              startLabel="06:00" endLabel="24:00"
+              accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
+          </View>
           {rhythmExpanded ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               {DAY_PARTS.map(part => {
