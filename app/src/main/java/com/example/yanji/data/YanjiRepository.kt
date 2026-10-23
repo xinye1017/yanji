@@ -343,9 +343,9 @@ class YanjiRepository private constructor() {
                 // 只初始化「系统配置默认值」。规则与理由见 AppInitializer 的 KDoc：
                 // 「没有学习记录」是合法业务状态，不能与「首次安装」混为一谈。
                 AppInitializer(db.userSettingsDao()).initialize()
-                // 早期删除承接副本时只删了副本，可能留下指向不存在任务的来源链接。
-                // 启动时幂等清理悬空链接，让原计划重新可见，同时保留其日期、完成状态和历史专注。
-                db.studyTaskDao().releaseDanglingCarryOverLinks(System.currentTimeMillis())
+                // 早期删除承接副本时若留下指向不存在目标任务的悬空来源链接，启动时清理悬空来源任务，
+                // 避免被删除的任务复活回到待处理区。
+                db.studyTaskDao().deleteDanglingCarryOverSources()
             }
             launch {
                 reconcileAchievements()
@@ -866,9 +866,9 @@ internal suspend fun carryStudyTaskToTodayInTransaction(
 /**
  * Deterministic delete boundary shared by production and SQLite tests.
  *
- * Releasing sources and deleting the destination happen before the transaction
- * commits. [delete] is injectable so the failure path can prove that the source
- * remains linked when the destination deletion fails.
+ * Deleting carry-over sources and deleting the destination happen before the transaction
+ * commits. [delete] is injectable so the failure path can prove that sources
+ * are preserved when the destination deletion fails.
  */
 internal suspend fun deleteStudyTaskInTransaction(
     db: YanjiDatabase,
@@ -876,6 +876,18 @@ internal suspend fun deleteStudyTaskInTransaction(
     timestamp: Long,
     delete: suspend () -> Int = { db.studyTaskDao().deleteById(id) }
 ): Boolean {
-    db.studyTaskDao().releaseCarryOverSources(destinationId = id, updatedAt = timestamp)
+    val dao = db.studyTaskDao()
+    deleteCarryOverSourcesRecursively(dao, id)
     return delete() > 0
+}
+
+private suspend fun deleteCarryOverSourcesRecursively(
+    dao: com.example.yanji.data.db.StudyTaskDao,
+    destinationId: String
+) {
+    val sourceIds = dao.getDirectCarryOverSourceIds(destinationId)
+    for (sourceId in sourceIds) {
+        deleteCarryOverSourcesRecursively(dao, sourceId)
+        dao.deleteById(sourceId)
+    }
 }

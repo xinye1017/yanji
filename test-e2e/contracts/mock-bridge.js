@@ -240,11 +240,24 @@ export class MockYanjiBridge {
   }
 
   async deleteTask(taskId) {
-    const index = this.tasks.findIndex(t => t.id === taskId);
-    if (index === -1) return false;
-    this.tasks.splice(index, 1);
-    this._emitDataChanged('tasks');
-    return true;
+    const toDelete = new Set([taskId]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const t of this.tasks) {
+        if (t.carriedOverToId && toDelete.has(t.carriedOverToId) && !toDelete.has(t.id)) {
+          toDelete.add(t.id);
+          added = true;
+        }
+      }
+    }
+    const initialLen = this.tasks.length;
+    this.tasks = this.tasks.filter(t => !toDelete.has(t.id));
+    if (this.tasks.length < initialLen) {
+      this._emitDataChanged('tasks');
+      return true;
+    }
+    return false;
   }
 
   async getCarryOverTasks() {

@@ -1161,6 +1161,48 @@ export function YanjiSubjectProportionRow({
 // action, and subject identity stays in a small swatch beside readable metadata.
 // ---------------------------------------------------------------------------
 
+/**
+ * The ledger's one chip shape: a subject tag and a duration/meta pill.
+ *
+ * A plan row used to mix two grammars in one line — a tinted subject tag plus a
+ * bare grey sentence ("实际专注 52m") that happened to sit next to it. Both are
+ * "a labeled value", so they now share one shape and differ only in tone.
+ */
+export function YanjiLedgerChip({
+  label,
+  tone = 'subject',
+  color,
+  completed = false,
+}: {
+  label: string;
+  /** `subject` tints by the subject colour; `meta` stays neutral. */
+  tone?: 'subject' | 'meta';
+  /** Subject colour; required for the `subject` tone. */
+  color?: string;
+  /** A finished row flattens both chips to the neutral tier. */
+  completed?: boolean;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, radius } = paper;
+  const useSubject = tone === 'subject' && Boolean(color) && !completed;
+  return (
+    <View style={{
+      flexShrink: 1,
+      backgroundColor: useSubject ? toSubtleColor(color as string, 0.14) : colors.subtle,
+      borderRadius: radius.tag,
+      paddingHorizontal: 7,
+      paddingVertical: 1.5,
+    }}>
+      <Text numberOfLines={1} style={{
+        ...typography.captionMeta,
+        color: useSubject ? (color as string) : colors.secondary,
+        fontWeight: '600',
+        flexShrink: 1,
+      }}>{label}</Text>
+    </View>
+  );
+}
+
 export function YanjiTaskLedgerRow({
   title,
   subjectName,
@@ -1248,22 +1290,9 @@ export function YanjiTaskLedgerRow({
               textDecorationLine: completed ? 'line-through' : 'none',
             }}
           >{title}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: layout.taskSubMarginTop }}>
-            <View style={{
-              flexShrink: 1,
-              backgroundColor: completed ? colors.subtle : toSubtleColor(accentColor, 0.14),
-              borderRadius: radius.tag,
-              paddingHorizontal: 7,
-              paddingVertical: 1.5,
-            }}>
-              <Text numberOfLines={1} style={{
-                ...typography.captionMeta,
-                color: completed ? colors.secondary : accentColor,
-                fontWeight: '600',
-                flexShrink: 1,
-              }}>{subjectName}</Text>
-            </View>
-            <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>{meta}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.xs + 2, marginTop: layout.taskSubMarginTop }}>
+            <YanjiLedgerChip label={subjectName} tone="subject" color={accentColor} completed={completed} />
+            <YanjiLedgerChip label={meta} tone="meta" completed={completed} />
           </View>
         </Pressable>
         {!completed ? (

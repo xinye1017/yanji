@@ -290,7 +290,7 @@ class StudyTaskCarryOverQueriesTest {
     }
 
     @Test
-    fun deletingACarriedCopyRestoresTheSourceToPending() = isolatedDatabase { db ->
+    fun deletingACarriedCopyDeletesTheSourceTaskAsWell() = isolatedDatabase { db ->
         val dao = db.studyTaskDao()
         dao.insert(task("source", "2026-10-20", title = "文件管理复习"))
         carryStudyTaskToTodayInTransaction(
@@ -308,15 +308,11 @@ class StudyTaskCarryOverQueriesTest {
             }
         }
 
-        val source = dao.getById("source")!!
-        assertNull(source.carriedOverToId)
-        assertEquals("2026-10-20", source.date)
-        assertEquals(70_000L, source.updatedAt)
+        assertNull(dao.getById("source"))
         assertNull(dao.getById("copy"))
         assertEquals(
-            listOf("source"),
-            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22")
-                .map { it.task.id }
+            0,
+            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size
         )
     }
 
@@ -374,7 +370,7 @@ class StudyTaskCarryOverQueriesTest {
     }
 
     @Test
-    fun danglingCarryOverLinksAreReleasedWithoutChangingTaskHistory() = isolatedDatabase { db ->
+    fun danglingCarryOverSourcesAreDeletedWithoutTouchingValidLinks() = isolatedDatabase { db ->
         val dao = db.studyTaskDao()
         val dangling = task(
             "dangling",
@@ -395,25 +391,18 @@ class StudyTaskCarryOverQueriesTest {
         )
         assertEquals(0, dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size)
 
-        assertEquals(1, dao.releaseDanglingCarryOverLinks(updatedAt = 3_000L))
+        assertEquals(1, dao.deleteDanglingCarryOverSources())
 
-        val released = dao.getById("dangling")!!
-        assertNull(released.carriedOverToId)
-        assertEquals("2026-10-20", released.date)
-        assertEquals(dangling.isCompleted, released.isCompleted)
-        assertEquals(dangling.createdAt, released.createdAt)
-        assertEquals(3_000L, released.updatedAt)
+        assertNull(dao.getById("dangling"))
         assertEquals("valid-copy", dao.getById("valid-source")!!.carriedOverToId)
         assertEquals(
-            listOf("dangling"),
-            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22")
-                .map { it.task.id }
+            0,
+            dao.getCarryOverWithActualSeconds("2026-10-15", "2026-10-22").size
         )
         assertEquals(
             "the integrity repair must be idempotent",
             0,
-            dao.releaseDanglingCarryOverLinks(updatedAt = 4_000L)
+            dao.deleteDanglingCarryOverSources()
         )
-        assertEquals(3_000L, dao.getById("dangling")!!.updatedAt)
     }
 }

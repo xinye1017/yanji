@@ -1,6 +1,6 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import {
   Easing,
   runOnJS,
@@ -358,32 +358,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
     taskId: task.id, subjectId: task.subjectId, subjectName: task.subjectName,
     title: task.title, plannedMinutes: task.plannedMinutes,
   });
-  const confirmDeleteTask = useCallback((task: StudyTask) => {
-    Alert.alert(
-      '删除任务',
-      `确定要删除「${task.title}」吗？`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setBusyTask(task.id);
-              await YanjiDataNative.deleteTask(task.id);
-              await refreshDailySnapshot(date);
-              void loadCarryOverTasks();
-            } catch {
-              setActionError('删除任务失败，请重试');
-            } finally {
-              setBusyTask(null);
-            }
-          },
-        },
-      ]
-    );
-  }, [date, loadCarryOverTasks]);
-
   const toggleTask = async (task: StudyTask) => {
     if (busyTask) return;
     setBusyTask(task.id);
@@ -659,7 +633,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
               isLast={index === rows.length - 1}
               busy={busyTask === task.id} disabled={busyTask !== null}
               onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)}
-              onLongPress={() => confirmDeleteTask(task)}
               onStartFocus={() => startTask(task)} />
           ))}
         </View>
