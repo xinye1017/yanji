@@ -553,11 +553,29 @@ class TabLayoutInstrumentedTest {
         onView(testId("tab-$tab")).perform(click())
         await("$tab activated") { required("pane-$tab").alpha == 1f }
         // The shell mounts a tab screen on its first visit (App.tsx), so the
-        // pane wrapper can be active one frame before its page content exists.
-        // Assert on the pane's children rather than on a specific screen
-        // element: Focus swaps its ScrollView for the immersion field while a
-        // session runs, so a scroll-focus wait would never settle there.
-        await("$tab content mounted") { (find("pane-$tab") as? ViewGroup)?.childCount?.let { it > 0 } == true }
+        // pane wrapper becomes active one frame before its page content exists.
+        // Wait for the page's own root: Today and Review own a ScrollView, and
+        // Focus swaps its ScrollView for the immersion field while a session
+        // runs, so each tab is probed with the roots it can actually show.
+        await("$tab content mounted") { pageRoot(tab) != null }
+    }
+
+    /** The root view each tab's page renders once the shell has mounted it. */
+    private fun pageRoot(tab: String): View? = when (tab) {
+        "focus" -> find("focus-ready") ?: find("focus-running") ?: find("focus-paused")
+        else -> find("scroll-$tab")
+    }
+
+    /** Pane state at the moment a wait failed, so the CI report explains itself. */
+    private fun paneDiagnostics(): String = tabs.joinToString("; ") { tab ->
+        val pane = find("pane-$tab") as? ViewGroup
+        val tags = pane?.let { group ->
+            (0 until group.childCount).joinToString(",") {
+                group.getChildAt(it).getTag(com.facebook.react.R.id.react_test_id)?.toString() ?: "-"
+            }
+        }
+        "$tab pane=${pane?.javaClass?.simpleName}:children=${pane?.childCount}:alpha=${pane?.alpha}" +
+            ":root=${pageRoot(tab) != null}:tags=$tags"
     }
 
     /** Visits every tab once so each lazily-mounted page has mounted. */
@@ -665,7 +683,8 @@ class TabLayoutInstrumentedTest {
             bitmap.recycle()
         }
         onMain {
-            Log.i("YanjiLayoutTest", "Failure $message: todayAlpha=${find("pane-today")?.alpha}, focus=${root?.hasWindowFocus()}")
+            val scrolls = root?.let { views(it).filterIsInstance<ScrollView>().count { scroll -> scroll.height > 0 } }
+            Log.i("YanjiLayoutTest", "Failure $message: focus=${root?.hasWindowFocus()} scrolls=$scrolls ${paneDiagnostics()}")
         }
     }
 
