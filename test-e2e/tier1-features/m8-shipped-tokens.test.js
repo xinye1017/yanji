@@ -58,8 +58,9 @@ export function registerShippedTokenTests() {
 
     it('no dark token is pure black', () => {
       // §三.6: pure black is forbidden as a background. The paper canvas is a
-      // warm near-black (#111315), never #000000.
-      assertEqual(tokens.YanjiPaperColors.dark.canvas, '#111315', 'Dark canvas must be #111315');
+      // warm charcoal (#1B1917) — dark, but still visibly a surface rather than
+      // an unlit screen, and never #000000.
+      assertEqual(tokens.YanjiPaperColors.dark.canvas, '#1B1917', 'Dark canvas must be #1B1917');
       for (const [key, value] of Object.entries(tokens.YanjiPaperColors.dark)) {
         if (typeof value !== 'string' || !value.startsWith('#')) continue;
         const normalized = value.trim().toUpperCase();
@@ -82,7 +83,7 @@ export function registerShippedTokenTests() {
       // The on-brand foreground must be explicit, not assumed: light brand is
       // dark enough for white, dark brand is light enough to need dark ink.
       assertEqual(tokens.YanjiPaperColors.light.onBrand, '#FFFFFF', 'Light onBrand must be #FFFFFF');
-      assertEqual(tokens.YanjiPaperColors.dark.onBrand, '#111315', 'Dark onBrand must be #111315');
+      assertEqual(tokens.YanjiPaperColors.dark.onBrand, '#1B1917', 'Dark onBrand must be #1B1917');
     });
 
     it('actual shipped brand text meets normal-size 4.5:1 contrast in both themes', () => {

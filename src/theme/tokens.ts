@@ -186,44 +186,58 @@ export const YanjiPaperColors = {
     positiveSubtle: 'rgba(39,104,79,0.07)',
   },
   dark: {
-    canvas: '#111315',
-    elevated: '#16191D',
-    surface: '#1A1D21',
-    subtle: '#23272D',
-    vernierWash: 'rgba(234,230,223,0.03)',
-    ink: '#EAE6DF',
-    secondary: '#9BA0A8',
-    muted: '#636870',
-    hairline: 'rgba(234,230,223,0.08)',
-    tickMinor: 'rgba(234,230,223,0.22)',
-    tickMajor: 'rgba(234,230,223,0.50)',
-    brand: '#E06D53',
-    /** Lifted from `brand` so labels stay >= 4.5:1 (measured 4.74:1) over the 10% `brandSubtle` wash on `subtle`. */
-    brandInk: '#E87D64',
+    /**
+     * Warm charcoal, not a near-black. The old #111315 sat at 0.6% luminance,
+     * which read as a hole punched in the screen: every surface above it had to
+     * climb hard to separate, and the warm paper identity of the light theme
+     * disappeared entirely. This stack keeps the same hue family as the
+     * parchment (a trace of red over blue) and starts at ~1.0% instead, so the
+     * page reads as dark paper rather than as an off screen. Each step is a
+     * visible move, not a rounding error.
+     */
+    canvas: '#1B1917',
+    elevated: '#211F1C',
+    surface: '#262320',
+    subtle: '#302C28',
+    vernierWash: 'rgba(239,234,225,0.03)',
+    ink: '#EFEAE1',
+    secondary: '#A8A199',
+    muted: '#6E6862',
+    hairline: 'rgba(239,234,225,0.09)',
+    tickMinor: 'rgba(239,234,225,0.22)',
+    tickMajor: 'rgba(239,234,225,0.50)',
+    brand: '#E8705A',
+    /** Lifted from `brand` so labels stay >= 4.5:1 (measured 4.93:1) over the 10% `brandSubtle` wash on `subtle`. */
+    brandInk: '#F08A74',
     /** See the light-mode tint note: 10% dark wash paired with `brandInk` to stay >= 4.5:1 across all surfaces. */
-    brandSubtle: 'rgba(224,109,83,0.10)',
-    onBrand: '#111315',
-    amber: '#DDA059',
-    amberSubtle: 'rgba(221,160,89,0.10)',
+    brandSubtle: 'rgba(232,112,90,0.10)',
+    onBrand: '#1B1917',
+    amber: '#DFA76A',
+    amberSubtle: 'rgba(223,167,106,0.10)',
     /** Heavier veil than light mode, matching the dark surface stack. */
     scrim: 'rgba(0,0,0,0.56)',
-    /** Destructive actions. Measured 6.11:1 on `surface`, 6.73:1 on `canvas`. */
-    danger: '#F87171',
+    /** Destructive actions. Measured 6.24:1 on `surface`, 6.61:1 on `canvas`. */
+    danger: '#F5827F',
     /** See the light-mode tint note: keep the destructive label above 4.5:1. */
-    dangerSubtle: 'rgba(248,113,113,0.10)',
+    dangerSubtle: 'rgba(245,130,127,0.10)',
     /**
      * See the light-mode note. Dark needs its own value rather than a reuse of
      * light's: `#27684F` would be unreadable here, and the board's 竹青
-     * `#2D7A5E` measures 4.39:1 on `subtle`. Measured worst case 5.65:1 on the
+     * `#2D7A5E` measures 4.39:1 on `subtle`. Measured worst case 5.09:1 on the
      * four steps, 4.80:1 on its own tint.
      */
-    positive: '#4FB08A',
-    positiveSubtle: 'rgba(79,176,138,0.10)',
+    positive: '#5FBE96',
+    positiveSubtle: 'rgba(95,190,150,0.10)',
   },
 } as const;
 
 const paperImmersiveBase = {
-  canvas: '#15181C',
+  /**
+   * The immersion field is the darkest surface the app shows, but it still has
+   * to read as a room with the lights down rather than as an unlit screen: it
+   * sits a step below the paper canvas and keeps the same warm bias.
+   */
+  canvas: '#141210',
   ink: '#F6F4EF',
   secondary: '#C4C7CE',
   subtitle: '#8A8F99',

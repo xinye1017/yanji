@@ -32,19 +32,19 @@ export const YanjiThemeTokens = {
       danger: '#B52B2B',
     },
     dark: {
-      canvas: '#111315',         // Warm near-black (never #000000)
-      surface: '#1A1D21',
-      subtle: '#23272D',
-      ink: '#EAE6DF',
-      secondary: '#9BA0A8',
-      muted: '#636870',
-      hairline: 'rgba(234,230,223,0.08)',
-      brand: '#E06D53',
-      brandInk: '#E87D64',       // Lifted so dark brand labels clear 4.5:1 on brandSubtle/subtle
-      onBrand: '#111315',
-      amber: '#DDA059',
+      canvas: '#1B1917',         // Warm charcoal (never #000000)
+      surface: '#262320',
+      subtle: '#302C28',
+      ink: '#EFEAE1',
+      secondary: '#A8A199',
+      muted: '#6E6862',
+      hairline: 'rgba(239,234,225,0.09)',
+      brand: '#E8705A',
+      brandInk: '#F08A74',       // Lifted so dark brand labels clear 4.5:1 on brandSubtle/subtle
+      onBrand: '#1B1917',
+      amber: '#DFA76A',
       scrim: 'rgba(0,0,0,0.56)',
-      danger: '#F87171',
+      danger: '#F5827F',
     },
   },
   /** YanjiRadius semantic scale — raw dp literals are forbidden at call sites. */
