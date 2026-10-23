@@ -443,7 +443,7 @@ class TabLayoutInstrumentedTest {
         ownedTaskId = task.id
         await("task editor closed after saving") { root?.hasWindowFocus() == true }
         await("new task is visible after native table invalidation") { findText(ownedTaskTitle, "today") != null }
-        onView(withContentDescription("为${task.title}设置专注")).perform(scrollTo(), click())
+        onView(withContentDescription("开始专注：${task.title}")).perform(scrollTo(), click())
         await("Focus consumes the task preset") { required("pane-focus").alpha == 1f }
         await("Task binding is shown") { findText("关联任务 · ${task.title}", "focus") != null }
         onMain { assertTrue("Preset adopts the task's planned duration", selectedPreset(task.plannedMinutes)) }
