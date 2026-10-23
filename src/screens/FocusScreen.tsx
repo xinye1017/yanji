@@ -380,6 +380,10 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
   if (!session) {
     const effectiveScale = Math.min(1.15, Math.max(0.85, fontScale));
+  // One slot height for the linked-plan band, used whether or not a plan is
+  // attached. It is sized for the chip's 34dp body plus its breathing room, and
+  // never derived from the content, so clearing the plan cannot resize it.
+  const taskSlotHeight = 40;
     const dialSlotHeight = Math.ceil(paper.typography.displayDial.lineHeight * effectiveScale);
     const rulerLabelHeight = Math.ceil(paper.typography.captionMeta.lineHeight * fontScale);
     const rulerLabelTop = YanjiSpacing.lg + paper.layout.vernierPointerHeight + YanjiSpacing.sm;
@@ -569,24 +573,29 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 
             </View>
 
-            {/* The dial never moves. A linked plan used to push it down by the
-                height of its own chip, so starting a focus from a task shifted the
-                clock a few dozen dp — the one number the page exists to show.
-                The chip now reserves its own band above, whether or not it is
-                present. */}
+            {/* A fixed slot for the linked plan, directly under the subject row.
+                Its height is the same whether or not a plan is attached, so the
+                dial below never moves.
+
+                The previous attempt set only a `minHeight` (32dp) and left the
+                chip to size itself: the chip's own close button reached the 44dp
+                touch floor, so an attached plan made the band ~52dp and clearing
+                it dropped back to 32dp — a 20dp hop that was plainly visible. A
+                band whose height is content-dependent cannot anchor anything;
+                this one states its height and centres whatever it holds. */}
             <View
               style={{
-                minHeight: YanjiSpacing.xl + 8,
-                justifyContent: 'flex-end',
+                height: taskSlotHeight,
+                justifyContent: 'center',
                 alignSelf: 'stretch',
               }}
             >
               {taskBinding ? (
                 <View
                   style={{
+                    height: taskSlotHeight,
                     paddingLeft: YanjiSpacing.md,
-                    paddingRight: YanjiSpacing.xs,
-                    paddingVertical: YanjiSpacing.xs,
+                    paddingRight: 2,
                     borderRadius: paper.radius.compactCard,
                     backgroundColor: paper.colors.brandSubtle,
                     flexDirection: 'row',
@@ -603,12 +612,14 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                   >
                     关联任务: {taskBinding.title}
                   </Text>
+                  {/* The target keeps its 44dp floor through hitSlop, so the chip
+                      can stay exactly as tall as the slot it sits in. */}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="取消关联任务"
-                    hitSlop={8}
+                    hitSlop={6}
                     onPress={() => setTaskBinding(null)}
-                    style={{ minWidth: YanjiTouch.min, minHeight: YanjiTouch.min, alignItems: 'center', justifyContent: 'center' }}
+                    style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}
                   >
                     <YanjiIcon name="close" size={16} color={paper.colors.secondary} />
                   </Pressable>

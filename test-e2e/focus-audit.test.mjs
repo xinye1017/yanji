@@ -296,7 +296,7 @@ test('major ticks carry readable subtitle labels in an enlarged, single accessib
  * The real FocusScreen with native/time adapters mocked. Pass session: null for
  * the ready state. Both states read task titles from the shared daily snapshot.
  */
-function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = false } = {}) {
+function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = false, focusPreset = null } = {}) {
   const alerts = [];
   const calls = [];
   const noop = () => {};
@@ -361,7 +361,8 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
     // 补录专注是独立弹窗；这里只验证 FocusScreen 的装配，弹窗本身由自己的用例覆盖。
     '../components/BackfillFocusModal': { BackfillFocusModal: noop },
     '../navigation/NavigationShell': {
-      useNavigationState: () => ({ focusPreset: null }),
+      // A preset is how a plan reaches the ready screen with its task attached.
+      useNavigationState: () => ({ focusPreset }),
       useNavigationActions: () => ({ clearFocusPreset: noop, selectTab: noop }),
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 110 }) },
@@ -381,6 +382,8 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
   };
   return {
     root: render(), alerts, calls, paper, render,
+    /** Effects queued by the most recent render, for tests that need to settle them. */
+    pendingEffects: () => effects,
     async loadSubjects() {
       for (const effect of effects) effect();
       await new Promise(resolve => setImmediate(resolve));
@@ -424,6 +427,48 @@ test('the ready screen offers the countdown ruler without preset or custom-durat
   assert.equal(findAll(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
   assert.equal(findAll(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
   assert.deepEqual(calls, [], 'rendering the ready state does not touch a native timer');
+});
+
+test('the linked-plan band keeps one fixed height, so the dial cannot shift', () => {
+  // 曾经只给这条带子加了 minHeight（32dp），而胶囊自己的关闭按钮要 44dp 的
+  // 触控下限，于是「有关联」时带子约 52dp、「取消关联」后回落到 32dp，
+  // 数字会向上跳 20dp。带宽必须写死、与内容无关，才可能锚住下面的时间。
+  // `root` is the first paint, before effects run; the preset lands in an
+  // effect, so the state under test is the paint after that effect.
+  const settle = h => {
+    for (const effect of h.pendingEffects()) effect();
+    h.render();
+    for (const effect of h.pendingEffects()) effect();
+    return h.render();
+  };
+  const withoutPlan = settle(focusScreenHarness({ session: null }));
+  const withPlan = settle(focusScreenHarness({
+    session: null,
+    focusPreset: {
+      taskId: 'task-1', subjectId: 'math', subjectName: '数学',
+      title: '学完前三章', plannedMinutes: 45,
+    },
+  }));
+
+  // The band is the direct parent of the chip, and of nothing else.
+  const bands = tree => findAll(tree, n => n.props?.style?.height === 40 &&
+    n.props?.style?.alignSelf === 'stretch');
+  const bareBand = bands(withoutPlan)[0];
+  const chipBand = bands(withPlan)[0];
+  assert.ok(bareBand, 'the band renders even with no plan attached');
+  assert.ok(chipBand, 'and stays the same height once a plan is attached');
+  assert.equal(bareBand.props.style.height, chipBand.props.style.height,
+    'attaching or clearing a plan never changes the band height');
+
+  // The chip body is the same height as its slot, not a content-sized box.
+  const chip = findAll(withPlan, n => {
+    const s = n.props?.style;
+    return s && s.height === 40 && s.flexDirection === 'row' && s.borderRadius !== undefined;
+  })[0];
+  assert.ok(chip, 'the chip is exactly as tall as the slot it sits in');
+  const cancel = findAll(withPlan, n => n.props?.accessibilityLabel === '取消关联任务')[0];
+  assert.ok(cancel, 'the plan can still be cleared');
+  assert.ok(cancel.props.hitSlop, 'its touch target survives through hit slop, not by growing the chip');
 });
 
 function sharedControlsHarness(isDark = false) {
