@@ -245,8 +245,8 @@ export function YanjiPaperSectionHeading({
   title,
   countText,
   right,
-  spaceBefore = YanjiSpacing.lg,
-  spaceAfter = 4,
+  spaceBefore = 14,
+  spaceAfter = 2,
   titleStyle,
   align = 'baseline',
   style,
@@ -268,13 +268,14 @@ export function YanjiPaperSectionHeading({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: align,
-        flexWrap: 'wrap',
+        // No wrap: the heading is one line, and a wrapping row lets the action
+        // drop below the title instead of sitting against the right edge.
         gap: YanjiSpacing.sm,
         marginBottom: spaceAfter,
         marginTop: spaceBefore,
       }, style]}
     >
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: YanjiSpacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: YanjiSpacing.xs, flexShrink: 1 }}>
         <Text
           accessibilityRole="header"
           style={[paper.typography.titleSection, titleStyle, { color: paper.colors.ink }]}
@@ -733,9 +734,12 @@ export function YanjiTextAction({ label, accessibilityLabel, onPress, disabled =
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
+      // A section accessory ("新建" / "写一条") is a text link beside a heading, not
+      // a row: the 48dp floor it used to carry pushed every heading it sat in
+      // down by ~17dp and made the whole page read airier than the design. The
+      // touch target is restored with hitSlop so the glyph stays on the baseline.
+      hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
       style={({ pressed }) => ({
-        minHeight: paper.layout.rowMinHeight,
-        minWidth: paper.layout.rowMinHeight,
         justifyContent: 'center',
         opacity: pressed ? 0.65 : 1,
       })}
@@ -1274,11 +1278,13 @@ export function YanjiTaskLedgerRow({
   const subLineMeta = planSubLineMeta(meta);
   return (
     <View>
+      {/* `.row` in the design: 11dp between columns, 8dp above and below, and the
+          commitment sits 3dp down so it optically centres on the title's first line. */}
       <View style={{
-        flexDirection: 'row', alignItems: 'flex-start', gap: YanjiSpacing.sm + 2,
+        flexDirection: 'row', alignItems: 'flex-start', gap: 11,
         paddingVertical: layout.taskRowPadding,
       }}>
-        <View style={{ width: 40, flexShrink: 0, paddingTop: 2 }}>
+        <View style={{ width: 40, flexShrink: 0, paddingTop: 3 }}>
           <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary }]}>
             {commitment}
           </Text>
@@ -1296,7 +1302,7 @@ export function YanjiTaskLedgerRow({
             // edge instead of being floated inside a wider touch column.
             width: layout.taskCheckboxSize,
             minHeight: layout.taskCheckboxSize,
-            marginTop: 4,
+            marginTop: 2,
             opacity: pressed ? 0.6 : 1,
           })}
         >

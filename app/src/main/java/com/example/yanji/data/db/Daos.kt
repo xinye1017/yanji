@@ -93,9 +93,23 @@ interface FocusSessionDao {
     )
     fun observeTotalSeconds(startInclusive: Long, endExclusive: Long): Flow<Long>
 
+    /**
+     * 计划累计用时：按计划分组求和（Today 页常驻 Flow，`focus_sessions` 每写一次就跑一次）。
+     *
+     * **`INDEXED BY` 是刻意的，不是冗余**：这条查询的执行计划在数据量跨过 ~10k 行后会被
+     * 优化器的成本模型选错——实测 30k 行时它放弃 `taskId` 覆盖索引，改用 `status` 前缀索引
+     * 并叠加 `USE TEMP B-TREE FOR GROUP BY`，耗时从 0.7ms 涨到 10.9ms（50k 行时 22.6ms，是
+     * 全表扫描的 1.5 倍）。触发条件是**存在半吊子统计**：`PRAGMA optimize` 的有界抽样
+     * 把 `status='COMPLETED'` 的选择性估成 1/15，而完整 `ANALYZE` 与完全无统计时都正确。
+     *
+     * 与其依赖优化器猜对，不如把意图写死：`taskId` 前导既能满足 `GROUP BY` 的索引序，
+     * 又是覆盖索引（不需回表）。代价是索引被改名时这条查询会**直接报错**而不是静默退化——
+     * 这正是我们要的失败方式，且 `QueryPlanGuardTest` 会在 CI 上先一步拦住。
+     */
     @Query(
         "SELECT taskId, COALESCE(SUM(durationSeconds), 0) AS seconds " +
             "FROM focus_sessions " +
+            "INDEXED BY `index_focus_sessions_taskId_status_durationSeconds` " +
             "WHERE status = 'COMPLETED' AND taskId IS NOT NULL " +
             "GROUP BY taskId"
     )

@@ -602,7 +602,9 @@ test('the journal slip is an unboxed timeline section so the plan keeps the read
   // Each section owns exactly one entry, in its heading: 「写一条」 for the journal
   // and 「新建」 for the plan. Neither is repeated inside an empty state.
   const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
-  assert.equal(writeNow.props.tone, 'quiet', '写一条 must not compete with the primary action');
+  // Both section entries are the same kind of control now: same label shape, same
+  // tone, so 「新建」 and 「写一条」 sit on one line at the right edge and read alike.
+  assert.equal(writeNow.props.tone, undefined, '写一条 defaults to the section accent, same as 新建');
   assert.equal(writeNow.props.label, '写一条');
   const planHeading = headings.find(node => node.props.title === '今日计划');
   const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];

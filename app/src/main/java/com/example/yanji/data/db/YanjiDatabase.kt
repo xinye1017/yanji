@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -703,13 +703,20 @@ abstract class YanjiDatabase : RoomDatabase() {
          *
          *  - `(status, startTime, subjectId, subjectName, durationSeconds)`：统计聚合的覆盖索引。
          *    统计一律 `status='COMPLETED' AND startTime ∈ [a,b)`，原来的单列 `startTime`
-         *    只能定位区间、每行仍需回表；覆盖索引把扫描留在索引里（月度窗口 1.84ms → 0.73ms）。
+         *    只能定位区间、每行仍需回表；覆盖索引把扫描留在索引里
+         *    （真实分布放大到 10k 行：月度投影 1.18ms → 0.86ms，SUM 0.31ms → 0.09ms）。
          *  - `(taskId, status, durationSeconds)`：`GROUP BY taskId` 与计划 LEFT JOIN 的必需索引。
          *    缺它时前者全表扫描、后者每次查询都要现场建 AUTOMATIC PARTIAL COVERING INDEX
-         *    （实测 13.97ms → 0.70ms）。
+         *    （放大到 10k 行：计划用时 JOIN 8.30ms → 0.28ms，约 30 倍）。
          *
          * 纯 `CREATE INDEX`：不重建表、不动任何业务数据，老设备（SQLite 3.9）同样可用。
          * 索引由 SQLite 在首次查询时按需填充，因此升级本身不会产生一次性长卡顿。
+         *
+         * **刻意不在这里（也不在打开路径上）执行 `ANALYZE` / `PRAGMA optimize`**：
+         * 实测这两个动作写入的部分统计会把 `observeTaskActualSeconds` 的计划带偏
+         * （30k 行时 0.7ms → 10.9ms，见该 DAO 的 KDoc）；而完全无统计时优化器的启发式
+         * 对这几条查询都给出正确计划。因此统计信息交给优化器自己判断，关键查询
+         * 则用 `INDEXED BY` 显式钉住，不依赖统计准确性。
          */
         val MIGRATION_24_25 = object : Migration(24, 25) {
             override fun migrate(connection: SQLiteConnection) {
@@ -723,6 +730,25 @@ abstract class YanjiDatabase : RoomDatabase() {
                         "`index_focus_sessions_taskId_status_durationSeconds` " +
                         "ON `focus_sessions` (`taskId`, `status`, `durationSeconds`)"
                 )
+            }
+        }
+
+        /**
+         * v25 → v26：清除 v25 构建写进库里的**部分统计信息**（`sqlite_stat1`）。
+         *
+         * 为什么单开一版迁移：v25 曾短暂在打开路径上跑 `PRAGMA optimize`，它写下的
+         * 有界抽样统计把 `status='COMPLETED'` 的选择性低估了约 15 倍，导致优化器为
+         * `observeTaskActualSeconds` 选中 `status` 前缀索引 + 临时 B-tree 分组
+         * （30k 行实测 0.7ms → 10.9ms，比全表扫描还慢）。v25 代码已经撤掉那次调用，
+         * 但统计表**不是 Room schema 的一部分**，撤代码不会把它删掉——它会留在用户库里
+         * 持续误导优化器。这条迁移就是为了让已经跑过 v25 的设备自愈。
+         *
+         * 纯 `DROP TABLE IF EXISTS`：删的是 SQLite 自己的统计表，不触碰任何业务数据；
+         * 表本就不存在时是 no-op（全新安装、或从未跑过 v25 的设备）。
+         */
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("DROP TABLE IF EXISTS `sqlite_stat1`")
             }
         }
 
@@ -757,35 +783,14 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_21_22,
             MIGRATION_22_23,
             MIGRATION_23_24,
-            MIGRATION_24_25
+            MIGRATION_24_25,
+            MIGRATION_25_26
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {
             runCatching {
                 File(context.applicationContext.noBackupFilesDir, SecretStore.LEGACY_FILE_NAME)
                     .writeText(value)
-            }
-        }
-
-        /**
-         * 打开数据库时补齐查询统计信息。
-         *
-         * **为什么必须有这一步**：`PRAGMA optimize` 会为统计缺失的表执行一次有界分析
-         * （写入 `sqlite_stat1`）。缺它时优化器只能靠启发式猜选择率，
-         * 实测在 3,000 行、三成挂计划的真实分布下会为
-         * `observeTaskActualSeconds`（Today 页常驻 Flow）选中 `status` 前缀索引，
-         * 于是它退化成「扫描全部 COMPLETED 行 + 临时 B-tree 分组」——
-         * 而 `focus_sessions` 每写一次它就重跑一次。补齐统计后同一条查询
-         * 走 `index_focus_sessions_taskId_status_durationSeconds` 且不再需要临时 B-tree。
-         * 该行为已由 `QueryPlanGuardTest` 钉住。
-         *
-         * **为什么要 runCatching**：老设备（minSdk 24 的 SQLite 3.9）不认识这个 pragma，
-         * 统计信息只是优化项，**绝不允许**它让数据库打不开——取不到就退回启发式计划，
-         * 与本次改动之前的行为一致。
-         */
-        private val optimizeStatisticsCallback = object : RoomDatabase.Callback() {
-            override fun onOpen(connection: SQLiteConnection) {
-                runCatching { connection.exec("PRAGMA optimize") }
             }
         }
 
@@ -798,7 +803,6 @@ abstract class YanjiDatabase : RoomDatabase() {
                     "yanji_study.db"
                 )
                 .addMigrations(*migrations(appContext))
-                .addCallback(optimizeStatisticsCallback)
                 .build()
                 .also { instance = it }
             }

@@ -334,10 +334,19 @@ export const YanjiPaperTypography = {
     lineHeight: 28,
     fontWeight: '600' as const,
   },
+  /**
+   * A section heading inside a page — 「今日计划」「记录此刻」「今日节奏」.
+   *
+   * It ranks above the body by *weight* more than by size: the redesign sets
+   * these at 13/900 with a hair of tracking, so a group title outranks the 15sp
+   * body beneath it without growing the heading row. Matches `.app-sec h4` in
+   * the design reference.
+   */
   titleSection: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '700' as const,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '900' as const,
+    letterSpacing: 0.4,
   },
   titleGroup: {
     fontSize: 15,
@@ -349,9 +358,10 @@ export const YanjiPaperTypography = {
     lineHeight: 22,
     fontWeight: '400' as const,
   },
+  /** A plan title — `.row-title` is 13.5/1.5/500, one step under body copy. */
   bodyTask: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 13.5,
+    lineHeight: 20,
     fontWeight: '500' as const,
   },
   bodyJournal: {
@@ -397,7 +407,8 @@ export const YanjiPaperLayout = {
   vernierMinorTickHeight: 10,
   vernierMajorTickHeight: 20,
   vernierPointerHeight: 28,
-  spectrumHeight: 10,
+  /** The distribution bar under the hero: a rule, not a block (`.spectrum` is 6px). */
+  spectrumHeight: 6,
   spectrumGap: 2,
   subjectSwatchSize: 7,
   taskCheckboxSize: 18,

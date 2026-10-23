@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 25
+    private val CURRENT_VERSION = 26
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -193,7 +193,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_21_22,
         YanjiDatabase.MIGRATION_22_23,
         YanjiDatabase.MIGRATION_23_24,
-        YanjiDatabase.MIGRATION_24_25
+        YanjiDatabase.MIGRATION_24_25,
+        YanjiDatabase.MIGRATION_25_26
     )
 
     /**
@@ -337,6 +338,38 @@ class YanjiMigrationTest {
     }
 
     // ---------------------------------------------------------------- 7 → 8 单跳
+
+    /**
+     * v25 → v26：清掉当时被 `PRAGMA optimize` 写进库里的部分统计信息。
+     *
+     * 这条迁移只在「设备曾经跑过 v25 构建」时才有实际作用，因此测试要模拟那个状态：
+     * 手工造一张 `sqlite_stat1`，确认迁移后它消失、且**业务数据一行不少**。
+     */
+    @Test
+    fun migrate25To26_dropsPartialPlannerStatisticsWithoutTouchingUserData() {
+        val db = helper.createDatabase(25)
+        db.execute("INSERT INTO focus_sessions VALUES " +
+            "('fs1','math_linear','线性代数',1000,2000,1234,0,0,'正向计时','',NULL,'COMPLETED',1)")
+        // 用真实路径制造统计表（sqlite_stat1 是保留名，不能直接 CREATE）：
+        // v25 构建当时就是在 onOpen 里跑的这类分析。
+        db.execute("ANALYZE")
+        assertEquals(
+            "前置条件：v25 状态下统计表应当已被写出",
+            1,
+            db.intValue("SELECT COUNT(*) FROM sqlite_master WHERE name='sqlite_stat1'")
+        )
+
+        val migrated = helper.runMigrationsAndValidate(26, allMigrations())
+
+        assertEquals(
+            "v25 写入的部分统计必须被清除，否则会持续误导优化器",
+            0,
+            migrated.intValue("SELECT COUNT(*) FROM sqlite_master WHERE name='sqlite_stat1'")
+        )
+        assertEquals("业务数据不得受影响", 1, migrated.intValue("SELECT COUNT(*) FROM focus_sessions"))
+        assertEquals(1234L, migrated.longValue("SELECT durationSeconds FROM focus_sessions WHERE id='fs1'"))
+        migrated.close()
+    }
 
     @Test
     fun migrate7To8_rescuesCredentialAndDropsRedundantColumns() {
@@ -1247,6 +1280,11 @@ class YanjiMigrationTest {
 
     private fun SQLiteConnection.intValue(sql: String): Int =
         prepare(sql).use { it.step(); it.getInt(0) }
+
+    /** 执行一条不返回结果的语句（测试里造种子数据用）。 */
+    private fun SQLiteConnection.execute(sql: String) {
+        prepare(sql).use { it.step() }
+    }
 
     private fun SQLiteConnection.longValue(sql: String): Long =
         prepare(sql).use { it.step(); it.getLong(0) }

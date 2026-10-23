@@ -521,36 +521,33 @@ export function TodayScreen({ visible, foregroundRevision }: {
             style={[typography.titleGreeting, { color: colors.ink, flex: 1 }]}>
             {greeting(now.getHours())}
           </Text>
-          <Pressable
-            onPress={openSettings}
-            accessibilityRole="button"
-            accessibilityLabel={countdown && countdownLocal
-              ? `${displayDate(date)}，${countdownLocal}，点击打开设置与目标`
-              : `${displayDate(date)}，点击打开设置与目标`}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={({ pressed }) => ({ alignItems: 'flex-end', paddingTop: 4, flexShrink: 0, opacity: pressed ? 0.65 : 1 })}>
-            <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
-              {displayDate(date)}
-            </Text>
-            {countdown && countdownLocal ? (
-              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-                {countdownLocal.includes('距初试')
-                  ? <>距初试 <Text style={{ color: colors.ink, fontWeight: '600' }}>{countdown.daysRemaining}</Text> 天</>
-                  : countdownLocal}
+          {/* Date and countdown stay plain text; the gear beside them is the way
+              into settings, so the text itself no longer doubles as a button. */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexShrink: 0 }}>
+            <View style={{ alignItems: 'flex-end', paddingTop: 4 }}>
+              <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+                {displayDate(date)}
               </Text>
-            ) : (
-              <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-                设置与目标
-              </Text>
-            )}
-          </Pressable>
+              {countdown && countdownLocal ? (
+                <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
+                  {countdownLocal.includes('距初试')
+                    ? <>距初试 <Text style={{ color: colors.ink, fontWeight: '600' }}>{countdown.daysRemaining}</Text> 天</>
+                    : countdownLocal}
+                </Text>
+              ) : null}
+            </View>
+            <YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标"
+              size={32} iconSize={19} />
+          </View>
         </View>
         <YanjiHairline />
 
         {/* One number answers "how is today going"; the goal rides the same
             top line with its state beside it, so the fact that used to repeat
             across four corners of this block is now said once. */}
-        <View style={{ paddingTop: YanjiSpacing.sm, paddingBottom: YanjiSpacing.xs }}>
+        {/* `.hero` in the design: 12dp above the label row, and no rule beneath —
+            the hairline belongs to the header, not between the hero and the plan. */}
+        <View style={{ paddingTop: 22, paddingBottom: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: layout.gridGap }}>
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日专注</Text>
             <Pressable onPress={openGoal} accessibilityRole="button" accessibilityLabel="调整日常学习目标"
@@ -559,9 +556,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
               {goalSeconds !== null && goalSeconds > 0 ? (
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>
                   目标 <Text style={{ color: colors.ink, fontWeight: '600' }}>{goalClock(goalSeconds)}</Text>
-                  {snapshot ? <Text style={{ color: goalReached ? colors.positive : colors.secondary, fontWeight: '600' }}>
-                    {`  ${goalReached ? '已达成' : `${Math.round(effectiveSeconds / goalSeconds * 100)}%`}`}
-                  </Text> : null}
+                  {/* No percentage: the hero number and the remainder line below
+                      already answer "how far along", and a third readout of the
+                      same ratio made the top line noisy. */}
+                  {snapshot && goalReached ? (
+                    <Text style={{ color: colors.positive, fontWeight: '600' }}>{'  已达成'}</Text>
+                  ) : null}
                 </Text>
               ) : (
                 <Text style={[typography.captionMeta, { color: colors.brandInk }]}>
@@ -579,10 +579,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
               <Text style={{ fontSize: 14, fontWeight: '600', color: colors.secondary, marginLeft: 5, transform: [{ translateY: -4 }] }}>分</Text>
             </> : <Text style={[typography.metricDaily, { color: colors.ink }]}>—</Text>}
           </View>
+          {/* Both halves are numbers the reader came for, so both are inked and
+              joined by the same 「 · 」 the rest of the page uses — the old line
+              separated them with three blank spaces. */}
           {savedStatus ? (
-            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 6, marginBottom: YanjiSpacing.xs }]}>
+            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 7, marginBottom: 4 }]}>
               {savedStatus}
-              <Text style={{ color: colors.muted }}>{'   '}</Text>
+              <Text style={{ color: colors.muted }}>{' · '}</Text>
               已完整结束 <Text style={{ color: colors.ink, fontWeight: '600' }}>{snapshot?.focusCount ?? 0}</Text> 轮
             </Text>
           ) : null}
@@ -595,7 +598,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   onPress={() => selectSegment({ kind: 'subject', key: `subject:${item.id}`, subjectId: item.id, subjectName: item.label, seconds: item.seconds })}
                   accessibilityRole="button" accessibilityState={{ selected: selection?.kind === 'subject' && selection.subjectId === item.id }}
                   accessibilityLabel={`${item.label}，今日专注 ${duration(item.seconds)}`}
-                  style={({ pressed }) => ({ minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.65 : 1 })}>
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.65 : 1 })}>
                   <View style={{ width: layout.subjectSwatchSize, height: layout.subjectSwatchSize, borderRadius: layout.subjectSwatchSize / 2, backgroundColor: item.color }} />
                   <Text style={[typography.captionMeta, { color: colors.secondary, fontWeight: selection?.kind === 'subject' && selection.subjectId === item.id ? '700' : '500' }]}>
                     {item.label} <Text style={{ color: colors.ink, fontWeight: '600' }}>{legendDuration(item.seconds)}</Text>
@@ -719,7 +723,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 label="写一条"
                 accessibilityLabel="新建今日记录"
                 onPress={newNote}
-                tone="quiet"
               />
             }
           />

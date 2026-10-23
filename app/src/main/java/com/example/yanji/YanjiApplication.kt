@@ -6,6 +6,7 @@ import android.util.Log
 import com.example.yanji.bridge.LaunchPreheat
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.bridge.YanjiPackage
+import com.example.yanji.bridge.YanjiSystemFonts
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
@@ -63,6 +64,10 @@ class YanjiApplication : Application(), com.facebook.react.ReactApplication {
         // 这个调用必须在任何 React Native 类被加载之前完成。
         SoLoader.init(this, YanjiMergedSoMapping())
         DefaultNewArchitectureEntryPoint.load()
+        // 在 React 实例创建前把设备的中文衬线注册成 RN 的 serif 家族：
+        // ColorOS 只在 400 一档给 zh-Hans 挂了 serif 回退，不注册的话页面里
+        // 只有几处标题是衬线，其余全落到 OPPO Sans。
+        YanjiSystemFonts.registerSystemSerif()
         YanjiRepository.init(this)
         // 预热必须在 Repository 就绪之后立刻开始：它读的正是 Repository 背后的同一份 Room
         // 数据，Activity 的首帧会等它（见 MainActivity.onCreate）。
