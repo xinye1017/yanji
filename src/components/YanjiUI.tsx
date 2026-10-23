@@ -1352,12 +1352,12 @@ export function YanjiTaskLedgerRow({
           </View>
         </Pressable>
         {!completed ? (
-          /* A single circular play target, centred on the row. It borrows the
-             Focus page's selected-subject card: a light brand wash inside a brand
-             hairline, with the accent-coloured glyph. The lead pending task is
-             the one this page invites you to start, so it carries the full accent
-             rim and a heavier glyph; the rest stay a step quieter in the same
-             family rather than falling back to neutral ink. */
+          /* A single circular play target, centred on the row. It is the same
+             accent fill as the Focus page's start button — the solid brand with
+             an on-brand glyph and no rim — so the two ways of starting a round
+             read as one action. `isLead` only lightens the circle slightly: the
+             row this page invites you to start keeps the strongest contrast,
+             and the others recede without leaving the accent family. */
           <Pressable
             onPress={onStartFocus}
             accessibilityRole="button"
@@ -1368,15 +1368,13 @@ export function YanjiTaskLedgerRow({
               width: layout.compactActionHeight + 2,
               height: layout.compactActionHeight + 2,
               borderRadius: (layout.compactActionHeight + 2) / 2,
-              borderWidth: isLead ? 1 : layout.hairlineWidth,
-              borderColor: isLead ? colors.brand : colors.brandSubtle,
-              backgroundColor: colors.brandSubtle,
+              backgroundColor: colors.brand,
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: pressed ? 0.6 : 1,
+              opacity: pressed ? 0.6 : isLead ? 1 : 0.72,
             })}
           >
-            <YanjiIcon name="play" size={11} color={isLead ? colors.brandInk : colors.brand} />
+            <YanjiIcon name="play" size={11} color={colors.onBrand} />
           </Pressable>
         ) : null}
       </View>

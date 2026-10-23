@@ -498,14 +498,12 @@ function WeekFilmstrip({ cells, onSelect }: {
       accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
       accessibilityState={{ selected: cell.isSelected, disabled: cell.isFuture }}
       // The selected day follows the Focus page's selected-subject card: a light
-      // brand wash with a brand hairline, so the mark is the same accent family
-      // everywhere instead of an ink-filled block on a paper page.
+      // brand wash with no rim, so the mark is the same accent family everywhere
+      // instead of an ink-filled block on a paper page.
       style={({ pressed }) => ({
         flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
         alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
         backgroundColor: cell.isSelected ? colors.brandSubtle : 'transparent',
-        borderWidth: cell.isSelected ? 1 : 0,
-        borderColor: cell.isSelected ? colors.brand : 'transparent',
         opacity: pressed ? 0.65 : 1,
       })}>
       <Text style={[typography.captionMeta, {
