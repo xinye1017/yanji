@@ -86,7 +86,12 @@ function harness({ records = [], subjects = SUBJECTS, tasks = TASKS, reject = nu
       useYanjiKeyboardInset: () => 0,
     },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
-    '../state/settingsViewLogic': { todayIso: () => '2026-10-23' },
+    '../state/settingsViewLogic': {
+      todayIso: () => {
+        const n = new Date();
+        return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+      },
+    },
   });
   return {
     effects,

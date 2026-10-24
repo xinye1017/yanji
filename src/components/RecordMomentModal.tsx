@@ -53,6 +53,13 @@ function dateLabel(iso: string): string {
   return parts && weekday ? `${parts.month}月${parts.day}日 ${weekday}` : iso;
 }
 
+export interface EditingNote {
+  id: string;
+  content: string;
+  category: NoteCategory;
+  isFavorite?: boolean;
+}
+
 interface RecordMomentModalProps {
   visible: boolean;
   /** ISO date `yyyy-MM-dd`; defaults to the device's local today. */
@@ -68,7 +75,7 @@ interface RecordMomentModalProps {
    * tell "the user left it alone" from "the user picked 灵感", and a missing
    * category would silently rewrite a doubt into an inspiration on save.
    */
-  editingNote?: { id: string; content: string; category: NoteCategory } | null;
+  editingNote?: EditingNote | null;
   /** When true, the sheet immediately reveals the delete confirmation buttons. */
   initialConfirmDelete?: boolean;
 }
@@ -90,6 +97,7 @@ export function RecordMomentModal({
   const [error, setError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [predictedCategory, setPredictedCategory] = useState<NoteCategory | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
   const captureDraft = useRef('');
   const [categoryOption, setCategoryOption] = useState<CaptureCategoryOption>('AUTO');
   const captureDraftCategory = useRef<{ option: CaptureCategoryOption; chosen: boolean }>({
@@ -103,6 +111,7 @@ export function RecordMomentModal({
     if (!visible) return;
     setText(editingNote?.content ?? captureDraft.current);
     setCategoryOption(editingNote ? editingNote.category : captureDraftCategory.current.option);
+    setIsFavorite(Boolean(editingNote?.isFavorite));
     setError(null);
     setAiFeedback(null);
     setPredictedCategory(null);
@@ -140,6 +149,19 @@ export function RecordMomentModal({
     }
   }, [editingNote, text]);
 
+  const handleToggleFavorite = useCallback(async () => {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    if (editingNote) {
+      try {
+        await YanjiDataNative.toggleFavoriteNote(editingNote.id);
+      } catch {
+        setIsFavorite(!next);
+        setError('收藏未保存，请重试');
+      }
+    }
+  }, [isFavorite, editingNote]);
+
   const handleSave = useCallback(async () => {
     if (saving || identifying) return;
     const content = text.trim();
@@ -149,9 +171,6 @@ export function RecordMomentModal({
     }
     setSaving(true);
     setError(null);
-    // Which write failed decides the message: after the content is committed only
-    // the category is still outstanding, and saying "保存失败" then would imply
-    // the text was lost too.
     let stage: 'content' | 'category' = 'content';
     try {
       let resolvedCategory: NoteCategory;
@@ -171,15 +190,11 @@ export function RecordMomentModal({
 
       if (editingNote) {
         await YanjiDataNative.updateNote(editingNote.id, content);
-        // Content is already committed at this point, so a failed category write
-        // has to say so instead of reporting a save that did not fully happen.
-        // Both calls are idempotent, so retrying is safe.
         if (resolvedCategory !== editingNote.category) {
           stage = 'category';
           await YanjiDataNative.setNoteCategory(editingNote.id, resolvedCategory);
         }
       } else {
-        // Bind to the active session when one exists; the timer keeps running.
         let sessionId: string | null = null;
         try {
           const session = await YanjiTimerNative.getActiveSession();
@@ -187,7 +202,10 @@ export function RecordMomentModal({
         } catch {
           sessionId = null;
         }
-        await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory);
+        const created = await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory);
+        if (isFavorite && created?.id) {
+          await YanjiDataNative.toggleFavoriteNote(created.id).catch(() => {});
+        }
       }
       if (!editingNote) {
         captureDraft.current = '';
@@ -197,15 +215,15 @@ export function RecordMomentModal({
       setCategoryOption('AUTO');
       setPredictedCategory(null);
       setAiFeedback(null);
+      setIsFavorite(false);
       onSaved?.();
       onClose();
     } catch {
-      // Preserve the user's text so nothing is lost on failure.
       setError(stage === 'category' ? '分类未保存，请重试' : '保存失败，内容已保留');
     } finally {
       setSaving(false);
     }
-  }, [saving, identifying, text, categoryOption, predictedCategory, editingNote, date, onClose, onSaved]);
+  }, [saving, identifying, text, categoryOption, predictedCategory, isFavorite, editingNote, date, onClose, onSaved]);
 
   const handleDelete = useCallback(async () => {
     if (saving || identifying || !editingNote) return;
@@ -236,10 +254,56 @@ export function RecordMomentModal({
   const insets = useSafeAreaInsets();
   const keyboardInset = useYanjiKeyboardInset();
 
-  // In dark mode, blend smoothly into the dark screen with a deep charcoal tone
-  const sheetBackground = theme.isDark ? '#141312' : paper.colors.surface;
-  const sheetBorderColor = theme.isDark ? 'rgba(255,255,255,0.08)' : paper.colors.hairline;
-  const scrimColor = theme.isDark ? 'rgba(0,0,0,0.65)' : paper.colors.scrim;
+  const sheetBackground = paper.colors.surface;
+  const sheetBorderColor = paper.colors.hairline;
+  const scrimColor = paper.colors.scrim;
+
+  // Header trailing component: Bookmark and Trash icons
+  const headerRight = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
+      {/* Bookmark Icon button */}
+      <Pressable
+        onPress={handleToggleFavorite}
+        disabled={saving || identifying}
+        accessibilityRole="button"
+        accessibilityLabel={isFavorite ? '取消收藏' : '收藏记录'}
+        hitSlop={8}
+        style={({ pressed }) => ({
+          width: 34,
+          height: 34,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <YanjiIcon
+          name={isFavorite ? 'bookmark' : 'bookmarkOutline'}
+          size={19}
+          color={isFavorite ? paper.colors.amber : paper.colors.secondary}
+        />
+      </Pressable>
+
+      {/* Trash (Delete) Icon button */}
+      {editingNote ? (
+        <Pressable
+          onPress={() => setConfirmDelete(true)}
+          disabled={saving || identifying}
+          accessibilityRole="button"
+          accessibilityLabel="删除这条记录"
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 34,
+            height: 34,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <YanjiIcon name="delete" size={19} color={paper.colors.secondary} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={handleClose}>
@@ -280,9 +344,11 @@ export function RecordMomentModal({
             }}
           />
 
-          {/* Heading with title "记录此刻" */}
+          {/* Heading with title "记录此刻", smaller refined font size, Bookmark & Trash in top right */}
           <YanjiPaperSheetHeading
             title="记录此刻"
+            titleStyle={{ fontSize: 18, lineHeight: 24, fontWeight: '700' }}
+            right={headerRight}
             disabled={saving || identifying}
           />
 
@@ -318,53 +384,34 @@ export function RecordMomentModal({
             ) : null}
           </View>
 
-          {/* For editing: quiet destructive delete button / confirmation row */}
-          {editingNote ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginBottom: YanjiSpacing.xs }}>
-              {confirmDelete ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                    删除后无法恢复
-                  </Text>
-                  <Pressable
-                    onPress={() => setConfirmDelete(false)}
-                    disabled={saving || identifying}
-                    accessibilityRole="button"
-                    accessibilityLabel="取消删除"
-                    style={{ paddingHorizontal: 6, paddingVertical: 2 }}
-                  >
-                    <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                      取消
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleDelete}
-                    disabled={saving || identifying}
-                    accessibilityRole="button"
-                    accessibilityLabel="确认删除这条记录"
-                    style={{ paddingHorizontal: 6, paddingVertical: 2 }}
-                  >
-                    <Text style={[paper.typography.captionMeta, { color: paper.colors.danger, fontWeight: '600' }]}>
-                      {saving ? '删除中…' : '确认删除'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => setConfirmDelete(true)}
-                  disabled={saving || identifying}
-                  accessibilityRole="button"
-                  accessibilityLabel="删除这条记录"
-                  style={({ pressed }) => ({
-                    paddingVertical: 2,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.danger }]}>
-                    删除这条记录
-                  </Text>
-                </Pressable>
-              )}
+          {/* For editing: quiet destructive delete confirmation row when delete is tapped */}
+          {confirmDelete && editingNote ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: YanjiSpacing.sm, marginBottom: YanjiSpacing.xs }}>
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                删除后无法恢复
+              </Text>
+              <Pressable
+                onPress={() => setConfirmDelete(false)}
+                disabled={saving || identifying}
+                accessibilityRole="button"
+                accessibilityLabel="取消删除"
+                style={{ paddingHorizontal: 6, paddingVertical: 2 }}
+              >
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                  取消
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleDelete}
+                disabled={saving || identifying}
+                accessibilityRole="button"
+                accessibilityLabel="确认删除这条记录"
+                style={{ paddingHorizontal: 6, paddingVertical: 2 }}
+              >
+                <Text style={[paper.typography.captionMeta, { color: paper.colors.danger, fontWeight: '600' }]}>
+                  {saving ? '删除中…' : '确认删除'}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -401,8 +448,8 @@ export function RecordMomentModal({
                 style={({ pressed }) => ({
                   width: 36,
                   height: 36,
-                  borderRadius: 18,
-                  backgroundColor: theme.isDark ? '#262422' : paper.colors.subtle,
+                  borderRadius: paper.radius.pill,
+                  backgroundColor: paper.colors.subtle,
                   alignItems: 'center',
                   justifyContent: 'center',
                   opacity: pressed ? 0.7 : 1,
@@ -424,7 +471,7 @@ export function RecordMomentModal({
                   minHeight: 36,
                   paddingHorizontal: 0,
                   paddingVertical: 0,
-                  borderRadius: 18,
+                  borderRadius: paper.radius.pill,
                 }}
               />
             </View>

@@ -12,7 +12,7 @@ import {
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
-import type { ActiveSessionState, NoteCategory, NoteEntry, StudyTask } from '../bridge';
+import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton, YanjiLedgerChip,
@@ -412,15 +412,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
     setCarryActionError(null);
     setDeferredCarryTaskIds(current => new Set(current).add(taskId));
   };
-  const toggleFavorite = async (note: NoteEntry) => {
-    if (busyNote) return;
-    setBusyNote(note.id);
-    setActionError(null);
-    try {
-      if (!await YanjiDataNative.toggleFavoriteNote(note.id)) throw new Error('refused');
-    } catch { setActionError('收藏未保存，请重试。'); }
-    finally { setBusyNote(null); }
-  };
   const toggleResolved = async (note: NoteEntry) => {
     if (busyNote) return;
     setBusyNote(note.id);
@@ -428,19 +419,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
     try {
       if (!await YanjiDataNative.toggleNoteResolved(note.id)) throw new Error('refused');
     } catch { setActionError('疑点状态未保存，请重试。'); }
-    finally { setBusyNote(null); }
-  };
-  /**
-   * 人工纠正分类。决策模型失败或未配置 Key 时会静默回落灵感，
-   * 这里让那次的回落可以被改回来：AI 建议，用户定夺。
-   */
-  const changeCategory = async (note: NoteEntry, category: NoteCategory) => {
-    if (busyNote) return;
-    setBusyNote(note.id);
-    setActionError(null);
-    try {
-      if (!await YanjiDataNative.setNoteCategory(note.id, category)) throw new Error('refused');
-    } catch { setActionError('分类未保存，请重试。'); }
     finally { setBusyNote(null); }
   };
   const openGoal = () => {
@@ -457,26 +435,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
   };
   /** The anchored menu is the only management surface a moment row has. */
   const noteMenuActions = (note: NoteEntry): TimelineAction[] => [
-    {
-      key: 'favorite',
-      icon: note.isFavorite ? 'star' : 'starOutline',
-      label: note.isFavorite ? '取消收藏' : '收藏记录',
-      onPress: () => void toggleFavorite(note),
-    },
     ...(note.category === 'DOUBT' ? [{
       key: 'resolve',
       icon: 'check' as const,
       label: note.isResolved ? '标记为待解决' : '标记为已解决',
       onPress: () => void toggleResolved(note),
     }] : []),
-    // 人工纠正分类，与回顾页同一组动作、同一套文案：
-    // 灵感 → 疑点 / 疑点 → 灵感，各只需一个显式动作。
-    {
-      key: 'category',
-      icon: note.category === 'DOUBT' ? 'inspiration' : 'doubt',
-      label: note.category === 'DOUBT' ? '改为灵感' : '改为疑点',
-      onPress: () => void changeCategory(note, note.category === 'DOUBT' ? 'INSPIRATION' : 'DOUBT'),
-    },
     { key: 'edit', icon: 'compose', label: '编辑记录', onPress: () => openNote(note) },
     { key: 'delete', icon: 'delete', label: '删除记录', danger: true, onPress: () => openNote(note, true) },
   ];

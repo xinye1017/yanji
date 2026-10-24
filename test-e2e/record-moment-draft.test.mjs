@@ -130,6 +130,7 @@ function modalHarness({ save, activeSession = null, classify = async () => 'INSP
       } else if (node && typeof node === 'object' && 'type' in node) {
         if (predicate(node)) found.push(node);
         walk(node.props?.children, predicate, found);
+        if (node.props?.right) walk(node.props.right, predicate, found);
       }
       return found;
     }

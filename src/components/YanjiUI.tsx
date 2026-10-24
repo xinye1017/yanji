@@ -117,6 +117,7 @@ export function YanjiPaperSheetHeading({
   onClose,
   disabled = false,
   closeTone = 'filled',
+  titleStyle,
   right,
 }: {
   title: string;
@@ -124,6 +125,7 @@ export function YanjiPaperSheetHeading({
   onClose?: () => void;
   disabled?: boolean;
   closeTone?: 'filled' | 'plain';
+  titleStyle?: TextStyle;
   right?: React.ReactNode;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -140,7 +142,7 @@ export function YanjiPaperSheetHeading({
       <View style={{ flex: 1 }}>
         <Text
           accessibilityRole="header"
-          style={[paper.typography.titleEditorial, { color: paper.colors.ink }]}
+          style={[paper.typography.titleEditorial, titleStyle, { color: paper.colors.ink }]}
         >
           {title}
         </Text>

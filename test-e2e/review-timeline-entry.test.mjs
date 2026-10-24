@@ -370,7 +370,7 @@ test('note rows keep favorite, resolution, category correction and editing in th
   doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   let menu = harness.menu(harness.render());
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
-    ['收藏记录', '标记为已解决', '改为灵感', '编辑记录', '删除记录']);
+    ['标记为已解决', '编辑记录', '删除记录']);
 
   pressMenuAction(menu, '标记为已解决');
   await flush();
@@ -379,12 +379,8 @@ test('note rows keep favorite, resolution, category correction and editing in th
   const inspRow = harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感');
   inspRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   menu = harness.menu(harness.render());
-  // 分类纠正对灵感行同样可达：AI 判成灵感不代表这就是最终结论。
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
-    ['收藏记录', '改为疑点', '编辑记录', '删除记录']);
-  pressMenuAction(menu, '改为疑点');
-  await flush();
-  assert.deepEqual(plain(harness.calls).slice(1), [['category', 'insp-1', 'DOUBT']]);
+    ['编辑记录', '删除记录']);
 
   harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')
     .props.onMore({ x: 10, y: 100, width: 44, height: 44 });

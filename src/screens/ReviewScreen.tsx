@@ -4,14 +4,14 @@ import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'r
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YanjiDataNative } from '../bridge';
-import type { DailySession, DailySnapshot, NoteCategory, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
+import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
   YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
-import { RecordMomentModal } from '../components/RecordMomentModal';
+import { EditingNote, RecordMomentModal } from '../components/RecordMomentModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
@@ -107,7 +107,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const [pendingDelete, setPendingDelete] = useState<{
     sessionId: string; isExam: boolean; subjectName: string;
   } | null>(null);
-  const [editingNote, setEditingNote] = useState<{ id: string; content: string; category: NoteCategory } | null>(null);
+  const [editingNote, setEditingNote] = useState<EditingNote | null>(null);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -206,15 +206,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     }
   };
 
-  const toggleFavorite = async (noteId: string) => {
-    if (busyNote) return;
-    setBusyNote(noteId);
-    setActionError(null);
-    try {
-      if (!await YanjiDataNative.toggleFavoriteNote(noteId)) throw new Error('refused');
-    } catch { setActionError('收藏未保存，请再次点击收藏重试。'); }
-    finally { setBusyNote(null); }
-  };
   const toggleResolved = async (noteId: string) => {
     if (busyNote) return;
     setBusyNote(noteId);
@@ -222,17 +213,6 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     try {
       if (!await YanjiDataNative.toggleNoteResolved(noteId)) throw new Error('refused');
     } catch { setActionError('疑点状态未保存，请重试。'); }
-    finally { setBusyNote(null); }
-  };
-  // 人工纠正分类：AI 只给建议，最终归灵感还是疑点由用户定夺。
-  // 传目标值而非「翻转」，所以重复点击同一目标是幂等的。
-  const changeCategory = async (noteId: string, category: NoteCategory) => {
-    if (busyNote) return;
-    setBusyNote(noteId);
-    setActionError(null);
-    try {
-      if (!await YanjiDataNative.setNoteCategory(noteId, category)) throw new Error('refused');
-    } catch { setActionError('分类未保存，请重试。'); }
     finally { setBusyNote(null); }
   };
   const removeSession = async () => {
@@ -268,32 +248,18 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     }
     const note = entry;
     return [
-      {
-        key: 'favorite',
-        icon: note.isFavorite ? 'star' as const : 'starOutline' as const,
-        label: note.isFavorite ? '取消收藏' : '收藏记录',
-        onPress: () => void toggleFavorite(note.noteId),
-      },
       ...(note.category === 'DOUBT' ? [{
         key: 'resolve',
         icon: 'check' as const,
         label: note.isResolved ? '标记为待解决' : '标记为已解决',
         onPress: () => void toggleResolved(note.noteId),
       }] : []),
-      // 人工纠正分类：无论 AI 判成什么，用户都能把它改成另一种。
-      // 灵感 → 疑点 / 疑点 → 灵感，各只需一个显式动作。
-      {
-        key: 'category',
-        icon: note.category === 'DOUBT' ? 'inspiration' : 'doubt',
-        label: note.category === 'DOUBT' ? '改为灵感' : '改为疑点',
-        onPress: () => void changeCategory(note.noteId, note.category === 'DOUBT' ? 'INSPIRATION' : 'DOUBT'),
-      },
       {
         key: 'edit',
         icon: 'compose' as const,
         label: '编辑记录',
         onPress: () => {
-          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
+          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
           setConfirmDeleteNote(false);
         },
       },
@@ -303,7 +269,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         label: '删除记录',
         danger: true,
         onPress: () => {
-          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
+          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
           setConfirmDeleteNote(true);
         },
       },

@@ -689,22 +689,7 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   assert.equal(menu.props.containerHeight, 820);
   assert.equal(menu.props.bottomInset, 96, 'the floating dock is reserved at the bottom');
   assert.deepEqual(JSON.parse(JSON.stringify(menu.props.actions.map(action => action.label))),
-    ['收藏记录', '改为疑点', '编辑记录', '删除记录'], 'an inspiration has no resolution action, but can still be corrected to a doubt');
-
-  pressMenuAction(menu, '收藏记录');
-  await new Promise(resolve => setTimeout(resolve, 0));
-  assert.deepEqual(calls, [['favorite', 'older']], 'the stored note, not the menu, is updated');
-  assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0);
-
-  // The category correction is reachable from the Today menu too, with the same
-  // explicit target value as on Review: AI suggested 灵感, the user overrides it.
-  items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
-  items[1].props.onMore(anchor);
-  pressMenuAction(nodes(h.render(), n => n.type === 'TimelineActionPopover')[0], '改为疑点');
-  await new Promise(resolve => setTimeout(resolve, 0));
-  assert.deepEqual(calls[1], ['category', 'older', 'DOUBT']);
-  assert.equal(nodes(h.render(), n => n.type === 'TimelineActionPopover').length, 0,
-    'correcting the category closes the menu like every other action');
+    ['编辑记录', '删除记录'], 'an inspiration has no resolution action');
 
   items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
   items[0].props.onMore(anchor);
@@ -727,20 +712,19 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   editor = nodes(tree, n => n.type === 'RecordMomentModal')[0];
   assert.equal(editor.props.editingNote.id, 'older');
   assert.equal(editor.props.initialConfirmDelete, true, 'delete only opens the existing confirmation');
-  assert.deepEqual(calls, [['favorite', 'older'], ['category', 'older', 'DOUBT']],
-    'menu delete never deletes directly');
+  assert.deepEqual(calls, [], 'menu delete never deletes directly');
 });
 
-test('a failed favorite surfaces the existing error and keeps the note', async () => {
-  const note = { id: 'note-1', date, timestamp: at('10:30'), content: '旧记录', category: 'INSPIRATION' };
-  const h = screenHarness(snapshot({ notes: [note] }), { toggleFavoriteNote: async () => false });
+test('a failed resolution surfaces the existing error and keeps the note', async () => {
+  const note = { id: 'note-1', date, timestamp: at('10:30'), content: '旧疑点', category: 'DOUBT', isResolved: false };
+  const h = screenHarness(snapshot({ notes: [note] }), { toggleNoteResolved: async () => false });
   const items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
   items[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
   const menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
-  pressMenuAction(menu, '收藏记录');
+  pressMenuAction(menu, '标记为已解决');
   await new Promise(resolve => setTimeout(resolve, 0));
   const tree = h.render();
-  assert.match(text(tree), /收藏未保存，请重试/);
+  assert.match(text(tree), /疑点状态未保存，请重试/);
   assert.equal(nodes(tree, n => n.type === 'TimelineCompactRow').length, 1, 'the note is not removed');
 });
 
