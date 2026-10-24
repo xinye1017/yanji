@@ -320,8 +320,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           title only repeated it. The view switch rides the right edge as a
           borderless capsule. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 10 }}>
-        <Text accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink }]}>
-          备考手账
+        <Text accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink, fontFamily: 'serif' }]}>
+          备考手帐
         </Text>
         <YanjiPaperSegmentedControl
           value={view}
