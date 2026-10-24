@@ -343,7 +343,7 @@ test('a new capture saves the model suggestion only while the user has not chose
   const modal = modalHarness({ classify: async () => 'DOUBT' });
 
   const opened = modal.render({ visible: true });
-  assert.equal(opened.categoryControl.props.value, 'INSPIRATION', 'the control starts at 灵感');
+  assert.equal(opened.categoryControl.props.value, 'AUTO', 'the control starts at 智能识别');
   const typed = modal.typeInto(opened, '为什么这道题要用换元');
   await typed.save.props.onPress();
 
@@ -396,7 +396,7 @@ test('a successful new save resets the category choice for the next capture', as
   assert.equal(modal.calls.saveQuickNote[0][3], 'DOUBT');
 
   const reopened = modal.render({ visible: true });
-  assert.equal(reopened.categoryControl.props.value, 'INSPIRATION', 'the next capture starts fresh');
+  assert.equal(reopened.categoryControl.props.value, 'AUTO', 'the next capture starts fresh at 智能识别');
   assert.equal(modal.refs[1].current.chosen, false, 'and the model may suggest again');
 });
 
@@ -449,3 +449,19 @@ test('a failed category write on edit reports the failure instead of a false sav
   assert.deepEqual(modal.calls.setNoteCategory, [['note-x', 'DOUBT']], 'the category write was attempted');
 });
 
+test('tapping AUTO while editing triggers immediate classification and commits on save', async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
+
+  const note = { id: 'note-auto', content: '为什么这里要用换元积分法？', category: 'INSPIRATION' };
+  const editor = modal.render({ visible: true, editingNote: note });
+  assert.equal(editor.categoryControl.props.value, 'INSPIRATION', 'initially uses stored category');
+
+  await modal.chooseCategory(editor, 'AUTO');
+  // allow microtask to complete async classifyMoment
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(modal.calls.classifyInputs, ['为什么这里要用换元积分法？'], 'calls classify immediately');
+
+  const settled = modal.render({ visible: true, editingNote: note });
+  await settled.save.props.onPress();
+  assert.deepEqual(modal.calls.setNoteCategory, [['note-auto', 'DOUBT']], 'saves the classified category');
+});

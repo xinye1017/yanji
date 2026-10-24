@@ -116,11 +116,15 @@ export function YanjiPaperSheetHeading({
   subtitle,
   onClose,
   disabled = false,
+  closeTone = 'filled',
+  right,
 }: {
   title: string;
   subtitle?: string;
-  onClose: () => void;
+  onClose?: () => void;
   disabled?: boolean;
+  closeTone?: 'filled' | 'plain';
+  right?: React.ReactNode;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
@@ -151,15 +155,19 @@ export function YanjiPaperSheetHeading({
           </Text>
         ) : null}
       </View>
-      <YanjiIconButton
-        icon="close"
-        accessibilityLabel="关闭"
-        onPress={onClose}
-        disabled={disabled}
-        size={paper.layout.rowMinHeight}
-        iconSize={17}
-        tone="filled"
-      />
+      {right !== undefined ? (
+        right
+      ) : onClose ? (
+        <YanjiIconButton
+          icon="close"
+          accessibilityLabel="关闭"
+          onPress={onClose}
+          disabled={disabled}
+          size={paper.layout.rowMinHeight}
+          iconSize={17}
+          tone={closeTone}
+        />
+      ) : null}
     </View>
   );
 }
@@ -300,9 +308,10 @@ export function YanjiPaperSectionHeading({
 // YanjiPaperSegmentedControl — one-of-N switch inside a subtle track
 // ---------------------------------------------------------------------------
 
-interface YanjiPaperSegmentedOption<T extends string> {
+export interface YanjiPaperSegmentedOption<T extends string> {
   value: T;
   label: string;
+  icon?: YanjiIconName;
 }
 
 export function YanjiPaperSegmentedControl<T extends string>({
@@ -368,6 +377,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
         <PaperSegment
           key={option.value}
           label={option.label}
+          icon={option.icon}
           selected={option.value === value}
           compact={compact}
           borderless={borderless}
@@ -383,6 +393,7 @@ export function YanjiPaperSegmentedControl<T extends string>({
 
 function PaperSegment({
   label,
+  icon,
   selected,
   compact,
   borderless,
@@ -392,6 +403,7 @@ function PaperSegment({
   onPress,
 }: {
   label: string;
+  icon?: YanjiIconName;
   selected: boolean;
   compact: boolean;
   borderless: boolean;
@@ -424,7 +436,7 @@ function PaperSegment({
       style={({ pressed }) => ({
         minHeight: compact ? paper.layout.rowMinHeight : paper.layout.rowMinHeight - YanjiSpacing.xs,
         minWidth: paper.layout.rowMinHeight,
-        paddingHorizontal: compact ? YanjiSpacing.md : YanjiSpacing.lg,
+        paddingHorizontal: compact ? YanjiSpacing.sm : YanjiSpacing.lg,
         paddingVertical: segmentInset,
         alignItems: 'center',
         justifyContent: 'center',
@@ -450,17 +462,26 @@ function PaperSegment({
           fill,
         ]}
       />
-      <Text
-        style={[
-          compact ? paper.typography.captionMeta : paper.typography.bodyPrimary,
-          {
-            color: selected ? paper.colors.ink : paper.colors.secondary,
-            fontWeight: selected ? '700' : '500',
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        {icon ? (
+          <YanjiIcon
+            name={icon}
+            size={compact ? 13 : 15}
+            color={disabled ? paper.colors.muted : selected ? paper.colors.ink : paper.colors.secondary}
+          />
+        ) : null}
+        <Text
+          style={[
+            compact ? paper.typography.captionMeta : paper.typography.bodyPrimary,
+            {
+              color: disabled ? paper.colors.muted : selected ? paper.colors.ink : paper.colors.secondary,
+              fontWeight: selected ? '700' : '500',
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -1394,6 +1415,7 @@ export function YanjiPrimaryButton({
   onPress,
   disabled = false,
   variant = 'primary',
+  accessibilityLabel,
   style,
 }: {
   label: string;
@@ -1408,6 +1430,7 @@ export function YanjiPrimaryButton({
    * a destructive action cannot borrow the accent of "start" or "save".
    */
   variant?: 'primary' | 'secondary' | 'danger';
+  accessibilityLabel?: string;
   style?: ViewStyle;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
@@ -1436,7 +1459,7 @@ export function YanjiPrimaryButton({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={detail ? `${label}，${detail}` : label}
+      accessibilityLabel={accessibilityLabel ?? (detail ? `${label}，${detail}` : (label || '确认'))}
       style={({ pressed }) => [
         {
           backgroundColor,
@@ -1460,21 +1483,23 @@ export function YanjiPrimaryButton({
       ]}
     >
       {icon ? (
-        <View style={{ marginRight: detail ? 0 : YanjiSpacing.sm }}>
+        <View style={{ marginRight: label ? (detail ? 0 : YanjiSpacing.sm) : 0 }}>
           <YanjiIcon name={icon} size={17} color={textColor} />
         </View>
       ) : null}
-      <Text
-        style={{
-          color: textColor,
-          fontSize: 16,
-          fontWeight: '600',
-          fontVariant: ['tabular-nums'],
-          maxWidth: detail ? '100%' : undefined,
-        }}
-      >
-        {label}
-      </Text>
+      {label ? (
+        <Text
+          style={{
+            color: textColor,
+            fontSize: 16,
+            fontWeight: '600',
+            fontVariant: ['tabular-nums'],
+            maxWidth: detail ? '100%' : undefined,
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
       {detail ? (
         <Text
           style={[

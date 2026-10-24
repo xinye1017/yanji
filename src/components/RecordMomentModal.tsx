@@ -10,14 +10,12 @@
  *   active focus session id.
  *
  * Category contract:
- * - The decision model only ever makes a *suggestion*. While the user has not
- *   touched the 灵感/疑点 control its answer preselects the value; once they have,
- *   their choice wins and the answer is discarded.
- * - This matters because classification fails closed to 灵感 when no API key is
- *   configured or the request times out. Without this control that silent
- *   fallback would become an uncorrectable fact about the record.
- * - The pending choice travels with the unsaved capture draft, so closing and
- *   reopening the sheet cannot quietly hand the decision back to the model.
+ * - Three choices: 'AUTO' (智能识别), 'INSPIRATION' (灵感), 'DOUBT' (疑点).
+ * - Defaults to 'AUTO'. When saving with 'AUTO', the decision model classifies
+ *   the text, failing closed to 'INSPIRATION'.
+ * - While in the modal (new or editing), tapping 'AUTO' triggers immediate
+ *   classification on the current content and displays the result.
+ * - Explicit user selection of 'INSPIRATION' or 'DOUBT' commits that category directly.
  * - Editing writes nothing until 保存: content and category commit together.
  */
 
@@ -28,7 +26,9 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { NoteCategory, YanjiDataNative, YanjiTimerNative } from '../bridge';
 import { classifyMoment } from '../services/decisionClient';
 import {
+  YanjiIcon,
   YanjiPaperSegmentedControl,
+  YanjiPaperSegmentedOption,
   YanjiPaperSheetHeading,
   YanjiPrimaryButton,
   YanjiTextInput,
@@ -38,9 +38,12 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import { parseIsoDate, weekdayLabelOf } from '../state/settingsViewLogic';
 
-const CATEGORY_OPTIONS: readonly { value: NoteCategory; label: string }[] = [
-  { value: 'INSPIRATION', label: '灵感' },
-  { value: 'DOUBT', label: '疑点' },
+export type CaptureCategoryOption = 'AUTO' | 'INSPIRATION' | 'DOUBT';
+
+const CATEGORY_OPTIONS: readonly YanjiPaperSegmentedOption<CaptureCategoryOption>[] = [
+  { value: 'AUTO', label: '智能识别', icon: 'sparkles' },
+  { value: 'INSPIRATION', label: '灵感', icon: 'inspiration' },
+  { value: 'DOUBT', label: '疑点', icon: 'doubt' },
 ];
 
 /** The sheet's date stamp: `2026-10-20` → `10月20日 · 周二`. */
@@ -82,16 +85,15 @@ export function RecordMomentModal({
   const reduceMotion = useReducedMotion();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+  const [predictedCategory, setPredictedCategory] = useState<NoteCategory | null>(null);
   const captureDraft = useRef('');
-  const [category, setCategory] = useState<NoteCategory>('INSPIRATION');
-  // "The user has decided" is the switch that stops the model from overwriting
-  // the control: before it flips, the model's answer preselects the value; after
-  // it, the answer is discarded. It survives closing the sheet via the draft ref.
-  const [categoryChosen, setCategoryChosen] = useState(false);
-  const captureDraftCategory = useRef<{ category: NoteCategory; chosen: boolean }>({
-    category: 'INSPIRATION',
+  const [categoryOption, setCategoryOption] = useState<CaptureCategoryOption>('AUTO');
+  const captureDraftCategory = useRef<{ option: CaptureCategoryOption; chosen: boolean }>({
+    option: 'AUTO',
     chosen: false,
   });
 
@@ -100,22 +102,46 @@ export function RecordMomentModal({
   useEffect(() => {
     if (!visible) return;
     setText(editingNote?.content ?? captureDraft.current);
-    setCategory(editingNote ? editingNote.category : captureDraftCategory.current.category);
-    // A saved category is already the user's decision, so editing never lets a
-    // later model answer move it.
-    setCategoryChosen(editingNote ? true : captureDraftCategory.current.chosen);
+    setCategoryOption(editingNote ? editingNote.category : captureDraftCategory.current.option);
     setError(null);
+    setAiFeedback(null);
+    setPredictedCategory(null);
+    setIdentifying(false);
     setConfirmDelete(initialConfirmDelete);
   }, [visible, editingNote, initialConfirmDelete]);
 
-  const chooseCategory = useCallback((next: NoteCategory) => {
-    setCategory(next);
-    setCategoryChosen(true);
-    if (!editingNote) captureDraftCategory.current = { category: next, chosen: true };
-  }, [editingNote]);
+  const chooseCategory = useCallback(async (next: CaptureCategoryOption) => {
+    setCategoryOption(next);
+    setError(null);
+    const chosen = next !== 'AUTO';
+    if (!editingNote) {
+      captureDraftCategory.current = { option: next, chosen };
+    }
+    if (next === 'AUTO') {
+      const content = text.trim();
+      if (content.length > 0) {
+        setIdentifying(true);
+        try {
+          const resolved = await classifyMoment(content);
+          setPredictedCategory(resolved);
+          setAiFeedback(`已智能识别为：${resolved === 'INSPIRATION' ? '灵感' : '疑点'}`);
+        } catch {
+          setAiFeedback('识别超时，保存时将重试');
+        } finally {
+          setIdentifying(false);
+        }
+      } else {
+        setAiFeedback(null);
+        setPredictedCategory(null);
+      }
+    } else {
+      setAiFeedback(null);
+      setPredictedCategory(null);
+    }
+  }, [editingNote, text]);
 
   const handleSave = useCallback(async () => {
-    if (saving) return;
+    if (saving || identifying) return;
     const content = text.trim();
     if (content.length === 0) {
       setError('写点什么再保存吧');
@@ -128,20 +154,32 @@ export function RecordMomentModal({
     // the text was lost too.
     let stage: 'content' | 'category' = 'content';
     try {
+      let resolvedCategory: NoteCategory;
+      if (categoryOption === 'AUTO') {
+        if (predictedCategory) {
+          resolvedCategory = predictedCategory;
+        } else {
+          try {
+            resolvedCategory = await classifyMoment(content);
+          } catch {
+            resolvedCategory = 'INSPIRATION';
+          }
+        }
+      } else {
+        resolvedCategory = categoryOption;
+      }
+
       if (editingNote) {
         await YanjiDataNative.updateNote(editingNote.id, content);
         // Content is already committed at this point, so a failed category write
         // has to say so instead of reporting a save that did not fully happen.
         // Both calls are idempotent, so retrying is safe.
-        if (category !== editingNote.category) {
+        if (resolvedCategory !== editingNote.category) {
           stage = 'category';
-          await YanjiDataNative.setNoteCategory(editingNote.id, category);
+          await YanjiDataNative.setNoteCategory(editingNote.id, resolvedCategory);
         }
       } else {
         // Bind to the active session when one exists; the timer keeps running.
-        // The session lookup and the classification request are started together
-        // so the sheet waits for one round trip instead of two in a row.
-        const suggestion = categoryChosen ? null : classifyMoment(content).catch(() => null);
         let sessionId: string | null = null;
         try {
           const session = await YanjiTimerNative.getActiveSession();
@@ -149,20 +187,16 @@ export function RecordMomentModal({
         } catch {
           sessionId = null;
         }
-        // 决策模型只给建议：用户点过「灵感 / 疑点」就以用户为准，
-        // 模型失败时静默回落灵感，但保存后仍可在菜单或编辑里纠正。
-        const resolvedCategory = categoryChosen
-          ? category
-          : ((await suggestion) ?? 'INSPIRATION');
         await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory);
       }
       if (!editingNote) {
         captureDraft.current = '';
-        captureDraftCategory.current = { category: 'INSPIRATION', chosen: false };
+        captureDraftCategory.current = { option: 'AUTO', chosen: false };
       }
       setText('');
-      setCategory('INSPIRATION');
-      setCategoryChosen(false);
+      setCategoryOption('AUTO');
+      setPredictedCategory(null);
+      setAiFeedback(null);
       onSaved?.();
       onClose();
     } catch {
@@ -171,10 +205,10 @@ export function RecordMomentModal({
     } finally {
       setSaving(false);
     }
-  }, [saving, text, date, onClose, onSaved, editingNote, category, categoryChosen]);
+  }, [saving, identifying, text, categoryOption, predictedCategory, editingNote, date, onClose, onSaved]);
 
   const handleDelete = useCallback(async () => {
-    if (saving || !editingNote) return;
+    if (saving || identifying || !editingNote) return;
     setSaving(true);
     setError(null);
     try {
@@ -187,19 +221,25 @@ export function RecordMomentModal({
     } finally {
       setSaving(false);
     }
-  }, [saving, editingNote, onSaved, onClose]);
+  }, [saving, identifying, editingNote, onSaved, onClose]);
 
   const handleClose = useCallback(() => {
     setError(null);
+    setAiFeedback(null);
+    setPredictedCategory(null);
+    setIdentifying(false);
     setConfirmDelete(false);
     onClose();
   }, [onClose]);
 
-  // View constants for the paper sheet, grouped with the keyboard inset they
-  // have to agree with.
   const paper = theme.paper;
   const insets = useSafeAreaInsets();
   const keyboardInset = useYanjiKeyboardInset();
+
+  // In dark mode, blend smoothly into the dark screen with a deep charcoal tone
+  const sheetBackground = theme.isDark ? '#141312' : paper.colors.surface;
+  const sheetBorderColor = theme.isDark ? 'rgba(255,255,255,0.08)' : paper.colors.hairline;
+  const scrimColor = theme.isDark ? 'rgba(0,0,0,0.65)' : paper.colors.scrim;
 
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={handleClose}>
@@ -207,26 +247,24 @@ export function RecordMomentModal({
         style={{
           flex: 1,
           justifyContent: 'flex-end',
-          backgroundColor: paper.colors.scrim,
-          // Lift the whole sheet clear of the keyboard. `paddingBottom` (not a
-          // bottom offset) keeps the scrim filling the screen so the backdrop
-          // still swallows taps above the sheet while it is raised.
+          backgroundColor: scrimColor,
           paddingBottom: keyboardInset,
         }}
       >
         <Pressable style={{ flex: 1 }} onPress={handleClose} accessibilityLabel="关闭" />
 
-        {/* The sheet: a floating page with a grabber; the capture is written
-            directly on the page instead of inside a boxed well. */}
+        {/* The sheet: floating page with a grabber; seamlessly blended background */}
         <View
           style={[
             {
-              backgroundColor: paper.colors.surface,
+              backgroundColor: sheetBackground,
               borderTopLeftRadius: paper.radius.sheet,
               borderTopRightRadius: paper.radius.sheet,
+              borderTopWidth: 1,
+              borderColor: sheetBorderColor,
               paddingHorizontal: paper.layout.pageGutter,
               paddingTop: YanjiSpacing.md,
-              paddingBottom: YanjiSpacing.lg + insets.bottom,
+              paddingBottom: YanjiSpacing.md + insets.bottom,
             },
             theme.shadow.floating(theme.isDark),
           ]}
@@ -234,151 +272,162 @@ export function RecordMomentModal({
           <View
             style={{
               alignSelf: 'center',
-              width: 36,
+              width: 32,
               height: 4,
               borderRadius: paper.radius.pill,
               backgroundColor: paper.colors.hairline,
-              marginBottom: YanjiSpacing.lg,
+              marginBottom: YanjiSpacing.md,
             }}
           />
 
-          {/* No date stamp: this sheet always writes to the day the page is
-              showing, so printing it restated the context the reader arrived with. */}
+          {/* Heading with title "记录此刻" */}
           <YanjiPaperSheetHeading
-            title={editingNote ? '编辑记录' : '记录此刻'}
-            onClose={handleClose}
+            title="记录此刻"
+            disabled={saving || identifying}
           />
 
-          {/* The sheet is the page: the capture is written straight onto it,
-              with no tinted well or rule between the heading and the words. */}
+          {/* Compact text input using serif journal face */}
           <YanjiTextInput
             value={text}
             onChangeText={next => {
               setText(next);
               if (!editingNote) captureDraft.current = next;
+              setAiFeedback(null);
             }}
             placeholder="一个想法、一处卡点、一点收获…"
             multiline
             variant="page"
             accessibilityLabel="记录内容"
-            style={{ minHeight: 152, maxHeight: 232, marginTop: YanjiSpacing.md }}
+            style={{ minHeight: 84, maxHeight: 140, marginTop: YanjiSpacing.xs, marginBottom: 2 }}
           />
 
-          {/* The category row sits under the words, not above them: the capture
-              is the page's subject, this is one quiet decision about it. The hint
-              only shows while the model is still allowed to decide, and it says so
-              — once the user has tapped, the row needs no explanation. */}
-          <View style={{ marginTop: YanjiSpacing.md }}>
-            <YanjiPaperSegmentedControl
-              value={category}
-              options={CATEGORY_OPTIONS}
-              onChange={chooseCategory}
-              accessibilityLabel="记录分类"
-              disabled={saving}
-            />
-            {!categoryChosen ? (
-              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.xs }]}>
-                保存时由决策模型判定，你可以直接选择
+          {/* Feedback & status row */}
+          <View style={{ minHeight: 18, justifyContent: 'center', marginBottom: YanjiSpacing.xs }}>
+            {identifying ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.brand }]}>
+                ⚡ AI 正在分析意图…
+              </Text>
+            ) : aiFeedback ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.brand }]}>
+                ✓ {aiFeedback}
+              </Text>
+            ) : error ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.danger }]}>
+                {error}
               </Text>
             ) : null}
           </View>
 
-          {error ? (
-            <Text
-              style={[
-                paper.typography.captionMeta,
-                { color: paper.colors.danger, marginTop: YanjiSpacing.sm },
-              ]}
-            >
-              {error}
-            </Text>
+          {/* For editing: quiet destructive delete button / confirmation row */}
+          {editingNote ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginBottom: YanjiSpacing.xs }}>
+              {confirmDelete ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                    删除后无法恢复
+                  </Text>
+                  <Pressable
+                    onPress={() => setConfirmDelete(false)}
+                    disabled={saving || identifying}
+                    accessibilityRole="button"
+                    accessibilityLabel="取消删除"
+                    style={{ paddingHorizontal: 6, paddingVertical: 2 }}
+                  >
+                    <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                      取消
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleDelete}
+                    disabled={saving || identifying}
+                    accessibilityRole="button"
+                    accessibilityLabel="确认删除这条记录"
+                    style={{ paddingHorizontal: 6, paddingVertical: 2 }}
+                  >
+                    <Text style={[paper.typography.captionMeta, { color: paper.colors.danger, fontWeight: '600' }]}>
+                      {saving ? '删除中…' : '确认删除'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => setConfirmDelete(true)}
+                  disabled={saving || identifying}
+                  accessibilityRole="button"
+                  accessibilityLabel="删除这条记录"
+                  style={({ pressed }) => ({
+                    paddingVertical: 2,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.danger }]}>
+                    删除这条记录
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           ) : null}
 
-          {/* One footer row carries every action: the quiet destructive text
-              on the left while editing, the save pill on the right. The old
-              hairline plus full-width button turned the page back into a form. */}
+          {/* Single Toolbar Row: Left Compact Segmented Control | Right Cancel (✕) & Save (✓) */}
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: editingNote ? 'space-between' : 'flex-end',
-              gap: YanjiSpacing.md,
-              marginTop: YanjiSpacing.md,
+              justifyContent: 'space-between',
+              gap: YanjiSpacing.sm,
             }}
           >
-            {editingNote ? (
-              confirmDelete ? (
-                <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
-                  删除后无法恢复
-                </Text>
-              ) : (
-                <Pressable
-                  onPress={() => setConfirmDelete(true)}
-                  disabled={saving}
-                  accessibilityRole="button"
-                  accessibilityLabel="删除这条记录"
-                  style={({ pressed }) => ({
-                    minHeight: paper.layout.rowMinHeight,
-                    minWidth: paper.layout.rowMinHeight,
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.danger }]}>
-                    删除
-                  </Text>
-                </Pressable>
-              )
-            ) : null}
+            {/* Left: Compact Category Segmented Control */}
+            <View style={{ flexShrink: 1 }}>
+              <YanjiPaperSegmentedControl
+                value={categoryOption}
+                options={CATEGORY_OPTIONS}
+                onChange={chooseCategory}
+                accessibilityLabel="记录分类"
+                compact={true}
+                disabled={saving || identifying}
+              />
+            </View>
 
-            {confirmDelete ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-                <Pressable
-                  onPress={() => setConfirmDelete(false)}
-                  disabled={saving}
-                  accessibilityRole="button"
-                  accessibilityLabel="取消删除"
-                  style={({ pressed }) => ({
-                    minHeight: paper.layout.rowMinHeight,
-                    justifyContent: 'center',
-                    paddingHorizontal: YanjiSpacing.md,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-                    取消
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleDelete}
-                  disabled={saving}
-                  accessibilityRole="button"
-                  accessibilityLabel="确认删除这条记录"
-                  style={({ pressed }) => ({
-                    minHeight: paper.layout.rowMinHeight,
-                    justifyContent: 'center',
-                    paddingHorizontal: YanjiSpacing.md,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text
-                    style={[
-                      paper.typography.bodyPrimary,
-                      { color: paper.colors.danger, fontWeight: '600' },
-                    ]}
-                  >
-                    {saving ? '删除中…' : '确认删除'}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
+            {/* Right: Cancel (✕) and Save (✓) button pills */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
+              {/* Cancel (✕) */}
+              <Pressable
+                onPress={handleClose}
+                disabled={saving || identifying}
+                accessibilityRole="button"
+                accessibilityLabel="取消"
+                hitSlop={6}
+                style={({ pressed }) => ({
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: theme.isDark ? '#262422' : paper.colors.subtle,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <YanjiIcon name="close" size={15} color={paper.colors.secondary} />
+              </Pressable>
+
+              {/* Save (✓) */}
               <YanjiPrimaryButton
                 icon="check"
-                label={saving ? '保存中' : '保存'}
+                label=""
+                accessibilityLabel="保存"
                 onPress={handleSave}
-                disabled={saving}
+                disabled={saving || identifying}
+                style={{
+                  width: 36,
+                  height: 36,
+                  minHeight: 36,
+                  paddingHorizontal: 0,
+                  paddingVertical: 0,
+                  borderRadius: 18,
+                }}
               />
-            )}
+            </View>
           </View>
         </View>
       </View>
