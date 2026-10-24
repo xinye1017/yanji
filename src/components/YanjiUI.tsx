@@ -901,6 +901,126 @@ export function YanjiEmptyLedgerRow({
 }
 
 // ---------------------------------------------------------------------------
+// YanjiCaptureCard — the entry that is also the empty state
+//
+// A section that is *about* writing opens with its own invitation rather than a
+// text link in the heading: the slot at the end of the list is where the next
+// entry will land, so it is where the action belongs. It renders identically
+// whether the list above it has rows or not, which is why an empty day needs no
+// separate empty-state sentence — the invitation already says what is missing
+// and what to do about it.
+// ---------------------------------------------------------------------------
+
+export function YanjiCaptureCard({
+  title,
+  hint,
+  onPress,
+  accessibilityLabel,
+}: {
+  title: string;
+  /** One line of guidance under the title; omit it for a single-line card. */
+  hint?: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityHint={hint}
+      style={({ pressed }) => ({
+        minHeight: layout.rowMinHeight,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: YanjiSpacing.sm + 2,
+        backgroundColor: colors.elevated,
+        // Dashed, like the plan's empty ledger row: the slot is a place a record
+        // will go, not a surface that already holds one.
+        borderWidth: layout.hairlineWidth,
+        borderColor: colors.hairline,
+        borderStyle: 'dashed',
+        borderRadius: radius.tag,
+        paddingHorizontal: YanjiSpacing.md,
+        paddingVertical: YanjiSpacing.sm,
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <YanjiIcon name="compose" size={layout.momentPreviewIconSize} color={colors.secondary} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[typography.bodyTask, { color: colors.ink }]}>{title}</Text>
+        {hint ? (
+          <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>{hint}</Text>
+        ) : null}
+      </View>
+      <YanjiIcon name="forward" size={14} color={colors.secondary} />
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiSectionToggle — a named state control in a section heading's accessory
+//
+// 「展开详情」 set the pattern: a heading accessory is a glyph plus a short label
+// on the heading's baseline, at `captionMeta` size, never a filled button — the
+// heading stays the loudest thing on the row. This makes that pattern shared so
+// two controls sitting side by side cannot drift apart.
+//
+// The label states the current value for a choice (倒序 / 正序) and the pending
+// action for a disclosure (收起 / 展开), which is what the two roles mean.
+// ---------------------------------------------------------------------------
+
+export function YanjiSectionToggle({
+  label,
+  icon,
+  onPress,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
+  disabled = false,
+  testID,
+}: {
+  label: string;
+  icon: YanjiIconName;
+  onPress: () => void;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  accessibilityState?: { expanded?: boolean; selected?: boolean; disabled?: boolean };
+  disabled?: boolean;
+  testID?: string;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography } = paper;
+  const color = disabled ? colors.muted : colors.secondary;
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ ...accessibilityState, disabled }}
+      // Same reason as `YanjiTextAction`: a min-height here would inflate every
+      // heading row it sits in, so the 44dp target comes from slop and the glyph
+      // stays on the baseline.
+      hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: YanjiSpacing.xs,
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <YanjiIcon name={icon} size={13} color={color} />
+      <Text style={[typography.captionMeta, { color, fontWeight: '600' }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // YanjiCard — a sheet on the desk, or an unboxed journal group
 // ---------------------------------------------------------------------------
 

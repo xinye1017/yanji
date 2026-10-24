@@ -14,9 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
+  YanjiBadge, YanjiCaptureCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton, YanjiLedgerChip,
-  YanjiPaperSectionHeading, YanjiPaperSheetHeading, YanjiPrimaryButton,
+  YanjiPaperSectionHeading, YanjiPaperSheetHeading, YanjiPrimaryButton, YanjiSectionToggle,
   YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
@@ -57,6 +57,12 @@ type Selection =
     partName: string;
   }
   | null;
+
+/** 「记录此刻」 reading order: `newest` = 倒序 (default), `oldest` = 正序. */
+type JournalOrder = 'newest' | 'oldest';
+
+/** How many rows a folded journal keeps — the number the old hard slice showed. */
+const JOURNAL_FOLDED_ROWS = 2;
 
 
 function localDay(day: Date): string {
@@ -202,6 +208,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const countdown = settingsSnapshot?.examCountdown ?? null;
   const active = useActiveSession(visible);
   const [rhythmExpanded, setRhythmExpanded] = useState(false);
+  /** Journal reading order and fold — the reader's choice, not a fixed rule. */
+  const [journalOrder, setJournalOrder] = useState<JournalOrder>('newest');
+  const [journalExpanded, setJournalExpanded] = useState(true);
   const [selection, setSelection] = useState<Selection>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
@@ -339,7 +348,21 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const effectiveSeconds = snapshot?.totalDurationSeconds ?? 0;
   const pending = tasks?.filter(task => !task.completed) ?? [];
   const completed = tasks?.filter(task => task.completed) ?? [];
-  const latestNotes = useMemo(() => [...notes ?? []].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2), [notes]);
+  /**
+   * The journal is ordered and folded by the reader, not by a fixed rule.
+   *
+   * 「记录此刻」 used to hard-slice the two newest notes and then link away for
+   * the rest, so a day with five notes silently hid three of them. The order is
+   * now a state the reader sets (倒序 = newest first, the default), and the fold
+   * is a control they press. Nothing is hidden unless they ask for it.
+   */
+  const journalNotes = useMemo(() => {
+    const ordered = [...notes ?? []].sort((a, b) => journalOrder === 'oldest'
+      ? a.timestamp - b.timestamp
+      : b.timestamp - a.timestamp);
+    return journalExpanded ? ordered : ordered.slice(0, JOURNAL_FOLDED_ROWS);
+  }, [notes, journalOrder, journalExpanded]);
+  const noteCount = notes?.length ?? 0;
   const visibleCarryOverTasks = useMemo(
     () => carryOverTasks.filter(task =>
       !task.completed && task.carriedOverToId === null && !deferredCarryTaskIds.has(task.id)),
@@ -681,24 +704,53 @@ export function TodayScreen({ visible, foregroundRevision }: {
 
 
         {/* The clock lives with its note; only the quiet spine sits outside.
-            The heading owns the whole section gap, so the wrapper adds none. */}
+            The heading owns the whole section gap, so the wrapper adds none.
+
+            The heading's accessory is the reading order and the fold, not a
+            create action: writing is what the section is *for*, so its entry is
+            the slot at the end of the list (`YanjiCaptureCard`) rather than a
+            text link competing with the title. */}
         <View>
           <YanjiPaperSectionHeading
             title="记录此刻"
             titleStyle={typography.titleSection}
+            countText={snapshot ? `${noteCount} 条` : '—'}
             align="baseline"
             spaceBefore={layout.sectionGap}
-            right={
-              <YanjiTextAction
-                label="写一条"
-                accessibilityLabel="新建今日记录"
-                onPress={newNote}
-              />
-            }
+            right={noteCount > 1 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                {/* A choice states its current value (倒序 / 正序) so the label
+                    never flips meaning between "what I picked" and "what I will
+                    get"; the two labels are the same width, so the fold control
+                    beside it cannot jump when the order changes. */}
+                <YanjiSectionToggle
+                  testID="journal-order"
+                  label={journalOrder === 'newest' ? '倒序' : '正序'}
+                  icon={journalOrder === 'newest' ? 'sortNewest' : 'sortOldest'}
+                  accessibilityLabel={journalOrder === 'newest' ? '按时间倒序，最新在前' : '按时间正序，最早在前'}
+                  accessibilityHint="切换记录的时间顺序"
+                  accessibilityState={{ selected: journalOrder === 'oldest' }}
+                  onPress={() => setJournalOrder(order => order === 'newest' ? 'oldest' : 'newest')}
+                />
+                {noteCount > JOURNAL_FOLDED_ROWS ? (
+                  <YanjiSectionToggle
+                    testID="journal-fold"
+                    label={journalExpanded ? '收起' : '展开'}
+                    icon={journalExpanded ? 'chevronUp' : 'chevronDown'}
+                    accessibilityLabel={journalExpanded ? '收起记录列表' : '展开全部记录'}
+                    accessibilityHint={journalExpanded
+                      ? `收起后只显示最新 ${JOURNAL_FOLDED_ROWS} 条`
+                      : `展开全部 ${noteCount} 条记录`}
+                    accessibilityState={{ expanded: journalExpanded }}
+                    onPress={() => setJournalExpanded(expanded => !expanded)}
+                  />
+                ) : null}
+              </View>
+            ) : undefined}
           />
-          {latestNotes.length > 0 ? (
+          {journalNotes.length > 0 ? (
             <View style={{ marginTop: YanjiSpacing.xs }}>
-              {latestNotes.map((note, index) => (
+              {journalNotes.map((note, index) => (
                 <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
                   tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 已解决' : '疑点 待解决')
@@ -708,22 +760,29 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   tagTone={note.category === 'INSPIRATION' ? 'positive'
                     : note.category === 'DOUBT' ? 'brand' : 'neutral'}
                   content={note.content}
-                  isFirst={index === 0} isLast={index === latestNotes.length - 1}
+                  isFirst={index === 0} isLast={index === journalNotes.length - 1}
                   disabled={busyNote !== null}
                   onPressContent={() => openNote(note)}
                   onMore={anchor => setMomentMenu({ note, anchor })} />
               ))}
-              {(notes?.length ?? 0) > 2 ? (
-                <View style={{ marginTop: YanjiSpacing.xs, alignItems: 'flex-end' }}>
-                  <YanjiTextAction label={`前往回顾查看全部 ${notes?.length} 篇记录 ›`} onPress={() => selectTab('review')} />
-                </View>
-              ) : null}
+            </View>
+          ) : null}
+          {/* The entry is also the empty state: with nothing above it the card
+              is the only thing in the section, and it already says what to do.
+              Loading is the one case that still needs a sentence, because there
+              is no snapshot to invite the reader into yet. */}
+          {snapshot ? (
+            <View style={{ marginTop: journalNotes.length > 0 ? YanjiSpacing.md : YanjiSpacing.xs }}>
+              <YanjiCaptureCard
+                title="写一条记录"
+                hint="一个想法、一处卡点、一点收获"
+                accessibilityLabel="新建今日记录"
+                onPress={newNote}
+              />
             </View>
           ) : (
-            /* No boxed invitation: the heading's 「写一条」 is the single entry,
-               and the empty state only says what is not there yet. */
             <Text style={[typography.captionMeta, { color: colors.secondary, paddingTop: YanjiSpacing.sm }]}>
-              {snapshot ? '还没有记录，想到什么就写一条。' : '正在读取今日随笔…'}
+              正在读取今日随笔…
             </Text>
           )}
         </View>

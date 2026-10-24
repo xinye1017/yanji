@@ -221,9 +221,10 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   let callbackIndex = 0;
   let sharedValueIndex = 0;
   const dataListeners = [];
-  const names = ['YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
-    'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading',
-    'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
+  const names = ['YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart',
+    'YanjiEditorialHeader', 'YanjiEmptyLedgerRow', 'YanjiHairline', 'YanjiIcon', 'YanjiIconButton',
+    'YanjiPaperSectionHeading', 'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading',
+    'YanjiPrimaryButton', 'YanjiSectionToggle', 'YanjiSubjectProportionRow',
     'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   let active = null;
@@ -591,35 +592,108 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
   assert.match(text(tree), /目标 6:00/, 'the metric still reports the stored goal');
 });
 
-test('the journal slip is an unboxed timeline section so the plan keeps the reading order', () => {
-  // The journal slip no longer wraps in a lifted white card.
-  // Instead, it is an unboxed timeline section with its own quiet action.
+test('the journal heading carries order and fold, and the plan keeps the reading order', () => {
+  // The journal is an unboxed timeline section. Its heading accessory is the
+  // reading order and the fold; the create entry moved into the list itself, so
+  // it is no longer a text link competing with the title.
   const tree = screenHarness(snapshot()).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
   const journalHeading = headings.find(node => node.props.title === '记录此刻');
   assert.ok(journalHeading, 'the journal section has its own section heading');
+  assert.equal(journalHeading.props.countText, '0 条', 'an empty day still states its count');
 
-  // Each section owns exactly one entry, in its heading: 「写一条」 for the journal
-  // and 「新建」 for the plan. Neither is repeated inside an empty state.
-  const writeNow = nodes(journalHeading.props.right, node => node.type === 'YanjiTextAction')[0];
-  // Both section entries are the same kind of control now: same label shape, same
-  // tone, so 「新建」 and 「写一条」 sit on one line at the right edge and read alike.
-  assert.equal(writeNow.props.tone, undefined, '写一条 defaults to the section accent, same as 新建');
-  assert.equal(writeNow.props.label, '写一条');
+  // With nothing to order or fold, the accessory renders nothing at all rather
+  // than two controls that cannot do anything.
+  assert.equal(journalHeading.props.right, undefined,
+    'no order/fold control is offered for an empty journal');
+
+  // The plan keeps its own text action: adding a task is still the plan's one
+  // entry, and it has not been moved into the row list.
   const planHeading = headings.find(node => node.props.title === '今日计划');
   const planAdd = nodes(planHeading.props.right, node => node.type === 'YanjiTextAction')[0];
   assert.equal(planAdd.props.tone, undefined, 'the plan action keeps the section accent');
   assert.equal(planAdd.props.label, '新建');
 
+  // The write entry is the card at the end of the list, present on an empty day
+  // because it *is* the empty state.
+  const capture = nodes(tree, node => node.type === 'YanjiCaptureCard')[0];
+  assert.ok(capture, 'the journal offers its capture card even with no notes');
+  assert.equal(capture.props.title, '写一条记录');
+  assert.equal(capture.props.hint, '一个想法、一处卡点、一点收获');
+  assert.equal(capture.props.accessibilityLabel, '新建今日记录');
+  assert.doesNotMatch(text(tree), /还没有记录，想到什么就写一条/,
+    'the invitation replaces the old empty-state sentence instead of repeating it');
 
-  // When empty, it renders an unboxed empty state prompt, not a lifted hero card.
+  // Nothing on the page is lifted above the plan.
   const cards = nodes(tree, node => node.type === 'YanjiCard');
   for (const card of cards) {
     assert.notEqual(card.props.variant, 'hero', 'no page-level card may be lifted above the plan');
   }
   assert.match(text(tree), /还没有安排今天的计划/);
-  assert.match(text(tree), /还没有记录，想到什么就写一条/);
 });
+
+test('the journal orders and folds on request instead of truncating at two', () => {
+  const notes = ['08:15', '11:40', '15:12', '17:56'].map((time, index) => ({
+    id: `note-${index}`, date, timestamp: at(time), content: `记录 ${time}`,
+    category: index % 2 ? 'DOUBT' : 'INSPIRATION', isFavorite: false, isResolved: false,
+  }));
+  const h = screenHarness(snapshot({ notes }));
+  const rows = tree => nodes(tree, node => node.type === 'TimelineCompactRow');
+  const heading = tree => nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
+    .find(node => node.props.title === '记录此刻');
+  const control = (tree, testID) => nodes(heading(tree).props.right, node => node.props.testID === testID)[0];
+
+  // All four are shown by default — nothing is hidden without being asked.
+  let tree = h.render();
+  assert.deepEqual(rows(tree).map(row => row.props.content),
+    ['记录 17:56', '记录 15:12', '记录 11:40', '记录 08:15'], 'newest first, all of them');
+  assert.equal(heading(tree).props.countText, '4 条');
+
+  // 倒序 states the order currently in effect, not the order it would switch to.
+  assert.equal(control(tree, 'journal-order').props.label, '倒序');
+  assert.equal(control(tree, 'journal-order').props.icon, 'sortNewest');
+  assert.equal(control(tree, 'journal-fold').props.label, '收起');
+  assert.equal(control(tree, 'journal-fold').props.accessibilityState.expanded, true);
+
+  // Folding keeps the newest two and says how many are behind the fold.
+  control(tree, 'journal-fold').props.onPress();
+  tree = h.render();
+  assert.deepEqual(rows(tree).map(row => row.props.content), ['记录 17:56', '记录 15:12']);
+  assert.equal(control(tree, 'journal-fold').props.label, '展开');
+  assert.equal(control(tree, 'journal-fold').props.accessibilityState.expanded, false);
+  assert.match(control(tree, 'journal-fold').props.accessibilityHint, /全部 4 条/);
+  assert.equal(heading(tree).props.countText, '4 条', 'the count still reports the whole day');
+
+  // Order flips to oldest-first and the folded window follows that order.
+  control(tree, 'journal-order').props.onPress();
+  tree = h.render();
+  assert.equal(control(tree, 'journal-order').props.label, '正序');
+  assert.equal(control(tree, 'journal-order').props.icon, 'sortOldest');
+  assert.deepEqual(rows(tree).map(row => row.props.content), ['记录 08:15', '记录 11:40'],
+    'the fold shows the first two of the order in effect');
+
+  // The capture card sits at the end of the list in every state, so writing is
+  // never hidden behind a fold.
+  assert.equal(nodes(tree, node => node.type === 'YanjiCaptureCard').length, 1);
+});
+
+test('order and fold controls appear only when they can do something', () => {
+  const note = time => ({ id: `n-${time}`, date, timestamp: at(time), content: `记录 ${time}`, category: 'INSPIRATION' });
+  const rightOf = count => {
+    const tree = screenHarness(snapshot({ notes: Array.from({ length: count }, (_, i) => note(`0${i + 8}:00`)) })).render();
+    const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
+      .find(node => node.props.title === '记录此刻');
+    return heading.props.right;
+  };
+  assert.equal(rightOf(1), undefined, 'one note has nothing to order or fold');
+  const two = nodes(rightOf(2), node => node.props.testID === 'journal-order');
+  assert.equal(two.length, 1, 'two notes can be ordered');
+  assert.equal(nodes(rightOf(2), node => node.props.testID === 'journal-fold').length, 0,
+    'but two notes are not worth folding');
+  assert.equal(nodes(rightOf(3), node => node.props.testID === 'journal-fold').length, 1,
+    'a third note makes folding meaningful');
+});
+
 
 test('the journal section renders one compact timeline row per note', () => {
   const note = {
@@ -673,10 +747,10 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
 
   let tree = h.render();
   let items = nodes(tree, n => n.type === 'TimelineCompactRow');
-  assert.deepEqual(items.map(n => n.props.content), ['最新记录', '旧记录']);
+  assert.deepEqual(items.map(n => n.props.content), ['最新记录', '旧记录', '旧记录']);
   assert.equal(items[0].props.isLast, false);
   assert.equal(items[1].props.isFirst, false);
-  assert.equal(items[1].props.isLast, true);
+  assert.equal(items[2].props.isLast, true);
 
   // Opening the menu from the second row anchors it to that row's button.
   items[1].props.onMore(anchor);

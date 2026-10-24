@@ -42,10 +42,10 @@ function todayHarness(snapshot, nativeOverrides = {}) {
   let index = 0;
   const calls = [];
   const names = [
-    'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
+    'YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiDayRhythmChart', 'YanjiPaperSectionHeading',
-    'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSubjectProportionRow',
-    'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction',
+    'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSectionToggle',
+    'YanjiSubjectProportionRow', 'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   const { TodayScreen } = loadTypeScript('src/screens/TodayScreen.tsx', {
