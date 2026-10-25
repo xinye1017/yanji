@@ -47,7 +47,7 @@ class DailySnapshotInstrumentedTest {
     fun closeIsolatedDatabase() { if (::db.isInitialized) db.close() }
 
     @Test
-    fun emptySnapshotUsesFourBoundedBusinessReads() = runBlocking {
+    fun emptySnapshotUsesFiveBoundedBusinessReads() = runBlocking {
         val snapshot = DailySnapshotReader.read(db, date)
         assertEquals(date, snapshot.date)
         assertEquals(0L, snapshot.totalDurationSeconds)
@@ -154,8 +154,14 @@ class DailySnapshotInstrumentedTest {
                 listOf("focus_sessions", "exam_sessions", "study_tasks", "journal_entries")
                     .any { table -> it.contains(table) }
         }
-        assertEquals("One read per daily projection, including task actual time", 4, selects.size)
+        // focus detail + focus participation COUNT + exams + tasks + notes.
+        assertEquals("One read per daily projection, including participation", 5, selects.size)
         assertTrue("Every business projection must be bounded", selects.all { it.contains("WHERE", ignoreCase = true) })
+        assertEquals(
+            "Participation must be its own COUNT, not a re-read of the detail rows",
+            1,
+            selects.count { it.contains("COUNT(*)", ignoreCase = true) && it.contains("focus_sessions") }
+        )
         android.util.Log.i("YanjiSnapshotTest", "Daily snapshot executes ${selects.size} bounded business queries")
     }
 }

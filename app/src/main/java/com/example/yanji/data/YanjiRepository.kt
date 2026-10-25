@@ -25,8 +25,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
-import androidx.room.immediateTransaction
-import androidx.room.useWriterConnection
 import java.time.LocalDate
 import java.util.UUID
 
