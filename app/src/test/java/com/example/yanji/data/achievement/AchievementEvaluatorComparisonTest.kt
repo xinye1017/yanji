@@ -111,4 +111,54 @@ class AchievementEvaluatorComparisonTest {
             assertEquals(1L, AchievementCatalog.find("review_1")!!.calculateProgress(facts))
         }
     }
+
+    /**
+     * 可复现的读取量证据：事件级评估只碰被解锁的候选所需的最小投影。
+     *
+     * 这条用例同时钉住「不再读整表」这件事：旧路径每写一次就 `getAllOnce()` 拉
+     * `SELECT *` 全量行（含 note 正文），新路径只允许窄列投影与聚合。断言的
+     * 是**列集合**而不是行数，因为行数会随数据规模变化，列集合才是这次优化的契约。
+     *
+     * 用 [AchievementEvent.FocusCompleted] 是因为它的候选集合里没有任何随笔口径，
+     * 因此这次评估**完全不该**碰 `journal_entries`；随笔口径自身的事件另有用例覆盖。
+     */
+    @Test fun focusEventEvaluationReadsOnlyNarrowProjectionsOfThePersistedTables() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val base = LocalDate.of(2026, 11, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val focus = (0 until 40).map { index ->
+                FocusSession("f-$index", "math", "数学", base + index * 60_000L,
+                    base + index * 60_000L + 600_000L, 600L, note = "这条正文不该被成就读取")
+            }
+            val completed = focus.first()
+            fixture.seed(
+                focus = focus,
+                exams = listOf(ExamSession("e", "math", "数学", 7200, 7200,
+                    startTime = base, endTime = base + 7_200_000L, score = 120.0)),
+                notes = listOf(NoteEntry("n", "2026-11-01", content = "复盘", createdAt = base + 1000))
+            )
+            fixture.reads.clear()
+            evaluator.evaluateAndPersist(AchievementEvent.FocusCompleted(completed), fixture.db, base + 5_000)
+            val businessReads = fixture.reads.filter {
+                Regex("\\b(focus_sessions|exam_sessions|journal_entries)\\b", RegexOption.IGNORE_CASE).containsMatchIn(it.sql)
+            }
+            assertTrue("a focus event must not read the journal table at all: $businessReads",
+                businessReads.none { it.sql.contains("journal_entries") })
+            assertFalse("no achievement read may select the full row: $businessReads",
+                businessReads.any { it.sql.contains("SELECT *") })
+            assertTrue("counts must stay SQL aggregates: $businessReads",
+                businessReads.any { it.sql.contains("COUNT(*)", ignoreCase = true) })
+            assertTrue("temporal rules must read only the time columns: $businessReads",
+                businessReads.any { it.sql.contains("startTime", ignoreCase = true) && it.sql.contains("durationSeconds") })
+            // The old path transferred every note body through `SELECT *`. Narrow
+            // projections must move strictly less text than one full copy of the
+            // fixture's note column, which is the reproducible volume claim.
+            val fullNoteBytes = focus.sumOf { it.note.toByteArray(Charsets.UTF_8).size.toLong() }
+            assertTrue("fixture must carry real text to compare against", fullNoteBytes > 0L)
+            val readTextBytes = businessReads.sumOf { it.textBytes }
+            assertTrue(
+                "achievement reads transferred $readTextBytes text bytes, one full note copy is $fullNoteBytes",
+                readTextBytes < fullNoteBytes
+            )
+        }
+    }
 }

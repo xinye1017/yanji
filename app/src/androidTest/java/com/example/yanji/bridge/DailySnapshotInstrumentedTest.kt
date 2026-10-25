@@ -149,19 +149,51 @@ class DailySnapshotInstrumentedTest {
     }
 
     private fun assertBoundedReads() {
-        val selects = synchronized(queries) { queries.toList() }.filter {
-            it.trimStart().startsWith("SELECT", ignoreCase = true) &&
+        val business = synchronized(queries) { queries.toList() }.filter {
+            val head = it.trimStart()
+            // The task projection is a CTE, so it starts with WITH rather than SELECT.
+            (head.startsWith("SELECT", ignoreCase = true) || head.startsWith("WITH", ignoreCase = true)) &&
                 listOf("focus_sessions", "exam_sessions", "study_tasks", "journal_entries")
                     .any { table -> it.contains(table) }
         }
-        // focus detail + focus participation COUNT + exams + tasks + notes.
-        assertEquals("One read per daily projection, including participation", 5, selects.size)
-        assertTrue("Every business projection must be bounded", selects.all { it.contains("WHERE", ignoreCase = true) })
+        assertTrue("Every business projection must be bounded", business.all { it.contains("WHERE", ignoreCase = true) })
+
+        // One statement per daily projection. Participation is its own indexed COUNT
+        // instead of re-reading every row that overlaps the day.
+        val focusDetail = "focus detail"
+        val focusParticipation = "focus participation"
+        val exams = "exams"
+        val tasks = "tasks"
+        val notes = "notes"
+        val expected = listOf(focusDetail, focusParticipation, exams, tasks, notes)
+        val matched = expected.filter { label ->
+            when (label) {
+                focusDetail -> business.any {
+                    // The task projection also sub-selects focus_sessions for actual
+                    // seconds, so exclude it to keep this match unambiguous.
+                    it.contains("FROM focus_sessions", ignoreCase = true) &&
+                        !it.contains("COUNT(*)", ignoreCase = true) &&
+                        !it.contains("study_tasks", ignoreCase = true)
+                }
+                focusParticipation -> business.any {
+                    it.contains("COUNT(*)", ignoreCase = true) &&
+                        it.contains("focus_sessions", ignoreCase = true) &&
+                        it.contains("effectiveEndTime", ignoreCase = true)
+                }
+                exams -> business.any {
+                    it.contains("FROM exam_sessions", ignoreCase = true) &&
+                        !it.contains("COUNT(*)", ignoreCase = true)
+                }
+                tasks -> business.any { it.contains("study_tasks", ignoreCase = true) }
+                else -> business.any { it.contains("journal_entries", ignoreCase = true) }
+            }
+        }
+        assertEquals("Missing projections; queries were $business", expected, matched)
         assertEquals(
-            "Participation must be its own COUNT, not a re-read of the detail rows",
-            1,
-            selects.count { it.contains("COUNT(*)", ignoreCase = true) && it.contains("focus_sessions") }
+            "Each projection must be exactly one bounded statement, got $business",
+            expected.size,
+            business.size
         )
-        android.util.Log.i("YanjiSnapshotTest", "Daily snapshot executes ${selects.size} bounded business queries")
+        android.util.Log.i("YanjiSnapshotTest", "Daily snapshot executes ${business.size} bounded business queries")
     }
 }

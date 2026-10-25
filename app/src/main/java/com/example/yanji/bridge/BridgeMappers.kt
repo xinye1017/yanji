@@ -272,7 +272,7 @@ object BridgeMappers {
      * 只看 `subjectName` 无法把自定义 id 归到大类里（`SubjectCatalog` 的推断依赖 id
      * 查表 + name 兜底两条线索），因此调用方少传一个参数就会产出一个「第二事实来源」。
      * 与 `StudyStatisticsRepository.kt` 里的 `buildNamedSessionDistribution`（每日快照的
-     * 科目分桶）以及 [com.example.yanji.data.study.StudyStats] 同口径。
+     * 科目分桶）同口径。
      *
      * @return `(bucketId, 展示名)`，展示名 = `SubjectCatalog.displayName(bucketId) ?: subjectName`。
      */

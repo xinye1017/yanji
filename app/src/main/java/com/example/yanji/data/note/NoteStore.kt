@@ -78,9 +78,11 @@ internal class NoteStore(
     }
 
     /**
-     * 更新疑点解决状态的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
+     * 原子切换疑点解决状态：返回 false 表示 id 不存在（或数据库未就绪）。
+     *
+     * 只按 id 读这一行的 `isResolved`，不依赖全量随笔镜像；读取与写回在同一个
+     * 事务里完成，两次并发切换不会都读到同一个旧值。
      */
-    /** Read only this row's resolved bit and persist its inverse in the same transaction. */
     suspend fun toggleResolvedAndAwait(id: String): Boolean {
         val db = dbProvider() ?: return false
         // Writer-connection transaction rather than `withTransaction`: the latter
@@ -96,6 +98,7 @@ internal class NoteStore(
         return toggled
     }
 
+    /** 显式写入疑点解决状态；返回 false 表示 id 不存在（或数据库未就绪）。 */
     suspend fun setResolvedAndAwait(id: String, isResolved: Boolean): Boolean {
         val dao = dbProvider()?.noteEntryDao() ?: return false
         val now = System.currentTimeMillis()
