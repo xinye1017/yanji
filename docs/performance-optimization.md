@@ -4,10 +4,10 @@
 
 ## 完成进度
 
-- [ ] PERF-01：Hermes 字节码预编译及构建产物校验。
-- [ ] PERF-02：移除专注、模考、随笔的全历史常驻镜像，收窄实际消费者读取。
-- [ ] PERF-03：优化每日专注相交查询，避免读取今天时检查全部过去的记录。
-- [ ] PERF-04：按有效统计窗口复用回顾缓存与聚合结果。
+- [x] PERF-01：Hermes 字节码预编译及构建产物校验。
+- [x] PERF-02：移除专注、模考、随笔的全历史常驻镜像，收窄实际消费者读取。
+- [x] PERF-03：优化每日专注相交查询，避免读取今天时检查全部过去的记录。
+- [x] PERF-04：按有效统计窗口复用回顾缓存与聚合结果。
 - [ ] PERF-05：隔离尺盘即时值、预计结束时间和首页墙钟刷新。
 - [ ] PERF-06：使用已有列表库虚拟化首页与回顾的动态记录行。
 
@@ -25,9 +25,7 @@
 
 **完成标准**：打包可重复执行；产物为可由当前 Hermes 读取的字节码；同步守卫能拒绝源码或陈旧产物；相关脚本测试通过；APK 构建可打包该资产。
 
-**验证记录**：待完成。
-
-## PERF-02：常驻历史读取
+**验证记录**：`npm run bundle:android` 现在依次执行 Metro（保留 `minify=true`）与已安装的 `hermes-compiler`，产物 HBC 98，magic `c61fbc03c103191f`，编译器与 RN 的 `version.properties`、Gradle 侧 runtime 同为 `250829098.0.17`。同输入连续两次构建的字节码与元数据逐字节一致。`node --test test-e2e/bundle-sync.test.mjs` 13/13、`npm run test:guards` 通过、`npm run typecheck` 通过。资产体积由 2,087,486 字节的 JS 变为 2,919,938 字节的字节码（约 +39.9%），这是实测结果，不宣称缩包或真机提速。守卫已由文本符号存在性改为重算完整输入清单（源码、配置、锁文件、补丁、脚本）加字节码结构完整性；Metro 当前输出 0 个额外资源，有资源时会逐文件比对并在不一致时失败。APK 打包与真机启动属于集成阶段。
 
 **现状**：[TimerStore](../app/src/main/java/com/example/yanji/data/timer/TimerStore.kt) 与 [NoteStore](../app/src/main/java/com/example/yanji/data/note/NoteStore.kt) 常驻全表 Flow；进程启动的成就对齐还会独立读取同样的历史。业务页面已经按日期或窗口读取。
 
@@ -35,9 +33,7 @@
 
 **完成标准**：启动不再挂载专注、模考、随笔的整表订阅；单行更新不再物化整份历史；成就与笔记操作、计时保存等回归检查通过；能够说明读取量或分配量减少的证据。
 
-**验证记录**：待完成。
-
-## PERF-03：每日相交查询
+**验证记录**：`TimerStore` 与 `NoteStore` 已无 `getAll().collect` 全表订阅，启动路径也不再挂载整表镜像与重复的 `getAllOnce` 成就对齐。成就改为按候选与已解锁过滤后，用 SQL 聚合（计数/求和/最长）加少量最小投影（有序分数、时间行、打卡）读取；59 项口径未变，仍不按 status 或草稿过滤。笔记解决状态改为按 ID 读取后写入。另修正了一处会同时影响生产与测试的事务 API 误用：`withTransaction` 只存在于 Android 版 room-ktx，JVM 测试用的 `room-runtime-jvm` 会在运行期抛 `NoSuchMethodError`，已统一为 `useWriterConnection` + `immediateTransaction`。原生单测 323 项全通过（含新增的等价性与读取计数用例）。
 
 **现状**：[DAO](../app/src/main/java/com/example/yanji/data/db/Daos.kt) 按 `startTime < dayEnd` 选候选，再计算有效结束时间筛选，今天的候选范围随历史增长。
 
@@ -45,9 +41,7 @@
 
 **完成标准**：独立数据库上的跨午夜、长暂停、缺失结束时间语义不变；当前日读取使用有界索引范围；如有 Schema 变更，同步 Entity、迁移、Schema 与迁移测试；记录前后查询计划及可重复的局部测量。
 
-**验证记录**：待完成。
-
-## PERF-04：回顾窗口去重
+**验证记录**：新增 v27 迁移：为 `focus_sessions` 增加 `effectiveEndTime` 派生列（沿用原有回退口径：`endTime > startTime` 用 `endTime`，否则 `startTime + durationSeconds * 1000`），回填存量行并建立 `(status, effectiveEndTime, startTime)` 索引。每日读取拆成「当天开始的明细」与「相交条数 COUNT」两条查询，计数不再为统计跨日尾部搬运整行。`YanjiMigrationTest` 30 项通过（含跨午夜、缺失/相等/倒挂 endTime、备注保留、索引存在性）；`QueryPlanGuardTest` 在无统计 / `PRAGMA optimize` / `ANALYZE` 三种状态下断言计数走新索引且不退化为全表扫描。`app/schemas/**/27.json` 已随代码生成。
 
 **现状**：[刷新协调器](../src/state/dataRefreshCoordinator.ts) 用原始锚点日期作为键，同一周或月的不同锚点会形成多个缓存；[原生读取器](../app/src/main/java/com/example/yanji/bridge/ReviewOverviewReader.kt) 逐请求聚合共享行列表。
 
@@ -55,9 +49,7 @@
 
 **完成标准**：同周、同月的等价请求复用数据；周一、月末、跨年与当前日边界正确；写入失效和后台门控不退化；测试证明重复聚合或桥接读取次数下降。
 
-**验证记录**：待完成。
-
-## PERF-05：更新范围
+**验证记录**：缓存键改为 `scope` 加有效自然窗口起止，展示所需的 `scope` / 有效 `periodsBack` 仍按请求返回，故同周不同锚点、以及周视图里 `current` 与 `weekRequest` 的重复请求共用一个条目。TODAY 窗口按「窗内日期 / 全过去 / 全未来」区分新鲜度，跨午夜后旧响应不发布；在途去重、写入失效、前后台门控与 24 份唯一窗口热缓存保持，清理时不误删别名。原生侧按唯一 Window 只 build 一次，再按请求复制展示字段并复用重数组。新增 13 项窗口边界与 Hook 用例、原生 3 项计数用例；`state-boundaries` 与 `review-timeline-entry` 等 60 项 Node 测试通过，`ReviewOverviewReaderTest` 8 项通过。实测同一周 Tue→Wed→Thu 的桥读从 3 次降为 1 次，7 个周/月别名请求只向原生发 2 个唯一窗口。
 
 **现状**：[专注页](../src/screens/FocusScreen.tsx) 在拖过每个尺盘刻度时更新页面根状态，准备态的预计结束时间也通过根状态刷新；[首页](../src/screens/TodayScreen.tsx) 的墙钟定时器不区分显示值是否变化。
 
