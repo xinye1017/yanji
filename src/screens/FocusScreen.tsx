@@ -34,6 +34,7 @@ import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { useDailySnapshot } from '../state/dataRefresh';
 import { todayIso } from '../state/settingsViewLogic';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
+import { focusClockType, focusRingSize } from './focusViewLogic';
 
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 180;
@@ -169,6 +170,13 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [actionError, setActionError] = useState<string | null>(null);
   const { focusPreset } = useNavigationState();
   const { clearFocusPreset } = useNavigationActions();
+  /**
+   * The measured slot the ring has to live in, between the header and the
+   * action block. `null` until the first layout pass, which the ring reads as
+   * "not measured yet" and answers with its designed size — distinct from a
+   * slot measured as empty, which genuinely has no room.
+   */
+  const [readoutSlot, setReadoutSlot] = useState<{ width: number; height: number } | null>(null);
 
   const loadSubjects = useCallback(() => {
     setSubjectLoadState('loading');
@@ -953,9 +961,24 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           ) : null}
         </View>
 
-        {/* Center Clock & Ring: Rock-solid anchor, never shifts when pausing or resuming */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <FocusTimerReadout session={session} visible={visible} />
+        {/* Center Clock & Ring: Rock-solid anchor, never shifts when pausing or resuming.
+            The slot is measured rather than assumed: the ring used to be sized
+            from the window width alone, which kept its portrait diameter in a
+            freeform window and painted it over this header and the actions
+            below. Reporting the real slot lets the ring fit whatever it has. */}
+        <View
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+          onLayout={event => {
+            const { width: slotWidth, height: slotHeight } = event.nativeEvent.layout;
+            const measured = { width: Math.round(slotWidth), height: Math.round(slotHeight) };
+            setReadoutSlot(current => (
+              current && current.width === measured.width && current.height === measured.height
+                ? current
+                : measured
+            ));
+          }}
+        >
+          <FocusTimerReadout session={session} visible={visible} slot={readoutSlot} />
         </View>
 
         {/* Bottom Actions: Fixed height container (124dp) so center clock does not move */}
@@ -1041,9 +1064,12 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
 function FocusTimerReadout({
   session,
   visible,
+  slot,
 }: {
   session: ActiveSessionState;
   visible: boolean;
+  /** Measured space between the header and the actions; null before layout. */
+  slot: { width: number; height: number } | null;
 }): React.JSX.Element {
   const theme = useYanjiTheme();
   const { width } = useWindowDimensions();
@@ -1062,7 +1088,14 @@ function FocusTimerReadout({
   const immersed = paused ? theme.paper.immersive.paused : theme.paper.immersive.running;
   const { main, sub } = splitClockParts(seconds);
 
-  const ringSize = Math.min(320, Math.max(260, Math.round(width * 0.76)));
+  // The ring fits the slot it was given, so a short window shrinks it rather
+  // than letting it paint over the subject badge and the action row.
+  const ringSize = focusRingSize({
+    windowWidth: width,
+    freeWidth: slot?.width ?? null,
+    freeHeight: slot?.height ?? null,
+  });
+  const clockType = focusClockType(ringSize);
   const strokeWidth = 5.5;
   const radius = (ringSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -1136,10 +1169,8 @@ function FocusTimerReadout({
             theme.paper.typography.displayTimer,
             {
               color: immersed.ink,
-              fontSize: Math.min(
-                78,
-                Math.max(54, Math.round(ringSize * 0.24))
-              ),
+              fontSize: clockType.fontSize,
+              lineHeight: clockType.lineHeight,
               fontWeight: '600',
               fontFamily: 'sans-serif-medium',
               textAlign: 'center',
