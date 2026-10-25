@@ -48,25 +48,8 @@ data class CarryOverTaskRow(
     val actualSeconds: Long
 )
 
-/** One-row achievement aggregates; all persisted statuses intentionally participate. */
-data class AchievementSessionTotals(val count: Long, val seconds: Long, val longestSeconds: Long)
-
-/** Temporal rules need only these columns, never session notes/modes/ids. */
-data class AchievementSessionTimeRow(val startTime: Long, val endTime: Long, val durationSeconds: Long)
-
-/** Fractional scores and start order are retained for the mathematical rules. */
-data class AchievementScoreRow(val startTime: Long, val subjectId: String, val subjectName: String, val score: Double)
-
-data class AchievementCheckInRow(val date: String, val streak: Int)
-
 @Dao
 interface FocusSessionDao {
-    @Query("SELECT COUNT(*) AS count, COALESCE(SUM(durationSeconds), 0) AS seconds, COALESCE(MAX(durationSeconds), 0) AS longestSeconds FROM focus_sessions")
-    suspend fun getAchievementTotals(): AchievementSessionTotals
-
-    @Query("SELECT startTime, endTime, durationSeconds FROM focus_sessions")
-    suspend fun getAchievementTimes(): List<AchievementSessionTimeRow>
-
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
     fun getAll(): Flow<List<FocusSessionEntity>>
 
@@ -180,24 +163,6 @@ interface FocusSessionDao {
 
 @Dao
 interface ExamSessionDao {
-    @Query("SELECT COUNT(*) AS count, COALESCE(SUM(actualDurationSeconds), 0) AS seconds, COALESCE(MAX(actualDurationSeconds), 0) AS longestSeconds FROM exam_sessions")
-    suspend fun getAchievementTotals(): AchievementSessionTotals
-
-    @Query("SELECT startTime, endTime, actualDurationSeconds AS durationSeconds FROM exam_sessions")
-    suspend fun getAchievementTimes(): List<AchievementSessionTimeRow>
-
-    @Query("SELECT startTime, subjectId, subjectName, score FROM exam_sessions WHERE score IS NOT NULL ORDER BY startTime DESC")
-    suspend fun getAchievementScores(): List<AchievementScoreRow>
-
-    @Query("SELECT EXISTS(SELECT 1 FROM exam_sessions WHERE plannedDurationSeconds >= 7200 AND actualDurationSeconds >= CAST(plannedDurationSeconds * 0.9 AS INTEGER))")
-    suspend fun hasAchievementEnduranceExam(): Boolean
-
-    @Query("SELECT EXISTS(SELECT 1 FROM exam_sessions AS e JOIN journal_entries AS j ON j.createdAt BETWEEN e.endTime AND e.endTime + 86400000)")
-    suspend fun hasAchievementReviewWithin24h(): Boolean
-
-    @Query("SELECT endTime FROM exam_sessions ORDER BY endTime ASC")
-    suspend fun getAchievementEndTimes(): List<Long>
-
     @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC")
     fun getAll(): Flow<List<ExamSessionEntity>>
 
@@ -258,9 +223,6 @@ interface ExamSessionDao {
 
 @Dao
 interface NoteEntryDao {
-    @Query("SELECT DISTINCT createdAt FROM journal_entries")
-    suspend fun getAchievementCreatedTimes(): List<Long>
-
     @Query("SELECT isResolved FROM journal_entries WHERE id = :id LIMIT 1")
     suspend fun getResolvedById(id: String): Boolean?
 
@@ -425,9 +387,6 @@ interface ChatSessionDao {
 
 @Dao
 interface CheckInDao {
-    @Query("SELECT date, streak FROM check_ins ORDER BY date DESC")
-    suspend fun getAchievementRows(): List<AchievementCheckInRow>
-
     @Query("SELECT * FROM check_ins ORDER BY date DESC")
     fun getAllFlow(): Flow<List<CheckInEntity>>
 
@@ -445,25 +404,6 @@ interface CheckInDao {
 
     /** 仅用于备份恢复：清空后按备份内容整表重建。 */
     @Query("DELETE FROM check_ins")
-    suspend fun deleteAll()
-}
-
-@Dao
-interface AchievementDao {
-    @Query("SELECT * FROM unlocked_achievements")
-    fun getAllFlow(): Flow<List<UnlockedAchievementEntity>>
-
-    @Query("SELECT id FROM unlocked_achievements")
-    suspend fun getUnlockedIds(): List<String>
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun unlock(item: UnlockedAchievementEntity)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun unlockAll(items: List<UnlockedAchievementEntity>)
-
-    /** 仅用于备份恢复：清空后按备份内容整表重建。 */
-    @Query("DELETE FROM unlocked_achievements")
     suspend fun deleteAll()
 }
 

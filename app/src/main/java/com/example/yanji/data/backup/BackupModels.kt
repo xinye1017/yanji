@@ -119,7 +119,6 @@ data class YanjiBackup(
     val chatSessions: List<ChatSession> = emptyList(),
     val chatMessages: List<ChatMessage> = emptyList(),
     val checkIns: List<CheckIn> = emptyList(),
-    val unlockedAchievements: Map<String, Long> = emptyMap(),
     val quickStartPresets: List<QuickStartPreset> = emptyList(),
     val studyTasks: List<StudyTask> = emptyList(),
     /**
@@ -138,7 +137,6 @@ data class YanjiBackup(
             chatSessions.isEmpty() &&
             chatMessages.isEmpty() &&
             checkIns.isEmpty() &&
-            unlockedAchievements.isEmpty() &&
             quickStartPresets.isEmpty() &&
             studyTasks.isEmpty() &&
             subjects.isEmpty() &&

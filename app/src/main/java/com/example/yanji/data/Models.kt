@@ -392,25 +392,3 @@ data class CheckIn(
     val mood: String = ""
 )
 
-enum class AchievementRarity(
-    val title: String
-) {
-    COMMON("普通"),
-    UNCOMMON("优秀"),
-    RARE("稀有"),
-    EPIC("史诗"),
-    LEGENDARY("传说"),
-    MYTHIC("神话")
-}
-
-enum class AchievementCategory(val title: String) {
-    ALL("全部"),
-    JOURNEY("研途启程"),
-    FOCUS("专注修炼"),
-    STREAK("坚持之路"),
-    EXAM("模考试炼"),
-    MATH("数学征途"),
-    REVIEW("复盘沉淀"),
-    HIDDEN("隐藏成就")
-}
-

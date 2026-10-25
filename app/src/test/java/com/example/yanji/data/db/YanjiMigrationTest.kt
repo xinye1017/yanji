@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 27
+    private val CURRENT_VERSION = 28
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -195,7 +195,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_23_24,
         YanjiDatabase.MIGRATION_24_25,
         YanjiDatabase.MIGRATION_25_26,
-        YanjiDatabase.MIGRATION_26_27
+        YanjiDatabase.MIGRATION_26_27,
+        YanjiDatabase.MIGRATION_27_28
     )
 
     /**
@@ -1041,10 +1042,11 @@ class YanjiMigrationTest {
 
         // 注意：`subjects` **不在**此列表中。它是系统提供的默认配置（内置学科词典），
         // 迁移时主动写入是设计意图，见 `migrate13To14_createsSubjectsTableSeededWithDefaults`。
+        // `unlocked_achievements` 也不再列出：成就系统摘除后该表已由 v28 迁移删除。
         listOf(
             "focus_sessions", "exam_sessions", "journal_entries",
             "chat_messages", "chat_sessions", "check_ins",
-            "unlocked_achievements", "quick_start_presets", "ai_analyses", "study_tasks"
+            "quick_start_presets", "ai_analyses", "study_tasks"
         ).forEach { table ->
             assertEquals("迁移不应向 $table 写入任何记录", 0, db.intValue("SELECT COUNT(*) FROM $table"))
         }
@@ -1314,6 +1316,56 @@ class YanjiMigrationTest {
             "The daily count must have its covering index",
             "index_focus_sessions_status_effectiveEndTime_startTime" in db.indexNames("focus_sessions")
         )
+        db.close()
+    }
+
+    /**
+     * v27 → v28 摘除成就系统：`unlocked_achievements` 表必须消失，而所有业务表
+     * 与它们的数据必须原样保留。成就只是「哪个成就何时解锁」，不属于学习记录。
+     */
+    @Test
+    fun migrate27To28_dropsAchievementTableAndKeepsEveryBusinessRow() {
+        helper.createDatabase(27).use { db ->
+            db.execute(
+                "INSERT INTO unlocked_achievements (id, unlockedAt) VALUES ('focus_first', 1000)"
+            )
+            db.execute(
+                "INSERT INTO focus_sessions (id, subjectId, subjectName, startTime, endTime, " +
+                    "durationSeconds, pausedDurationSeconds, pauseCount, mode, note, status, createdAt) " +
+                    "VALUES ('f-keep', 'math', '数学', 1000, 4000, 3, 0, 0, '正向计时', '保留的随笔', 'COMPLETED', 1000)"
+            )
+            db.execute(
+                "INSERT INTO journal_entries (id, date, title, content, moodScore, energyScore, " +
+                    "studySatisfaction, tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, " +
+                    "isDraft, category, isResolved) " +
+                    "VALUES ('n-keep', '2026-10-26', '', '一条记录', 3, 3, 0, '', '', '[]', 1000, 1000, 0, 0, " +
+                    "'INSPIRATION', 0)"
+            )
+            db.execute(
+                "INSERT INTO check_ins (date, checkInTime, streak, note, mood) " +
+                    "VALUES ('2026-10-26', 1000, 3, '', '')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(27))
+
+        assertFalse(
+            "the achievement table must be gone",
+            "unlocked_achievements" in db.indexNames("unlocked_achievements")
+        )
+        assertEquals(
+            "no achievement table may remain",
+            0,
+            db.intValue(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'unlocked_achievements'"
+            )
+        )
+        // Business data is untouched by the drop.
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM focus_sessions"))
+        assertEquals("保留的随笔", db.textValue("SELECT note FROM focus_sessions WHERE id = 'f-keep'"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM journal_entries"))
+        assertEquals("一条记录", db.textValue("SELECT content FROM journal_entries WHERE id = 'n-keep'"))
+        assertEquals(1, db.intValue("SELECT COUNT(*) FROM check_ins"))
         db.close()
     }
 

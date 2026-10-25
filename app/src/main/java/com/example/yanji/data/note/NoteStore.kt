@@ -3,7 +3,6 @@ package com.example.yanji.data.note
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.db.NoteEntryEntity
 import com.example.yanji.data.db.YanjiDatabase
-import com.example.yanji.data.achievement.AchievementEvent
 import kotlinx.coroutines.CoroutineScope
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
@@ -17,8 +16,6 @@ internal class NoteStore(
     private val scope: CoroutineScope,
     private val dbProvider: () -> YanjiDatabase?
 ) {
-
-    var onAchievementEvent: (suspend (AchievementEvent) -> Unit)? = null
 
     /**
      * 保存随笔。**以 Room 为唯一事实来源**。
@@ -44,8 +41,7 @@ internal class NoteStore(
      * resolve，JS 侧紧接着的读取会漏掉这条记录。这里把同一条归一化规则原样搬过来
      * （按 id 保留首次 `createdAt`、刷新 `updatedAt`），只是把执行权交还调用方。
      *
-     * 仍然只写 Room；已有行的内容、收藏等编辑不触发成就读取。
-     * [onAchievementEvent] 是 NoteStore 的私有回调，因此可等待写路径也必须放在这里。
+     * 仍然只写 Room。
      */
     suspend fun addOrUpdateAndAwait(entry: NoteEntry) {
         val dao = dbProvider()?.noteEntryDao() ?: return
@@ -55,7 +51,6 @@ internal class NoteStore(
             updatedAt = System.currentTimeMillis()
         )
         dao.insert(NoteEntryEntity.fromDomainModel(normalized))
-        if (existing == null) onAchievementEvent?.invoke(AchievementEvent.NoteCreated(normalized))
     }
 
     /**
@@ -69,8 +64,7 @@ internal class NoteStore(
     /**
      * 更新正文的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
      *
-     * 只写 Room。**不触发**
-     * [AchievementEvent.NoteCreated]：这是编辑既有随笔，不是新建。
+     * 只写 Room：这是编辑既有随笔，不是新建。
      */
     suspend fun updateContentAndAwait(id: String, content: String): Boolean {
         val dao = dbProvider()?.noteEntryDao() ?: return false

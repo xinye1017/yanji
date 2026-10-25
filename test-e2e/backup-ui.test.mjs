@@ -77,7 +77,6 @@ function backupPreview(changes = {}) {
       chatSessions: 3,
       chatMessages: 14,
       checkIns: 6,
-      achievements: 4,
       quickStartPresets: 5,
       studyTasks: 9,
       subjects: 8,
@@ -311,7 +310,8 @@ test('prepare only opens a preview after staging succeeds and never restores by 
   assert.match(rendered, /格式版本 3/);
   assert.match(rendered, /应用版本 2\.0\.0/);
   assert.match(rendered, /2026-10-17 09:05/);
-  for (const count of ['11', '2', '7', '3', '14', '6', '4', '5', '9', '8']) {
+  // Nine categories remain after the achievement system was removed.
+  for (const count of ['11', '2', '7', '3', '14', '6', '5', '9', '8']) {
     assert.match(rendered, new RegExp(`\\b${count}\\b`));
   }
   assert.ok(buttonByLabel(opened, '确认覆盖并恢复'));
@@ -326,7 +326,7 @@ test('the preview states every replacement and conditional preservation exactly'
   });
   await openPreview(harness);
   const rendered = text(harness.render());
-  assert.match(rendered, /专注记录、模考记录、随笔、学习任务、打卡、成就、旧版聊天和快捷预设/);
+  assert.match(rendered, /专注记录、模考记录、随笔、学习任务、打卡、旧版聊天和快捷预设/);
   assert.match(rendered, /备份中为空的类别会清空本机现有数据/);
   assert.match(rendered, /设置不会改变/);
   assert.match(rendered, /学科保持不变/);

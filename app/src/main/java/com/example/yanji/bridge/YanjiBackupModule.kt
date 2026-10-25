@@ -175,7 +175,6 @@ class YanjiBackupModule(private val reactContext: ReactApplicationContext) : Rea
             putInt("chatSessions", backup.chatSessions.size)
             putInt("chatMessages", backup.chatMessages.size)
             putInt("checkIns", backup.checkIns.size)
-            putInt("achievements", backup.unlockedAchievements.size)
             putInt("quickStartPresets", backup.quickStartPresets.size)
             putInt("studyTasks", backup.studyTasks.size)
             putInt("subjects", backup.subjects.size)

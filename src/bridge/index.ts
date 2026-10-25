@@ -253,7 +253,6 @@ export interface BackupPreview {
     chatSessions: number;
     chatMessages: number;
     checkIns: number;
-    achievements: number;
     quickStartPresets: number;
     studyTasks: number;
     subjects: number;

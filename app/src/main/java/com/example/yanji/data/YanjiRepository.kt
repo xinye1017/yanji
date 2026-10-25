@@ -3,8 +3,6 @@ package com.example.yanji.data
 
 import android.content.Context
 import com.example.yanji.data.backup.BackupImportResult
-import com.example.yanji.data.achievement.AchievementEvaluator
-import com.example.yanji.data.achievement.AchievementEvent
 import com.example.yanji.data.ai.AiClient
 import com.example.yanji.data.ai.AiDiagnosticParser
 import com.example.yanji.data.checkin.CheckInStore
@@ -220,19 +218,6 @@ class YanjiRepository private constructor() {
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
     private val noteStore = NoteStore(scope = repoScope, dbProvider = { database })
     private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
-    val achievementEvaluator = AchievementEvaluator()
-
-    init {
-        timerStore.onAchievementEvent = { event ->
-            triggerAchievementEvaluation(event)
-        }
-        noteStore.onAchievementEvent = { event ->
-            triggerAchievementEvaluation(event)
-        }
-        checkInStore.onAchievementEvent = { event ->
-            triggerAchievementEvaluation(event)
-        }
-    }
 
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
@@ -242,9 +227,6 @@ class YanjiRepository private constructor() {
     private val settingsWriteMutex = Mutex()
 
     val checkIns: StateFlow<List<CheckIn>> get() = checkInStore.checkIns
-
-    private val _unlockedAchievements = MutableStateFlow<Map<String, Long>>(emptyMap())
-    val unlockedAchievements: StateFlow<Map<String, Long>> = _unlockedAchievements.asStateFlow()
 
     // Current running active session if any
     val activeFocus: StateFlow<FocusSession?> get() = timerStore.activeFocus
@@ -319,11 +301,6 @@ class YanjiRepository private constructor() {
             timerStore.bind()
             checkInStore.bind(db)
             launch {
-                db.achievementDao().getAllFlow().collect { entities ->
-                    _unlockedAchievements.value = entities.associate { it.id to it.unlockedAt }
-                }
-            }
-            launch {
                 // AI 诊断报告：DB 为唯一事实来源，内存 StateFlow 仅作同步读缓存。
                 // 冷启动时从这里恢复上一次报告，避免重启即丢。
                 db.aiAnalysisDao().getAll().collect { entities ->
@@ -337,9 +314,6 @@ class YanjiRepository private constructor() {
                 // 早期删除承接副本时若留下指向不存在目标任务的悬空来源链接，启动时清理悬空来源任务，
                 // 避免被删除的任务复活回到待处理区。
                 db.studyTaskDao().deleteDanglingCarryOverSources()
-            }
-            launch {
-                reconcileAchievements()
             }
         }
     }
@@ -736,16 +710,6 @@ class YanjiRepository private constructor() {
 
     fun getPast7DaysCheckInStatus(): List<DayCheckInStatus> = checkInStore.getPast7DaysCheckInStatus()
 
-    suspend fun triggerAchievementEvaluation(event: AchievementEvent) = withContext(Dispatchers.IO) {
-        val db = database ?: return@withContext
-        val now = System.currentTimeMillis()
-        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(event, db, now)
-        if (newlyUnlocked.isNotEmpty()) {
-            _unlockedAchievements.update { current -> current + newlyUnlocked.associateWith { now } }
-        }
-    }
-
-    suspend fun reconcileAchievements() = triggerAchievementEvaluation(AchievementEvent.ReconcileAll)
 }
 
 /** Internally raised when a task is no longer eligible for carry-over. */

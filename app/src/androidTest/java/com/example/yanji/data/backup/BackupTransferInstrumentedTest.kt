@@ -236,7 +236,6 @@ class BackupTransferInstrumentedTest {
             assertEquals(1, secondDb.chatSessionDao().count())
             assertEquals(2, secondDb.chatMessageDao().count())
             assertEquals(1, secondDb.checkInDao().count())
-            assertEquals(2, secondDb.achievementDao().getAllFlow().first().size)
             assertEquals(1, secondDb.quickStartPresetDao().count())
             assertEquals(1, secondDb.studyTaskDao().getAllFlow().first().size)
             assertEquals(2, secondDb.subjectDao().count())
@@ -357,7 +356,6 @@ class BackupTransferInstrumentedTest {
             ChatMessage(id = "m-2", sessionId = "s-1", sender = ChatSender.JUANJUAN, content = "试试十字四折法")
         ),
         checkIns = listOf(CheckIn(date = "2026-09-11", checkInTime = epoch, streak = 3, note = "打卡")),
-        unlockedAchievements = mapOf("focus_first" to epoch, "streak_7" to epoch + 1),
         quickStartPresets = listOf(
             QuickStartPreset(id = "q-1", type = QuickStartPreset.TYPE_START_FOCUS, label = "开始专注", sortOrder = 0)
         ),

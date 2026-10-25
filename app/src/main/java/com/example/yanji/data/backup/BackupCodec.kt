@@ -52,7 +52,10 @@ object BackupCodec {
     private fun validateEnvelope(root: JsonObject, version: Int): String? {
         // All previous exports encoded defaults. Requiring their envelope prevents {} or a
         // partial unrelated object from silently becoming an instruction to clear every table.
-        val required = recordArrays + listOf("exportedAt", "appVersionName", "checkIns", "unlockedAchievements") +
+        // `unlockedAchievements` is deliberately NOT required any more: the achievement system
+        // is gone, so old files that still carry it import normally (the field is ignored) and
+        // files exported from now on simply omit it.
+        val required = recordArrays + listOf("exportedAt", "appVersionName", "checkIns") +
             if (version >= 2) listOf("studyTasks", "subjects") else emptyList()
         required.firstOrNull { it !in root }?.let { return "这不是完整的研迹备份：缺少 $it，无法安全恢复" }
         if ((root["exportedAt"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull == null ||
@@ -70,7 +73,8 @@ object BackupCodec {
                 }
             }
         }
-        if (root["unlockedAchievements"] !is JsonObject) return "备份文件中的成就记录结构无效"
+        // No achievement validation: old files may still carry the key, and its shape no
+        // longer affects whether the rest of the backup is safe to restore.
         if (version >= 3 && root["settings"] is JsonObject) {
             val settings = root.getValue("settings") as JsonObject
             if (listOf("decisionProvider", "decisionModel", "decisionEndpoint").any { it !in settings }) {

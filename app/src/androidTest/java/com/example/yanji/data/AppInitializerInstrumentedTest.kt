@@ -11,7 +11,6 @@ import com.example.yanji.data.db.ExamSessionEntity
 import com.example.yanji.data.db.FocusSessionEntity
 import com.example.yanji.data.db.NoteEntryEntity
 import com.example.yanji.data.db.QuickStartPresetEntity
-import com.example.yanji.data.db.UnlockedAchievementEntity
 import com.example.yanji.data.db.UserSettingsEntity
 import com.example.yanji.data.db.YanjiDatabase
 import kotlinx.coroutines.flow.first
@@ -66,7 +65,6 @@ class AppInitializerInstrumentedTest {
             db.chatMessageDao().count() +
             db.chatSessionDao().count() +
             db.checkInDao().count() +
-            db.achievementDao().getAllFlow().first().size +
             db.quickStartPresetDao().count()
 
     @Test
@@ -123,13 +121,12 @@ class AppInitializerInstrumentedTest {
             ChatMessageEntity(id = "message-1", sessionId = "chat-1", sender = "USER", content = "测试", timestamp = epoch)
         )
         db.checkInDao().insert(CheckInEntity.fromDomainModel(CheckIn(date = "2026-09-11", checkInTime = epoch)))
-        db.achievementDao().unlock(UnlockedAchievementEntity(id = "achievement-1", unlockedAt = epoch))
         db.quickStartPresetDao().insert(
             QuickStartPresetEntity(id = "quick-start-1", label = "兼容墓碑测试", createdAt = epoch)
         )
         init()
 
-        assertEquals("测试前置必须覆盖全部业务表", 8, businessRowCount())
+        assertEquals("测试前置必须覆盖全部业务表", 7, businessRowCount())
 
         // 2) 用户主动清空全部业务记录（设置保留）。
         db.focusSessionDao().deleteAll()
@@ -138,7 +135,6 @@ class AppInitializerInstrumentedTest {
         db.chatMessageDao().clearAll()
         db.chatSessionDao().clearAll()
         db.checkInDao().deleteAll()
-        db.achievementDao().deleteAll()
         db.quickStartPresetDao().deleteAll()
 
         // 3) 重启（再跑一次初始化）

@@ -28,7 +28,6 @@ import com.example.yanji.data.db.NoteEntryEntity
 import com.example.yanji.data.db.QuickStartPresetEntity
 import com.example.yanji.data.db.StudyTaskEntity
 import com.example.yanji.data.db.SubjectEntity
-import com.example.yanji.data.db.UnlockedAchievementEntity
 import com.example.yanji.data.db.UserSettingsEntity
 import com.example.yanji.data.db.YanjiDatabase
 import com.example.yanji.data.db.YanjiDatabase_Impl
@@ -289,7 +288,6 @@ class BackupStoreTest {
         checkIns = listOf(
             CheckIn(date = "2026-09-05", checkInTime = epoch, streak = 7, note = "连续", mood = "平稳")
         ),
-        unlockedAchievements = mapOf("focus_first" to epoch, "streak_7" to epoch + 1),
         quickStartPresets = listOf(
             QuickStartPreset(
                 id = "quick-full",
@@ -356,7 +354,6 @@ class BackupStoreTest {
                     assertEquals(expected.chatSessions.single(), reopened.chatSessionDao().getById("chat-full")!!.toDomainModel())
                     assertEquals(expected.chatMessages.single(), reopened.chatMessageDao().getAll().first().single().toDomainModel())
                     assertEquals(expected.checkIns.single(), reopened.checkInDao().getAllOnce().single().toDomainModel())
-                    assertEquals(expected.unlockedAchievements, reopened.achievementDao().getAllFlow().first().associate { it.id to it.unlockedAt })
                     assertEquals(expected.quickStartPresets.single(), reopened.quickStartPresetDao().getAllFlow().first().single().toDomainModel())
                     assertEquals(expected.studyTasks.single(), reopened.studyTaskDao().getAllFlow().first().single().toDomainModel())
                     assertEquals(expected.subjects, reopened.subjectDao().getAll().map { it.toDomainModel() })
@@ -648,7 +645,6 @@ class BackupStoreTest {
         db.chatSessionDao().getAll().first().toString(),
         db.chatMessageDao().getAll().first().toString(),
         db.checkInDao().getAllOnce().toString(),
-        db.achievementDao().getAllFlow().first().toString(),
         db.quickStartPresetDao().getAllFlow().first().toString(),
         db.studyTaskDao().getAllFlow().first().toString(),
         db.subjectDao().getAll().toString(),

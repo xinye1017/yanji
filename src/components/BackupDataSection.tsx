@@ -34,7 +34,6 @@ const COUNT_ROWS: Array<[keyof BackupPreview['counts'], string]> = [
   ['chatSessions', '旧版聊天会话'],
   ['chatMessages', '旧版聊天消息'],
   ['checkIns', '打卡'],
-  ['achievements', '成就'],
   ['quickStartPresets', '快捷预设'],
   ['studyTasks', '学习任务'],
   ['subjects', '学科'],
@@ -337,7 +336,7 @@ export function BackupDataSection(): React.JSX.Element {
 
               <View style={{ marginTop: YanjiSpacing.md, gap: YanjiSpacing.sm }}>
                 <Text style={[typography.bodyPrimary, { color: colors.danger, fontWeight: '700' }]}>
-                  会替换或清空：专注记录、模考记录、随笔、学习任务、打卡、成就、旧版聊天和快捷预设。
+                  会替换或清空：专注记录、模考记录、随笔、学习任务、打卡、旧版聊天和快捷预设。
                   备份中为空的类别会清空本机现有数据。
                 </Text>
                 <Text style={[typography.captionMeta, { color: colors.secondary }]}>

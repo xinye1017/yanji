@@ -404,12 +404,6 @@ data class CheckInEntity(
     }
 }
 
-@Entity(tableName = "unlocked_achievements")
-data class UnlockedAchievementEntity(
-    @PrimaryKey val id: String,
-    val unlockedAt: Long
-)
-
 @Entity(
     tableName = "subjects",
     indices = [Index("parentId"), Index("sortOrder")]

@@ -18,13 +18,12 @@ import java.io.File
         ChatMessageEntity::class,
         ChatSessionEntity::class,
         CheckInEntity::class,
-        UnlockedAchievementEntity::class,
         QuickStartPresetEntity::class,
         StudyTaskEntity::class,
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 27,
+    version = 28,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -36,7 +35,6 @@ abstract class YanjiDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
     abstract fun chatSessionDao(): ChatSessionDao
     abstract fun checkInDao(): CheckInDao
-    abstract fun achievementDao(): AchievementDao
     abstract fun quickStartPresetDao(): QuickStartPresetDao
     abstract fun studyTaskDao(): StudyTaskDao
     abstract fun subjectDao(): SubjectDao
@@ -773,6 +771,20 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v27 → v28: drop the achievement table.
+         *
+         * 成就系统已从产品中摘除：没有页面入口、没有评估流程、没有业务触发。
+         * 表里只存过「哪个成就何时解锁」，不属于学习记录本身，因此删除不会
+         * 丢失任何用户数据。纯 `DROP TABLE IF EXISTS`：不重建表、不动其他
+         * 业务表，全新安装或从未解锁过成就的库里是 no-op。
+         */
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("DROP TABLE IF EXISTS `unlocked_achievements`")
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -805,7 +817,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_23_24,
             MIGRATION_24_25,
             MIGRATION_25_26,
-            MIGRATION_26_27
+            MIGRATION_26_27,
+            MIGRATION_27_28
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

@@ -93,10 +93,6 @@ class BackupCodecTest {
             ChatMessage(id = "m-2", sessionId = "s-1", sender = ChatSender.JUANJUAN, content = "试试十字四折法")
         ),
         checkIns = listOf(CheckIn(date = "2026-09-11", checkInTime = epoch, streak = 3)),
-        unlockedAchievements = mapOf(
-            "focus_first" to epoch,
-            "streak_7" to epoch + 1
-        ),
         quickStartPresets = listOf(
             QuickStartPreset(id = "q-1", type = QuickStartPreset.TYPE_START_FOCUS, label = "开始专注", sortOrder = 0)
         )
@@ -139,7 +135,6 @@ class BackupCodecTest {
         assertEquals(126.0, restored.examSessions.single().score!!, 0.001)
         assertEquals(listOf("数学突破", "心态平和"), restored.noteEntries.single().tags)
         assertEquals(ChatSender.JUANJUAN, restored.chatMessages[1].sender)
-        assertEquals(2, restored.unlockedAchievements.size)
         assertEquals("开始专注", restored.quickStartPresets.single().label)
         assertEquals("浙江大学 计算机学院", restored.settings!!.targetSchool)
     }
@@ -165,6 +160,32 @@ class BackupCodecTest {
     fun `decode rejects a backup from a newer schema version`() {
         val json = fullJson(sampleBackup().copy(schemaVersion = YanjiBackup.CURRENT_SCHEMA_VERSION + 1))
         assertFailure(json, "更新版本")
+    }
+
+    /**
+     * 摘除成就系统后，用户手里的旧备份仍然带着 `unlockedAchievements` 字段。
+     * 这些文件必须照常导入：该字段被忽略，其余记录完整恢复，且不会因此报错。
+     */
+    @Test
+    fun `legacy backup carrying achievements still restores every other record`() {
+        val legacy = JsonObject(
+            fullObject() + ("unlockedAchievements" to JsonObject(
+                mapOf(
+                    "focus_first" to JsonPrimitive(1000L),
+                    "streak_7" to JsonPrimitive(2000L)
+                )
+            ))
+        )
+
+        val result = BackupCodec.decode(legacy.toString())
+        assertTrue("a legacy file must not be rejected for its achievement field", result is BackupDecodeResult.Success)
+        val restored = (result as BackupDecodeResult.Success).backup
+        assertEquals(1, restored.focusSessions.size)
+        assertEquals(1, restored.examSessions.size)
+        assertEquals(1, restored.noteEntries.size)
+        assertEquals(1, restored.checkIns.size)
+        assertEquals(1, restored.quickStartPresets.size)
+        assertTrue("achievement data is simply dropped", restored.isEmpty.not())
     }
 
     @Test
