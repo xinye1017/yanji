@@ -1,103 +1,72 @@
 #!/usr/bin/env node
 
 /**
- * Guard: the committed Metro bundle must match the committed source.
- *
- * Why this exists. `app/src/main/assets/index.android.bundle` is checked in
- * because `release.yml` builds the signed APK with `assembleRelease` alone — no
- * bundling step — so the file has to be present in the tree for a release to
- * contain JavaScript at all. (The quality workflow regenerates it, but that is
- * not the path a release takes.)
- *
- * A committed build artifact carries one real risk: it can silently drift from
- * the source it was built from, and then the APK ships code that no longer
- * exists in `src/`. A stale bundle is invisible in review (it is one minified
- * line) and would only show up as "the fix isn't in the app" on a device.
- *
- * This guard closes that gap cheaply: every component and function name changed
- * recently must be either present in the bundle (a new symbol) or absent from it
- * (a removed symbol). It is a *presence* check, not a semantic one — it catches
- * "forgot to rebuild", which is the failure mode that actually happens.
- *
- * Run: `node scripts/check-bundle-sync.mjs`
+ * Check the committed Add-to-App artifact without Metro, Git or node_modules.
+ * The build receipt binds the entire repository input inventory (source,
+ * configuration, npm content-integrity lock and patches) to a full HBC digest.
+ * This detects stale/changed artifacts; it is not a signed build attestation.
  */
-
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  bundleOptions, bundlePath, hermesFlags, inspectBytecode, metadataPath,
+  readVersions, repoRoot, snapshotInputs, verifyResources,
+} from './android-bundle.mjs';
 
-const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const bundlePath = 'app/src/main/assets/index.android.bundle';
-
-/**
- * Symbols that MUST be in the bundle, with the source file that defines them.
- *
- * Each entry is a rename or a new export: if the bundle lacks the new name, it
- * was not rebuilt after that change. Keep this list short and current — it is a
- * tripwire for the last few UI refactors, not a mirror of the whole codebase.
- */
-const requiredSymbols = [
-  // The 今日学习节奏 rebuild.
-  { symbol: 'YanjiDayRhythmChart', source: 'src/components/YanjiUI.tsx' },
-  { symbol: 'measuredRhythmHours', source: 'src/components/YanjiUI.tsx' },
-  { symbol: 'rhythmChartHeight', source: 'src/theme/tokens.ts' },
-  { symbol: 'rhythmSummary', source: 'src/screens/todayViewLogic.ts' },
-  // The settings rebuild.
-  { symbol: 'YanjiDecisionModelSection', source: 'src/components/DecisionModelSection.tsx' },
-  // Module paths are not preserved by Metro, so this checks an export instead:
-  // `examCountdownText` is the formatter Today and Settings now share.
-  { symbol: 'examCountdownText', source: 'src/state/settingsViewLogic.ts' },
-];
-
-/**
- * Symbols that must NOT be in the bundle: an old name still shipping there means
- * the artifact predates the rename that removed it.
- */
-const forbiddenSymbols = ['YanjiMiniRhythmSparkline', 'rhythmBarWidth', 'rhythmBarHeight'];
-
-export async function runGuard(root = scriptRoot) {
+export async function runGuard(root = repoRoot) {
   const errors = [];
-  let bundle;
   try {
-    bundle = await readFile(path.join(root, bundlePath), 'utf8');
-  } catch {
-    errors.push(
-      `Committed bundle is missing: ${bundlePath}. ` +
-      'The release build packages this file directly, so a fresh clone cannot produce a working APK without it. ' +
-      'Regenerate it with `npm run bundle:android`.',
-    );
-    return { errors };
-  }
-
-  for (const { symbol, source } of requiredSymbols) {
-    if (!bundle.includes(symbol)) {
-      errors.push(
-        `Bundle is stale: it does not contain \`${symbol}\` (defined in ${source}). ` +
-        'The committed artifact predates that change — run `npm run bundle:android` and commit the result.',
-      );
+    let bytes;
+    try {
+      bytes = await readFile(path.join(root, bundlePath));
+    } catch (error) {
+      throw new Error(`Committed bundle is missing: ${bundlePath}. ${error.message}`);
     }
-  }
-
-  for (const symbol of forbiddenSymbols) {
-    if (bundle.includes(symbol)) {
-      errors.push(
-        `Bundle is stale: it still contains the removed symbol \`${symbol}\`. ` +
-        'Run `npm run bundle:android` so the shipped JS matches the source.',
-      );
+    const artifact = inspectBytecode(bytes);
+    let metadata;
+    try {
+      metadata = JSON.parse(await readFile(path.join(root, metadataPath), 'utf8'));
+    } catch (error) {
+      throw new Error(`Bundle build metadata is missing or invalid: ${metadataPath}. ${error.message}`);
     }
+    if (metadata.schemaVersion !== 1 || JSON.stringify(metadata.options) !==
+        JSON.stringify({ metro: bundleOptions, hermes: hermesFlags })) {
+      throw new Error('Bundle metadata schema/build options differ from the current build pipeline.');
+    }
+    const versions = await readVersions(root);
+    if (JSON.stringify(metadata.versions) !== JSON.stringify(versions)) {
+      throw new Error('Bundle compiler/runtime/dependency integrity versions are stale.');
+    }
+    const inputs = await snapshotInputs(root);
+    if (JSON.stringify(metadata.inputs) !== JSON.stringify(inputs)) {
+      const recorded = new Map((metadata.inputs?.files ?? []).map(file => [file.path, file.sha256]));
+      const current = new Map(inputs.files.map(file => [file.path, file.sha256]));
+      const changed = [...new Set([...recorded.keys(), ...current.keys()])]
+        .filter(name => recorded.get(name) !== current.get(name));
+      throw new Error(`Bundle inputs are stale or metadata was altered: ${changed.slice(0, 12).join(', ') || 'input manifest digest'}.`);
+    }
+    if (JSON.stringify(metadata.artifact) !== JSON.stringify(artifact)) {
+      throw new Error('Bundle artifact hash/length/format differs from the build metadata.');
+    }
+    if (!/^[a-f0-9]{64}$/.test(metadata.metro?.sha256) || !Number.isInteger(metadata.metro?.bytes) ||
+        metadata.metro.bytes <= 0 || metadata.metro.sha1 !== artifact.sourceSha1) {
+      throw new Error('HBC source hash does not match the recorded Metro compilation input.');
+    }
+    await verifyResources(root, metadata.assets);
+  } catch (error) {
+    errors.push(`${error.message} Regenerate with npm run bundle:android (and synchronize any reported Android resources).`);
   }
-
   return { errors };
 }
 
-const invokedDirectly = process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (invokedDirectly) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { errors } = await runGuard();
-  if (errors.length > 0) {
+  if (errors.length) {
     console.error('Bundle sync guard: FAIL');
     for (const error of errors) console.error(`  - ${error}`);
-    process.exit(1);
+    process.exitCode = 1;
+  } else {
+    console.log('Bundle sync guard: PASS (source/config/dependency contents, HBC integrity and Android assets match the build receipt).');
   }
-  console.log('Bundle sync guard: PASS (committed bundle matches the current source).');
 }

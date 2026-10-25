@@ -8,7 +8,7 @@
     "test": "node test-e2e/runner.js && node --test test-e2e/*.test.mjs",
     "test:guards": "node scripts/check-bundle-sync.mjs && node scripts/check-native-patches.mjs",
     "typecheck": "tsc --noEmit",
-    "bundle:android": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output app/src/main/assets/index.android.bundle --assets-dest app/src/main/res"
+    "bundle:android": "node scripts/bundle-android.mjs"
   },
   "dependencies": {
     "@shopify/flash-list": "^2.3.3",

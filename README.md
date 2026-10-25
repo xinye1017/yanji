@@ -220,6 +220,10 @@ app/src/main/java/com/example/yanji/
 
 ### 命令行构建
 
+`npm run bundle:android` 先生成生产模式 Metro JS，再用锁文件中与 Android runtime 匹配的 Hermes compiler 编译为字节码。APK 继续直接打包已提交的 `app/src/main/assets/index.android.bundle`，相邻 `.meta.json` 记录源码、配置、依赖锁与补丁内容摘要、Metro 输入摘要、字节码版本与完整产物摘要及 Android 资源摘要。`node scripts/check-bundle-sync.mjs` 可在未安装 npm 依赖的 checkout 中复验同步与字节码完整性；它是构建收据校验，不是签名来源证明。单独运行 Gradle 不会生成或刷新 bundle。
+
+中间 JS、source map 和暂存资源仅写入忽略的 `build/`，结束后清理。构建会核对 Metro 生成资源与 `app/src/main/res` 的实际内容；资源缺失、陈旧或旧收据中有已废弃资源时明确失败，需同步对应资源后重跑。Hermes 格式升级时需同步审阅字节码校验器，不能仅修改元数据中的版本号。
+
 ```bash
 # 1. 克隆代码仓库
 git clone https://github.com/xinye1017/yanji.git

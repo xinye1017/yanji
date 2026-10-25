@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "versions": {
+    "reactNative": "0.87.1",
+    "hermes": "250829098.0.17",
+    "compilerIntegrity": "sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw=="
+  },
+  "options": {
+    "metro": {
+      "platform": "android",
+      "dev": false,
+      "minify": true,
+      "entryFile": "index.js"
+    },
+    "hermes": [
+      "-O",
+      "-w",
+      "-emit-binary"
+    ]
+  },
+  "inputs": {
+    "sha256": "be97fa9c191d6cbfbd23750e490e46b19bed97407dbac383027e6594cc1446f5",
+    "files": [
+      {
+        "path": "App.tsx",
+        "sha256": "a400247a8fa09b2a9733d26de6355aa4de216ffa0061644f3bcbfc8739c50320"
+      },
+      {
+        "path": "assets/branding/launcher-icon.jpg",
+        "sha256": "4392cc4407db073589c0270a396fd77a5573d4bd8d66e4245b73dbe622adb778"
+      },
+      {
+        "path": "babel.config.js",
+        "sha256": "414d7952e21b0d1408a4e3797f6a6d6cf6bfe8201740c5ca5304646151c86e06"
+      },
+      {
+        "path": "gradle/libs.versions.toml",
+        "sha256": "00811ac6d2005f3fcdf028b622baced2d982a73550276028b8e567cd6d1d5188"
+      },
+      {
+        "path": "index.js",
+        "sha256": "c6ddbd169fdc26d1a5b8061938061716f50a4c1825239f6c7e955c31c65ffaa8"
+      },
+      {
+        "path": "metro.config.js",
+        "sha256": "9c6bb0979a9da80462410f1033c3c3bbb97740e4c49ec3b2312dab58f1d8c93e"
+      },
+      {
+        "path": "package-lock.json",
+        "sha256": "951d17bb256434b1d2484d7fafbbacabd26dc9a06d40e2f76b05554facecee1b"
+      },
+      {
+        "path": "package.json",
+        "sha256": "66920c62006f1e2e51024b6f98a216ad65a253dcc8eb8446da207bed0052a7b4"
+      },
+      {
+        "path": "patches/README.md",
+        "sha256": "8a6ff3cd469199c33f5d785532099779f3d4b824e6b6fb79359a495c28fe06f7"
+      },
+      {
+        "path": "patches/react-native-blur-overlay+3.2.1.patch",
+        "sha256": "7cd8b1805b1e9797002f342e59e73fd68f1f686657779a186611c479023ad970"
+      },
+      {
+        "path": "patches/react-native-svg+15.15.5.patch",
+        "sha256": "084d976c1dfe8d4e0d5cc256e27a602819b42ef8f463bb4c10aea84d803953e6"
+      },
+      {
+        "path": "scripts/android-bundle.mjs",
+        "sha256": "f0ba8cea844b0c47d47b6f05895657ba866d6a6efbdef9e418708f407b68dc11"
+      },
+      {
+        "path": "scripts/bundle-android.mjs",
+        "sha256": "0f658722f184f0bbc0abdc644e11b54472cd5c8a2e7ce7f7a8c2469448d3e3fb"
+      },
+      {
+        "path": "scripts/check-bundle-sync.mjs",
+        "sha256": "eb37854e3d6de97ffa24636cf05e43c5a6428199835feb365373d9ce5a5b9aad"
+      },
+      {
+        "path": "skills-lock.json",
+        "sha256": "4b6ee058f9ebd77afca1bc200f49dec666aba5c3e5a13b0d966b39a6e8190651"
+      },
+      {
+        "path": "src/bridge/index.ts",
+        "sha256": "759b5f3c5d3750e6242a522430e39ee1267d59e006404f7d966562893b7148c0"
+      },
+      {
+        "path": "src/components/BackfillFocusModal.tsx",
+        "sha256": "c2d18ff5d23e0da0df108734c6d1ea9f72ccd3258be3880954a24e947b48e4c9"
+      },
+      {
+        "path": "src/components/BackupDataSection.tsx",
+        "sha256": "992d1ac4ae26d7da2a3fb25a2542e1159e745d79bbf392584bb41cf55684b52a"
+      },
+      {
+        "path": "src/components/DecisionModelSection.tsx",
+        "sha256": "a7a86f1fa8216e811f77cf46d58060b40f63cb0f96b14f3b0c29fbe0d39a8115"
+      },
+      {
+        "path": "src/components/FocusVernierDial.tsx",
+        "sha256": "bfb23b5bd35d33e1b9939fd25b5188b28ade0c33294bfab82ea586f9d64342e2"
+      },
+      {
+        "path": "src/components/RecordMomentModal.tsx",
+        "sha256": "df8072c6933b339286068a790a1e2525306bce6fbb6072cd5793e7ff86b4b6ad"
+      },
+      {
+        "path": "src/components/RollingTimeDisplay.tsx",
+        "sha256": "dab32366ba72638790f1ddfc4f7510e88c27f40fc5d2b0d6de04e3eca4c721e6"
+      },
+      {
+        "path": "src/components/SessionNoteModal.tsx",
+        "sha256": "b39ad014a12974053235437483eea40b5e0fc86231191115625f5e0ab87ce01b"
+      },
+      {
+        "path": "src/components/SettingsRows.tsx",
+        "sha256": "61956c646b1e60ee8a9c46ae58182567560c40ee1df59eb084009adc14fa407e"
+      },
+      {
+        "path": "src/components/SettingsSheets.tsx",
+        "sha256": "f3cbc718eb4a8debf685077c430c3b688953edb5795d0bbca0f0a57a7772f40f"
+      },
+      {
+        "path": "src/components/SubjectsSheet.tsx",
+        "sha256": "7657523df7de8a4f14d8d3d7b09a8c0329c29ffcf3716c8ab10725ccca4a61c1"
+      },
+      {
+        "path": "src/components/TaskEditorModal.tsx",
+        "sha256": "18d3218116673bfb953f904f34343b42ae74f9b9c62fa78b398394d7c573d62e"
+      },
+      {
+        "path": "src/components/TimelineActionPopover.tsx",
+        "sha256": "d83a261da440f11c518e80e07750f3a437917574108cc03b1ae8f606b2da2196"
+      },
+      {
+        "path": "src/components/TimelineCompactRow.tsx",
+        "sha256": "209d59d4c51121c6d453e235a393e8738f765f5327fd7e851e3a25c26a000704"
+      },
+      {
+        "path": "src/components/YanjiUI.tsx",
+        "sha256": "4661cbb09aef524f1573e82de1c88fefb6c59cdac0a19eb8becaf404aa4af774"
+      },
+      {
+        "path": "src/components/icons.ts",
+        "sha256": "03168091ae0fd2b3853a3b5f10f65623afc2dd3b08b0965c6ef3dc1da478a711"
+      },
+      {
+        "path": "src/components/lineChartGeometry.ts",
+        "sha256": "3862451556b2ab08b80a3841659bdd4ef11d727afc7e811b5a499362ab92ebc9"
+      },
+      {
+        "path": "src/navigation/BottomTabBar.tsx",
+        "sha256": "2bd17290833f10fdd24635aeebbdfdae944ee09a7ca786d8e0d779be64f21e2c"
+      },
+      {
+        "path": "src/navigation/NavigationShell.tsx",
+        "sha256": "3ea85c9fa497221fba3f1d60ba0c7fc0806c0426c266aeb8ec628bbb6f53300d"
+      },
+      {
+        "path": "src/navigation/useBottomTabLayout.ts",
+        "sha256": "a1eb64d1c714bb4993a6aa073b66d629ff4efda3af557c6f5b195d9503bb82af"
+      },
+      {
+        "path": "src/navigation/useNavigationAccessibility.ts",
+        "sha256": "168ef8dd5d94a9a5b36a41855653ede25c982c7c0c284f6108d741bd3be7211a"
+      },
+      {
+        "path": "src/screens/FocusScreen.tsx",
+        "sha256": "04914d6276a40aaa44d3b4639b0532ef0b8d2996eeacbbffd8089239bb83530a"
+      },
+      {
+        "path": "src/screens/ReviewScreen.tsx",
+        "sha256": "28a899f75ad54531e2e027f5182a932ef0fe3954aa42f047b5360696c2fdf2ea"
+      },
+      {
+        "path": "src/screens/SettingsScreen.tsx",
+        "sha256": "a1446ce786909aa9b582788c9933ccccbdcf659a2c40ed248294bd39e1abeeff"
+      },
+      {
+        "path": "src/screens/TodayScreen.tsx",
+        "sha256": "a6091d2f6a850154fb62680b0aca57fdb40cdc6f52d25bf1c96ca3365501f025"
+      },
+      {
+        "path": "src/screens/focusViewLogic.ts",
+        "sha256": "4e05f1b81797da6e0132847781c3bba5fb1e01d3cda071728db19088575b4454"
+      },
+      {
+        "path": "src/screens/reviewViewLogic.ts",
+        "sha256": "5be38b0e81defd58432b07191b1c2f521631ed6a03b8954ccb8d79699cc3155a"
+      },
+      {
+        "path": "src/screens/todayViewLogic.ts",
+        "sha256": "e28c757e85441b80fccb499846550c5ae3dc41ffd19b5c9440672e19cef3e9cb"
+      },
+      {
+        "path": "src/services/decisionClient.ts",
+        "sha256": "904b70fc66bbf949dc20a3cdfa4d87140217a4069a984240792c33b4566dc6d0"
+      },
+      {
+        "path": "src/state/dataRefresh.ts",
+        "sha256": "c5bdf44a0daf7731f9f43e41c8cbb5f030e2bd859e8750e3602c38e8f92cf02e"
+      },
+      {
+        "path": "src/state/dataRefreshCoordinator.ts",
+        "sha256": "7a244518f5d1e50fb826990c18766e0653e6b38cfb2b854162d0141b2b8aaddc"
+      },
+      {
+        "path": "src/state/settingsViewLogic.ts",
+        "sha256": "2297055c865ce3d7ae7efeb1efccb8cfb1594114af0dd5b293a59f80607ba614"
+      },
+      {
+        "path": "src/state/timerStore.ts",
+        "sha256": "44d727353f79ebbb6d15d3fdc0457cb47d9446a217fb98dcbf1142315f7eea84"
+      },
+      {
+        "path": "src/theme/ThemeProvider.tsx",
+        "sha256": "b3b9fc06a2ab094c8fd2619ad5c602d47f9ddcc6ce04ef34bc6a0a7cc96c5774"
+      },
+      {
+        "path": "src/theme/liquidGlass.ts",
+        "sha256": "52088cc0064b73781f32b8b130b100f1318d3db4b6469e48d9f7c1004c44523f"
+      },
+      {
+        "path": "src/theme/tokens.ts",
+        "sha256": "ef4494fab4b8c0711a5f17ac6dfa06d8d8fabecc36c9bca4bdc1343db9b3a111"
+      },
+      {
+        "path": "tsconfig.json",
+        "sha256": "659d3d7acd8eafd757a9e234f50f870fde1ed45efc5858fb4e4b14cb3571c383"
+      }
+    ]
+  },
+  "metro": {
+    "bytes": 2088975,
+    "sha256": "fd210cb2d22802519a5d25354452555a5462e2cc2ccfa4176664552b4a314a3b",
+    "sha1": "b9278185df911790df3c9c3ec281c0e3e8ced2d1"
+  },
+  "artifact": {
+    "version": 98,
+    "sourceSha1": "b9278185df911790df3c9c3ec281c0e3e8ced2d1",
+    "bytes": 2919938,
+    "sha256": "8687c39a1a76916dcb64be7ff98f01709fe6c1732eaf9a2e52a4bc9e1808771b"
+  },
+  "assets": []
+}

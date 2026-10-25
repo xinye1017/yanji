@@ -26,7 +26,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 
 **原生库接入方式**：本项目是 Android Add-to-App，`:app` 未应用 React Native app Gradle 插件；第三方库按既有流程手工链接。新增含 Fabric 组件的库需同步更新 `settings.gradle.kts`、`app/build.gradle.kts` 的依赖与 codegen 任务、`YanjiApplication.kt` 的 Package 注册，以及 `app/src/main/jni/{CMakeLists.txt,OnLoad.cpp}` 的 C++ 编译与组件描述符注册。不能仅安装 npm 包后就宣称接入完成。
 
-**前端交付顺序**：先执行 `npm run typecheck` 与必要的针对性检查，再执行 `npm run bundle:android` 生成 APK 所用 JS bundle，最后执行 `gradlew.bat assembleDebug`。单独 Gradle 编译不会自动刷新 JS bundle；不得把旧 bundle 的安装误报为新 UI 已交付。
+**前端交付顺序**：先执行 `npm run typecheck` 与必要的针对性检查，再执行 `npm run bundle:android`，经 Metro 与版本匹配的 Hermes 编译生成 APK 所用字节码（仍为 `app/src/main/assets/index.android.bundle`）及相邻构建元数据，最后执行 `gradlew.bat assembleDebug`。单独 Gradle 编译不会自动刷新 bundle；不得把旧 bundle 的安装误报为新 UI 已交付。`node scripts/check-bundle-sync.mjs` 无需安装依赖即可按真实内容检查源码、配置、依赖锁与补丁、字节码完整性和已打包资源；修改这些构建输入后必须重新生成 bundle 与元数据。Metro 暂存资源必须与 `app/src/main/res` 中的打包资源一致，否则构建拒绝发布字节码并指出需同步的资源。
 
 **原生构建并发**：Gradle worker 数由 `gradle.properties` 限制；各 Android 模块的 CMake/Ninja 编译任务池由根 `build.gradle.kts` 统一限制。不得为了提速覆盖这些限制，避免多 ABI 构建同时启动数十个 `clang++` 导致内存耗尽。
 
