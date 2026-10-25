@@ -361,12 +361,28 @@ export const YanjiPaperTypography = {
     fontWeight: '600' as const,
   },
   /**
-   * A section heading inside a page — 「今日计划」「记录此刻」「今日节奏」.
+   * A section heading inside a page — 「今日计划」「记录此刻」「今日学习节奏」.
    *
-   * It ranks above the body by *weight* more than by size: the redesign sets
-   * these at 13/900 with a hair of tracking, so a group title outranks the 15sp
-   * body beneath it without growing the heading row. Matches `.app-sec h4` in
-   * the design reference.
+   * It ranks above the body by *weight* more than by size: these are set at
+   * 16/900 with a hair of tracking, so a group title outranks the 15sp body
+   * beneath it and can be found by scanning the left edge of the page.
+   *
+   * This is the *page* tier. Compact headings inside a sheet or a card
+   * (`YanjiPaperSectionHeading` inside TaskEditorModal, the settings sheets and
+   * the backup section) stay on `titleSection`: they sit in a column that is
+   * already framed, so a page-sized heading would shout inside it.
+   */
+  titlePageSection: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '900' as const,
+    letterSpacing: 0.3,
+  },
+  /**
+   * A compact group heading inside a sheet, card or row.
+   *
+   * Matches `.app-sec h4` in the design reference: 13/900 with a hair of
+   * tracking, which outranks 15sp body without growing the row it sits in.
    */
   titleSection: {
     fontSize: 13,

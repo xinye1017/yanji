@@ -651,10 +651,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
 
         <YanjiPaperSectionHeading
           title="今日计划"
-          titleStyle={typography.titleSection}
+          titleStyle={typography.titlePageSection}
           countText={snapshot ? undefined : '—'}
           spaceBefore={layout.sectionGap}
-          align="baseline"
           right={<YanjiTextAction label="新建" accessibilityLabel="添加任务" onPress={openTaskEditor} />}
         />
         <View>
@@ -707,15 +706,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
             The heading owns the whole section gap, so the wrapper adds none.
 
             The heading's accessory is the reading order and the fold, not a
-            create action: writing is what the section is *for*, so its entry is
-            the slot at the end of the list (`YanjiCaptureCard`) rather than a
-            text link competing with the title. */}
+            create action. Writing is what the section is *for*, so its entry is
+            the card directly under the heading (`YanjiCaptureCard`) — first row
+            of the section, always, whether or not anything is written yet. */}
         <View>
           <YanjiPaperSectionHeading
             title="记录此刻"
-            titleStyle={typography.titleSection}
+            titleStyle={typography.titlePageSection}
             countText={snapshot ? `${noteCount} 条` : '—'}
-            align="baseline"
             spaceBefore={layout.sectionGap}
             right={noteCount > 1 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
@@ -748,8 +746,25 @@ export function TodayScreen({ visible, foregroundRevision }: {
               </View>
             ) : undefined}
           />
+          {/* The entry is also the empty state, and it is always the first row:
+              the reader writes before they re-read, and a fixed position means
+              the invitation never moves as notes accumulate. */}
+          {snapshot ? (
+            <View style={{ marginTop: YanjiSpacing.sm }}>
+              <YanjiCaptureCard
+                title="写一条记录"
+                hint="一个想法、一处卡点、一点收获"
+                accessibilityLabel="新建今日记录"
+                onPress={newNote}
+              />
+            </View>
+          ) : (
+            <Text style={[typography.captionMeta, { color: colors.secondary, paddingTop: YanjiSpacing.sm }]}>
+              正在读取今日随笔…
+            </Text>
+          )}
           {journalNotes.length > 0 ? (
-            <View style={{ marginTop: YanjiSpacing.xs }}>
+            <View style={{ marginTop: YanjiSpacing.md }}>
               {journalNotes.map((note, index) => (
                 <TimelineCompactRow key={note.id}
                   timeLabel={timeLabel(note.timestamp)}
@@ -767,24 +782,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
               ))}
             </View>
           ) : null}
-          {/* The entry is also the empty state: with nothing above it the card
-              is the only thing in the section, and it already says what to do.
-              Loading is the one case that still needs a sentence, because there
-              is no snapshot to invite the reader into yet. */}
-          {snapshot ? (
-            <View style={{ marginTop: journalNotes.length > 0 ? YanjiSpacing.md : YanjiSpacing.xs }}>
-              <YanjiCaptureCard
-                title="写一条记录"
-                hint="一个想法、一处卡点、一点收获"
-                accessibilityLabel="新建今日记录"
-                onPress={newNote}
-              />
-            </View>
-          ) : (
-            <Text style={[typography.captionMeta, { color: colors.secondary, paddingTop: YanjiSpacing.sm }]}>
-              正在读取今日随笔…
-            </Text>
-          )}
         </View>
 
         {/* 今日学习节奏.
@@ -799,7 +796,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <View>
           <YanjiPaperSectionHeading
             title="今日学习节奏"
-            titleStyle={typography.titleSection}
+            titleStyle={typography.titlePageSection}
             spaceBefore={layout.sectionGap}
             right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
               accessibilityRole="button"

@@ -672,9 +672,78 @@ test('the journal orders and folds on request instead of truncating at two', () 
   assert.deepEqual(rows(tree).map(row => row.props.content), ['记录 08:15', '记录 11:40'],
     'the fold shows the first two of the order in effect');
 
-  // The capture card sits at the end of the list in every state, so writing is
-  // never hidden behind a fold.
+  // The capture card is always present, and the fold never hides it.
   assert.equal(nodes(tree, node => node.type === 'YanjiCaptureCard').length, 1);
+});
+
+test('the capture card is the first row under the journal heading, before any note', () => {
+  // Reading order inside the section: heading → write → notes. The entry used
+  // to sit at the end of the list, which meant a long journal pushed it below
+  // the fold. Writing is the section's own action, so it stays where the eye
+  // lands first and never moves as notes accumulate.
+  const notes = ['08:15', '17:56'].map((time, index) => ({
+    id: `note-${index}`, date, timestamp: at(time), content: `记录 ${time}`,
+    category: 'INSPIRATION', isFavorite: false, isResolved: false,
+  }));
+  const orderOf = tree => {
+    // Walk the section's own subtree in document order and note which of the
+    // two markers appears first; this is the rendered order, not a prop.
+    const seen = [];
+    const walk = node => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== 'object' || !('type' in node)) return;
+      if (node.type === 'YanjiCaptureCard') seen.push('capture');
+      if (node.type === 'TimelineCompactRow') seen.push('note');
+      if (typeof node.type === 'function') walk(node.type(node.props));
+      else walk(node.props?.children);
+    };
+    walk(tree);
+    return seen;
+  };
+
+  const withNotes = orderOf(screenHarness(snapshot({ notes })).render());
+  assert.deepEqual(withNotes, ['capture', 'note', 'note'],
+    'the write entry comes first, then the notes beneath it');
+
+  // An empty day has no notes at all, and the card is the whole section body.
+  assert.deepEqual(orderOf(screenHarness(snapshot()).render()), ['capture']);
+
+  // Folding removes rows but must not move the entry out of first position.
+  const many = ['08:15', '11:40', '15:12', '17:56'].map((time, index) => ({
+    id: `note-many-${index}`, date, timestamp: at(time), content: `记录 ${time}`,
+    category: 'INSPIRATION', isFavorite: false, isResolved: false,
+  }));
+  const h = screenHarness(snapshot({ notes: many }));
+  // The controls live in the heading's accessory slot, which is a prop rather
+  // than a child, so the walk has to enter it explicitly.
+  const fold = () => {
+    const heading = nodes(h.render(), node => node.type === 'YanjiPaperSectionHeading'
+      && node.props.title === '记录此刻')[0];
+    return nodes(heading.props.right, node => node.props.testID === 'journal-fold')[0];
+  };
+  assert.ok(fold(), 'four notes make folding available');
+  fold().props.onPress();
+  assert.deepEqual(orderOf(h.render()), ['capture', 'note', 'note'],
+    'a folded journal still opens with the write entry');
+});
+
+test('the page section headings use the page type scale, not the compact one', () => {
+  // 「今日计划」「记录此刻」「今日学习节奏」 are the page's three group titles. They
+  // were on the compact sheet scale (13/900), which made them sit at the same
+  // size as the metadata around them. The page tier is larger and stays a
+  // separate token so sheet-internal headings do not grow with it.
+  const tree = screenHarness(snapshot()).render();
+  const pageHeadings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
+  assert.equal(pageHeadings.length, 3, 'the page has exactly its three group headings');
+  for (const heading of pageHeadings) {
+    assert.equal(heading.props.titleStyle, tokens.YanjiPaperTypography.titlePageSection,
+      `${heading.props.title} must use the page section scale`);
+  }
+  assert.ok(tokens.YanjiPaperTypography.titlePageSection.fontSize
+    > tokens.YanjiPaperTypography.titleSection.fontSize,
+    'the page tier is larger than the compact sheet tier');
+  assert.equal(tokens.YanjiPaperTypography.titlePageSection.fontWeight, '900',
+    'a group title still outranks the body by weight');
 });
 
 test('order and fold controls appear only when they can do something', () => {

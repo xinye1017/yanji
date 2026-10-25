@@ -258,7 +258,7 @@ export function YanjiPaperSectionHeading({
   spaceBefore = 14,
   spaceAfter = 2,
   titleStyle,
-  align = 'baseline',
+  align = 'center',
   style,
 }: {
   title: string;
@@ -267,6 +267,13 @@ export function YanjiPaperSectionHeading({
   spaceBefore?: number;
   spaceAfter?: number;
   titleStyle?: TextStyle;
+  /**
+   * `center` is the default because the accessory is usually a composite
+   * control (icon + label, or two controls in a row), and Yoga cannot read a
+   * baseline out of a `View` — it falls back to the *bottom* edge, which drops
+   * a two-line accessory below the title and onto the first row beneath it.
+   * `baseline` remains available for a single plain-text accessory.
+   */
   align?: 'baseline' | 'center';
   style?: StyleProp<ViewStyle>;
 }): React.JSX.Element {
