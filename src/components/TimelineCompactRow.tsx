@@ -7,10 +7,10 @@
  * menu the screen opens. Presentation only: the screen owns identity and every
  * write.
  */
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { toSubtleColor, YanjiSpacing, YanjiTouch } from '../theme/tokens';
+import { toSubtleColor, YanjiSpacing } from '../theme/tokens';
 import { YanjiIcon } from './YanjiUI';
 import type { YanjiIconName } from './icons';
 import type { PopoverAnchor } from './TimelineActionPopover';
@@ -72,7 +72,6 @@ export function TimelineCompactRow({
 }: TimelineCompactRowProps): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  const [rowHeight, setRowHeight] = useState<number>(YanjiTouch.min);
   const moreRef = useRef<React.ComponentRef<typeof View>>(null);
   const hasContent = Boolean(content && content.trim());
   const title = hasContent ? previewOf(content!) : '';
@@ -161,7 +160,6 @@ export function TimelineCompactRow({
 
         {hasContent ? (
           <View
-            onLayout={event => setRowHeight(event.nativeEvent.layout.height)}
             style={{
               flex: 1,
               minWidth: 0,
@@ -265,7 +263,6 @@ export function TimelineCompactRow({
           </View>
         ) : (
           <View
-            onLayout={event => setRowHeight(event.nativeEvent.layout.height)}
             style={{
               flex: 1,
               minWidth: 0,

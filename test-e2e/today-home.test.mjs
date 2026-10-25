@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTypeScript } from './framework/load-typescript.js';
+import { createFlashListDouble } from './framework/flash-list-double.js';
 
 const tokens = loadTypeScript('src/theme/tokens.ts');
 const theme = {
@@ -227,6 +228,11 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     'YanjiPrimaryButton', 'YanjiSectionToggle', 'YanjiSubjectProportionRow',
     'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
+  // The page's real list, replaced by a double that windows its cells. See
+  // `framework/flash-list-double.js`: it mounts a bounded window and exposes how
+  // many rows it was handed, which is what lets a test tell virtualization apart
+  // from data truncation.
+  const flashList = createFlashListDouble();
   let active = null;
   let tick;
   let visible = true;
@@ -290,6 +296,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       RefreshControl: 'RefreshControl',
       useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
     },
+    '@shopify/flash-list': flashList,
     'react-native-reanimated': {
       Easing: { out: value => value, in: value => value, cubic: 'cubic' },
       runOnJS: callback => callback,
@@ -410,6 +417,20 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     mount,
     rerender,
     flush,
+    /** The list double: how many rows were handed over, and how many mounted. */
+    flashList,
+    /**
+     * The list as it was actually given.
+     *
+     * `FlashList` is a function component, so it only runs when the tree is
+     * walked — the harness's `nodes` helper is what instantiates it. This walks
+     * the current render first, so a caller that only wants the list does not
+     * have to know that detail.
+     */
+    listRender: () => {
+      nodes(render(), () => false);
+      return flashList.lastRender('scroll-today');
+    },
   };
 }
 
@@ -1220,4 +1241,97 @@ test('a failed pending read keeps old rows and exposes a retry; success clears i
   tree = h.render();
   assert.equal(nodes(tree, node => node.type === 'YanjiStaleDataNotice'
     && /待处理任务读取失败/.test(node.props.message)).length, 0);
+});
+
+test('the page hands every record to a windowed list instead of mounting them all', () => {
+  // PERF-06 的可测部分：记录不再由 ScrollView 一次全挂载。
+  //
+  // 这个用例证明两件互相独立的事，缺一不可：
+  //   1) 列表拿到的是**全部**行 —— 不是截断数据冒充优化；
+  //   2) 首帧实际挂载的行数由窗口决定，而不是由当天记录数决定。
+  // 只断言「用了 FlashList」是没有意义的：把 data 砍成两行同样能过。
+  const notes = Array.from({ length: 40 }, (_, index) => ({
+    id: `bulk-${index}`,
+    date,
+    timestamp: at('08:00') + index * 60_000,
+    content: `记录 ${index}`,
+    category: 'INSPIRATION',
+    isFavorite: false,
+    isResolved: false,
+  }));
+  const tasks = Array.from({ length: 12 }, (_, index) => task({
+    id: `plan-${index}`,
+    title: `计划 ${index}`,
+  }));
+  const h = screenHarness(snapshot({ notes, tasks }));
+  h.render();
+
+  const list = h.listRender();
+  assert.ok(list, 'the page renders one vertical list');
+  // 12 plan rows + the 记录此刻 heading + the write entry + 40 notes.
+  assert.equal(list.rowCount, 12 + 1 + 1 + 40,
+    'every plan row and every note reaches the list — nothing is truncated away');
+  assert.ok(list.mounted < list.rowCount,
+    `the first paint mounts a window, not the whole day (mounted ${list.mounted} of ${list.rowCount})`);
+  assert.ok(list.mounted <= 8,
+    `the initial mount is bounded by the viewport, not by data size (was ${list.mounted})`);
+
+  // Two pools: plan rows and journal rows recycle separately.
+  assert.deepEqual([...new Set(list.types)].sort(), ['capture', 'journal-heading', 'note', 'task'],
+    'each row kind is declared, so cells recycle within their own type');
+
+  // Scrolling extends the window; every row stays reachable.
+  let mounted = list.mounted;
+  for (let pass = 0; pass < 12 && mounted < list.rowCount; pass += 1) {
+    mounted = h.flashList.scroll(6, 'scroll-today');
+  }
+  assert.equal(mounted, list.rowCount, 'scrolling reaches the last row — nothing is unreachable');
+});
+
+test('folding, ordering and the anchored menu behave the same on the virtualized page', async () => {
+  // 虚拟化不能改变读者的行为。这组断言在窗口化列表上重跑折叠、排序与菜单，
+  // 并证明折叠只是缩小交给列表的行数，而不是把数据丢掉。
+  const notes = ['08:15', '11:40', '15:12', '17:56'].map((time, index) => ({
+    id: `vnote-${index}`, date, timestamp: at(time), content: `记录 ${time}`,
+    category: index % 2 ? 'DOUBT' : 'INSPIRATION', isFavorite: false, isResolved: false,
+  }));
+  const h = screenHarness(snapshot({ notes }));
+  const tree = h.render();
+  const heading = () => nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
+    .find(node => node.props.title === '记录此刻');
+  assert.ok(heading(), 'the journal heading still renders');
+  assert.equal(heading().props.countText, '4 条', 'the heading counts the whole day, not the window');
+
+  // Default order is newest first and the list receives all four.
+  const list = h.listRender();
+  assert.equal(list.rowCount, 1 + 1 + 4, 'heading + write entry + four notes');
+  const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
+  assert.deepEqual(rows.map(row => row.props.content),
+    ['记录 17:56', '记录 15:12', '记录 11:40', '记录 08:15'],
+    'newest first, and the window still shows the newest four');
+
+  // Folding reduces the rows handed to the list, and keeps the newest two.
+  const control = testID => nodes(heading().props.right, node => node.props.testID === testID)[0];
+  control('journal-fold').props.onPress();
+  const folded = h.render();
+  assert.equal(h.listRender().rowCount, 1 + 1 + 2,
+    'a folded journal hands the list two rows — it does not hand over all four and hide them');
+  assert.deepEqual(nodes(folded, node => node.type === 'TimelineCompactRow').map(row => row.props.content),
+    ['记录 17:56', '记录 15:12']);
+  assert.equal(heading().props.countText, '4 条', 'the count still reports the whole day after folding');
+
+  // Reversing the order reverses what the list is given.
+  control('journal-order').props.onPress();
+  const reversed = h.render();
+  assert.deepEqual(nodes(reversed, node => node.type === 'TimelineCompactRow').map(row => row.props.content),
+    ['记录 08:15', '记录 11:40'], 'the folded window follows the order in effect');
+
+  // The anchored menu still opens from a recycled row and carries its identity.
+  const anchor = { x: 210, y: 420, width: 44, height: 44 };
+  const target = nodes(reversed, node => node.type === 'TimelineCompactRow')[0];
+  target.props.onMore(anchor);
+  const menu = nodes(h.render(), node => node.type === 'TimelineActionPopover')[0];
+  assert.ok(menu, 'a row mounted from the recycling window still anchors its menu');
+  assert.deepEqual(menu.props.anchor, anchor);
+  assert.equal(nodes(h.render(), node => node.type === 'TimelineActionPopover').length, 1);
 });

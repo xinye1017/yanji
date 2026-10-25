@@ -66,6 +66,47 @@ type JournalOrder = 'newest' | 'oldest';
 /** How many rows a folded journal keeps — the number the old hard slice showed. */
 const JOURNAL_FOLDED_ROWS = 2;
 
+/**
+ * One recyclable row of the page.
+ *
+ * The page is a single vertical surface: the greeting, the day's summary and the
+ * three section headings are its header, and everything that repeats — plan
+ * rows, the 「写一条记录」 entry, journal rows and the rhythm detail — is a list
+ * item. Two kinds only, so FlashList keeps two recycling pools instead of one
+ * oversized one: a plan row and a journal row have different heights and
+ * different content shapes, and mixing them would make every recycled cell pay
+ * to re-layout as the other kind.
+ */
+type TodayRow =
+  | {
+    kind: 'task';
+    key: string;
+    task: StudyTask;
+    isLead: boolean;
+    isLast: boolean;
+  }
+  | {
+    /** 「待处理计划」 — the one entry into historical unfinished work. */
+    kind: 'carry-over';
+    key: string;
+  }
+  | {
+    /** 「记录此刻」 heading, which must follow the plan rows it succeeds. */
+    kind: 'journal-heading';
+    key: string;
+  }
+  | {
+    kind: 'capture';
+    key: string;
+  }
+  | {
+    kind: 'note';
+    key: string;
+    note: NoteEntry;
+    isFirst: boolean;
+    isLast: boolean;
+  };
+
 
 function localDay(day: Date): string {
   return [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')].join('-');
@@ -385,6 +426,46 @@ export function TodayScreen({ visible, foregroundRevision }: {
       !task.completed && task.carriedOverToId === null && !deferredCarryTaskIds.has(task.id)),
     [carryOverTasks, deferredCarryTaskIds],
   );
+  const carryOverVisible = visibleCarryOverTasks.length > 0;
+  /**
+   * The recyclable rows, in the order the page reads.
+   *
+   * The order is the same one the page rendered inline: plan rows (pending
+   * before completed), then the 「待处理计划」 entry, then the 「记录此刻」
+   * heading, then its write entry, then the notes. The two section headings are
+   * rows rather than part of the header because the rows they title sit below
+   * them — a heading pinned into the header would strand the plan rows above the
+   * journal heading that has to follow them.
+   *
+   * Every note the reader can see is in this array: the fold is what hides rows,
+   * not a slice the list never receives, so a folded journal still reports its
+   * whole count and unfolding mounts the rest.
+   */
+  const rows = useMemo<TodayRow[]>(() => {
+    const orderedTasks = [...pending, ...completed];
+    const list: TodayRow[] = orderedTasks.map((task, index) => ({
+      kind: 'task',
+      key: `task:${task.id}`,
+      task,
+      isLead: !task.completed && task.id === pending[0]?.id,
+      isLast: index === orderedTasks.length - 1,
+    }));
+    if (carryOverVisible) {
+      list.push({ kind: 'carry-over', key: 'carry-over' });
+    }
+    list.push({ kind: 'journal-heading', key: 'journal-heading' });
+    if (snapshot) list.push({ kind: 'capture', key: 'capture' });
+    journalNotes.forEach((note, index) => {
+      list.push({
+        kind: 'note',
+        key: `note:${note.id}`,
+        note,
+        isFirst: index === 0,
+        isLast: index === journalNotes.length - 1,
+      });
+    });
+    return list;
+  }, [pending, completed, carryOverVisible, snapshot, journalNotes]);
   useEffect(() => {
     if (visibleCarryOverTasks.length === 0) closeCarryOver();
   }, [closeCarryOver, visibleCarryOverTasks.length]);
@@ -507,10 +588,149 @@ export function TodayScreen({ visible, foregroundRevision }: {
           : snapshot.examCount > 0 ? `含 ${snapshot.examCount} 场模考`
             : '';
 
+  /**
+   * One row of the virtualized page.
+   *
+   * These are the same components the page used to `map` inline, so nothing about
+   * a row's content, order or actions changes — only when it is mounted. The
+   * 「写一条记录」 entry is a row rather than part of the header so it stays
+   * adjacent to the journal heading and first in that section's reading order.
+   */
+  const renderRow = useCallback<ListRenderItem<TodayRow>>(({ item }) => {
+    if (item.kind === 'task') {
+      const task = item.task;
+      return (
+        <YanjiTaskLedgerRow
+          title={task.title}
+          subjectName={task.subjectName}
+          meta={taskMeta(task)}
+          accentColor={task.subjectColor}
+          completed={task.completed}
+          isLead={item.isLead}
+          isLast={item.isLast}
+          busy={busyTask === task.id}
+          disabled={busyTask !== null}
+          onToggle={() => void toggleTask(task)}
+          onEdit={() => setTaskInfo(task)}
+          onStartFocus={() => startTask(task)}
+        />
+      );
+    }
+    if (item.kind === 'carry-over') {
+      return (
+        <Pressable testID="open-carry-over" onPress={openCarryOver}
+          accessibilityRole="button" accessibilityLabel={`待处理计划，${visibleCarryOverTasks.length} 项`}
+          accessibilityState={{ expanded: carryOverOpen && !carryOverClosing }}
+          style={({ pressed }) => ({
+            minHeight: layout.rowMinHeight, paddingVertical: YanjiSpacing.sm,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: YanjiSpacing.sm,
+            marginTop: YanjiSpacing.sm, borderTopWidth: layout.hairlineWidth, borderColor: colors.hairline,
+            opacity: pressed ? 0.65 : 1,
+          })}>
+          <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>待处理计划</Text>
+          <YanjiIcon name="forward" size={16} color={colors.secondary} />
+        </Pressable>
+      );
+    }
+    if (item.kind === 'journal-heading') {
+      return (
+        <YanjiPaperSectionHeading
+          title="记录此刻"
+          titleStyle={typography.titlePageSection}
+          countText={snapshot ? `${noteCount} 条` : '—'}
+          spaceBefore={layout.sectionGap}
+          right={noteCount > 1 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+              {/* A choice states its current value (倒序 / 正序) so the label
+                  never flips meaning between "what I picked" and "what I will
+                  get"; the two labels are the same width, so the fold control
+                  beside it cannot jump when the order changes. */}
+              <YanjiSectionToggle
+                testID="journal-order"
+                label={journalOrder === 'newest' ? '倒序' : '正序'}
+                icon={journalOrder === 'newest' ? 'sortNewest' : 'sortOldest'}
+                accessibilityLabel={journalOrder === 'newest' ? '按时间倒序，最新在前' : '按时间正序，最早在前'}
+                accessibilityHint="切换记录的时间顺序"
+                accessibilityState={{ selected: journalOrder === 'oldest' }}
+                onPress={() => setJournalOrder(order => order === 'newest' ? 'oldest' : 'newest')}
+              />
+              {noteCount > JOURNAL_FOLDED_ROWS ? (
+                <YanjiSectionToggle
+                  testID="journal-fold"
+                  label={journalExpanded ? '收起' : '展开'}
+                  icon={journalExpanded ? 'chevronUp' : 'chevronDown'}
+                  accessibilityLabel={journalExpanded ? '收起记录列表' : '展开全部记录'}
+                  accessibilityHint={journalExpanded
+                    ? `收起后只显示最新 ${JOURNAL_FOLDED_ROWS} 条`
+                    : `展开全部 ${noteCount} 条记录`}
+                  accessibilityState={{ expanded: journalExpanded }}
+                  onPress={() => setJournalExpanded(expanded => !expanded)}
+                />
+              ) : null}
+            </View>
+          ) : undefined}
+        />
+      );
+    }
+    if (item.kind === 'capture') {
+      return (
+        <View style={{ marginTop: YanjiSpacing.sm }}>
+          <YanjiCaptureCard
+            title="写一条记录"
+            hint="一个想法、一处卡点、一点收获"
+            accessibilityLabel="新建今日记录"
+            onPress={newNote}
+          />
+        </View>
+      );
+    }
+    const note = item.note;
+    return (
+      <View style={{ marginTop: YanjiSpacing.md }}>
+        <TimelineCompactRow
+          timeLabel={timeLabel(note.timestamp)}
+          tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 已解决' : '疑点 待解决')
+            : note.category === 'INSPIRATION' ? '灵感' : null}
+          tagIcon={note.category === 'INSPIRATION' ? 'inspiration'
+            : note.category === 'DOUBT' ? 'doubt' : undefined}
+          tagTone={note.category === 'INSPIRATION' ? 'positive'
+            : note.category === 'DOUBT' ? 'brand' : 'neutral'}
+          content={note.content}
+          isFirst={item.isFirst}
+          isLast={item.isLast}
+          disabled={busyNote !== null}
+          onPressContent={() => openNote(note)}
+          onMore={anchor => setMomentMenu({ note, anchor })}
+        />
+      </View>
+    );
+  }, [
+    busyNote, busyTask, carryOverClosing, carryOverOpen, colors.hairline,
+    journalExpanded, journalOrder, layout.hairlineWidth, layout.rowMinHeight,
+    layout.sectionGap, newNote, noteCount, openCarryOver, openNote, snapshot,
+    startTask, toggleTask, typography.bodyPrimary, typography.titlePageSection,
+    visibleCarryOverTasks.length,
+  ]);
+
+  /**
+   * Two recycling pools, not one: a plan row and a journal row differ in height
+   * and structure, so telling FlashList their type lets each pool keep cells
+   * that already fit instead of re-laying out on every swap.
+   */
+  const rowType = useCallback((item: TodayRow) => item.kind, []);
+  const rowKey = useCallback((item: TodayRow) => item.key, []);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
-      <ScrollView testID="scroll-today" style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false} overScrollMode="never"
+      <FlashList
+        testID="scroll-today"
+        data={rows}
+        renderItem={renderRow}
+        keyExtractor={rowKey}
+        getItemType={rowType}
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
         onScrollBeginDrag={() => setMomentMenu(null)}
         onMomentumScrollBegin={() => setMomentMenu(null)}
         // While the menu is up its backdrop owns every touch; hide the list from
@@ -520,7 +740,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
         // Same distance from the status bar as the Focus page's header: the three
         // tabs share one page-top rhythm, so switching tabs never shifts the
         // headline down or up.
-        contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: contentPadding }}>
+        contentContainerStyle={{
+          paddingHorizontal: layout.pageGutter,
+          paddingTop: YanjiSpacing.sm,
+          paddingBottom: contentPadding,
+        }}
+        ListHeaderComponent={
+          <>
         {/* The greeting owns the top-left at Serif headline size; the date and exam
             countdown stack on the right as a clean text card that taps to open settings. */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: layout.sectionGap }}>
@@ -681,31 +907,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
             prompt={snapshot ? '还没有安排今天的计划。' : '正在读取今日计划…'}
             actionLabel={null}
             onPress={openTaskEditor} /> : null}
-          {[...pending, ...completed].map((task, index, rows) => (
-            <YanjiTaskLedgerRow key={task.id} title={task.title} subjectName={task.subjectName}
-              meta={taskMeta(task)} accentColor={task.subjectColor} completed={task.completed}
-              isLead={!task.completed && task.id === pending[0]?.id}
-              isLast={index === rows.length - 1}
-              busy={busyTask === task.id} disabled={busyTask !== null}
-              onToggle={() => void toggleTask(task)} onEdit={() => setTaskInfo(task)}
-              onStartFocus={() => startTask(task)} />
-          ))}
         </View>
 
-        {visibleCarryOverTasks.length > 0 ? (
-          <Pressable testID="open-carry-over" onPress={openCarryOver}
-            accessibilityRole="button" accessibilityLabel={`待处理计划，${visibleCarryOverTasks.length} 项`}
-            accessibilityState={{ expanded: carryOverOpen && !carryOverClosing }}
-            style={({ pressed }) => ({
-              minHeight: layout.rowMinHeight, paddingVertical: YanjiSpacing.sm,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: YanjiSpacing.sm,
-              marginTop: YanjiSpacing.sm, borderTopWidth: layout.hairlineWidth, borderColor: colors.hairline,
-              opacity: pressed ? 0.65 : 1,
-            })}>
-            <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>待处理计划</Text>
-            <YanjiIcon name="forward" size={16} color={colors.secondary} />
-          </Pressable>
-        ) : null}
         {carryOverReadFailed ? (
           <YanjiStaleDataNotice
             message={visibleCarryOverTasks.length > 0
@@ -717,90 +920,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
             style={{ marginTop: YanjiSpacing.sm }}
           />
         ) : null}
-
-
-        {/* The clock lives with its note; only the quiet spine sits outside.
-            The heading owns the whole section gap, so the wrapper adds none.
-
-            The heading's accessory is the reading order and the fold, not a
-            create action. Writing is what the section is *for*, so its entry is
-            the card directly under the heading (`YanjiCaptureCard`) — first row
-            of the section, always, whether or not anything is written yet. */}
-        <View>
-          <YanjiPaperSectionHeading
-            title="记录此刻"
-            titleStyle={typography.titlePageSection}
-            countText={snapshot ? `${noteCount} 条` : '—'}
-            spaceBefore={layout.sectionGap}
-            right={noteCount > 1 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                {/* A choice states its current value (倒序 / 正序) so the label
-                    never flips meaning between "what I picked" and "what I will
-                    get"; the two labels are the same width, so the fold control
-                    beside it cannot jump when the order changes. */}
-                <YanjiSectionToggle
-                  testID="journal-order"
-                  label={journalOrder === 'newest' ? '倒序' : '正序'}
-                  icon={journalOrder === 'newest' ? 'sortNewest' : 'sortOldest'}
-                  accessibilityLabel={journalOrder === 'newest' ? '按时间倒序，最新在前' : '按时间正序，最早在前'}
-                  accessibilityHint="切换记录的时间顺序"
-                  accessibilityState={{ selected: journalOrder === 'oldest' }}
-                  onPress={() => setJournalOrder(order => order === 'newest' ? 'oldest' : 'newest')}
-                />
-                {noteCount > JOURNAL_FOLDED_ROWS ? (
-                  <YanjiSectionToggle
-                    testID="journal-fold"
-                    label={journalExpanded ? '收起' : '展开'}
-                    icon={journalExpanded ? 'chevronUp' : 'chevronDown'}
-                    accessibilityLabel={journalExpanded ? '收起记录列表' : '展开全部记录'}
-                    accessibilityHint={journalExpanded
-                      ? `收起后只显示最新 ${JOURNAL_FOLDED_ROWS} 条`
-                      : `展开全部 ${noteCount} 条记录`}
-                    accessibilityState={{ expanded: journalExpanded }}
-                    onPress={() => setJournalExpanded(expanded => !expanded)}
-                  />
-                ) : null}
-              </View>
-            ) : undefined}
-          />
-          {/* The entry is also the empty state, and it is always the first row:
-              the reader writes before they re-read, and a fixed position means
-              the invitation never moves as notes accumulate. */}
-          {snapshot ? (
-            <View style={{ marginTop: YanjiSpacing.sm }}>
-              <YanjiCaptureCard
-                title="写一条记录"
-                hint="一个想法、一处卡点、一点收获"
-                accessibilityLabel="新建今日记录"
-                onPress={newNote}
-              />
-            </View>
-          ) : (
-            <Text style={[typography.captionMeta, { color: colors.secondary, paddingTop: YanjiSpacing.sm }]}>
-              正在读取今日随笔…
-            </Text>
-          )}
-          {journalNotes.length > 0 ? (
-            <View style={{ marginTop: YanjiSpacing.md }}>
-              {journalNotes.map((note, index) => (
-                <TimelineCompactRow key={note.id}
-                  timeLabel={timeLabel(note.timestamp)}
-                  tagLabel={note.category === 'DOUBT' ? (note.isResolved ? '疑点 已解决' : '疑点 待解决')
-                    : note.category === 'INSPIRATION' ? '灵感' : null}
-                  tagIcon={note.category === 'INSPIRATION' ? 'inspiration'
-                    : note.category === 'DOUBT' ? 'doubt' : undefined}
-                  tagTone={note.category === 'INSPIRATION' ? 'positive'
-                    : note.category === 'DOUBT' ? 'brand' : 'neutral'}
-                  content={note.content}
-                  isFirst={index === 0} isLast={index === journalNotes.length - 1}
-                  disabled={busyNote !== null}
-                  onPressContent={() => openNote(note)}
-                  onMore={anchor => setMomentMenu({ note, anchor })} />
-              ))}
-            </View>
-          ) : null}
-        </View>
-
+          </>
+        }
+        ListFooterComponent={
+          <>
         {/* 今日学习节奏.
             Collapsed, this used to be a caption, a row of 18 fixed-width ticks
             and a chevron — a title with no subject, and a strip that read as a
@@ -916,7 +1039,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
             </View>
           ) : null}
         </View>
-      </ScrollView>
+          </>
+        }
+      />
 
       {carryOverOpen && visible ? (
         <Modal visible transparent animationType="none" onRequestClose={closeCarryOver}>

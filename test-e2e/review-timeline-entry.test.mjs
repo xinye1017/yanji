@@ -14,6 +14,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTypeScript } from './framework/load-typescript.js';
+import { createFlashListDouble } from './framework/flash-list-double.js';
 
 const tokens = loadTypeScript('src/theme/tokens.ts');
 const theme = {
@@ -83,14 +84,16 @@ function nodes(tree, predicate) {
     if (Array.isArray(node)) { node.forEach(walk); return; }
     if (!node || typeof node !== 'object' || !('type' in node)) return;
     if (typeof node.type === 'function') {
+      // A function component is not a host node: expand it and keep walking the
+      // element it returns. Returning early here dropped everything a mocked
+      // list component produced (its header and its rows).
       walk(node.type(node.props));
       return;
     }
     if (predicate(node)) result.push(node);
     walk(node.props.children);
   }
-  walk(tree);
-  return result;
+  walk(tree);  return result;
 }
 
 function text(tree) {
@@ -118,6 +121,7 @@ function screenHarness(daySnapshot, {
   const calls = [];
   const states = [];
   const refs = {};
+  const flashList = createFlashListDouble();
   let index = 0;
   let refIndex = 0;
   // The retry spies record the exact window the banner re-reads.
@@ -143,6 +147,10 @@ function screenHarness(daySnapshot, {
       useWindowDimensions: () => ({ fontScale: 1, width: 390, height: 844 }),
     },
     'react-native-reanimated': { useReducedMotion: () => true },
+    // The timeline view is a FlashList now. The shared double windows its cells,
+    // so a test can tell "the rows go through the virtualised list" apart from
+    // "the page mounted every row and called it virtualization".
+    '@shopify/flash-list': flashList,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
     '../bridge': {
       YanjiDataNative: {
@@ -173,19 +181,31 @@ function screenHarness(daySnapshot, {
       refreshReviewOverview: async request => { refreshCalls.push(['review', request.scope, request.anchorDate]); },
     },
   }, { Date: class extends Date { constructor(...args) { super(...(args.length ? args : [`${date}T18:00:00`])); } } });
+  const render = () => {
+    index = 0;
+    refIndex = 0;
+    return ReviewScreen({ visible: true });
+  };
   return {
     calls,
     refreshCalls,
-    render: () => {
-      index = 0;
-      refIndex = 0;
-      return ReviewScreen({ visible: true });
-    },
+    flashList,
+    render,
     rows: tree => nodes(tree, node => node.type === 'TimelineCompactRow'),
     menu: tree => nodes(tree, node => node.type === 'TimelineActionPopover')[0],
     noteModal: tree => nodes(tree, node => node.type === 'SessionNoteModal')[0],
     recordModal: tree => nodes(tree, node => node.type === 'RecordMomentModal')[0],
     confirmation: tree => nodes(tree, node => node.type === 'Modal')[0],
+    /**
+     * The timeline list as it was actually given.
+     *
+     * `FlashList` is a function component, so it only runs while the tree is
+     * walked; this walks the current render first so callers need not know that.
+     */
+    listRender: () => {
+      nodes(render(), () => false);
+      return flashList.lastRender('scroll-review');
+    },
   };
 }
 
@@ -486,6 +506,54 @@ test('the timeline warns when the day it is showing may be behind Room', () => {
 test('a healthy review read shows no staleness banner', () => {
   const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
   assert.equal(nodes(h.render(), node => node.type === 'YanjiStaleDataNotice').length, 0);
+});
+
+test('the timeline view renders through the virtualised list, not an inline map', () => {
+  // A day can hold many sessions and notes; the rows used to be mapped straight
+  // into the page's ScrollView, which mounted every offscreen row. The list is
+  // now the scroll container, so the header rides `ListHeaderComponent` and the
+  // rows are items — which is what lets the renderer recycle them.
+  //
+  // The double windows its cells, so this asserts both halves of the claim: the
+  // list receives every entry (no truncation), and the first paint mounts only a
+  // window of them (no eager mount of the whole day).
+  const many = Array.from({ length: 30 }, (_, index) => note({
+    id: `bulk-note-${index}`,
+    content: `记录 ${index}`,
+    timestamp: at('08:00') + index * 60_000,
+  }));
+  const h = screenHarness(snapshot({ sessions: [session({ id: 's1' })], notes: many }));
+  const tree = h.render();
+  const list = nodes(tree, node => node.type === 'FlashList')[0];
+  assert.ok(list, 'the timeline view is a FlashList');
+  assert.ok(list.props.ListHeaderComponent, 'the filmstrip and summary ride the header');
+  assert.equal(typeof list.props.renderItem, 'function');
+  assert.equal(list.props.testID, 'scroll-review',
+    'the list is the page scroll container, not nested inside another one');
+
+  const windowed = h.listRender();
+  assert.equal(windowed.rowCount, 31, 'one session and thirty notes all reach the list');
+  assert.ok(windowed.mounted < windowed.rowCount,
+    `the first paint mounts a window, not the whole day (mounted ${windowed.mounted} of ${windowed.rowCount})`);
+  assert.ok(windowed.mounted <= 8,
+    `the initial mount is bounded by the viewport, not by entry count (was ${windowed.mounted})`);
+
+  // Scrolling extends the window until every entry has been reached.
+  let mounted = windowed.mounted;
+  for (let pass = 0; pass < 12 && mounted < windowed.rowCount; pass += 1) {
+    mounted = h.flashList.scroll(6, 'scroll-review');
+  }
+  assert.equal(mounted, windowed.rowCount, 'scrolling reaches the last entry — nothing is unreachable');
+
+  // Switching to the trend view must leave the virtualised list behind: that
+  // branch is a fixed set of cards, so it keeps the plain scroll view.
+  const segmented = nodes(tree, node => node.type === 'YanjiPaperSegmentedControl')[0];
+  segmented.props.onChange('trend');
+  const trendTree = h.render();
+  assert.equal(nodes(trendTree, node => node.type === 'FlashList').length, 0,
+    'the trend view is not a virtualised list');
+  assert.ok(nodes(trendTree, node => node.type === 'ScrollView').length > 0,
+    'the trend view keeps its plain scroll view');
 });
 
 test('a review still loading shows no staleness banner', () => {

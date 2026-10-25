@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
@@ -305,19 +306,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const spectrum = distribution.map(slice => ({ id: slice.subjectId, label: slice.subjectName,
     seconds: slice.minutes * 60, color: slice.subjectColor || colors.secondary }));
 
-  return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
-    <ScrollView testID="scroll-review" style={{ flex: 1 }}
-      showsVerticalScrollIndicator={false} overScrollMode="never"
-      onScrollBeginDrag={() => setTimelineMenu(null)}
-      onMomentumScrollBegin={() => setTimelineMenu(null)}
-      // While the menu is up its backdrop owns every touch; hide the list from
-      // TalkBack too, so the modal panel is the only thing being read.
-      accessibilityElementsHidden={timelineMenu !== null}
-      importantForAccessibility={timelineMenu ? 'no-hide-descendants' : 'auto'}
-      contentContainerStyle={{
-        // The Focus page sets the page-top rhythm for all three tabs.
-        paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: contentPadding,
-      }}>
+  const pageHeader = (
+    <>
       {/* The page title stands alone: the window (year / week) is already spelled
           out by the filmstrip and the period bar below, so an eyebrow above the
           title only repeated it. The view switch rides the right edge as a
@@ -348,65 +338,97 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           style={{ marginTop: YanjiSpacing.md }}
         />
       ) : null}
+    </>
+  );
 
-      {view === 'timeline' ? (
-        <>
-          <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
-          <DaySummary snapshot={snapshot} />
-          <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
+  const timelineHeader = (
+    <>
+      {pageHeader}
+      <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
+      <DaySummary snapshot={snapshot} />
+      <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
+      {/* The rows used to sit under this gap inside their own wrapper. Now they
+          are list items, so the header has to carry the separation itself. */}
+      <View style={{ height: YanjiSpacing.lg }} />
+    </>
+  );
 
-          <Timeline
-            entries={entries}
+  const trendBody = (
+    <>
+      {pageHeader}
+      <PeriodSelectorBar
+        scope={scope}
+        anchorDate={date}
+        onScopeChange={setScope}
+        onPrevious={() => {
+          if (scope === 'TODAY') setDate(prev => shiftIsoDate(prev, -1));
+          else if (scope === 'CALENDAR_WEEK') setDate(prev => shiftIsoDate(prev, -7));
+          else setDate(prev => shiftMonthAnchor(prev, -1));
+        }}
+        onNext={() => {
+          if (scope === 'TODAY') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 1), todayIso()));
+          else if (scope === 'CALENDAR_WEEK') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 7), todayIso()));
+          else setDate(prev => stepMonthForwardWithinToday(prev, todayIso()));
+        }}
+        canStepForward={date < todayIso()}
+      />
+
+      <TrendSummary
+        overview={overview}
+        previousOverview={previousOverview}
+        scope={scope}
+        deltaLabel={delta.label}
+        deltaPercent={deltaPercent}
+        goalDays={goalDays}
+        chartWidth={chartWidth}
+        onChartLayout={setChartWidth}
+        columns={columns}
+        peak={peak}
+        hourBuckets={hourBuckets}
+        peakHour={peakHour}
+        hourCenters={hourCenters}
+        axisLabelItems={axisLabelItems}
+        preciseSessionCount={preciseSessions.length}
+        fontScale={fontScale}
+        distribution={distribution}
+        spectrum={spectrum}
+      />
+    </>
+  );
+
+  const listProps = {
+    testID: 'scroll-review',
+    showsVerticalScrollIndicator: false,
+    overScrollMode: 'never' as const,
+    onScrollBeginDrag: () => setTimelineMenu(null),
+    onMomentumScrollBegin: () => setTimelineMenu(null),
+    // While the menu is up its backdrop owns every touch; hide the list from
+    // TalkBack too, so the modal panel is the only thing being read.
+    accessibilityElementsHidden: timelineMenu !== null,
+    importantForAccessibility: timelineMenu ? 'no-hide-descendants' as const : 'auto' as const,
+    contentContainerStyle: {
+      // The Focus page sets the page-top rhythm for all three tabs.
+      paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: contentPadding,
+    },
+  };
+
+  return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+    {view === 'timeline'
+      ? <FlashList
+          {...listProps}
+          data={entries}
+          keyExtractor={entry => entry.key}
+          ListHeaderComponent={timelineHeader}
+          renderItem={({ item, index }) => <TimelineItem entry={item}
+            isFirst={index === 0} isLast={index === entries.length - 1}
             busyNote={busyNote !== null}
             onEditNote={note => {
               setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
               setConfirmDeleteNote(false);
             }}
-            onOpenMenu={(entry, anchor) => setTimelineMenu({ entry, anchor })}
-          />
-        </>
-      ) : (
-        <>
-          <PeriodSelectorBar
-            scope={scope}
-            anchorDate={date}
-            onScopeChange={setScope}
-            onPrevious={() => {
-              if (scope === 'TODAY') setDate(prev => shiftIsoDate(prev, -1));
-              else if (scope === 'CALENDAR_WEEK') setDate(prev => shiftIsoDate(prev, -7));
-              else setDate(prev => shiftMonthAnchor(prev, -1));
-            }}
-            onNext={() => {
-              if (scope === 'TODAY') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 1), todayIso()));
-              else if (scope === 'CALENDAR_WEEK') setDate(prev => stepForwardWithinToday(shiftIsoDate(prev, 7), todayIso()));
-              else setDate(prev => stepMonthForwardWithinToday(prev, todayIso()));
-            }}
-            canStepForward={date < todayIso()}
-          />
-
-          <TrendSummary
-            overview={overview}
-            previousOverview={previousOverview}
-            scope={scope}
-            deltaLabel={delta.label}
-            deltaPercent={deltaPercent}
-            goalDays={goalDays}
-            chartWidth={chartWidth}
-            onChartLayout={setChartWidth}
-            columns={columns}
-            peak={peak}
-            hourBuckets={hourBuckets}
-            peakHour={peakHour}
-            hourCenters={hourCenters}
-            axisLabelItems={axisLabelItems}
-            preciseSessionCount={preciseSessions.length}
-            fontScale={fontScale}
-            distribution={distribution}
-            spectrum={spectrum}
-          />
-        </>
-      )}
-    </ScrollView>
+            onOpenMenu={(entry, anchor) => setTimelineMenu({ entry, anchor })} />}
+        />
+      : <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>}
 
     {timelineMenu ? (
       <TimelineActionPopover
@@ -598,26 +620,12 @@ function DaySummary({ snapshot }: {
 
 // ---------------------------------------------------------------------------
 // The timeline — one spine, clock on the left, event on the right
+//
+// The rows are rendered by the page's own FlashList (`ListHeaderComponent`
+// carries the filmstrip and summary), so there is no local list wrapper here:
+// a list nested inside the page's scroll view never receives a viewport height
+// and therefore cannot recycle anything.
 // ---------------------------------------------------------------------------
-
-function Timeline({ entries, busyNote, onEditNote, onOpenMenu }: {
-  entries: readonly TimelineEntry[];
-  busyNote: boolean;
-  onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
-  onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const { typography } = paper;
-  return <View style={{ marginTop: YanjiSpacing.lg }}>
-    {entries.map((entry, index) => <TimelineItem key={entry.key} entry={entry}
-      isFirst={index === 0} isLast={index === entries.length - 1}
-      busyNote={busyNote}
-      onEditNote={onEditNote} onOpenMenu={onOpenMenu} />)}
-
-
-
-  </View>;
-}
 
 function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu }: {
   entry: TimelineEntry;

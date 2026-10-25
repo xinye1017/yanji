@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTypeScript } from './framework/load-typescript.js';
+import { createFlashListDouble } from './framework/flash-list-double.js';
 
 const tokens = loadTypeScript('src/theme/tokens.ts');
 const theme = {
@@ -41,6 +42,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
   const states = {};
   let index = 0;
   const calls = [];
+  const flashList = createFlashListDouble();
   const names = [
     'YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiDayRhythmChart', 'YanjiPaperSectionHeading',
@@ -64,6 +66,10 @@ function todayHarness(snapshot, nativeOverrides = {}) {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
       useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 2 }),
     },
+    // Both pages now scroll through FlashList. The shared double mounts only a
+    // window of cells, so these tests keep reading the rendered rows without
+    // pretending that every row is mounted at once.
+    '@shopify/flash-list': flashList,
     'react-native-reanimated': {
       Easing: { out: value => value, in: value => value, cubic: 'cubic' },
       runOnJS: callback => callback,
@@ -136,6 +142,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
   const states = {};
   let index = 0;
   const calls = [];
+  const flashList = createFlashListDouble();
   const names = [
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
     'YanjiIcon', 'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
@@ -159,6 +166,8 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
       useWindowDimensions: () => ({ fontScale: 1, width: 390, height: 844 }),
     },
+    // Same windowed double as the Today harness.
+    '@shopify/flash-list': flashList,
     'react-native-reanimated': { useReducedMotion: () => true },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
     '../bridge': {
