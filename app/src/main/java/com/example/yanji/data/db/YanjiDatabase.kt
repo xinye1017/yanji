@@ -24,7 +24,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -753,6 +753,26 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v26 → v27: index the same effective end already used by daily overlap
+         * queries. Historical endTime/duration and every domain field are left
+         * intact. Once populated, today can seek by the effective end instead of
+         * checking every completed session that started before tomorrow.
+         */
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE focus_sessions ADD COLUMN effectiveEndTime INTEGER NOT NULL DEFAULT 0")
+                connection.exec(
+                    "UPDATE focus_sessions SET effectiveEndTime = " +
+                        "CASE WHEN endTime > startTime THEN endTime ELSE startTime + durationSeconds * 1000 END"
+                )
+                connection.exec(
+                    "CREATE INDEX IF NOT EXISTS `index_focus_sessions_status_effectiveEndTime_startTime` " +
+                        "ON `focus_sessions` (`status`, `effectiveEndTime`, `startTime`)"
+                )
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -784,7 +804,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_22_23,
             MIGRATION_23_24,
             MIGRATION_24_25,
-            MIGRATION_25_26
+            MIGRATION_25_26,
+            MIGRATION_26_27
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

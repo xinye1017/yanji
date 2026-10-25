@@ -1,5 +1,6 @@
 package com.example.yanji.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -27,7 +28,8 @@ import org.json.JSONArray
     indices = [
         Index("startTime"),
         Index(value = ["status", "startTime", "subjectId", "subjectName", "durationSeconds"]),
-        Index(value = ["taskId", "status", "durationSeconds"])
+        Index(value = ["taskId", "status", "durationSeconds"]),
+        Index(value = ["status", "effectiveEndTime", "startTime"])
     ]
 )
 data class FocusSessionEntity(
@@ -46,6 +48,16 @@ data class FocusSessionEntity(
     val status: String = "COMPLETED",
     val createdAt: Long = System.currentTimeMillis()
 ) {
+    /**
+     * Query-only projection of the existing end-time fallback. This is not a
+     * second timer fact: domain/backup models still use endTime and duration.
+     * Keeping it outside the data-class constructor makes copy(startTime = …,
+     * durationSeconds = …) recompute it instead of copying a stale projection.
+     * Room populates this column when reading and binds it on every DAO insert.
+     */
+    @ColumnInfo(defaultValue = "0")
+    var effectiveEndTime: Long = if (endTime > startTime) endTime else startTime + durationSeconds * 1000L
+
     fun toDomainModel(): FocusSession {
         return FocusSession(
             id = id,

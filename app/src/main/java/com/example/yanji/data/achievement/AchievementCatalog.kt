@@ -2,16 +2,6 @@ package com.example.yanji.data.achievement
 
 import com.example.yanji.data.AchievementCategory
 import com.example.yanji.data.AchievementRarity
-import com.example.yanji.data.CheckIn
-import com.example.yanji.data.ExamSession
-import com.example.yanji.data.FocusSession
-import com.example.yanji.data.NoteEntry
-import com.example.yanji.data.SubjectCatalog
-import com.example.yanji.data.checkin.CheckInLogic
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 
 /**
  * 结构化成就定义数据模型。
@@ -29,12 +19,7 @@ data class AchievementDef(
     val isHidden: Boolean = false,
     val seriesId: String? = null,
     val seriesOrder: Int = 0,
-    val calculateProgress: (
-        focusSessions: List<FocusSession>,
-        examSessions: List<ExamSession>,
-        noteEntries: List<NoteEntry>,
-        checkIns: List<CheckIn>
-    ) -> Long
+    val calculateProgress: (AchievementFacts) -> Long
 )
 
 /**
@@ -51,34 +36,6 @@ object AchievementCatalog {
     const val SERIES_EXAM_COUNT = "series_exam_count"
     const val SERIES_REVIEW_COUNT = "series_review_count"
 
-    private fun isMorning(timeMs: Long): Boolean {
-        if (timeMs <= 0) return false
-        val lt = Instant.ofEpochMilli(timeMs).atZone(ZoneId.systemDefault()).toLocalTime()
-        return !lt.isAfter(LocalTime.of(8, 0))
-    }
-
-    private fun isNight2330(timeMs: Long): Boolean {
-        if (timeMs <= 0) return false
-        val lt = Instant.ofEpochMilli(timeMs).atZone(ZoneId.systemDefault()).toLocalTime()
-        return !lt.isBefore(LocalTime.of(23, 30)) || lt.isBefore(LocalTime.of(4, 0))
-    }
-
-    private fun isNight2300(timeMs: Long): Boolean {
-        if (timeMs <= 0) return false
-        val lt = Instant.ofEpochMilli(timeMs).atZone(ZoneId.systemDefault()).toLocalTime()
-        return !lt.isBefore(LocalTime.of(23, 0)) || lt.isBefore(LocalTime.of(4, 0))
-    }
-
-    private fun dateKey(timeMs: Long): String {
-        return Instant.ofEpochMilli(timeMs).atZone(ZoneId.systemDefault()).toLocalDate().toString()
-    }
-
-    private fun isMath(subjectId: String, subjectName: String): Boolean {
-        return SubjectCatalog.categoryIdOf(subjectId) == "math" ||
-            subjectId.contains("math", ignoreCase = true) ||
-            subjectName.contains("数")
-    }
-
     val definitions: List<AchievementDef> = listOf(
         // ==========================================
         // 1. 研途启程 (JOURNEY) - 前期高频正反馈
@@ -93,9 +50,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "千里之行，始于足下。你的研途第一步已经坚定踏出！",
-            calculateProgress = { focus, exam, _, _ ->
-                (focus.size + exam.size).toLong().coerceAtMost(1L)
-            }
+            calculateProgress = { it.sessionCount.coerceAtMost(1L) }
         ),
         AchievementDef(
             id = "journey_checkin_first",
@@ -107,9 +62,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "无论前路漫漫，今天你已按时赴约。",
-            calculateProgress = { _, _, _, checkIns ->
-                checkIns.size.toLong().coerceAtMost(1L)
-            }
+            calculateProgress = { it.checkInCount.coerceAtMost(1L) }
         ),
         AchievementDef(
             id = "journey_journal_first",
@@ -121,9 +74,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "篇",
             rewardQuote = "笔尖划过纸页的沙沙声，是内心安定沉静的力量。",
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(1L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(1L) }
         ),
         AchievementDef(
             id = "journey_exam_first",
@@ -135,9 +86,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "场",
             rewardQuote = "未曾登台，焉知锋芒？第一场实战模考顺利收官！",
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(1L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(1L) }
         ),
 
         // ==========================================
@@ -155,10 +104,7 @@ object AchievementCatalog {
             rewardQuote = "一小时的专注，星火微芒亦可燎原。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 1,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(1L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(1L) }
         ),
         AchievementDef(
             id = "focus_5h",
@@ -172,10 +118,7 @@ object AchievementCatalog {
             rewardQuote = "五小时积累，专注渐成习惯。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 2,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(5L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(5L) }
         ),
         AchievementDef(
             id = "focus_10h",
@@ -189,10 +132,7 @@ object AchievementCatalog {
             rewardQuote = "十小时的专注沉淀，思维的齿轮已开始全速运转。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 3,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(10L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(10L) }
         ),
         AchievementDef(
             id = "focus_25h",
@@ -206,10 +146,7 @@ object AchievementCatalog {
             rewardQuote = "步履不停，日拱一卒，行稳方能致远。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 4,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(25L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(25L) }
         ),
         AchievementDef(
             id = "focus_50h",
@@ -223,10 +160,7 @@ object AchievementCatalog {
             rewardQuote = "半百学时，耐得住寂寞方能守得住繁华。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 5,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(50L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(50L) }
         ),
         AchievementDef(
             id = "focus_100h",
@@ -240,10 +174,7 @@ object AchievementCatalog {
             rewardQuote = "百小时淬炼！每一分汗水都在为你筑起高分上岸的城墙！",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 6,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(100L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(100L) }
         ),
         AchievementDef(
             id = "focus_250h",
@@ -257,10 +188,7 @@ object AchievementCatalog {
             rewardQuote = "二百五十小时。炉火纯青，渐入化境。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 7,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(250L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(250L) }
         ),
         AchievementDef(
             id = "focus_500h",
@@ -274,10 +202,7 @@ object AchievementCatalog {
             rewardQuote = "积土成山，风雨兴焉；五百小时已是峰峦耸峙。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 8,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(500L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(500L) }
         ),
         AchievementDef(
             id = "focus_1000h",
@@ -291,10 +216,7 @@ object AchievementCatalog {
             rewardQuote = "一千小时。时间不会说谎。",
             seriesId = SERIES_FOCUS_HOURS,
             seriesOrder = 9,
-            calculateProgress = { focus, exam, _, _ ->
-                val secs = focus.sumOf { it.durationSeconds } + exam.sumOf { it.actualDurationSeconds }
-                (secs / 3600L).coerceAtMost(1000L)
-            }
+            calculateProgress = { (it.studySeconds / 3600L).coerceAtMost(1000L) }
         ),
 
         // 单次专注挑战
@@ -310,11 +232,7 @@ object AchievementCatalog {
             rewardQuote = "沉入书海四十五分钟，世界静止，唯思绪奔涌。",
             seriesId = SERIES_SINGLE_FOCUS,
             seriesOrder = 1,
-            calculateProgress = { focus, exam, _, _ ->
-                val maxFocusMins = focus.maxOfOrNull { it.durationSeconds }?.let { it / 60L } ?: 0L
-                val maxExamMins = exam.maxOfOrNull { it.actualDurationSeconds }?.let { it / 60L } ?: 0L
-                maxOf(maxFocusMins, maxExamMins).coerceAtMost(45L)
-            }
+            calculateProgress = { (it.longestSessionSeconds / 60L).coerceAtMost(45L) }
         ),
         AchievementDef(
             id = "focus_single_90m",
@@ -328,11 +246,7 @@ object AchievementCatalog {
             rewardQuote = "一个半小时的潜心深潜，知识的轮廓愈发清晰。",
             seriesId = SERIES_SINGLE_FOCUS,
             seriesOrder = 2,
-            calculateProgress = { focus, exam, _, _ ->
-                val maxFocusMins = focus.maxOfOrNull { it.durationSeconds }?.let { it / 60L } ?: 0L
-                val maxExamMins = exam.maxOfOrNull { it.actualDurationSeconds }?.let { it / 60L } ?: 0L
-                maxOf(maxFocusMins, maxExamMins).coerceAtMost(90L)
-            }
+            calculateProgress = { (it.longestSessionSeconds / 60L).coerceAtMost(90L) }
         ),
         AchievementDef(
             id = "focus_deep_2h",
@@ -346,11 +260,7 @@ object AchievementCatalog {
             rewardQuote = "心无旁骛，物我两忘。两个小时的极限入定，这就是强者的定力！",
             seriesId = SERIES_SINGLE_FOCUS,
             seriesOrder = 3,
-            calculateProgress = { focus, exam, _, _ ->
-                val maxFocusMins = focus.maxOfOrNull { it.durationSeconds }?.let { it / 60L } ?: 0L
-                val maxExamMins = exam.maxOfOrNull { it.actualDurationSeconds }?.let { it / 60L } ?: 0L
-                maxOf(maxFocusMins, maxExamMins).coerceAtMost(120L)
-            }
+            calculateProgress = { (it.longestSessionSeconds / 60L).coerceAtMost(120L) }
         ),
         AchievementDef(
             id = "focus_single_180m",
@@ -364,11 +274,7 @@ object AchievementCatalog {
             rewardQuote = "三小时不移方寸。书山有路，你已化身苦行之舟。",
             seriesId = SERIES_SINGLE_FOCUS,
             seriesOrder = 4,
-            calculateProgress = { focus, exam, _, _ ->
-                val maxFocusMins = focus.maxOfOrNull { it.durationSeconds }?.let { it / 60L } ?: 0L
-                val maxExamMins = exam.maxOfOrNull { it.actualDurationSeconds }?.let { it / 60L } ?: 0L
-                maxOf(maxFocusMins, maxExamMins).coerceAtMost(180L)
-            }
+            calculateProgress = { (it.longestSessionSeconds / 60L).coerceAtMost(180L) }
         ),
 
         // ==========================================
@@ -386,11 +292,7 @@ object AchievementCatalog {
             rewardQuote = "事不过三，三日已成势头。",
             seriesId = SERIES_STREAK,
             seriesOrder = 1,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(3L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(3L) }
         ),
         AchievementDef(
             id = "streak_7_days",
@@ -404,11 +306,7 @@ object AchievementCatalog {
             rewardQuote = "整整一周！习惯的齿轮已咬合，前进不再需要过多挣扎。",
             seriesId = SERIES_STREAK,
             seriesOrder = 2,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(7L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(7L) }
         ),
         AchievementDef(
             id = "streak_14_days",
@@ -422,11 +320,7 @@ object AchievementCatalog {
             rewardQuote = "半月之功，严谨自律，无惧风雨。",
             seriesId = SERIES_STREAK,
             seriesOrder = 3,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(14L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(14L) }
         ),
         AchievementDef(
             id = "streak_30_days",
@@ -440,11 +334,7 @@ object AchievementCatalog {
             rewardQuote = "整整一个月！无论风雨从未间断，你拥有考研最可贵的毅力！",
             seriesId = SERIES_STREAK,
             seriesOrder = 4,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(30L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(30L) }
         ),
         AchievementDef(
             id = "streak_60_days",
@@ -458,11 +348,7 @@ object AchievementCatalog {
             rewardQuote = "六十个昼夜的守望，自律早已刻入骨髓。",
             seriesId = SERIES_STREAK,
             seriesOrder = 5,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(60L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(60L) }
         ),
         AchievementDef(
             id = "streak_100_days",
@@ -476,11 +362,7 @@ object AchievementCatalog {
             rewardQuote = "百日筑基！跨越漫长周期的坚守，已蜕变成沉稳的王者。",
             seriesId = SERIES_STREAK,
             seriesOrder = 6,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(100L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(100L) }
         ),
         AchievementDef(
             id = "streak_180_days",
@@ -494,11 +376,7 @@ object AchievementCatalog {
             rewardQuote = "半年苦修。青灯黄卷，行者无疆。",
             seriesId = SERIES_STREAK,
             seriesOrder = 7,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(180L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(180L) }
         ),
         AchievementDef(
             id = "streak_300_days",
@@ -512,11 +390,7 @@ object AchievementCatalog {
             rewardQuote = "三百日未辍。道阻且长，行则将至。",
             seriesId = SERIES_STREAK,
             seriesOrder = 8,
-            calculateProgress = { _, _, _, checkIns ->
-                val cur = CheckInLogic.currentStreak(checkIns.map { it.date }.toSet(), System.currentTimeMillis()).toLong()
-                val maxH = checkIns.maxOfOrNull { it.streak.toLong() } ?: 0L
-                maxOf(cur, maxH).coerceAtMost(300L)
-            }
+            calculateProgress = { it.checkInStreak.coerceAtMost(300L) }
         ),
         AchievementDef(
             id = "streak_restart",
@@ -528,20 +402,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "跌倒并不致命，致命的是不再站起。重新出发，更加坚定！",
-            calculateProgress = { _, _, _, checkIns ->
-                val hasSeven = checkIns.any { it.streak >= 7 }
-                val sorted = checkIns.sortedBy { it.date }
-                var hadBreak = false
-                for (i in 0 until sorted.size - 1) {
-                    val d1 = LocalDate.parse(sorted[i].date)
-                    val d2 = LocalDate.parse(sorted[i + 1].date)
-                    if (d2.toEpochDay() - d1.toEpochDay() >= 4L) {
-                        hadBreak = true
-                        break
-                    }
-                }
-                if (hasSeven && (hadBreak || sorted.any { it.streak == 1 })) 1L else 0L
-            }
+            calculateProgress = { if (it.checkInRestart) 1L else 0L }
         ),
 
         // ==========================================
@@ -559,9 +420,7 @@ object AchievementCatalog {
             rewardQuote = "三经沙场，试卷已不再令你心跳失序。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 1,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(3L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(3L) }
         ),
         AchievementDef(
             id = "exam_5_count",
@@ -575,9 +434,7 @@ object AchievementCatalog {
             rewardQuote = "宝剑锋从磨砺出，考场节奏已然在心。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 2,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(5L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(5L) }
         ),
         AchievementDef(
             id = "exam_10_count",
@@ -591,9 +448,7 @@ object AchievementCatalog {
             rewardQuote = "十年磨一剑，十场真题实测，锋芒初露。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 3,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(10L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(10L) }
         ),
         AchievementDef(
             id = "exam_20_count",
@@ -607,9 +462,7 @@ object AchievementCatalog {
             rewardQuote = "二十度交卷，大将之风，波澜不惊。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 4,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(20L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(20L) }
         ),
         AchievementDef(
             id = "exam_30_count",
@@ -623,9 +476,7 @@ object AchievementCatalog {
             rewardQuote = "三十场硝烟淬炼，考场之上已无生疏之题。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 5,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(30L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(30L) }
         ),
         AchievementDef(
             id = "exam_50_count",
@@ -639,9 +490,7 @@ object AchievementCatalog {
             rewardQuote = "五十场全真模考。千锤百炼，势不可挡。",
             seriesId = SERIES_EXAM_COUNT,
             seriesOrder = 6,
-            calculateProgress = { _, exam, _, _ ->
-                exam.size.toLong().coerceAtMost(50L)
-            }
+            calculateProgress = { it.examCount.coerceAtMost(50L) }
         ),
         AchievementDef(
             id = "exam_endurance_120m",
@@ -653,13 +502,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "两小时以上高强度推导，坚持到底就是胜利。",
-            calculateProgress = { _, exam, _, _ ->
-                val ok = exam.any {
-                    it.plannedDurationSeconds >= 120 * 60L &&
-                        it.actualDurationSeconds >= (it.plannedDurationSeconds * 0.9).toLong()
-                }
-                if (ok) 1L else 0L
-            }
+            calculateProgress = { if (it.enduranceExam) 1L else 0L }
         ),
         AchievementDef(
             id = "exam_full_180m",
@@ -671,10 +514,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "整整 180 分钟全真极限交卷。这一卷，直面终局！",
-            calculateProgress = { _, exam, _, _ ->
-                val ok = exam.any { it.actualDurationSeconds >= 180 * 60L }
-                if (ok) 1L else 0L
-            }
+            calculateProgress = { if (it.fullExam) 1L else 0L }
         ),
 
         // ==========================================
@@ -692,10 +532,7 @@ object AchievementCatalog {
             rewardQuote = "九十分及格之槛已破，数学大厦根基稳固。",
             seriesId = SERIES_MATH,
             seriesOrder = 1,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(90L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(90L) }
         ),
         AchievementDef(
             id = "math_score_100",
@@ -709,10 +546,7 @@ object AchievementCatalog {
             rewardQuote = "踏破三位数大关！数学不再是拦路虎，而是你的得分利器。",
             seriesId = SERIES_MATH,
             seriesOrder = 2,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(100L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(100L) }
         ),
         AchievementDef(
             id = "math_score_110",
@@ -726,10 +560,7 @@ object AchievementCatalog {
             rewardQuote = "一百一十分。基础扎实，难题亦有一战之力。",
             seriesId = SERIES_MATH,
             seriesOrder = 3,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(110L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(110L) }
         ),
         AchievementDef(
             id = "math_score_120",
@@ -743,10 +574,7 @@ object AchievementCatalog {
             rewardQuote = "一百二十分！稳居名校竞争梯队，傲视群雄！",
             seriesId = SERIES_MATH,
             seriesOrder = 4,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(120L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(120L) }
         ),
         AchievementDef(
             id = "math_score_130",
@@ -760,10 +588,7 @@ object AchievementCatalog {
             rewardQuote = "130 分。真正的高分区，从这里开始。",
             seriesId = SERIES_MATH,
             seriesOrder = 5,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(130L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(130L) }
         ),
         AchievementDef(
             id = "math_score_140",
@@ -777,10 +602,7 @@ object AchievementCatalog {
             rewardQuote = "山高万仞，你已经站到了极少数人能够抵达的位置。",
             seriesId = SERIES_MATH,
             seriesOrder = 6,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(140L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(140L) }
         ),
         AchievementDef(
             id = "math_score_145",
@@ -794,10 +616,7 @@ object AchievementCatalog {
             rewardQuote = "距离完美，只剩最后五分。",
             seriesId = SERIES_MATH,
             seriesOrder = 7,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(145L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(145L) }
         ),
         AchievementDef(
             id = "math_score_150",
@@ -811,10 +630,7 @@ object AchievementCatalog {
             rewardQuote = "150 / 150。此卷无憾。",
             seriesId = SERIES_MATH,
             seriesOrder = 8,
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) }
-                mathExams.mapNotNull { it.score }.maxOrNull()?.toLong()?.coerceAtMost(150L) ?: 0L
-            }
+            calculateProgress = { it.mathBestScore.coerceAtMost(150L) }
         ),
         AchievementDef(
             id = "math_personal_best",
@@ -826,16 +642,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "超越过去的自己，是最真实的成长！",
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) && it.score != null }
-                    .sortedBy { it.startTime }
-                if (mathExams.size < 2) 0L
-                else {
-                    val maxPrev = mathExams.dropLast(1).mapNotNull { it.score }.maxOrNull() ?: 0.0
-                    val latest = mathExams.last().score ?: 0.0
-                    if (latest > maxPrev) 1L else 0L
-                }
-            }
+            calculateProgress = { if (it.mathPersonalBest) 1L else 0L }
         ),
         AchievementDef(
             id = "math_jump_10",
@@ -847,21 +654,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "十余分的大跨越！厚积薄发的顿悟时刻！",
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) && it.score != null }
-                    .sortedBy { it.startTime }
-                var triggered = false
-                var currentMax = 0
-                for (item in mathExams) {
-                    val s = item.score?.toInt() ?: 0
-                    if (currentMax > 0 && s - currentMax >= 10) {
-                        triggered = true
-                        break
-                    }
-                    if (s > currentMax) currentMax = s
-                }
-                if (triggered) 1L else 0L
-            }
+            calculateProgress = { if (it.mathJump) 1L else 0L }
         ),
         AchievementDef(
             id = "math_breakthrough",
@@ -873,27 +666,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "撞碎平台期的坚壁！耐住寂寞，终见光明！",
-            calculateProgress = { _, exam, _, _ ->
-                val mathExams = exam.filter { isMath(it.subjectId, it.subjectName) && it.score != null }
-                    .sortedBy { it.startTime }
-                var plateauCount = 0
-                var currentMax = 0
-                var broken = false
-                for (item in mathExams) {
-                    val s = item.score?.toInt() ?: 0
-                    if (s > currentMax) {
-                        if (plateauCount >= 3) {
-                            broken = true
-                            break
-                        }
-                        currentMax = s
-                        plateauCount = 0
-                    } else {
-                        plateauCount++
-                    }
-                }
-                if (broken) 1L else 0L
-            }
+            calculateProgress = { if (it.mathBreakthrough) 1L else 0L }
         ),
 
         // ==========================================
@@ -911,9 +684,7 @@ object AchievementCatalog {
             rewardQuote = "第一篇复盘。敢于直面问题的人，已经赢了一半。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 1,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(1L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(1L) }
         ),
         AchievementDef(
             id = "review_3",
@@ -927,9 +698,7 @@ object AchievementCatalog {
             rewardQuote = "吾日三省吾身，知得失而明进退。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 2,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(3L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(3L) }
         ),
         AchievementDef(
             id = "review_7",
@@ -943,9 +712,7 @@ object AchievementCatalog {
             rewardQuote = "七篇反思总结，让模糊的灵感沉淀为清晰的方法论。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 3,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(7L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(7L) }
         ),
         AchievementDef(
             id = "review_15",
@@ -959,9 +726,7 @@ object AchievementCatalog {
             rewardQuote = "半月反思，字字句句皆是研路心血。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 4,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(15L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(15L) }
         ),
         AchievementDef(
             id = "review_30",
@@ -975,9 +740,7 @@ object AchievementCatalog {
             rewardQuote = "三十篇深度复盘，你已拥有属于自己的错题心法。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 5,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(30L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(30L) }
         ),
         AchievementDef(
             id = "review_50",
@@ -991,9 +754,7 @@ object AchievementCatalog {
             rewardQuote = "五十篇凝练自省。知错能改，善莫大焉。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 6,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(50L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(50L) }
         ),
         AchievementDef(
             id = "review_100",
@@ -1007,9 +768,7 @@ object AchievementCatalog {
             rewardQuote = "百篇自省之书。以此为鉴，照亮远方。",
             seriesId = SERIES_REVIEW_COUNT,
             seriesOrder = 7,
-            calculateProgress = { _, _, notes, _ ->
-                notes.size.toLong().coerceAtMost(100L)
-            }
+            calculateProgress = { it.noteCount.coerceAtMost(100L) }
         ),
         AchievementDef(
             id = "review_within_24h",
@@ -1021,14 +780,7 @@ object AchievementCatalog {
             target = 1L,
             unit = "次",
             rewardQuote = "趁热打铁。考后二十四小时的复盘黄金期，你抓住了！",
-            calculateProgress = { _, exam, notes, _ ->
-                val ok = exam.any { e ->
-                    notes.any { j ->
-                        j.createdAt in e.endTime..(e.endTime + 86400000L)
-                    }
-                }
-                if (ok) 1L else 0L
-            }
+            calculateProgress = { if (it.reviewWithin24h) 1L else 0L }
         ),
         AchievementDef(
             id = "review_5_same_day",
@@ -1040,17 +792,7 @@ object AchievementCatalog {
             target = 5L,
             unit = "次",
             rewardQuote = "连续五场考后当天立克复盘！执行力就是你的超能力！",
-            calculateProgress = { _, exam, notes, _ ->
-                val sortedExams = exam.sortedBy { it.endTime }
-                var count = 0
-                for (e in sortedExams) {
-                    val examDay = dateKey(e.endTime)
-                    val hasSameDay = notes.any { j -> dateKey(j.createdAt) == examDay }
-                    if (hasSameDay) count++ else count = 0
-                    if (count >= 5) break
-                }
-                count.toLong().coerceAtMost(5L)
-            }
+            calculateProgress = { it.sameDayReviewStreak.coerceAtMost(5L) }
         ),
 
         // ==========================================
@@ -1067,25 +809,7 @@ object AchievementCatalog {
             unit = "天",
             rewardQuote = "晨光熹微，万籁俱寂，你与朝阳并肩而行。",
             isHidden = true,
-            calculateProgress = { focus, exam, _, _ ->
-                val morningDays = (focus.filter { isMorning(it.startTime) }.map { dateKey(it.startTime) } +
-                    exam.filter { isMorning(it.startTime) }.map { dateKey(it.startTime) })
-                    .distinct()
-                    .sorted()
-                var streak = 0
-                var maxStreak = 0
-                for (i in 0 until morningDays.size) {
-                    if (i == 0) {
-                        streak = 1
-                    } else {
-                        val d1 = LocalDate.parse(morningDays[i - 1])
-                        val d2 = LocalDate.parse(morningDays[i])
-                        if (d2.toEpochDay() - d1.toEpochDay() == 1L) streak++ else streak = 1
-                    }
-                    if (streak > maxStreak) maxStreak = streak
-                }
-                maxStreak.toLong().coerceAtMost(3L)
-            }
+            calculateProgress = { it.morningStreak.coerceAtMost(3L) }
         ),
         AchievementDef(
             id = "hidden_night_owl",
@@ -1098,10 +822,7 @@ object AchievementCatalog {
             unit = "次",
             rewardQuote = "深夜二十三点半的台灯，照亮的是未来的录取通知书。",
             isHidden = true,
-            calculateProgress = { focus, exam, _, _ ->
-                val ok = focus.any { isNight2330(it.endTime) } || exam.any { isNight2330(it.endTime) }
-                if (ok) 1L else 0L
-            }
+            calculateProgress = { if (it.nightOwl) 1L else 0L }
         ),
         AchievementDef(
             id = "hidden_day_and_night",
@@ -1114,18 +835,7 @@ object AchievementCatalog {
             unit = "次",
             rewardQuote = "朝披清晨露，晚顶漫天星。一日之内，尽览日月。",
             isHidden = true,
-            calculateProgress = { focus, exam, _, _ ->
-                val focusMorning = focus.filter { isMorning(it.startTime) || isMorning(it.endTime) }.map { dateKey(it.startTime) }.toSet()
-                val examMorning = exam.filter { isMorning(it.startTime) || isMorning(it.endTime) }.map { dateKey(it.startTime) }.toSet()
-                val morningDates = focusMorning + examMorning
-
-                val focusNight = focus.filter { isNight2300(it.endTime) }.map { dateKey(it.startTime) }.toSet()
-                val examNight = exam.filter { isNight2300(it.endTime) }.map { dateKey(it.startTime) }.toSet()
-                val nightDates = focusNight + examNight
-
-                val ok = morningDates.intersect(nightDates).isNotEmpty()
-                if (ok) 1L else 0L
-            }
+            calculateProgress = { if (it.dayAndNight) 1L else 0L }
         ),
         AchievementDef(
             id = "hidden_daily_10h",
@@ -1138,19 +848,7 @@ object AchievementCatalog {
             unit = "小时",
             rewardQuote = "一天十小时深度沉浸！心流无止境，学海任遨游。",
             isHidden = true,
-            calculateProgress = { focus, exam, _, _ ->
-                val allDaySecs = mutableMapOf<String, Long>()
-                focus.forEach {
-                    val k = dateKey(it.startTime)
-                    allDaySecs[k] = (allDaySecs[k] ?: 0L) + it.durationSeconds
-                }
-                exam.forEach {
-                    val k = dateKey(it.startTime)
-                    allDaySecs[k] = (allDaySecs[k] ?: 0L) + it.actualDurationSeconds
-                }
-                val maxHours = (allDaySecs.values.maxOrNull() ?: 0L) / 3600L
-                maxHours.coerceAtMost(10L)
-            }
+            calculateProgress = { (it.mostDaySeconds / 3600L).coerceAtMost(10L) }
         ),
         AchievementDef(
             id = "hidden_extreme_12h",
@@ -1163,19 +861,7 @@ object AchievementCatalog {
             unit = "小时",
             rewardQuote = "十二小时极限燃烧。这是属于拼命者的壮烈史诗。",
             isHidden = true,
-            calculateProgress = { focus, exam, _, _ ->
-                val allDaySecs = mutableMapOf<String, Long>()
-                focus.forEach {
-                    val k = dateKey(it.startTime)
-                    allDaySecs[k] = (allDaySecs[k] ?: 0L) + it.durationSeconds
-                }
-                exam.forEach {
-                    val k = dateKey(it.startTime)
-                    allDaySecs[k] = (allDaySecs[k] ?: 0L) + it.actualDurationSeconds
-                }
-                val maxHours = (allDaySecs.values.maxOrNull() ?: 0L) / 3600L
-                maxHours.coerceAtMost(12L)
-            }
+            calculateProgress = { (it.mostDaySeconds / 3600L).coerceAtMost(12L) }
         )
     )
 

@@ -48,8 +48,25 @@ data class CarryOverTaskRow(
     val actualSeconds: Long
 )
 
+/** One-row achievement aggregates; all persisted statuses intentionally participate. */
+data class AchievementSessionTotals(val count: Long, val seconds: Long, val longestSeconds: Long)
+
+/** Temporal rules need only these columns, never session notes/modes/ids. */
+data class AchievementSessionTimeRow(val startTime: Long, val endTime: Long, val durationSeconds: Long)
+
+/** Fractional scores and start order are retained for the mathematical rules. */
+data class AchievementScoreRow(val startTime: Long, val subjectId: String, val subjectName: String, val score: Double)
+
+data class AchievementCheckInRow(val date: String, val streak: Int)
+
 @Dao
 interface FocusSessionDao {
+    @Query("SELECT COUNT(*) AS count, COALESCE(SUM(durationSeconds), 0) AS seconds, COALESCE(MAX(durationSeconds), 0) AS longestSeconds FROM focus_sessions")
+    suspend fun getAchievementTotals(): AchievementSessionTotals
+
+    @Query("SELECT startTime, endTime, durationSeconds FROM focus_sessions")
+    suspend fun getAchievementTimes(): List<AchievementSessionTimeRow>
+
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC")
     fun getAll(): Flow<List<FocusSessionEntity>>
 
@@ -69,23 +86,40 @@ interface FocusSessionDao {
     ): List<FocusStatsRow>
 
     /**
-     * 与 [startInclusive, endExclusive) 有交集的已完成专注。
+     * 当天开始的已完成专注（每日时间轴与总时长）。
      *
-     * 与「按开始时间归属」的统计查询不同，这里按时间区间相交：
-     * 一条 23:40→00:10 的专注会同时出现在前一天和后一天的查询里。每日快照只用
-     * 它计算「参与次数」；时间轴与总时长仍按开始日期归属，因此同一条历史记录
-     * 只显示一次、只累计一次。
-     *
-     * `endTime` 缺失的历史行回退为 `startTime + durationSeconds * 1000`，与 JS
-     * 侧绘制节奏图时的回退口径一致。
+     * 按 `startTime` 归属：一条 23:40→00:10 的专注只属于开始日，第二天的时间轴不重复
+     * 展示它，时长也不切分。跨日那部分由 [countCompletedOverlapping] 单独计数。
      */
     @Query(
         "SELECT * FROM focus_sessions " +
-            "WHERE status = 'COMPLETED' AND startTime < :endExclusive " +
-            "AND (CASE WHEN endTime > startTime THEN endTime ELSE startTime + durationSeconds * 1000 END) > :startInclusive " +
+            "WHERE status = 'COMPLETED' AND startTime >= :startInclusive AND startTime < :endExclusive " +
             "ORDER BY startTime DESC"
     )
-    suspend fun getCompletedOverlapping(startInclusive: Long, endExclusive: Long): List<FocusSessionEntity>
+    suspend fun getCompletedStartingBetween(
+        startInclusive: Long,
+        endExclusive: Long
+    ): List<FocusSessionEntity>
+
+    /**
+     * 与 [startInclusive, endExclusive) 有交集的已完成专注条数（每日「参与次数」）。
+     *
+     * 与按开始日归属的明细查询不同，这里按时间区间相交：23:40→00:10 的专注在两天
+     * 各计一次。只返回 COUNT，因此跨日尾部不需要把整行搬进 CursorWindow。
+     *
+     * 走 `(status, effectiveEndTime, startTime)` 覆盖索引：先按结束时间定位到
+     * 「结束晚于当天开始」的行，再排除「开始晚于当天结束」的行。这与原先
+     * `startTime < :endExclusive AND 有效结束 > :startInclusive` 的结果完全一致，
+     * 但读取今天时不再逐条检查全部历史。`effectiveEndTime` 由 Entity 与 v27 迁移
+     * 按同一回退口径维护（endTime 缺失时用 startTime + durationSeconds * 1000）。
+     */
+    @Query(
+        "SELECT COUNT(*) FROM focus_sessions " +
+            "INDEXED BY `index_focus_sessions_status_effectiveEndTime_startTime` " +
+            "WHERE status = 'COMPLETED' " +
+            "AND effectiveEndTime > :startInclusive AND startTime < :endExclusive"
+    )
+    suspend fun countCompletedOverlapping(startInclusive: Long, endExclusive: Long): Int
 
     @Query(
         "SELECT COALESCE(SUM(durationSeconds), 0) FROM focus_sessions " +
@@ -146,6 +180,24 @@ interface FocusSessionDao {
 
 @Dao
 interface ExamSessionDao {
+    @Query("SELECT COUNT(*) AS count, COALESCE(SUM(actualDurationSeconds), 0) AS seconds, COALESCE(MAX(actualDurationSeconds), 0) AS longestSeconds FROM exam_sessions")
+    suspend fun getAchievementTotals(): AchievementSessionTotals
+
+    @Query("SELECT startTime, endTime, actualDurationSeconds AS durationSeconds FROM exam_sessions")
+    suspend fun getAchievementTimes(): List<AchievementSessionTimeRow>
+
+    @Query("SELECT startTime, subjectId, subjectName, score FROM exam_sessions WHERE score IS NOT NULL ORDER BY startTime DESC")
+    suspend fun getAchievementScores(): List<AchievementScoreRow>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM exam_sessions WHERE plannedDurationSeconds >= 7200 AND actualDurationSeconds >= CAST(plannedDurationSeconds * 0.9 AS INTEGER))")
+    suspend fun hasAchievementEnduranceExam(): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM exam_sessions AS e JOIN journal_entries AS j ON j.createdAt BETWEEN e.endTime AND e.endTime + 86400000)")
+    suspend fun hasAchievementReviewWithin24h(): Boolean
+
+    @Query("SELECT endTime FROM exam_sessions ORDER BY endTime ASC")
+    suspend fun getAchievementEndTimes(): List<Long>
+
     @Query("SELECT * FROM exam_sessions ORDER BY startTime DESC")
     fun getAll(): Flow<List<ExamSessionEntity>>
 
@@ -206,6 +258,12 @@ interface ExamSessionDao {
 
 @Dao
 interface NoteEntryDao {
+    @Query("SELECT DISTINCT createdAt FROM journal_entries")
+    suspend fun getAchievementCreatedTimes(): List<Long>
+
+    @Query("SELECT isResolved FROM journal_entries WHERE id = :id LIMIT 1")
+    suspend fun getResolvedById(id: String): Boolean?
+
     @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
     fun getAll(): Flow<List<NoteEntryEntity>>
 
@@ -367,6 +425,9 @@ interface ChatSessionDao {
 
 @Dao
 interface CheckInDao {
+    @Query("SELECT date, streak FROM check_ins ORDER BY date DESC")
+    suspend fun getAchievementRows(): List<AchievementCheckInRow>
+
     @Query("SELECT * FROM check_ins ORDER BY date DESC")
     fun getAllFlow(): Flow<List<CheckInEntity>>
 

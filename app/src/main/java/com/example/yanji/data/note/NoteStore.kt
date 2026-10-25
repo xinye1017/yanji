@@ -5,17 +5,13 @@ import com.example.yanji.data.db.NoteEntryEntity
 import com.example.yanji.data.db.YanjiDatabase
 import com.example.yanji.data.achievement.AchievementEvent
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import kotlinx.coroutines.launch
 
 /**
- * 日记的状态与动作归属者。
- *
- * 写入路径刻意只走 Room：内存列表由 DAO Flow 回灌，**不做双写**。
- * 这样「同一天只允许一条日记」与 `updatedAt` 的一致性都由
- * [addOrUpdate] 里的日期归一化保证，不会出现内存与库各说各话。
+ * 随笔动作归属者。Room 是唯一事实来源；不保留全历史内存镜像。
+ * v15 起按 id 归一化，一天允许多篇随笔；createdAt 仅在首次落库时生成。
  */
 internal class NoteStore(
     private val scope: CoroutineScope,
@@ -23,17 +19,6 @@ internal class NoteStore(
 ) {
 
     var onAchievementEvent: (suspend (AchievementEvent) -> Unit)? = null
-
-    private val _noteEntries = MutableStateFlow<List<NoteEntry>>(emptyList())
-    val noteEntries: StateFlow<List<NoteEntry>> = _noteEntries.asStateFlow()
-
-    fun bind(db: YanjiDatabase) {
-        scope.launch {
-            db.noteEntryDao().getAll().collect { entities ->
-                _noteEntries.value = entities.map { it.toDomainModel() }
-            }
-        }
-    }
 
     /**
      * 保存随笔。**以 Room 为唯一事实来源**。
@@ -48,14 +33,7 @@ internal class NoteStore(
      */
     fun addOrUpdate(entry: NoteEntry) {
         scope.launch {
-            val dao = dbProvider()?.noteEntryDao() ?: return@launch
-            val existing = dao.getById(entry.id)
-            val normalized = entry.copy(
-                createdAt = existing?.createdAt ?: entry.createdAt,
-                updatedAt = System.currentTimeMillis()
-            )
-            dao.insert(NoteEntryEntity.fromDomainModel(normalized))
-            onAchievementEvent?.invoke(AchievementEvent.NoteCreated(normalized))
+            addOrUpdateAndAwait(entry)
         }
     }
 
@@ -66,7 +44,7 @@ internal class NoteStore(
      * resolve，JS 侧紧接着的读取会漏掉这条记录。这里把同一条归一化规则原样搬过来
      * （按 id 保留首次 `createdAt`、刷新 `updatedAt`），只是把执行权交还调用方。
      *
-     * 仍然**只写 Room**：内存列表由 `bind()` 的 DAO Flow 回灌，不会出现双写。
+     * 仍然只写 Room；已有行的内容、收藏等编辑不触发成就读取。
      * [onAchievementEvent] 是 NoteStore 的私有回调，因此可等待写路径也必须放在这里。
      */
     suspend fun addOrUpdateAndAwait(entry: NoteEntry) {
@@ -77,7 +55,7 @@ internal class NoteStore(
             updatedAt = System.currentTimeMillis()
         )
         dao.insert(NoteEntryEntity.fromDomainModel(normalized))
-        onAchievementEvent?.invoke(AchievementEvent.NoteCreated(normalized))
+        if (existing == null) onAchievementEvent?.invoke(AchievementEvent.NoteCreated(normalized))
     }
 
     /**
@@ -91,7 +69,7 @@ internal class NoteStore(
     /**
      * 更新正文的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
      *
-     * 只写 Room，内存列表由 `bind()` 的 DAO Flow 回灌。**不触发**
+     * 只写 Room。**不触发**
      * [AchievementEvent.NoteCreated]：这是编辑既有随笔，不是新建。
      */
     suspend fun updateContentAndAwait(id: String, content: String): Boolean {
@@ -102,6 +80,22 @@ internal class NoteStore(
     /**
      * 更新疑点解决状态的**可等待版本**：返回 false 表示 id 不存在（或数据库未就绪）。
      */
+    /** Read only this row's resolved bit and persist its inverse in the same transaction. */
+    suspend fun toggleResolvedAndAwait(id: String): Boolean {
+        val db = dbProvider() ?: return false
+        // Writer-connection transaction rather than `withTransaction`: the latter
+        // only exists in the Android room-ktx artifact, and the JVM tests run
+        // against room-runtime-jvm where it is a NoSuchMethodError at runtime.
+        var toggled = false
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val current = db.noteEntryDao().getResolvedById(id) ?: return@immediateTransaction
+                toggled = setResolvedAndAwait(id, !current)
+            }
+        }
+        return toggled
+    }
+
     suspend fun setResolvedAndAwait(id: String, isResolved: Boolean): Boolean {
         val dao = dbProvider()?.noteEntryDao() ?: return false
         val now = System.currentTimeMillis()

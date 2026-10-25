@@ -1,5 +1,7 @@
 package com.example.yanji.data.achievement
 
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
@@ -53,96 +55,55 @@ object AchievementEventFilter {
         "streak_restart"
     )
 
-    fun candidatesFor(event: AchievementEvent): Set<String>? {
-        return when (event) {
-            is AchievementEvent.FocusCompleted -> FOCUS_CANDIDATES
-            is AchievementEvent.ExamCompleted -> EXAM_CANDIDATES
-            is AchievementEvent.NoteCreated -> JOURNAL_CANDIDATES
-            is AchievementEvent.CheckInRecorded -> CHECKIN_CANDIDATES
-            is AchievementEvent.ReconcileAll -> null // null means all 59
-        }
+    fun candidatesFor(event: AchievementEvent): Set<String>? = when (event) {
+        is AchievementEvent.FocusCompleted -> FOCUS_CANDIDATES
+        is AchievementEvent.ExamCompleted -> EXAM_CANDIDATES
+        is AchievementEvent.NoteCreated -> JOURNAL_CANDIDATES
+        is AchievementEvent.CheckInRecorded -> CHECKIN_CANDIDATES
+        is AchievementEvent.ReconcileAll -> null
     }
 }
 
-/**
- * 纯逻辑与事件驱动的成就评估器。
- *
- * 核心保障：
- * 1. 纯计算无副作用：[evaluate] 只根据输入数据返回应解锁的成就 ID 列表；
- * 2. 显式落库：[evaluateAndPersist] 只有在发现未解锁成就满足条件时才执行写入；
- * 3. 幂等：已解锁的成就直接跳过评估；数据库插入使用 INSERT OR IGNORE；
- * 4. 可恢复：[AchievementEvent.ReconcileAll] 安全网确保即使单次事件因进程崩溃丢失，亦可在启动时自动对齐。
- */
+/** Pure progress calculation plus an explicit, idempotent Room evaluation boundary. */
 class AchievementEvaluator(
     private val definitions: List<AchievementDef> = AchievementCatalog.definitions
 ) {
-
-    /**
-     * 纯函数：根据当前数据和事件类型评估应解锁的成就 ID。
-     *
-     * @param event 触发事件（用于过滤候选集）
-     * @param focusSessions 专注历史
-     * @param examSessions 模考历史
-     * @param noteEntries 日记历史
-     * @param checkIns 打卡历史
-     * @param unlockedIds 已经解锁的成就 ID 集合（避免重复计算）
-     * @return 本次新满足解锁条件且尚未解锁的成就 ID 列表
-     */
-    fun evaluate(
-        event: AchievementEvent,
-        focusSessions: List<FocusSession>,
-        examSessions: List<ExamSession>,
-        noteEntries: List<NoteEntry>,
-        checkIns: List<CheckIn>,
-        unlockedIds: Set<String>
-    ): List<String> {
+    internal fun pendingDefinitions(event: AchievementEvent, unlockedIds: Set<String>): List<AchievementDef> {
         val candidates = AchievementEventFilter.candidatesFor(event)
-        val newlyUnlocked = mutableListOf<String>()
-
-        for (def in definitions) {
-            // 1. 过滤已解锁
-            if (unlockedIds.contains(def.id)) continue
-
-            // 2. 过滤事件相关性
-            if (candidates != null && !candidates.contains(def.id)) continue
-
-            // 3. 计算进度
-            val progress = def.calculateProgress(focusSessions, examSessions, noteEntries, checkIns)
-            if (progress >= def.target) {
-                newlyUnlocked.add(def.id)
-            }
-        }
-
-        return newlyUnlocked
+        return definitions.filter { it.id !in unlockedIds && (candidates == null || it.id in candidates) }
     }
 
+    fun evaluate(event: AchievementEvent, facts: AchievementFacts, unlockedIds: Set<String>): List<String> =
+        pendingDefinitions(event, unlockedIds).filter { it.calculateProgress(facts) >= it.target }.map { it.id }
+
     /**
-     * 协调执行评估并执行显式幂等落库。
+     * Every event arrives after its business write. Read the persisted source, not the event's
+     * domain object or a possibly stale Flow mirror. Filter already-unlocked candidates before
+     * reading any facts; serializing the read/unlock transaction also prevents duplicate work.
      */
     suspend fun evaluateAndPersist(
         event: AchievementEvent,
         db: YanjiDatabase,
-        focusSessions: List<FocusSession>,
-        examSessions: List<ExamSession>,
-        noteEntries: List<NoteEntry>,
-        checkIns: List<CheckIn>,
-        unlockedIds: Set<String>,
         nowMs: Long = System.currentTimeMillis()
     ): List<String> {
-        val toUnlock = evaluate(
-            event = event,
-            focusSessions = focusSessions,
-            examSessions = examSessions,
-            noteEntries = noteEntries,
-            checkIns = checkIns,
-            unlockedIds = unlockedIds
-        )
-
-        if (toUnlock.isNotEmpty()) {
-            val entities = toUnlock.map { UnlockedAchievementEntity(it, nowMs) }
-            db.achievementDao().unlockAll(entities)
+        // The writer-connection pair instead of `withTransaction`: the latter is
+        // only in the Android room-ktx artifact, while the JVM tests resolve
+        // room-runtime-jvm and would crash with NoSuchMethodError. Both paths are
+        // the same serialized write transaction, so production and tests agree.
+        var unlocked: List<String> = emptyList()
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val unlockedIds = db.achievementDao().getUnlockedIds().toSet()
+                val pending = pendingDefinitions(event, unlockedIds)
+                if (pending.isEmpty()) return@immediateTransaction
+                val facts = AchievementFactsReader.read(db, pending, nowMs)
+                val toUnlock = pending.filter { it.calculateProgress(facts) >= it.target }.map { it.id }
+                if (toUnlock.isNotEmpty()) {
+                    db.achievementDao().unlockAll(toUnlock.map { UnlockedAchievementEntity(it, nowMs) })
+                }
+                unlocked = toUnlock
+            }
         }
-
-        return toUnlock
+        return unlocked
     }
 }

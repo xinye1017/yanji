@@ -53,6 +53,7 @@ class QueryPlanGuardTest {
             "index_focus_sessions_status_startTime_subjectId_subjectName_durationSeconds"
         const val TASK_INDEX = "index_focus_sessions_taskId_status_durationSeconds"
         const val START_TIME_INDEX = "index_focus_sessions_startTime"
+        const val EFFECTIVE_END_INDEX = "index_focus_sessions_status_effectiveEndTime_startTime"
 
         /** 断言规模：跨过实测出现计划退化的阈值（约 10k 行）才有意义。 */
         const val SEEDED_ROWS = 20_000
@@ -123,9 +124,13 @@ class QueryPlanGuardTest {
 
     @Test
     fun hotQueriesKeepTheirIndicesUnderEveryStatisticsState() {
-        val db = helper.createDatabase(25)
-        val (monthStart, anchor) = db.seed()
+        // Seed on v26 (no effectiveEndTime), then run the real v27 migration so the
+        // plans below are measured against the backfilled column and its index.
+        val seeded = helper.createDatabase(26)
+        val (monthStart, anchor) = seeded.seed()
+        seeded.close()
         val dayEnd = anchor + 86_400_000L
+        val db = helper.runMigrationsAndValidate(27, listOf(YanjiDatabase.MIGRATION_26_27))
 
         val taskAgg =
             "SELECT taskId, COALESCE(SUM(durationSeconds), 0) AS seconds FROM focus_sessions " +
@@ -142,10 +147,14 @@ class QueryPlanGuardTest {
                 "FROM study_tasks AS t LEFT JOIN focus_sessions AS f " +
                 "ON f.taskId = t.id AND f.status = 'COMPLETED' " +
                 "WHERE t.date = '2026-10-10' GROUP BY t.id"
-        val dailyOverlap =
-            "SELECT * FROM focus_sessions WHERE status = 'COMPLETED' AND startTime < $dayEnd " +
-                "AND (CASE WHEN endTime > startTime THEN endTime " +
-                "ELSE startTime + durationSeconds * 1000 END) > $anchor ORDER BY startTime DESC"
+        val dailyDetail =
+            "SELECT * FROM focus_sessions WHERE status = 'COMPLETED' " +
+                "AND startTime >= $anchor AND startTime < $dayEnd ORDER BY startTime DESC"
+        val dailyParticipation =
+            "SELECT COUNT(*) FROM focus_sessions " +
+                "INDEXED BY `$EFFECTIVE_END_INDEX` " +
+                "WHERE status = 'COMPLETED' " +
+                "AND effectiveEndTime > $anchor AND startTime < $dayEnd"
 
         // 三种统计状态都要成立：无统计（生产常态）/ optimize / 完整 ANALYZE。
         // 只在一种状态下断言，正是当初放过 30k 行计划退化的原因。
@@ -175,11 +184,19 @@ class QueryPlanGuardTest {
             assertFalse("计划 JOIN 仍在依赖临时自建索引（$state）：$joinPlan", joinPlan.contains("AUTOMATIC"))
             assertTrue("计划 JOIN 未使用 $TASK_INDEX（$state）：$joinPlan", joinPlan.contains(TASK_INDEX))
 
-            val dailyPlan = db.plan(dailyOverlap)
-            assertFalse("每日相交查询退化为全表扫描（$state）：$dailyPlan", dailyPlan.contains("SCAN focus_sessions"))
+            val detailPlan = db.plan(dailyDetail)
+            assertFalse("每日明细退化为全表扫描（$state）：$detailPlan", detailPlan.contains("SCAN focus_sessions"))
             assertTrue(
-                "每日相交查询未使用 startTime 前缀索引（$state）：$dailyPlan",
-                dailyPlan.contains(COVERING_INDEX) || dailyPlan.contains(START_TIME_INDEX)
+                "每日明细未使用 startTime 前缀索引（$state）：$detailPlan",
+                detailPlan.contains(COVERING_INDEX) || detailPlan.contains(START_TIME_INDEX)
+            )
+
+            // 参与计数只返回 COUNT，且必须靠结束时间索引定位，不能退回逐行检查全部历史。
+            val participationPlan = db.plan(dailyParticipation)
+            assertFalse("每日参与计数退化为全表扫描（$state）：$participationPlan", participationPlan.contains("SCAN focus_sessions"))
+            assertTrue(
+                "每日参与计数未使用 $EFFECTIVE_END_INDEX（$state）：$participationPlan",
+                participationPlan.contains(EFFECTIVE_END_INDEX)
             )
         }
 

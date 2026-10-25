@@ -112,14 +112,9 @@ class PersistedWritesTest {
         }
     }
 
-    @Test fun failedSessionWritesPropagateAndPreserveRecordsAndCaches() = runBlocking {
+    @Test fun failedSessionWritesPropagateAndPreserveRecords() = runBlocking {
         for (operation in listOf("note", "focus", "exam")) fixture { db, driver, scope, _ ->
             val store = TimerStore(scope, { db })
-            store.bind(db)
-            withTimeout(5000) {
-                store.focusSessions.first { it.isNotEmpty() }
-                store.examSessions.first { it.isNotEmpty() }
-            }
             val gate = WriteGate(true).also { it.release.countDown() }
             driver.gate = gate
             val result = runCatching {
@@ -132,8 +127,6 @@ class PersistedWritesTest {
             assertTrue("$operation must propagate the actual write failure", result.isFailure)
             assertEquals("原随笔", db.focusSessionDao().getById("focus")?.note)
             assertNotNull(db.examSessionDao().getById("exam"))
-            assertEquals("原随笔", store.focusSessions.value.single().note)
-            assertEquals("exam", store.examSessions.value.single().id)
         }
     }
 

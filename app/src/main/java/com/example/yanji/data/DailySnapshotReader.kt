@@ -1,6 +1,7 @@
 package com.example.yanji.data
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.example.yanji.data.db.ExamSessionEntity
 import com.example.yanji.data.db.FocusSessionEntity
 import com.example.yanji.data.db.NoteEntryEntity
@@ -33,7 +34,8 @@ internal object DailySnapshotAssembler {
         focusEntities: List<FocusSessionEntity>,
         examEntities: List<ExamSessionEntity>,
         taskRows: List<StudyTaskActualSecondsRow>,
-        noteEntities: List<NoteEntryEntity>
+        noteEntities: List<NoteEntryEntity>,
+        focusParticipationCount: Int
     ): DailyStudySnapshot {
         val focusSessions = focusEntities.map(FocusSessionEntity::toDomainModel)
         val examSessions = examEntities.map(ExamSessionEntity::toDomainModel)
@@ -50,20 +52,9 @@ internal object DailySnapshotAssembler {
             examList = examSessions,
             subjects = SubjectCatalog.all
         )
-        // The focus query is deliberately interval-based (a session that crossed
-        // midnight is returned on both days). Participation counts that overlap;
-        // `summary` keeps the row and its duration on its start day only.
-        val dayRange = YanjiTime.parseIsoDate(date)?.let { YanjiTime.dayRange(it) }
-        val focusParticipationCount = if (dayRange == null) 0 else focusEntities.count { entity ->
-            val endTime = if (entity.endTime > entity.startTime) {
-                entity.endTime
-            } else {
-                entity.startTime + entity.durationSeconds * 1000L
-            }
-            entity.status == SessionStatus.COMPLETED.name &&
-                entity.startTime < dayRange.endExclusive &&
-                endTime > dayRange.startInclusive
-        }
+        // Participation is a separate indexed COUNT. The detail list now only
+        // contains sessions starting on this day, so cross-day tails never need
+        // to be loaded as full entities merely to count them.
 
         return DailyStudySnapshot(
             date = summary.date,
@@ -85,18 +76,27 @@ internal object DailySnapshotAssembler {
 /** Reads every daily projection under one Room read transaction on the IO dispatcher. */
 object DailySnapshotReader {
     suspend fun read(db: YanjiDatabase, date: String): DailyStudySnapshot = withContext(Dispatchers.IO) {
-        db.withTransaction {
-            val range = YanjiTime.parseIsoDate(date)
-                ?.let { YanjiTime.dayRange(it) }
-                ?: EpochRange(0L, 0L)
-            val focus = db.focusSessionDao()
-                .getCompletedOverlapping(range.startInclusive, range.endExclusive)
-            val exams = db.examSessionDao()
-                .getCompletedInRange(range.startInclusive, range.endExclusive)
-            val tasks = db.studyTaskDao().getByDateWithActualSeconds(date)
-            val notes = db.noteEntryDao().getAllByDate(date)
+        // One serialized read transaction on the writer connection. `withTransaction`
+        // is Android-room-ktx only, so JVM tests would fail on it; this form keeps
+        // production and the unit-test driver on the same code path.
+        var snapshot: DailyStudySnapshot? = null
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val range = YanjiTime.parseIsoDate(date)
+                    ?.let { YanjiTime.dayRange(it) }
+                    ?: EpochRange(0L, 0L)
+                val focus = db.focusSessionDao()
+                    .getCompletedStartingBetween(range.startInclusive, range.endExclusive)
+                val participation = db.focusSessionDao()
+                    .countCompletedOverlapping(range.startInclusive, range.endExclusive)
+                val exams = db.examSessionDao()
+                    .getCompletedInRange(range.startInclusive, range.endExclusive)
+                val tasks = db.studyTaskDao().getByDateWithActualSeconds(date)
+                val notes = db.noteEntryDao().getAllByDate(date)
 
-            DailySnapshotAssembler.assemble(date, focus, exams, tasks, notes)
+                snapshot = DailySnapshotAssembler.assemble(date, focus, exams, tasks, notes, participation)
+            }
         }
+        checkNotNull(snapshot) { "daily snapshot was not assembled inside the transaction" }
     }
 }

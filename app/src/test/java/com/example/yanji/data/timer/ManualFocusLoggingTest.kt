@@ -3,46 +3,71 @@ package com.example.yanji.data.timer
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.achievement.AchievementEvent
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import com.example.yanji.data.achievement.AchievementTestDatabase
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.*
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ManualFocusLoggingTest {
-
-    @Test
-    fun testTimerStoreAddFocusSessionEmitsAchievementEvent() = runTest {
-        val testScope = TestScope(UnconfinedTestDispatcher(testScheduler))
-        val timerStore = TimerStore(
-            scope = testScope,
-            dbProvider = { null }
-        )
-
-        var emittedEvent: AchievementEvent? = null
-        timerStore.onAchievementEvent = { event ->
-            emittedEvent = event
+    @Test fun manualFocusIsPersistedBeforeItsAchievementEvent() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val store = TimerStore(fixture.scope, { fixture.db })
+            val session = FocusSession("manual", "math", "高等数学", 1000, 1801000, 1800, mode = "补记专注")
+            var emitted: AchievementEvent? = null
+            store.onAchievementEvent = { event ->
+                emitted = event
+                assertEquals(session, fixture.db.focusSessionDao().getById(session.id)!!.toDomainModel())
+            }
+            store.addFocusSession(session)
+            assertEquals(AchievementEvent.FocusCompleted(session), emitted)
+            assertEquals(session, store.getFocusSessionByIdFromDb(session.id)!!.toDomainModel())
         }
+    }
 
-        val session = FocusSession(
-            id = "test-session-1",
-            subjectId = "math",
-            subjectName = "高等数学",
-            startTime = 1000L,
-            endTime = 1000L + 1800 * 1000L,
-            durationSeconds = 1800L,
-            mode = "补记专注",
-            status = SessionStatus.COMPLETED
-        )
+    @Test fun manualExamIsPersistedBeforeItsAchievementEvent() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val store = TimerStore(fixture.scope, { fixture.db })
+            val session = com.example.yanji.data.ExamSession("manual-exam", "math", "数学", actualDurationSeconds = 10800)
+            val event = CompletableDeferred<AchievementEvent>()
+            store.onAchievementEvent = {
+                assertEquals(session, fixture.db.examSessionDao().getById(session.id)!!.toDomainModel())
+                event.complete(it)
+            }
+            store.addExamSession(session)
+            assertEquals(AchievementEvent.ExamCompleted(session), withTimeout(5000) { event.await() })
+            fixture.stopScope()
+        }
+    }
 
-        timerStore.addFocusSession(session)
-
-        assertEquals(1, timerStore.focusSessions.value.size)
-        assertEquals("test-session-1", timerStore.focusSessions.value.first().id)
-        assertTrue(emittedEvent is AchievementEvent.FocusCompleted)
-        assertEquals(session, (emittedEvent as AchievementEvent.FocusCompleted).session)
+    @Test fun timerCompletionKeepsLeafEventsAndTheRecordingThreshold() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val store = TimerStore(fixture.scope, { fixture.db })
+            val events = mutableListOf<AchievementEvent>()
+            store.onAchievementEvent = { events.add(it) }
+            val active = ActiveSession("focus", ActiveSessionKind.FOCUS, "math", "数学", note = "真实随笔", taskId = "task", startedAtEpochMs = 1000)
+            store.persistence.completeFocus(active, 59, 7, 2, 67000)
+            assertEquals(0, fixture.db.focusSessionDao().count())
+            assertNull(store.lastCompletedFocus.value)
+            assertTrue(events.isEmpty())
+            store.persistence.completeFocus(active, 60, 7, 2, 68000)
+            val focus = fixture.db.focusSessionDao().getById("focus")!!.toDomainModel()
+            assertEquals(60L, focus.durationSeconds)
+            assertEquals(7L, focus.pausedDurationSeconds)
+            assertEquals(2, focus.pauseCount)
+            assertEquals("真实随笔", focus.note)
+            assertEquals("task", focus.taskId)
+            assertEquals(SessionStatus.COMPLETED, focus.status)
+            assertEquals(focus, store.lastCompletedFocus.value)
+            store.acknowledgeCompletedFocus()
+            assertNull(store.lastCompletedFocus.value)
+            val exam = active.copy(sessionId = "exam", kind = ActiveSessionKind.EXAM, plannedDurationSeconds = 10800)
+            store.persistence.completeExam(exam, 10000, 10001000)
+            assertEquals(fixture.db.examSessionDao().getById("exam")!!.toDomainModel(), store.lastCompletedExam.value)
+            assertEquals(2, events.size)
+            store.acknowledgeCompletedExam()
+            assertNull(store.lastCompletedExam.value)
+        }
     }
 }

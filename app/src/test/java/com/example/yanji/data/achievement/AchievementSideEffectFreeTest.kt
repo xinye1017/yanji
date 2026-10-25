@@ -1,134 +1,49 @@
 package com.example.yanji.data.achievement
 
-import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
-import com.example.yanji.data.SessionStatus
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class AchievementSideEffectFreeTest {
-
     private val evaluator = AchievementEvaluator()
 
-    @Test
-    fun testCatalogProjectionIsStableAndPure() {
+    @Test fun catalogProjectionIsStableAndPure() = runBlocking {
         assertEquals(59, AchievementCatalog.definitions.size)
         assertEquals(8, AchievementCatalog.getSeries(AchievementCatalog.SERIES_MATH).size)
-
-        // 纯函数：同一份输入重复求值必须得到同一结果，且不修改入参集合。
-        val now = System.currentTimeMillis()
-        val focus = listOf(
-            FocusSession(
-                id = "f1",
-                subjectId = "math",
-                subjectName = "数学一",
-                startTime = now - 3600_000,
-                endTime = now,
-                durationSeconds = 3600,
-                status = SessionStatus.COMPLETED
-            )
-        )
-        val exam = listOf<ExamSession>()
-        val snapshot = focus.toList()
-
-        val first = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = focus,
-            examSessions = exam,
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-        val second = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = focus,
-            examSessions = exam,
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        assertEquals("evaluate must be deterministic", first, second)
-        assertEquals("evaluate must not mutate its inputs", snapshot, focus)
-    }
-
-    @Test
-    fun testReconciliationCatchesUnprocessedSessions() {
-        val now = System.currentTimeMillis()
-        val completedFocus = listOf(
-            FocusSession(
-                id = "f1",
-                subjectId = "math",
-                subjectName = "数学一",
-                startTime = now - 7200_000,
-                endTime = now,
-                durationSeconds = 7200,
-                status = SessionStatus.COMPLETED
-            )
-        )
-
-        val newlyUnlocked = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = completedFocus,
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        assertTrue(newlyUnlocked.contains("journey_focus_first"))
-        assertTrue(newlyUnlocked.contains("focus_1h"))
-        assertTrue(newlyUnlocked.contains("focus_single_45m"))
-
-        val secondPass = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = completedFocus,
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = newlyUnlocked.toSet()
-        )
-
-        assertTrue("Second reconciliation pass must unlock zero additional items", secondPass.isEmpty())
-    }
-
-    @Test
-    fun testEventDrivenSelectiveEvaluation() {
-        val now = System.currentTimeMillis()
-        val s = FocusSession(
-            id = "f1",
-            subjectId = "math",
-            subjectName = "数学一",
-            startTime = now - 3600_000,
-            endTime = now,
-            durationSeconds = 3600,
-            status = SessionStatus.COMPLETED
-        )
-
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        val defMap = AchievementCatalog.definitions.associateBy { it.id }
-        for (id in unlocked) {
-            assertTrue(
-                "Evaluated achievement $id must exist in catalog and be relevant to focus event",
-                defMap.containsKey(id) && AchievementEventFilter.FOCUS_CANDIDATES.contains(id)
-            )
+        AchievementTestDatabase().use { fixture ->
+            fixture.seed(focus = listOf(FocusSession("f", "math", "数学", 1, 3600001, 3600)))
+            val facts = fixture.facts()
+            fixture.reads.clear()
+            val first = evaluator.evaluate(AchievementEvent.ReconcileAll, facts, emptySet())
+            val second = evaluator.evaluate(AchievementEvent.ReconcileAll, facts, emptySet())
+            assertEquals(first, second)
+            assertEquals(1L, facts.sessionCount)
+            assertTrue("Pure evaluation must not read or write Room", fixture.reads.isEmpty())
+            assertTrue(fixture.db.achievementDao().getUnlockedIds().isEmpty())
         }
+    }
 
-        assertFalse(unlocked.contains("journey_journal_first"))
-        assertFalse(unlocked.contains("journey_checkin_first"))
-        assertFalse(unlocked.contains("review_1"))
-        assertFalse(unlocked.contains("streak_3_days"))
+    @Test fun reconciliationCatchesUnprocessedSessionsAndIsIdempotent() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            fixture.seed(focus = listOf(FocusSession("f", "math", "数学", 1, 7200001, 7200)))
+            val unlocked = evaluator.evaluateAndPersist(AchievementEvent.ReconcileAll, fixture.db, 1234)
+            assertTrue(unlocked.containsAll(listOf("journey_focus_first", "focus_1h", "focus_single_45m")))
+            assertTrue(evaluator.evaluateAndPersist(AchievementEvent.ReconcileAll, fixture.db, 9999).isEmpty())
+            assertEquals(unlocked.toSet(), fixture.db.achievementDao().getUnlockedIds().toSet())
+            assertEquals(1, fixture.db.focusSessionDao().count())
+        }
+    }
+
+    @Test fun focusEventOnlyEvaluatesItsCandidates() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val focus = FocusSession("f", "math", "数学", 1, 3600001, 3600)
+            fixture.seed(focus = listOf(focus))
+            val unlocked = evaluator.evaluateAndPersist(AchievementEvent.FocusCompleted(focus), fixture.db)
+            assertTrue(unlocked.isNotEmpty())
+            assertTrue(unlocked.all { it in AchievementEventFilter.FOCUS_CANDIDATES })
+            assertFalse("review_1" in unlocked)
+            assertFalse("streak_3_days" in unlocked)
+        }
     }
 }

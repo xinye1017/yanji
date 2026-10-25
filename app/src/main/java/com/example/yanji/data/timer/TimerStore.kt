@@ -23,7 +23,7 @@ import java.util.UUID
  * 专注 / 模考会话的状态与动作归属者。
  *
  * 职责边界：
- *  - 持有 `_focusSessions` / `_examSessions` / 活动会话 / 「刚完成」事件；
+ *  - 持有活动会话与「刚完成」事件；历史记录仅按需读 Room；
  *  - 实现 [TimerSessionPersistence]，作为 [ActiveSessionCoordinator] 的落库出口；
  *  - 计时的**时间事实**仍由前台 Service 的 [TimerMachine]（单调时钟）负责，
  *    本类只处理业务语义（谁在计时、结束之后写什么）。
@@ -52,12 +52,6 @@ internal class TimerStore(
             actualSeconds >= MIN_RECORDED_FOCUS_SECONDS
     }
 
-    private val _focusSessions = MutableStateFlow<List<FocusSession>>(emptyList())
-    val focusSessions: StateFlow<List<FocusSession>> = _focusSessions.asStateFlow()
-
-    private val _examSessions = MutableStateFlow<List<ExamSession>>(emptyList())
-    val examSessions: StateFlow<List<ExamSession>> = _examSessions.asStateFlow()
-
     private val _activeFocus = MutableStateFlow<FocusSession?>(null)
     val activeFocus: StateFlow<FocusSession?> = _activeFocus.asStateFlow()
 
@@ -67,17 +61,7 @@ internal class TimerStore(
     private val _lastCompletedExam = MutableStateFlow<ExamSession?>(null)
     val lastCompletedExam: StateFlow<ExamSession?> = _lastCompletedExam.asStateFlow()
 
-    fun bind(db: YanjiDatabase) {
-        scope.launch {
-            db.focusSessionDao().getAll().collect { entities ->
-                _focusSessions.value = entities.map { it.toDomainModel() }
-            }
-        }
-        scope.launch {
-            db.examSessionDao().getAll().collect { entities ->
-                _examSessions.value = entities.map { it.toDomainModel() }
-            }
-        }
+    fun bind() {
         scope.launch {
             ActiveSessionCoordinator.active.collect { session ->
                 if (session == null) {
@@ -285,7 +269,7 @@ internal class TimerStore(
 
     // ------------------------------------------------------------ 落库出口
 
-    /** 专注完成。数据只写 Room，内存列表交给 DAO Flow 回灌。 */
+    /** 专注完成。数据只写 Room，保留刚完成事件供业务叶子消费者使用。 */
     private suspend fun persistCompletedFocus(
         session: ActiveSession,
         actualSeconds: Long,
@@ -342,18 +326,16 @@ internal class TimerStore(
 
     // ------------------------------------------------------------ 记录 CRUD
 
-    suspend fun addFocusSession(session: FocusSession) {
-        _focusSessions.value = listOf(session) + _focusSessions.value
-        withContext(Dispatchers.IO) {
-            dbProvider()?.focusSessionDao()?.insert(FocusSessionEntity.fromDomainModel(session))
-            onAchievementEvent?.invoke(AchievementEvent.FocusCompleted(session))
-        }
+    suspend fun addFocusSession(session: FocusSession) = withContext(Dispatchers.IO) {
+        val db = checkNotNull(dbProvider()) { "Database is not initialized" }
+        db.focusSessionDao().insert(FocusSessionEntity.fromDomainModel(session))
+        onAchievementEvent?.invoke(AchievementEvent.FocusCompleted(session))
     }
 
     fun addExamSession(session: ExamSession) {
-        _examSessions.value = listOf(session) + _examSessions.value
         scope.launch {
-            dbProvider()?.examSessionDao()?.insert(ExamSessionEntity.fromDomainModel(session))
+            val db = checkNotNull(dbProvider()) { "Database is not initialized" }
+            db.examSessionDao().insert(ExamSessionEntity.fromDomainModel(session))
             onAchievementEvent?.invoke(AchievementEvent.ExamCompleted(session))
         }
     }
@@ -381,21 +363,11 @@ internal class TimerStore(
         dbProvider()?.examSessionDao()?.getById(id)
     }
 
-    fun getFocusSessionByIdFlow(id: String): Flow<FocusSession?> {
-        val db = dbProvider()
-        return if (db != null) {
-            db.focusSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
-        } else {
-            _focusSessions.map { list -> list.find { it.id == id } }
-        }
-    }
+    fun getFocusSessionByIdFlow(id: String): Flow<FocusSession?> =
+        checkNotNull(dbProvider()) { "Database is not initialized" }
+            .focusSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
 
-    fun getExamSessionByIdFlow(id: String): Flow<ExamSession?> {
-        val db = dbProvider()
-        return if (db != null) {
-            db.examSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
-        } else {
-            _examSessions.map { list -> list.find { it.id == id } }
-        }
-    }
+    fun getExamSessionByIdFlow(id: String): Flow<ExamSession?> =
+        checkNotNull(dbProvider()) { "Database is not initialized" }
+            .examSessionDao().getByIdFlow(id).map { it?.toDomainModel() }
 }

@@ -10,7 +10,6 @@ import com.example.yanji.data.ai.AiDiagnosticParser
 import com.example.yanji.data.checkin.CheckInStore
 import com.example.yanji.data.checkin.DayCheckInStatus
 import com.example.yanji.data.note.NoteStore
-import com.example.yanji.data.study.StudyStats
 import com.example.yanji.data.timer.TimerStore
 import com.example.yanji.data.db.*
 import com.example.yanji.data.security.KeystoreSecretStore
@@ -26,7 +25,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import java.time.LocalDate
 import java.util.UUID
 
@@ -236,11 +236,6 @@ class YanjiRepository private constructor() {
         }
     }
 
-    val focusSessions: StateFlow<List<FocusSession>> get() = timerStore.focusSessions
-    val examSessions: StateFlow<List<ExamSession>> get() = timerStore.examSessions
-
-    val noteEntries: StateFlow<List<NoteEntry>> get() = noteStore.noteEntries
-
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
 
@@ -322,10 +317,8 @@ class YanjiRepository private constructor() {
                 }
             }
 
-            // 以下都不是首帧依赖：全表内存镜像、维护任务与成就重算。
-            // 它们仍在同一 IO 域并发执行，但已经不会再阻挡预热。
-            timerStore.bind(db)
-            noteStore.bind(db)
+            // 以下不是首帧依赖：活动计时、打卡、维护任务与一次性成就事实读取。
+            timerStore.bind()
             checkInStore.bind(db)
             launch {
                 db.achievementDao().getAllFlow().collect { entities ->
@@ -407,9 +400,7 @@ class YanjiRepository private constructor() {
     fun getExamSessionByIdFlow(id: String): Flow<ExamSession?> = timerStore.getExamSessionByIdFlow(id)
 
     fun observeTodayStudyDurationSeconds(): Flow<Long> {
-        val db = database ?: return combine(focusSessions, examSessions) { f, e ->
-            StudyStats.durationOnDay(f, e, System.currentTimeMillis())
-        }
+        val db = requireDatabase()
         val todayRange = YanjiTime.dayRange(YanjiTime.today())
         val focusFlow = db.focusSessionDao().observeTotalSeconds(todayRange.startInclusive, todayRange.endExclusive)
         val examFlow = db.examSessionDao().observeTotalSeconds(todayRange.startInclusive, todayRange.endExclusive)
@@ -541,12 +532,16 @@ class YanjiRepository private constructor() {
         endExclusive: Long
     ): CompletedStatsRows = withContext(Dispatchers.IO) {
         val db = requireDatabase()
-        db.withTransaction {
-            CompletedStatsRows(
-                focus = db.focusSessionDao().getCompletedStatsRows(startInclusive, endExclusive),
-                exams = db.examSessionDao().getCompletedStatsRows(startInclusive, endExclusive)
-            )
+        var rows: CompletedStatsRows? = null
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                rows = CompletedStatsRows(
+                    focus = db.focusSessionDao().getCompletedStatsRows(startInclusive, endExclusive),
+                    exams = db.examSessionDao().getCompletedStatsRows(startInclusive, endExclusive)
+                )
+            }
         }
+        checkNotNull(rows) { "completed stats were not read inside the transaction" }
     }
 
     internal fun observeStudyDuration(
@@ -587,6 +582,9 @@ class YanjiRepository private constructor() {
     /** 更新随笔正文（可等待），返回 false 表示 id 不存在。 */
     suspend fun updateNoteContentAndAwait(id: String, content: String) =
         noteStore.updateContentAndAwait(id, content)
+
+    /** 原子读取单行当前状态并等待切换落库，不依赖全量随笔镜像。 */
+    suspend fun toggleNoteResolvedAndAwait(id: String) = noteStore.toggleResolvedAndAwait(id)
 
     /** 更新疑点解决状态（可等待），返回 false 表示 id 不存在。 */
     suspend fun setNoteResolvedAndAwait(id: String, isResolved: Boolean) =
@@ -728,10 +726,6 @@ class YanjiRepository private constructor() {
         settings: UserSettings
     ): AiAnalysis? = aiDiagnosticParser.parse(content, snapshot, settings)
 
-    // Helper query computations (Unified Single Source of Truth)
-    fun getTodayFocusDurationSeconds(): Long =
-        StudyStats.durationOnDay(timerStore.focusSessions.value, timerStore.examSessions.value, System.currentTimeMillis())
-
     // CheckIn & Streak operations
     fun isCheckedInToday(): Boolean = checkInStore.isCheckedInToday()
 
@@ -746,74 +740,14 @@ class YanjiRepository private constructor() {
 
     suspend fun triggerAchievementEvaluation(event: AchievementEvent) = withContext(Dispatchers.IO) {
         val db = database ?: return@withContext
-        val focus = focusSessions.value
-        val exam = examSessions.value
-        val notes = noteEntries.value
-        val checkInList = checkIns.value
-        val unlockedIds = _unlockedAchievements.value.keys
-
-        val currentFocus = when (event) {
-            is AchievementEvent.FocusCompleted -> {
-                if (focus.any { it.id == event.session.id }) focus else listOf(event.session) + focus
-            }
-            else -> focus
-        }
-        val currentExam = when (event) {
-            is AchievementEvent.ExamCompleted -> {
-                if (exam.any { it.id == event.session.id }) exam else listOf(event.session) + exam
-            }
-            else -> exam
-        }
-        val currentNote = when (event) {
-            is AchievementEvent.NoteCreated -> {
-                if (notes.any { it.id == event.entry.id }) notes else listOf(event.entry) + notes
-            }
-            else -> notes
-        }
-        val currentCheckIns = when (event) {
-            is AchievementEvent.CheckInRecorded -> {
-                if (checkInList.any { it.date == event.checkIn.date }) checkInList else listOf(event.checkIn) + checkInList
-            }
-            else -> checkInList
-        }
-
-        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(
-            event = event,
-            db = db,
-            focusSessions = currentFocus,
-            examSessions = currentExam,
-            noteEntries = currentNote,
-            checkIns = currentCheckIns,
-            unlockedIds = unlockedIds
-        )
+        val now = System.currentTimeMillis()
+        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(event, db, now)
         if (newlyUnlocked.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
+            _unlockedAchievements.update { current -> current + newlyUnlocked.associateWith { now } }
         }
     }
 
-    suspend fun reconcileAchievements() = withContext(Dispatchers.IO) {
-        val db = database ?: return@withContext
-        val focus = db.focusSessionDao().getAllOnce().map { it.toDomainModel() }
-        val exam = db.examSessionDao().getAllOnce().map { it.toDomainModel() }
-        val notes = db.noteEntryDao().getAllOnce().map { it.toDomainModel() }
-        val checkInList = db.checkInDao().getAllOnce().map { it.toDomainModel() }
-        val unlockedIds = db.achievementDao().getUnlockedIds().toSet()
-
-        val newlyUnlocked = achievementEvaluator.evaluateAndPersist(
-            event = AchievementEvent.ReconcileAll,
-            db = db,
-            focusSessions = focus,
-            examSessions = exam,
-            noteEntries = notes,
-            checkIns = checkInList,
-            unlockedIds = unlockedIds
-        )
-        if (newlyUnlocked.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            _unlockedAchievements.value = _unlockedAchievements.value + newlyUnlocked.associateWith { now }
-        }
-    }
+    suspend fun reconcileAchievements() = triggerAchievementEvaluation(AchievementEvent.ReconcileAll)
 }
 
 /** Internally raised when a task is no longer eligible for carry-over. */

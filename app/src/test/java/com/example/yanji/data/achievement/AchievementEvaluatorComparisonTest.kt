@@ -1,222 +1,114 @@
 package com.example.yanji.data.achievement
 
-import com.example.yanji.data.CheckIn
-import com.example.yanji.data.ExamSession
-import com.example.yanji.data.FocusSession
-import com.example.yanji.data.NoteEntry
-import com.example.yanji.data.SessionStatus
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import com.example.yanji.data.*
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.TimeZone
+import kotlin.random.Random
 
 class AchievementEvaluatorComparisonTest {
-
     private val evaluator = AchievementEvaluator()
 
-    @Test
-    fun testEmptyDatabaseUnlocksNothing() {
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = emptyList(),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-        assertTrue("No achievements should be unlocked on empty database", unlocked.isEmpty())
+    @Test fun emptyDatabaseUnlocksNothing() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            assertTrue(evaluator.evaluateAndPersist(AchievementEvent.ReconcileAll, fixture.db).isEmpty())
+        }
     }
 
-    @Test
-    fun testTargetMinusOneBoundary() {
-        // focus_1h target is 3600 seconds. 3599 seconds should NOT unlock focus_1h.
-        val now = System.currentTimeMillis()
-        val s = FocusSession(
-            id = "f1",
-            subjectId = "math",
-            subjectName = "数学一",
-            startTime = now - 3599_000,
-            endTime = now,
-            durationSeconds = 3599,
-            status = SessionStatus.COMPLETED
-        )
-
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        // journey_focus_first (target 1 count) is satisfied
-        assertTrue(unlocked.contains("journey_focus_first"))
-        // focus_1h (target 1h = 3600s) is NOT satisfied (3599 / 3600 = 0)
-        assertFalse("3599s should not unlock focus_1h", unlocked.contains("focus_1h"))
+    @Test fun focusHourBoundariesAndAlreadyUnlockedCandidates() = runBlocking {
+        for (seconds in listOf(3599L, 3600L, 3601L)) AchievementTestDatabase().use { fixture ->
+            val focus = FocusSession("focus", "math", "数学", 1, 10000, seconds)
+            fixture.seed(focus = listOf(focus))
+            val event = AchievementEvent.FocusCompleted(focus)
+            val unlocked = evaluator.evaluateAndPersist(event, fixture.db)
+            assertTrue("journey_focus_first" in unlocked)
+            assertEquals(seconds >= 3600, "focus_1h" in unlocked)
+            assertFalse("focus_5h" in unlocked)
+            assertTrue(evaluator.evaluateAndPersist(event, fixture.db).isEmpty())
+        }
     }
 
-    @Test
-    fun testExactTargetBoundary() {
-        // 3600 seconds should unlock both journey_focus_first and focus_1h
-        val now = System.currentTimeMillis()
-        val s = FocusSession(
-            id = "f1",
-            subjectId = "math",
-            subjectName = "数学一",
-            startTime = now - 3600_000,
-            endTime = now,
-            durationSeconds = 3600,
-            status = SessionStatus.COMPLETED
-        )
-
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        assertTrue("journey_focus_first must unlock", unlocked.contains("journey_focus_first"))
-        assertTrue("focus_1h must unlock", unlocked.contains("focus_1h"))
-        assertFalse("focus_5h must not unlock", unlocked.contains("focus_5h"))
+    @Test fun noteEventsOnlyEvaluateJournalCandidates() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            val note = NoteEntry("note", "2026-09-18", content = "复盘", createdAt = 100)
+            fixture.seed(notes = listOf(note), focus = listOf(FocusSession("focus", "math", "数学", 1, 2, 36000)))
+            assertEquals(setOf("journey_journal_first", "review_1"), evaluator.evaluateAndPersist(AchievementEvent.NoteCreated(note), fixture.db).toSet())
+        }
     }
 
-    @Test
-    fun testTargetPlusOneBoundary() {
-        val now = System.currentTimeMillis()
-        val s = FocusSession(
-            id = "f1",
-            subjectId = "math",
-            subjectName = "数学一",
-            startTime = now - 3601_000,
-            endTime = now,
-            durationSeconds = 3601,
-            status = SessionStatus.COMPLETED
-        )
-
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        assertTrue("focus_1h must unlock with 3601 seconds", unlocked.contains("focus_1h"))
+    @Test fun everyProgressValueMatchesThePreOptimizationRules() = runBlocking {
+        val originalZone = TimeZone.getDefault()
+        val originalSubjects = SubjectCatalog.all
+        try {
+            SubjectCatalog.replaceAll(SubjectCatalog.defaults + Subject("custom-algebra", "代数", "#123456", 30, parentId = "math"))
+            for (zone in listOf("Asia/Shanghai", "America/New_York", "UTC")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                val base = LocalDate.of(2026, 11, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val now = base + 10 * 86400000L
+                for (seed in 0..5) AchievementTestDatabase().use { fixture ->
+                    val random = Random(seed)
+                    val statuses = SessionStatus.entries
+                    val focus = (0 until 20).map { index ->
+                        val start = base + index / 3 * 86400000L + listOf(0L, 4 * 3600000L, 8 * 3600000L, 8 * 3600000L + 1, 23 * 3600000L, 23 * 3600000L + 30 * 60000L)[index % 6]
+                        FocusSession("f-$index", "other", "其他", start, start + random.nextLong(60, 20000) * 1000,
+                            listOf(0L, 59, 60, 3599, 3600, 43199, 43200)[(index + seed) % 7],
+                            note = "正文不参与成就", status = statuses[index % statuses.size])
+                    }
+                    val exam = (0 until 20).map { index ->
+                        val start = base + random.nextLong(0, 8 * 86400000L)
+                        val subjectId = listOf("math_advanced", "custom-algebra", "MATH-legacy", "old", "english")[index % 5]
+                        ExamSession("e-$index", subjectId, if (subjectId == "old") "旧数学" else "科目", 7201,
+                            listOf(6480L, 6481, 10799, 10800)[index % 4], start,
+                            base + index / 3 * 86400000L + (index % 3) * 3600000L,
+                            listOf(null, 89.9, 90.9, 100.1, 99.9, 110.0, 140.9, 150.0)[(index + seed) % 8],
+                            note = "模考正文", status = statuses[index % statuses.size])
+                    }
+                    val notes = (0 until 14).map { index ->
+                        NoteEntry("n-$index", "1999-01-01", content = "复盘", createdAt = base + index / 2 * 86400000L + 3600000L,
+                            isDraft = index % 2 == 0)
+                    }
+                    val checkIns = (0 until 9).map { index ->
+                        CheckIn(LocalDate.of(2026, 11, 1).plusDays(if (index < 6) index.toLong() else index + 4L).toString(),
+                            streak = if (seed % 2 == 0) index + 1 else 1)
+                    }
+                    fixture.seed(focus, exam, notes, checkIns)
+                    // Fetch the real persisted rows in exactly the original input order.
+                    val persistedFocus = fixture.db.focusSessionDao().getAllOnce().map { it.toDomainModel() }
+                    val persistedExams = fixture.db.examSessionDao().getAllOnce().map { it.toDomainModel() }
+                    val persistedNotes = fixture.db.noteEntryDao().getAllOnce().map { it.toDomainModel() }
+                    val persistedCheckIns = fixture.db.checkInDao().getAllOnce().map { it.toDomainModel() }
+                    val facts = fixture.facts(nowMs = now)
+                    for (def in AchievementCatalog.definitions) {
+                        assertEquals("${def.id}, zone=$zone, seed=$seed",
+                            legacyAchievementProgress(def, persistedFocus, persistedExams, persistedNotes, persistedCheckIns, now),
+                            def.calculateProgress(facts))
+                    }
+                    val expected = AchievementCatalog.definitions.filter {
+                        legacyAchievementProgress(it, persistedFocus, persistedExams, persistedNotes, persistedCheckIns, now) >= it.target
+                    }.map { it.id }
+                    assertEquals(expected, evaluator.evaluateAndPersist(AchievementEvent.ReconcileAll, fixture.db, now))
+                }
+            }
+        } finally {
+            TimeZone.setDefault(originalZone)
+            SubjectCatalog.replaceAll(originalSubjects)
+        }
     }
 
-    @Test
-    fun testEventFilteringEfficiency() {
-        // When NoteCreated occurs, only review & journey_journal achievements can unlock
-        val j = NoteEntry(
-            id = "j1",
-            date = "2026-09-18",
-            title = "今日复盘",
-            content = "数学极限完成",
-            moodScore = 4,
-            energyScore = 4,
-            studySatisfaction = 5,
-            tomorrowPlan = "",
-            blockers = "",
-            tags = listOf("数学")
-        )
-
-        val unlocked = evaluator.evaluate(
-            event = AchievementEvent.NoteCreated(j),
-            focusSessions = emptyList(),
-            examSessions = emptyList(),
-            noteEntries = listOf(j),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        )
-
-        assertEquals(
-            setOf("journey_journal_first", "review_1"),
-            unlocked.toSet()
-        )
-    }
-
-    @Test
-    fun testHistoricalAlreadyUnlockedAreSkipped() {
-        val now = System.currentTimeMillis()
-        val s = FocusSession(
-            id = "f1",
-            subjectId = "math",
-            subjectName = "数学一",
-            startTime = now - 3600_000,
-            endTime = now,
-            durationSeconds = 3600,
-            status = SessionStatus.COMPLETED
-        )
-
-        val firstUnlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = emptySet()
-        ).toSet()
-
-        assertTrue("First evaluation should unlock achievements", firstUnlocked.isNotEmpty())
-
-        val secondUnlocked = evaluator.evaluate(
-            event = AchievementEvent.FocusCompleted(s),
-            focusSessions = listOf(s),
-            examSessions = emptyList(),
-            noteEntries = emptyList(),
-            checkIns = emptyList(),
-            unlockedIds = firstUnlocked
-        )
-
-        assertTrue("Already unlocked achievements must be skipped on subsequent evaluation", secondUnlocked.isEmpty())
-    }
-
-    @Test
-    fun testReconcileAllParityWithOldCatalogCalculation() {
-        val now = System.currentTimeMillis()
-        val focusList = listOf(
-            FocusSession("f1", "sub_math", "数学一", now - 7200_000, now - 3600_000, 3600, status = SessionStatus.COMPLETED),
-            FocusSession("f2", "sub_408", "408专业课", now - 3600_000, now, 3600, status = SessionStatus.COMPLETED)
-        )
-        val examList = listOf(
-            ExamSession("e1", "sub_math", "数学一", 10800, 10800, now - 20000_000, now - 9200_000, score = 105.0, maxScore = 150.0, status = SessionStatus.COMPLETED)
-        )
-        val noteList = listOf(
-            NoteEntry(
-                id = "j1",
-                date = "2026-09-17",
-                title = "复盘1",
-                content = "content",
-                moodScore = 4,
-                energyScore = 4,
-                studySatisfaction = 4
+    @Test fun statusAndDraftRowsKeepTheirExistingAchievementMeaning() = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            fixture.seed(
+                focus = listOf(FocusSession("cancelled", "math", "数学", 1, 2, 3600, status = SessionStatus.CANCELLED)),
+                exams = listOf(ExamSession("running", "math", "数学", score = 145.9, status = SessionStatus.RUNNING)),
+                notes = listOf(NoteEntry("draft", "2026-01-01", isDraft = true))
             )
-        )
-        val checkInList = listOf(
-            CheckIn("2026-09-18", now, 1, "打卡1", "good")
-        )
-
-        // Old implementation parity check:
-        val expected = AchievementCatalog.definitions
-            .filter { it.calculateProgress(focusList, examList, noteList, checkInList) >= it.target }
-            .map { it.id }
-            .toSet()
-
-        // New evaluator ReconcileAll check:
-        val actual = evaluator.evaluate(
-            event = AchievementEvent.ReconcileAll,
-            focusSessions = focusList,
-            examSessions = examList,
-            noteEntries = noteList,
-            checkIns = checkInList,
-            unlockedIds = emptySet()
-        ).toSet()
-
-        assertEquals("New evaluator must produce 100% identical unlock set as old catalog calculation", expected, actual)
+            val facts = fixture.facts()
+            assertEquals(1L, AchievementCatalog.find("focus_1h")!!.calculateProgress(facts))
+            assertEquals(145L, AchievementCatalog.find("math_score_150")!!.calculateProgress(facts))
+            assertEquals(1L, AchievementCatalog.find("review_1")!!.calculateProgress(facts))
+        }
     }
 }

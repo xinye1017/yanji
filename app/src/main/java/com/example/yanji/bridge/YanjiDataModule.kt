@@ -217,14 +217,8 @@ class YanjiDataModule(
 
     @ReactMethod
     fun toggleNoteResolved(noteId: String, promise: Promise) {
-        scope.launch {
-            val note = repository.noteEntries.value.find { it.id == noteId }
-            if (note == null) {
-                promise.resolve(false)
-                return@launch
-            }
-            val success = repository.setNoteResolvedAndAwait(noteId, !note.isResolved)
-            promise.resolve(success)
+        scope.launchPersistedWrite(promise, "E_NOTE_RESOLVED") {
+            promise.resolve(repository.toggleNoteResolvedAndAwait(noteId))
         }
     }
 

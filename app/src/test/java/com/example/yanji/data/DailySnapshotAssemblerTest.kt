@@ -21,6 +21,7 @@ class DailySnapshotAssemblerTest {
         val snapshot = DailySnapshotAssembler.assemble(
             date = date,
             focusEntities = emptyList(),
+            focusParticipationCount = 0,
             examEntities = emptyList(),
             taskRows = emptyList(),
             noteEntities = emptyList()
@@ -42,6 +43,7 @@ class DailySnapshotAssemblerTest {
     fun sessionsAreSortedNewestFirstAndNotesOldestFirst() {
         val snapshot = DailySnapshotAssembler.assemble(
             date = date,
+            focusParticipationCount = 2,
             focusEntities = listOf(
                 focus("focus-early", dayStart + 100_000, 10),
                 focus("focus-late", dayStart + 200_000, 30)
@@ -84,7 +86,7 @@ class DailySnapshotAssemblerTest {
         )
 
         val firstDay = DailySnapshotAssembler.assemble(
-            date, listOf(lateNight), emptyList(), emptyList(), emptyList()
+            date, listOf(lateNight), emptyList(), emptyList(), emptyList(), 1
         )
         assertEquals(1, firstDay.focusParticipationCount)
         assertEquals(1, firstDay.focusCount)
@@ -92,7 +94,7 @@ class DailySnapshotAssemblerTest {
         assertEquals(1_800L, firstDay.totalDurationSeconds)
 
         val secondDay = DailySnapshotAssembler.assemble(
-            nextDay, listOf(lateNight), emptyList(), emptyList(), emptyList()
+            nextDay, emptyList(), emptyList(), emptyList(), emptyList(), 1
         )
         assertEquals("the after-midnight tail participates", 1, secondDay.focusParticipationCount)
         assertEquals("the row belongs to its start day", 0, secondDay.focusCount)
@@ -105,6 +107,7 @@ class DailySnapshotAssemblerTest {
         val selectedTask = task("selected", date, completed = false)
         val snapshot = DailySnapshotAssembler.assemble(
             date = date,
+            focusParticipationCount = 1,
             // This is the selected-day session query. Historical sessions contribute
             // through the pre-aggregated task row, not through this timeline list.
             focusEntities = listOf(focus("today-focus", dayStart + 10_000, 120, "selected")),
@@ -138,6 +141,7 @@ class DailySnapshotAssemblerTest {
     fun sessionsCarryTheirBoundPlanIdAndLeaveUnboundOnesNull() {
         val snapshot = DailySnapshotAssembler.assemble(
             date = date,
+            focusParticipationCount = 2,
             focusEntities = listOf(
                 focus("bound", dayStart + 100_000, 10, taskId = "task-os-ch4"),
                 focus("unbound", dayStart + 200_000, 20)

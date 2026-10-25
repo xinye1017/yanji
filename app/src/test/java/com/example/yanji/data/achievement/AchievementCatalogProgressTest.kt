@@ -3,6 +3,7 @@ package com.example.yanji.data.achievement
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.SessionStatus
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +17,13 @@ import org.junit.Test
  * 系列阶梯、真实时长判定、隐藏成就的分档计算都不允许在清理中丢失。
  */
 class AchievementCatalogProgressTest {
+
+    private fun progress(def: AchievementDef, focus: List<FocusSession> = emptyList(), exams: List<ExamSession> = emptyList()): Long = runBlocking {
+        AchievementTestDatabase().use { fixture ->
+            fixture.seed(focus = focus, exams = exams)
+            def.calculateProgress(fixture.facts())
+        }
+    }
 
     private fun def(id: String): AchievementDef =
         requireNotNull(AchievementCatalog.find(id)) { "achievement $id must exist in catalog" }
@@ -60,7 +68,7 @@ class AchievementCatalogProgressTest {
             plannedDurationSeconds = 10800L,
             actualDurationSeconds = 1800L
         )
-        assertEquals(0L, def.calculateProgress(emptyList(), listOf(fakeLongExam), emptyList(), emptyList()))
+        assertEquals(0L, progress(def, exams = listOf(fakeLongExam)))
 
         // 实际时长达到 180 分钟：计入。
         val realExam = ExamSession(
@@ -70,7 +78,7 @@ class AchievementCatalogProgressTest {
             plannedDurationSeconds = 10800L,
             actualDurationSeconds = 10800L
         )
-        assertEquals(1L, def.calculateProgress(emptyList(), listOf(realExam), emptyList(), emptyList()))
+        assertEquals(1L, progress(def, exams = listOf(realExam)))
     }
 
     @Test
@@ -86,8 +94,8 @@ class AchievementCatalogProgressTest {
             score = 142.0
         )
 
-        assertEquals(140L, def140.calculateProgress(emptyList(), listOf(exam142), emptyList(), emptyList()))
-        assertEquals(142L, def145.calculateProgress(emptyList(), listOf(exam142), emptyList(), emptyList()))
+        assertEquals(140L, progress(def140, exams = listOf(exam142)))
+        assertEquals(142L, progress(def145, exams = listOf(exam142)))
     }
 
     @Test
@@ -106,6 +114,6 @@ class AchievementCatalogProgressTest {
             status = SessionStatus.COMPLETED
         )
 
-        assertEquals(12L, def.calculateProgress(listOf(longSession), emptyList(), emptyList(), emptyList()))
+        assertEquals(12L, progress(def, focus = listOf(longSession)))
     }
 }

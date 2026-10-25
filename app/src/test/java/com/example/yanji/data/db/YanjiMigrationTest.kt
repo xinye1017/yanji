@@ -43,7 +43,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 26
+    private val CURRENT_VERSION = 27
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -194,7 +194,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_22_23,
         YanjiDatabase.MIGRATION_23_24,
         YanjiDatabase.MIGRATION_24_25,
-        YanjiDatabase.MIGRATION_25_26
+        YanjiDatabase.MIGRATION_25_26,
+        YanjiDatabase.MIGRATION_26_27
     )
 
     /**
@@ -1275,6 +1276,44 @@ class YanjiMigrationTest {
         assertEquals(1000L, db.longValue("SELECT createdAt FROM study_tasks WHERE id='task-v23'"))
         assertEquals(1200L, db.longValue("SELECT updatedAt FROM study_tasks WHERE id='task-v23'"))
         assertEquals(1, db.intValue("SELECT COUNT(*) FROM study_tasks"))
+        db.close()
+    }
+
+    @Test
+    fun migrate26To27_indexesEffectiveEndWithoutRewritingBusinessTimes() {
+        helper.createDatabase(26).use { db ->
+            listOf(
+                "('normal', 1000, 5000, 2)",
+                "('missing', 2000, 0, 3)",
+                "('equal', 3000, 3000, 4)",
+                "('backwards', 4000, 3000, 5)",
+                "('zero', 5000, 0, 0)"
+            ).forEach { values ->
+                db.execute(
+                    "INSERT INTO focus_sessions " +
+                        "(id, startTime, endTime, durationSeconds, subjectId, subjectName, " +
+                        "pausedDurationSeconds, pauseCount, mode, note, status, createdAt) " +
+                        "SELECT id, startTime, endTime, durationSeconds, 'math', '数学', 0, 0, " +
+                        "'正向计时', 'keep note', 'COMPLETED', 1000 FROM " +
+                        "(SELECT column1 AS id, column2 AS startTime, column3 AS endTime, " +
+                        "column4 AS durationSeconds FROM (VALUES $values))"
+                )
+            }
+        }
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(26))
+        assertEquals(5, db.intValue("SELECT COUNT(*) FROM focus_sessions"))
+        assertEquals(5000L, db.longValue("SELECT effectiveEndTime FROM focus_sessions WHERE id='normal'"))
+        assertEquals(5000L, db.longValue("SELECT effectiveEndTime FROM focus_sessions WHERE id='missing'"))
+        assertEquals(7000L, db.longValue("SELECT effectiveEndTime FROM focus_sessions WHERE id='equal'"))
+        assertEquals(9000L, db.longValue("SELECT effectiveEndTime FROM focus_sessions WHERE id='backwards'"))
+        assertEquals(5000L, db.longValue("SELECT effectiveEndTime FROM focus_sessions WHERE id='zero'"))
+        assertEquals(0L, db.longValue("SELECT endTime FROM focus_sessions WHERE id='missing'"))
+        assertEquals(3000L, db.longValue("SELECT endTime FROM focus_sessions WHERE id='backwards'"))
+        assertEquals("keep note", db.textValue("SELECT note FROM focus_sessions WHERE id='normal'"))
+        assertTrue(
+            "The daily count must have its covering index",
+            "index_focus_sessions_status_effectiveEndTime_startTime" in db.indexNames("focus_sessions")
+        )
         db.close()
     }
 
