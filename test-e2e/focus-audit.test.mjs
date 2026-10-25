@@ -296,13 +296,34 @@ test('major ticks carry readable subtitle labels in an enlarged, single accessib
  * The real FocusScreen with native/time adapters mocked. Pass session: null for
  * the ready state. Both states read task titles from the shared daily snapshot.
  */
-function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = false, focusPreset = null } = {}) {
+function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = false, focusPreset = null, nowMs = null } = {}) {
   const alerts = [];
   const calls = [];
   const noop = () => {};
   const states = [];
   let stateIndex = 0;
   let effects = [];
+  /**
+   * Every write the page's own state setters perform.
+   *
+   * This is the measurable side of PERF-05: a drag must not commit anything to
+   * the page root, so this counter has to stay still while the picker previews.
+   * Counting renders is not possible without a renderer, and counting state
+   * commits is the cost that actually re-rendered the whole ready screen.
+   */
+  const rootCommits = [];
+  /**
+   * The state slots the current component is allocating into.
+   *
+   * The `useState` mock is index-based, so a sub-component inspected through
+   * `expand` must not allocate into — or later write into — the page's array.
+   * Each owner therefore gets its own array, captured by its own setters: a
+   * child that previews 27 marks writes its own slots, and the page root records
+   * nothing.
+   */
+  let container = states;
+  let owner = 'root';
+  const childStates = new Map();
   const active = session === null ? null : {
     sessionId: 'test-owned', subjectId: 'math', subjectName: '数学',
     mode: 'COUNTDOWN', taskId: null, startTime: 0,
@@ -322,9 +343,15 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
       useCallback: fn => fn, useMemo: fn => fn(), useEffect: effect => effects.push(effect), useRef: initial => ({ current: initial }),
       useState: initial => {
         const index = stateIndex++;
-        if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
-        return [states[index], next => {
-          states[index] = typeof next === 'function' ? next(states[index]) : next;
+        const box = container;
+        // Ownership is fixed when the slot is allocated, not when it is later
+        // written: a child's setter is usually called from the parent's event
+        // handler, long after `expand` restored the page as the current owner.
+        const isRoot = owner === 'root';
+        if (!(index in box)) box[index] = typeof initial === 'function' ? initial() : initial;
+        return [box[index], next => {
+          if (isRoot) rootCommits.push(index);
+          box[index] = typeof next === 'function' ? next(box[index]) : next;
         }];
       },
     },
@@ -374,14 +401,55 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
       syncActiveSession: async () => {},
     },
   };
-  const { FocusScreen } = loadTypeScript('src/screens/FocusScreen.tsx', mocks);
-  const render = () => {
+  const { FocusScreen } = loadTypeScript('src/screens/FocusScreen.tsx', mocks, nowMs === null ? {} : {
+    // The projected end time is `now + duration`, so a printed minute can only
+    // be asserted against a pinned clock. `loadTypeScript` runs the module in its
+    // own VM context, so the pinned `Date` has to be injected there — patching
+    // `globalThis` in this file would not reach it.
+    Date: class extends Date {
+      constructor(...args) {
+        super(...(args.length ? args : [nowMs]));
+      }
+      static now() { return nowMs; }
+    },
+  });
+  const render = (pageVisible = true) => {
     stateIndex = 0;
     effects = [];
-    return FocusScreen({ visible: true });
+    return FocusScreen({ visible: pageVisible });
+  };
+  /**
+   * Instantiate a local sub-component for inspection with its own state slots.
+   *
+   * The `useState` mock is index-based, so calling a child during a tree walk
+   * would allocate into the parent's array and later write over the parent's
+   * values. Each inspected child gets a stable array keyed by its own type, and
+   * the page keeps its own array and effect queue untouched, so a walk can look
+   * inside a child without corrupting a later render.
+   */
+  const expand = node => {
+    const key = node.type;
+    if (!childStates.has(key)) childStates.set(key, []);
+    const savedContainer = container;
+    const savedIndex = stateIndex;
+    const savedEffects = effects;
+    container = childStates.get(key);
+    stateIndex = 0;
+    owner = 'child';
+    try {
+      return node.type(node.props);
+    } finally {
+      container = savedContainer;
+      stateIndex = savedIndex;
+      effects = savedEffects;
+      owner = 'root';
+    }
   };
   return {
-    root: render(), alerts, calls, paper, render,
+    root: render(), alerts, calls, paper, render, expand,
+    /** Page-root state commits since the last `clearCommits()`. */
+    rootCommits,
+    clearCommits: () => { rootCommits.length = 0; },
     /** Effects queued by the most recent render, for tests that need to settle them. */
     pendingEffects: () => effects,
     async loadSubjects() {
@@ -394,19 +462,52 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
   };
 }
 
-function findAll(node, predicate, matches = []) {
-  if (Array.isArray(node)) for (const element of node) findAll(element, predicate, matches);
+/**
+ * Walk the rendered tree, descending into the local sub-components that carry
+ * the duration picker's own UI.
+ *
+ * `FocusScreen` now composes real sub-components (the duration picker and the
+ * projected end-time label) that the harness does not mock, so their elements
+ * appear as `type: <function>`. A host-string-only walk would report the ruler
+ * as missing even though it renders.
+ *
+ * Only `DurationPicker`/`EstimatedEndTime` are expanded on purpose: expanding
+ * every function component would also instantiate `FocusTimerReadout`, whose
+ * `useTimerTick` is mocked to throw, and that guard exists to prove the *root*
+ * screen does not subscribe to second ticks — it is not a statement about the
+ * leaf that is supposed to.
+ */
+const EXPANDED_COMPONENTS = new Set(['DurationPicker', 'EstimatedEndTime']);
+
+/** The text a rendered element carries, following nested `Text` children. */
+function textOf(node) {
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  if (node === null || node === undefined) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (typeof node !== 'object' || !('type' in node)) return '';
+  return textOf(node.props?.children);
+}
+
+function findAll(node, predicate, matches = [], expand = null) {
+  if (Array.isArray(node)) for (const element of node) findAll(element, predicate, matches, expand);
   else if (node && typeof node === 'object' && 'type' in node) {
     if (predicate(node)) matches.push(node);
-    findAll(node.props?.children, predicate, matches);
+    const expandable = typeof node.type === 'function'
+      && EXPANDED_COMPONENTS.has(node.type.name);
+    if (expandable && expand) findAll(expand(node), predicate, matches, expand);
+    else findAll(node.props?.children, predicate, matches, expand);
   }
   return matches;
 }
 
 test('the ready screen offers the countdown ruler without preset or custom-duration buttons', () => {
-  const { root, calls } = focusScreenHarness({ session: null });
+  const harness = focusScreenHarness({ session: null });
+  const { root, calls } = harness;
+  // Expanding a child needs its own state slots; the walk asks the harness for
+  // that instead of calling the component inline.
+  const walk = (node, predicate) => findAll(node, predicate, [], harness.expand);
   assert.equal(root.props.testID, 'focus-ready');
-  const dials = findAll(root, n => n.type === 'FocusVernierDial');
+  const dials = walk(root, n => n.type === 'FocusVernierDial');
   assert.equal(dials.length, 1);
   const dial = dials[0];
   assert.deepEqual({
@@ -414,18 +515,23 @@ test('the ready screen offers the countdown ruler without preset or custom-durat
     max: dial.props.maxMinutes, step: dial.props.stepMinutes,
   }, { value: 45, min: 5, max: 180, step: 5 });
   assert.equal(dial.props.accessibilityLabel, '调整倒计时长度');
-  const strip = findAll(root, n => n.props?.children === dial)[0];
-  assert.ok(strip, 'the enlarged ruler is the strip’s only child');
-  assert.equal(strip.props.style.marginHorizontal, -tokens.YanjiPaperLayout.pageGutter);
-  assert.equal(findAll(root, n => n.props?.accessibilityRole === 'button' || n.type === 'YanjiPrimaryButton').length, 8,
+  // The ruler stays full-bleed: the dial sits inside the strip that cancels the
+  // page gutter, so the scale spans edge to edge. It is now nested one level
+  // deeper (inside the duration picker), so match on the bleeding container
+  // rather than on "whose only child is the dial".
+  const strip = walk(root, n => n.props?.style?.marginHorizontal === -tokens.YanjiPaperLayout.pageGutter)[0];
+  assert.ok(strip, 'the ruler is wrapped in the full-bleed strip');
+  assert.equal(walk(strip, n => n.type === 'FocusVernierDial').length, 1,
+    'the strip carries exactly one ruler');
+  assert.equal(walk(root, n => n.props?.accessibilityRole === 'button' || n.type === 'YanjiPrimaryButton').length, 8,
     'the ready state includes record, start, and 6 quick preset chips');
-  const presetChips = findAll(root, n => typeof n.props?.testID === 'string' && n.props.testID.startsWith('focus-preset-'));
+  const presetChips = walk(root, n => typeof n.props?.testID === 'string' && n.props.testID.startsWith('focus-preset-'));
   assert.equal(presetChips.length, 6, 'provides 6 quick preset duration chips');
-  const chip45 = findAll(root, n => n.props?.testID === 'focus-preset-45')[0];
+  const chip45 = walk(root, n => n.props?.testID === 'focus-preset-45')[0];
   assert.equal(chip45.props.accessibilityState.selected, true);
-  assert.equal(findAll(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
-  assert.equal(findAll(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
-  assert.equal(findAll(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
+  assert.equal(walk(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
+  assert.equal(walk(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
+  assert.equal(walk(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
   assert.deepEqual(calls, [], 'rendering the ready state does not touch a native timer');
 });
 
@@ -643,4 +749,165 @@ test('paused discard opens native confirmation; cancellation never calls discard
   buttons[1].onPress();
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls, ['discard'], 'only the confirmed action invokes native discard, once');
+});
+
+test('dragging the ruler updates the picker without re-rendering the ready screen', () => {
+  // 拖动曾经直接写页面根状态：每跨 5 分钟刻度，科目区、任务带、尺盘和静态渐变
+  // 都跟着重渲染。现在即时值留在 DurationPicker 子树里，页面只在停稳时收到一次值。
+  const harness = focusScreenHarness({ session: null });
+  const walk = (node, predicate) => findAll(node, predicate, [], harness.expand);
+
+  const dialOf = root => walk(root, n => n.type === 'FocusVernierDial')[0];
+  const readoutOf = root => walk(root, n => n.props?.testID === 'focus-duration-value')[0];
+
+  const dial = dialOf(harness.root);
+  assert.ok(dial, 'the ready state renders the ruler');
+  assert.equal(readoutOf(harness.root).props.children, '45:00');
+
+  // The dial is controlled by the picker's own preview state, so a drag only
+  // moves the value inside that subtree. `onChangeMinutes` is the live channel
+  // and `onSettleMinutes` is the single commit the page hears.
+  assert.equal(typeof dial.props.onChangeMinutes, 'function');
+  assert.equal(typeof dial.props.onSettleMinutes, 'function');
+  assert.notEqual(dial.props.onChangeMinutes, dial.props.onSettleMinutes,
+    'the live preview and the committed value are separate channels');
+
+  // Committing 60 is what the page keeps: the preset row and the projected end
+  // time both follow it, and the readout agrees.
+  dial.props.onSettleMinutes(60);
+  const settled = harness.render();
+  assert.equal(
+    walk(settled, n => n.props?.testID === 'focus-preset-60')[0].props.accessibilityState.selected,
+    true,
+    'the confirmed value is what the preset row reflects'
+  );
+  assert.equal(dialOf(settled).props.valueMinutes, 60,
+    'the dial is driven by the committed value after settling');
+  assert.equal(readoutOf(settled).props.children, '60:00');
+
+  // A task preset that is not on the 5-minute grid must survive as-is.
+  const presetHarness = focusScreenHarness({
+    session: null,
+    focusPreset: { taskId: 't', subjectId: 'math', subjectName: '数学', plannedMinutes: 37 },
+  });
+  for (const effect of presetHarness.pendingEffects()) effect();
+  const afterPreset = presetHarness.render();
+  const presetDial = findAll(afterPreset, n => n.type === 'FocusVernierDial', [], presetHarness.expand)[0];
+  assert.equal(presetDial.props.valueMinutes, 37,
+    'a real planned duration is projected, not rounded to the nearest mark');
+});
+
+test('a live drag commits nothing to the page root', () => {
+  // The measurable claim of PERF-05: dragging across marks used to write
+  // `durationMinutes` into the page root on every 5-minute step, which redrew
+  // the subject chips, the task band, the ruler and the static gradient. The
+  // preview now lives in the picker subtree, so the page root must stay untouched
+  // for the whole gesture.
+  const harness = focusScreenHarness({ session: null });
+  const walk = (node, predicate) => findAll(node, predicate, [], harness.expand);
+  const dial = walk(harness.root, n => n.type === 'FocusVernierDial')[0];
+  assert.ok(dial, 'the ready state renders the ruler');
+
+  dial.props.onDragStateChange(true);
+  harness.clearCommits();
+  // 45 → 180 in 5-minute steps is 27 marks; the old code committed all of them.
+  const marks = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120,
+    125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180];
+  let dragging = harness.render();
+  for (const mark of marks) {
+    walk(dragging, n => n.type === 'FocusVernierDial')[0].props.onChangeMinutes(mark);
+    dragging = harness.render();
+  }
+  assert.deepEqual(harness.rootCommits, [],
+    'a whole drag gesture writes no page-root state');
+
+  // The preview itself did move, so the silence is not a broken control.
+  assert.equal(walk(dragging, n => n.props?.testID === 'focus-duration-value')[0].props.children, '180:00',
+    'the live preview follows the finger without committing');
+  // …and no preset chip claims the dragged value before it settles.
+  for (const preset of [45, 60, 90, 120, 180]) {
+    assert.equal(walk(dragging, n => n.props?.testID === `focus-preset-${preset}`)[0]
+      .props.accessibilityState.selected, false,
+    'no preset is marked selected while the finger is still moving');
+  }
+});
+
+test('one settle commits the confirmed value once, and start uses it', async () => {
+  const subjects = [{ id: 'math', name: '数学', colorHex: '#356AE6', enabled: true, parentId: null, sortOrder: 1 }];
+  const harness = focusScreenHarness({ session: null, subjects });
+  const walk = (node, predicate) => findAll(node, predicate, [], harness.expand);
+  let tree = await harness.loadSubjects();
+  const dial = walk(tree, n => n.type === 'FocusVernierDial')[0];
+
+  // Preview far away from the committed value first, then settle on 90.
+  dial.props.onDragStateChange(true);
+  dial.props.onChangeMinutes(55);
+  harness.render();
+  harness.clearCommits();
+  // A settle ends the gesture, so the picker clears its own drag flag as it
+  // commits — that is what lets the preset row mark the confirmed value again.
+  walk(harness.render(), n => n.type === 'FocusVernierDial')[0].props.onDragStateChange(false);
+  walk(harness.render(), n => n.type === 'FocusVernierDial')[0].props.onSettleMinutes(90);
+  assert.equal(harness.rootCommits.length, 2,
+    'settling writes the duration pair exactly once (the value and its projection)');
+  assert.equal(new Set(harness.rootCommits).size, 2,
+    'the two writes are the two duration slots, not one slot twice');
+
+  tree = harness.render();
+  assert.equal(walk(tree, n => n.props?.testID === 'focus-preset-90')[0].props.accessibilityState.selected, true);
+  assert.equal(walk(tree, n => n.props?.testID === 'focus-duration-value')[0].props.children, '90:00');
+
+  // The started session carries the confirmed value, not the abandoned preview.
+  // `startFocus(subjectId, subjectName, mode, note, taskId, plannedMinutes)`.
+  await walk(tree, n => n.type === 'YanjiPrimaryButton')[0].props.onPress();
+  assert.equal(harness.calls[0][0], 'start');
+  assert.equal(harness.calls[0][6], 90,
+    'the native session starts with the last confirmed duration');
+});
+
+test('the projected end time is its own minute leaf and corrects on return', () => {
+  // 预计结束时间曾经由页面根状态每 15 秒刷新一次，整页跟着重绘。现在它是一条
+  // 独立文字叶子：只有它自己按分钟更新，回到前台/重新可见时立即重读时钟。
+  //
+  // The projected value is `now + duration`, so the clock is pinned: 15:20 on
+  // 2026-10-16, which is the same instant the daily snapshot fixtures use.
+  const frozen = new Date('2026-10-16T15:20:00').getTime();
+  const harness = focusScreenHarness({ session: null, nowMs: frozen });
+  const walk = (node, predicate) => findAll(node, predicate, [], harness.expand);
+
+  const labelOf = root => walk(root, n => n.props?.testID === 'focus-estimated-end')[0];
+  const label = labelOf(harness.root);
+  assert.ok(label, 'the ready state prints the projected end time as its own node');
+  // 15:20 + 45 minutes = 16:05.
+  assert.equal(textOf(label), '预计 16:05 结束本轮');
+
+  // Its clock is inside the leaf, not the page: the page root owns no timer for
+  // it, so becoming visible again re-reads instead of trusting a stale interval
+  // that the platform may have throttled while hidden.
+  const leaf = walk(harness.root, n => typeof n.type === 'function' && n.type.name === 'EstimatedEndTime')[0];
+  assert.ok(leaf, 'the label is a real sub-component, so its timer can be isolated');
+  assert.equal(leaf.props.durationMinutes, 45);
+  assert.equal(leaf.props.active, true, 'the leaf follows page visibility');
+
+  // Leaving the page stops the leaf clock; returning starts it again from a
+  // fresh read rather than from a minute it accumulated while hidden.
+  const hidden = harness.render(false);
+  assert.equal(
+    walk(hidden, n => typeof n.type === 'function' && n.type.name === 'EstimatedEndTime')[0].props.active,
+    false,
+    'a hidden page stops the projected-end clock'
+  );
+
+  // A non-grid committed duration projects exactly, without rounding.
+  const presetHarness = focusScreenHarness({
+    session: null,
+    nowMs: frozen,
+    focusPreset: { taskId: 't', subjectId: 'math', subjectName: '数学', plannedMinutes: 37 },
+  });
+  for (const effect of presetHarness.pendingEffects()) effect();
+  const projected = findAll(presetHarness.render(),
+    n => n.props?.testID === 'focus-estimated-end', [], presetHarness.expand)[0];
+  // 15:20 + 37 minutes = 15:57 — not the nearest 5-minute mark (16:00).
+  assert.equal(textOf(projected), '预计 15:57 结束本轮',
+    'a 37-minute plan projects 15:20 + 37m, not the nearest 5-minute mark');
 });

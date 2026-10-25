@@ -1,6 +1,8 @@
 /** Paper & Chrono: saved facts come from Room; live ticks stay in their leaf. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import type { ListRenderItem } from '@shopify/flash-list';
 import {
   Easing,
   runOnJS,
@@ -283,7 +285,22 @@ export function TodayScreen({ visible, foregroundRevision }: {
   useEffect(() => {
     if (!visible) return;
     setNow(new Date());
-    const timer = setInterval(() => setNow(new Date()), 30_000);
+    // The clock only feeds the date line, the greeting and the current-hour
+    // marker, so it commits on a date or hour change instead of every tick.
+    // A 30s poll still lands within one tick of the boundary, and returning to
+    // the foreground re-reads immediately so a slept-through boundary is exact.
+    const sync = () => {
+      const next = new Date();
+      setNow(current => (
+        current.getDate() === next.getDate()
+        && current.getMonth() === next.getMonth()
+        && current.getFullYear() === next.getFullYear()
+        && current.getHours() === next.getHours()
+          ? current
+          : next
+      ));
+    };
+    const timer = setInterval(sync, 30_000);
     return () => clearInterval(timer);
   }, [visible, foregroundRevision]);
   useEffect(() => {

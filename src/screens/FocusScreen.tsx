@@ -16,6 +16,8 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,11 +78,243 @@ function formatDialMinutes(minutes: number): string {
 
 
 /** Projection only — it never writes a planned duration, it just reads the clock. */
-function formatEstimatedEndTime(durationMinutes: number): string {
-  const end = new Date(Date.now() + durationMinutes * 60 * 1000);
+function formatEstimatedEndTime(durationMinutes: number, nowMs: number): string {
+  const end = new Date(nowMs + durationMinutes * 60 * 1000);
   const hh = String(end.getHours()).padStart(2, '0');
   const mm = String(end.getMinutes()).padStart(2, '0');
   return `预计 ${hh}:${mm} 结束本轮`;
+}
+
+/**
+ * The wall clock at the precision this page prints it: once per minute.
+ *
+ * The label is `now + duration` rendered as `HH:mm`, so it can only change on a
+ * minute boundary. The timer therefore waits for the next whole minute and then
+ * ticks once a minute — a 30s poll would wake twice per visible change, and a
+ * free-running interval would drift away from the boundary it is trying to
+ * print.
+ *
+ * `active` is the page's own visibility. Leaving the tab or the foreground
+ * tears the timer down, and coming back re-reads the clock immediately instead
+ * of waiting for the next boundary: a timer that was throttled or stopped while
+ * hidden would otherwise keep printing a minute that has already passed.
+ */
+function useMinuteClock(active: boolean): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return undefined;
+    const read = () => setNowMs(Date.now());
+    let interval: ReturnType<typeof setInterval> | null = null;
+    // Correct immediately: the page may have been hidden across a boundary.
+    read();
+    const align = setTimeout(() => {
+      read();
+      interval = setInterval(read, 60_000);
+      if (typeof (interval as any)?.unref === 'function') (interval as any).unref();
+    }, 60_000 - (Date.now() % 60_000));
+    if (typeof (align as any)?.unref === 'function') (align as any).unref();
+    return () => {
+      clearTimeout(align);
+      if (interval) clearInterval(interval);
+    };
+  }, [active]);
+  return nowMs;
+}
+
+/**
+ * The projected end time of the planned round.
+ *
+ * It owns its own minute clock: the page used to bump a root state every 15s
+ * just to refresh this one line, which re-rendered the whole ready screen
+ * (subject chips, ruler, gradient) for a label that only changes once a minute.
+ * Keeping the timer inside the leaf means the cost stays here.
+ */
+function EstimatedEndTime({
+  durationMinutes,
+  active,
+  style,
+}: {
+  durationMinutes: number;
+  active: boolean;
+  style: StyleProp<TextStyle>;
+}): React.JSX.Element {
+  const nowMs = useMinuteClock(active);
+  return (
+    <Text testID="focus-estimated-end" style={style}>
+      {formatEstimatedEndTime(durationMinutes, nowMs)}
+    </Text>
+  );
+}
+
+/**
+ * The ready-state duration picker: rolling digits, the vernier ruler, its
+ * feathering fade, the preset chips and the projected end time.
+ *
+ * Dragging used to write straight into the page's `durationMinutes`, so every
+ * 5-minute tick re-rendered the whole ready screen — subject chips, task slot,
+ * this ruler and the static gradient — while the finger was still moving. The
+ * live value now lives here; the page only learns the value once it settles.
+ */
+function DurationPicker({
+  initialMinutes,
+  settledMinutes,
+  onCommitMinutes,
+  disabled,
+  visible,
+}: {
+  initialMinutes: number;
+  settledMinutes: number;
+  onCommitMinutes: (value: number) => void;
+  disabled: boolean;
+  /** Whether the page is on screen; the projected-end clock follows it. */
+  visible: boolean;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const [preview, setPreview] = useState(initialMinutes);
+  const [dragging, setDragging] = useState(false);
+
+  // A preset chosen elsewhere (a task's planned minutes) must reach the dial,
+  // but only when the page's settled value actually changes — not on every
+  // render of the page above it.
+  useEffect(() => {
+    setPreview(settledMinutes);
+  }, [settledMinutes]);
+
+  const handleDrag = useCallback((isDragging: boolean) => {
+    setDragging(isDragging);
+  }, []);
+
+  const handleSettle = useCallback((value: number) => {
+    setPreview(value);
+    onCommitMinutes(value);
+  }, [onCommitMinutes]);
+
+  return (
+    <>
+      <RollingTimeDisplay
+        valueMinutes={preview}
+        color={paper.colors.ink}
+        style={{ marginVertical: YanjiSpacing.xs }}
+      />
+
+      <Text
+        testID="focus-duration-value"
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+        accessible={false}
+      >
+        {formatDialMinutes(preview)}
+      </Text>
+
+      {/* Full-bleed strip: the ruler belongs to the page, not to a card. */}
+      <View style={{ alignSelf: 'stretch', position: 'relative', marginTop: YanjiSpacing.sm }}>
+        <View style={{ marginHorizontal: -paper.layout.pageGutter }}>
+          <FocusVernierDial
+            valueMinutes={preview}
+            onChangeMinutes={setPreview}
+            onSettleMinutes={handleSettle}
+            onDragStateChange={handleDrag}
+            minMinutes={MIN_MINUTES}
+            maxMinutes={MAX_MINUTES}
+            stepMinutes={5}
+            disabled={disabled}
+            accessibilityLabel="调整倒计时长度"
+          />
+        </View>
+
+        {/* Full-span Feathering Fade: Keep only central tick and label solid, fading out towards both sides */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: -paper.layout.pageGutter,
+            right: -paper.layout.pageGutter,
+            top: 0,
+            bottom: 0,
+          }}
+        >
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="ruler-feather-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={1} />
+                <Stop offset="12%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
+                <Stop offset="24%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
+                <Stop offset="34%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
+                <Stop offset="42%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
+                <Stop offset="46%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                <Stop offset="54%" stopColor={paper.colors.canvas} stopOpacity={0} />
+                <Stop offset="58%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
+                <Stop offset="66%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
+                <Stop offset="76%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
+                <Stop offset="88%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
+                <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-feather-gradient)" />
+          </Svg>
+        </View>
+      </View>
+
+      {/* Quick Preset Chips */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: YanjiSpacing.xs + 2,
+          marginTop: YanjiSpacing.md,
+        }}
+      >
+        {FOCUS_PRESETS.map(preset => {
+          const isSelected = !dragging && settledMinutes === preset;
+          return (
+            <Pressable
+              key={preset}
+              testID={`focus-preset-${preset}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${preset}分钟`}
+              accessibilityState={{ selected: isSelected }}
+              hitSlop={6}
+              onPress={() => {
+                setPreview(preset);
+                onCommitMinutes(preset);
+              }}
+              style={({ pressed }) => [
+                {
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: paper.radius.pill,
+                  backgroundColor: isSelected
+                    ? paper.colors.brandSubtle
+                    : paper.colors.subtle,
+                  borderWidth: isSelected ? 1 : 0,
+                  borderColor: isSelected ? paper.colors.brand : 'transparent',
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  paper.typography.captionMeta,
+                  {
+                    color: isSelected ? paper.colors.brandInk : paper.colors.secondary,
+                    fontWeight: isSelected ? '700' : '500',
+                  },
+                ]}
+              >
+                {preset}m
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <EstimatedEndTime
+        durationMinutes={settledMinutes}
+        active={visible}
+        style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm + 2, textAlign: 'center' }]}
+      />
+    </>
+  );
 }
 
 const AnimatedView = (Animated && Animated.View ? Animated.View : View) as React.ComponentType<any>;
@@ -93,13 +327,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const { width, fontScale } = useWindowDimensions();
     const [date] = useState(todayIso);
   const session = useActiveSession(visible);
-  const [, setClockTick] = useState(0);
-  useEffect(() => {
-    if (!visible || session) return;
-    const interval = setInterval(() => setClockTick(t => t + 1), 15000);
-    if (typeof (interval as any)?.unref === 'function') (interval as any).unref();
-    return () => clearInterval(interval);
-  }, [visible, session]);
 
   const transitionAnim = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
   const immersionFade = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
@@ -159,7 +386,15 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MINUTES);
   const [settledDuration, setSettledDuration] = useState(DEFAULT_MINUTES);
-  const [isDialDragging, setIsDialDragging] = useState(false);
+  /**
+   * One commit for a chosen duration: the value to start with and the value the
+   * picker projects (preset highlight, projected end time). Keeping them in
+   * lockstep here is what lets the picker preview locally while dragging.
+   */
+  const commitDuration = useCallback((value: number) => {
+    setDurationMinutes(value);
+    setSettledDuration(value);
+  }, []);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
   // 补录专注 ≠ 补录随笔：ready 态的「补录记录」写一条真实的 focus_sessions，
@@ -638,125 +873,13 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             <View style={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', marginVertical: YanjiSpacing.sm }}>
               {timerMode === 'COUNTDOWN' ? (
                 <>
-                  <RollingTimeDisplay
-                    valueMinutes={durationMinutes}
-                    color={paper.colors.ink}
-                    style={{ marginVertical: YanjiSpacing.xs }}
+                  <DurationPicker
+                    initialMinutes={durationMinutes}
+                    settledMinutes={settledDuration}
+                    onCommitMinutes={commitDuration}
+                    disabled={busy}
+                    visible={visible}
                   />
-
-                  <Text
-                    testID="focus-duration-value"
-                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-                    accessible={false}
-                  >
-                    {formatDialMinutes(durationMinutes)}
-                  </Text>
-
-                  {/* Full-bleed strip: the ruler belongs to the page, not to a card. */}
-                  <View style={{ alignSelf: 'stretch', position: 'relative', marginTop: YanjiSpacing.sm }}>
-                    <View style={{ marginHorizontal: -paper.layout.pageGutter }}>
-                      <FocusVernierDial
-                        valueMinutes={durationMinutes}
-                        onChangeMinutes={setDurationMinutes}
-                        onSettleMinutes={setSettledDuration}
-                        onDragStateChange={setIsDialDragging}
-                        minMinutes={MIN_MINUTES}
-                        maxMinutes={MAX_MINUTES}
-                        stepMinutes={5}
-                        accessibilityLabel="调整倒计时长度"
-                      />
-                    </View>
-
-                    {/* Full-span Feathering Fade: Keep only central tick and label solid, fading out towards both sides */}
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        left: -paper.layout.pageGutter,
-                        right: -paper.layout.pageGutter,
-                        top: 0,
-                        bottom: 0,
-                      }}
-                    >
-                      <Svg width="100%" height="100%">
-                        <Defs>
-                          <LinearGradient id="ruler-feather-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <Stop offset="0%" stopColor={paper.colors.canvas} stopOpacity={1} />
-                            <Stop offset="12%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
-                            <Stop offset="24%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
-                            <Stop offset="34%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
-                            <Stop offset="42%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
-                            <Stop offset="46%" stopColor={paper.colors.canvas} stopOpacity={0} />
-                            <Stop offset="54%" stopColor={paper.colors.canvas} stopOpacity={0} />
-                            <Stop offset="58%" stopColor={paper.colors.canvas} stopOpacity={0.2} />
-                            <Stop offset="66%" stopColor={paper.colors.canvas} stopOpacity={0.55} />
-                            <Stop offset="76%" stopColor={paper.colors.canvas} stopOpacity={0.82} />
-                            <Stop offset="88%" stopColor={paper.colors.canvas} stopOpacity={0.96} />
-                            <Stop offset="100%" stopColor={paper.colors.canvas} stopOpacity={1} />
-                          </LinearGradient>
-                        </Defs>
-                        <Rect x="0" y="0" width="100%" height="100%" fill="url(#ruler-feather-gradient)" />
-                      </Svg>
-                    </View>
-                  </View>
-
-                  {/* Quick Preset Chips */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: YanjiSpacing.xs + 2,
-                      marginTop: YanjiSpacing.md,
-                    }}
-                  >
-                    {FOCUS_PRESETS.map(preset => {
-                      const isSelected = !isDialDragging && settledDuration === preset;
-                      return (
-                        <Pressable
-                          key={preset}
-                          testID={`focus-preset-${preset}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${preset}分钟`}
-                          accessibilityState={{ selected: isSelected }}
-                          hitSlop={6}
-                          onPress={() => {
-                            setDurationMinutes(preset);
-                            setSettledDuration(preset);
-                          }}
-                          style={({ pressed }) => [
-                            {
-                              paddingHorizontal: 12,
-                              paddingVertical: 5,
-                              borderRadius: paper.radius.pill,
-                              backgroundColor: isSelected
-                                ? paper.colors.brandSubtle
-                                : paper.colors.subtle,
-                              borderWidth: isSelected ? 1 : 0,
-                              borderColor: isSelected ? paper.colors.brand : 'transparent',
-                              opacity: pressed ? 0.75 : 1,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              paper.typography.captionMeta,
-                              {
-                                color: isSelected ? paper.colors.brandInk : paper.colors.secondary,
-                                fontWeight: isSelected ? '700' : '500',
-                              },
-                            ]}
-                          >
-                            {preset}m
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginTop: YanjiSpacing.sm + 2, textAlign: 'center' }]}>
-                    {formatEstimatedEndTime(settledDuration)}
-                  </Text>
                 </>
               ) : (
                 <>
