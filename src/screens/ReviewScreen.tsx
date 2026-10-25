@@ -24,6 +24,7 @@ import {
   useDailyReadFailed, useDailySnapshot,
   useReviewDataVisibility, useReviewOverview, useReviewReadFailed, useSettingsSnapshot,
 } from '../state/dataRefresh';
+import { reviewWindowKey } from '../state/dataRefreshCoordinator';
 import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
   buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
@@ -76,7 +77,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     [date]
   );
   const reviewRequests = useMemo(
-    () => [overviewRequest, previousRequest, weekRequest],
+    () => scope === 'CALENDAR_WEEK'
+      ? [overviewRequest, previousRequest]
+      : [overviewRequest, previousRequest, weekRequest],
     [overviewRequest, previousRequest, weekRequest]
   );
   const overview = useReviewOverview(overviewRequest);
@@ -160,7 +163,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         // 时间线的周点阵读的是所选日所在的自然周；一并预取，切回时间线也不闪空。
         { scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: anchor },
       ].forEach(request => {
-        requests.set(`${request.scope}:${request.periodsBack}:${request.anchorDate}`, request);
+        requests.set(reviewWindowKey(request), request);
       });
     });
     const dailyDates = view === 'timeline'

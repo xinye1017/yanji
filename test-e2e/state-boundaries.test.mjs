@@ -702,7 +702,8 @@ test('mounted Review overview stays available while hidden and keeps obsolete wi
   f.hooks.useReviewOverview(request);
   const unsubscribe = f.observer().subscribe(() => {});
   f.hooks.useReviewDataVisibility('review', [request], true);
-  const detach = f.effects.pop()();
+  const detach = f.effects.pop()(); // Unmount cleanup is independent of request updates.
+  f.effects.pop()(); // Register the visible windows.
   f.reads.review[0].resolve({ totalSeconds: 600 });
   await settle();
   const shown = f.observer().get();

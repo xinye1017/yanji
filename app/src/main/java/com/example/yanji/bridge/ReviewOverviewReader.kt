@@ -61,15 +61,30 @@ internal object ReviewOverviewReader {
         val endExclusive = windows.maxOf { it.range.endExclusive }
         val rows = repository.readCompletedStatsRows(startInclusive, endExclusive)
 
-        return requests.indices.map { index ->
-            build(
-                scope = requests[index].scope,
-                periodsBack = requests[index].effectivePeriodsBack.toInt(),
-                window = windows[index],
-                focus = rows.focus,
-                exams = rows.exams,
-                todayIso = todayIso
-            )
+        return buildAll(requests, windows, rows.focus, rows.exams, todayIso)
+    }
+
+    /** Equivalent windows share the row traversal and mapper result; only request metadata is copied. */
+    fun buildAll(
+        requests: List<Request>,
+        windows: List<Window>,
+        focus: List<FocusStatsRow>,
+        exams: List<ExamStatsRow>,
+        todayIso: String
+    ): List<BridgeMappers.ReviewOverviewFields> {
+        val built = HashMap<Window, BridgeMappers.ReviewOverviewFields>()
+        return requests.mapIndexed { index, request ->
+            val overview = built.getOrPut(windows[index]) {
+                build(
+                    scope = request.scope,
+                    periodsBack = request.effectivePeriodsBack.toInt(),
+                    window = windows[index],
+                    focus = focus,
+                    exams = exams,
+                    todayIso = todayIso
+                )
+            }
+            overview.copy(scope = request.scope, periodsBack = request.effectivePeriodsBack.toInt())
         }
     }
 

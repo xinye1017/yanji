@@ -24,8 +24,39 @@ interface DataRefreshLoaders {
 
 type Listener = () => void;
 
-function reviewRequestId(request: ReviewRequestKey): string {
-  return `${request.scope}:${request.periodsBack}:${request.anchorDate}`;
+function localDateIso(date = new Date()): string {
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
+}
+
+function effectivePeriodsBack(request: ReviewRequestKey): number {
+  return request.scope === 'TODAY' ? 0 : Math.max(0, Math.trunc(request.periodsBack));
+}
+
+/** Same calendar window as ReviewOverviewReader.windowOf, independent of the display anchor. */
+export function reviewWindowKey(request: ReviewRequestKey): string {
+  const anchor = new Date(`${request.anchorDate}T12:00:00`);
+  const start = Number.isNaN(anchor.getTime()) ? new Date() : anchor;
+  const periodsBack = effectivePeriodsBack(request);
+  if (request.scope === 'CALENDAR_WEEK') {
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - periodsBack * 7);
+  } else if (request.scope === 'CALENDAR_MONTH') {
+    // Set the day first: subtracting a month from the 31st must not overflow February.
+    start.setDate(1);
+    start.setMonth(start.getMonth() - periodsBack);
+  }
+  const end = new Date(start);
+  if (request.scope === 'CALENDAR_WEEK') end.setDate(end.getDate() + 6);
+  else if (request.scope === 'CALENDAR_MONTH') {
+    end.setMonth(end.getMonth() + 1, 0);
+  }
+  return `${request.scope}:${localDateIso(start)}:${localDateIso(end)}`;
+}
+
+/** Today affects flags/averages only while inside a window (including its last day). */
+function reviewTodayBoundary(id: string): string {
+  const [, first, last] = id.split(':');
+  const today = localDateIso();
+  return today < first ? 'future' : today > last ? 'past' : today;
 }
 
 /**
@@ -77,6 +108,13 @@ export class DataRefreshCoordinator {
   private readonly reviewValues = new Map<string, ReviewOverview>();
   private readonly reviewRetained = new Map<string, ReviewOverview>();
   private readonly reviewRetainedDirty = new Set<string>();
+  private readonly reviewAsOf = new Map<string, string>();
+  // Request objects are owned by callers; keep useSyncExternalStore projections
+  // stable without retaining every display anchor ever visited.
+  private readonly reviewProjections = new WeakMap<ReviewRequestKey, {
+    source: ReviewOverview;
+    value: ReviewOverview;
+  }>();
   private readonly reviewRequests = new Map<string, ReviewRequestKey>();
   private readonly reviewListeners = new Map<string, Set<Listener>>();
   private readonly reviewReaders = new Map<string, string[]>();
@@ -230,34 +268,43 @@ export class DataRefreshCoordinator {
   }
 
   getReviewOverview(request: ReviewRequestKey): ReviewOverview | null {
-    const id = reviewRequestId(request);
-    return this.reviewValues.get(id) ?? this.reviewRetained.get(id) ?? null;
+    const id = reviewWindowKey(request);
+    const source = this.reviewValues.get(id) ?? this.reviewRetained.get(id);
+    if (!source) return null;
+    const previous = this.reviewProjections.get(request);
+    if (previous?.source === source) return previous.value;
+    const value = { ...source, scope: request.scope, periodsBack: effectivePeriodsBack(request) };
+    this.reviewProjections.set(request, { source, value });
+    return value;
   }
 
   /** Whether the last completed read for this window failed (see `getDailyReadFailed`). */
   getReviewReadFailed(request: ReviewRequestKey): boolean {
-    return this.reviewReadFailed.has(reviewRequestId(request));
+    return this.reviewReadFailed.has(reviewWindowKey(request));
   }
 
   subscribeReviewOverview(request: ReviewRequestKey, listener: Listener): () => void {
-    const id = reviewRequestId(request);
+    const id = reviewWindowKey(request);
     this.reviewRequests.set(id, request);
-    return this.subscribe(this.reviewListeners, id, listener, () => this.pruneReview(id));
+    this.promoteReview(id);
+    // Each subscription owns its slot, even if equivalent requests use the same callback.
+    return this.subscribe(this.reviewListeners, id, () => listener(), () => this.pruneReview(id));
   }
 
   setReviewReader(readerId: string, requests: ReadonlyArray<ReviewRequestKey> | null): void {
     const previousIds = this.reviewReaders.get(readerId) ?? [];
     const nextRequests = requests ?? [];
-    const nextIds = nextRequests.map(request => {
-      const id = reviewRequestId(request);
+    const nextIds = [...new Set(nextRequests.map(request => {
+      const id = reviewWindowKey(request);
       this.reviewRequests.set(id, request);
+      this.promoteReview(id);
       return id;
-    });
-    if (previousIds.length === nextIds.length && previousIds.every((id, i) => id === nextIds[i])) {
-      return;
-    }
+    }))];
 
-    this.reviewReaders.delete(readerId);
+    // Register next windows before releasing previous ones: switching between
+    // equivalent anchors must not invalidate a shared read still in use.
+    if (nextIds.length > 0) this.reviewReaders.set(readerId, nextIds);
+    else this.reviewReaders.delete(readerId);
     for (const id of previousIds) {
       if (!this.isReviewVisible(id)) {
         this.invalidateReview(id);
@@ -265,7 +312,6 @@ export class DataRefreshCoordinator {
       }
     }
     if (nextIds.length > 0) {
-      this.reviewReaders.set(readerId, nextIds);
       // 一次切换涉及的三个窗口合并成一次桥调用：它们共享同一次区间扫描。
       // 已经有新鲜值（预取命中）的窗口不再重读。后台注册只登记不读取，
       // 由 `handleForeground` 在回到前台的那次跳变上补读。
@@ -276,7 +322,7 @@ export class DataRefreshCoordinator {
   }
 
   refreshReviewOverview(request: ReviewRequestKey): Promise<void> {
-    const id = reviewRequestId(request);
+    const id = reviewWindowKey(request);
     this.reviewRequests.set(id, request);
     this.invalidateReview(id);
     if (this.isReviewVisible(id)) return this.ensureReview(id);
@@ -297,7 +343,7 @@ export class DataRefreshCoordinator {
     if (!this.foreground) return;
     const wanted: string[] = [];
     for (const request of requests) {
-      const id = reviewRequestId(request);
+      const id = reviewWindowKey(request);
       this.reviewRequests.set(id, request);
       if (this.isReviewFresh(id) || this.reviewInFlight.has(id) || wanted.includes(id)) continue;
       wanted.push(id);
@@ -464,6 +510,7 @@ export class DataRefreshCoordinator {
   }
 
   private isReviewFresh(id: string): boolean {
+    if (this.reviewAsOf.get(id) !== reviewTodayBoundary(id)) return false;
     if (this.reviewValues.has(id) && !this.reviewDirty.has(id)) return true;
     return this.reviewRetained.has(id) && !this.reviewRetainedDirty.has(id);
   }
@@ -482,7 +529,7 @@ export class DataRefreshCoordinator {
    * 每个 id 仍按自己的版本号判断结果是否已经过期。
    */
   private readReviewIds(ids: ReadonlyArray<string>): Promise<void> {
-    const entries = ids
+    const entries = [...new Set(ids)]
       // 已经在读的窗口不重复发请求：失效已经由版本号记录，旧读取完成时
       // 会因为版本不匹配被丢弃，并在 finally 里按需补一次新读取。
       .filter(id => !this.reviewInFlight.has(id))
@@ -490,8 +537,9 @@ export class DataRefreshCoordinator {
         id,
         request: this.reviewRequests.get(id),
         version: this.reviewVersions.get(id) ?? 0,
+        asOf: reviewTodayBoundary(id),
       }))
-      .filter((entry): entry is { id: string; request: ReviewRequestKey; version: number } =>
+      .filter((entry): entry is { id: string; request: ReviewRequestKey; version: number; asOf: string } =>
         entry.request !== undefined
       );
     if (entries.length === 0) return Promise.resolve();
@@ -500,10 +548,12 @@ export class DataRefreshCoordinator {
       .getReviewOverviews(entries.map(entry => entry.request))
       .then(overviews => {
         entries.forEach((entry, index) => {
-          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version) return;
+          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version ||
+              reviewTodayBoundary(entry.id) !== entry.asOf) return;
           const overview = overviews[index];
           if (!overview) return;
           this.reviewValues.set(entry.id, overview);
+          this.reviewAsOf.set(entry.id, entry.asOf);
           this.reviewRetained.delete(entry.id);
           this.reviewRetainedDirty.delete(entry.id);
           this.reviewDirty.delete(entry.id);
@@ -513,7 +563,8 @@ export class DataRefreshCoordinator {
       })
       .catch(() => {
         entries.forEach(entry => {
-          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version) return;
+          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version ||
+              reviewTodayBoundary(entry.id) !== entry.asOf) return;
           this.reviewDirty.add(entry.id);
           this.reviewReadFailed.add(entry.id);
           this.notify(this.reviewListeners, entry.id);
@@ -524,7 +575,8 @@ export class DataRefreshCoordinator {
           if (this.reviewInFlight.get(entry.id) === request) this.reviewInFlight.delete(entry.id);
         });
         entries.forEach(entry => {
-          if ((this.reviewVersions.get(entry.id) ?? 0) !== entry.version && this.isReviewVisible(entry.id)) {
+          if (((this.reviewVersions.get(entry.id) ?? 0) !== entry.version ||
+               reviewTodayBoundary(entry.id) !== entry.asOf) && this.isReviewVisible(entry.id)) {
             void this.ensureReview(entry.id);
           } else {
             this.pruneReview(entry.id);
@@ -630,7 +682,7 @@ export class DataRefreshCoordinator {
     }
     keyListeners.add(listener);
     return () => {
-      keyListeners?.delete(listener);
+      if (!keyListeners?.delete(listener)) return;
       if (keyListeners?.size === 0) {
         listeners.delete(key);
         onEmpty?.();
@@ -671,6 +723,15 @@ export class DataRefreshCoordinator {
     }
   }
 
+  private promoteReview(id: string): void {
+    const value = this.reviewRetained.get(id);
+    if (!value) return;
+    this.reviewValues.set(id, value);
+    if (this.reviewRetainedDirty.has(id)) this.reviewDirty.add(id);
+    this.reviewRetained.delete(id);
+    this.reviewRetainedDirty.delete(id);
+  }
+
   private pruneReview(id: string): void {
     if (this.isReviewVisible(id) || this.reviewListeners.has(id) || this.reviewInFlight.has(id)) {
       return;
@@ -678,10 +739,11 @@ export class DataRefreshCoordinator {
     const value = this.reviewValues.get(id);
     if (value) {
       this.retainReview(id, value, this.reviewDirty.has(id));
-    } else {
-      // No value ever landed (or it was already released): the request key is no
-      // longer needed and would otherwise grow with every window the user browses.
+    } else if (!this.reviewRetained.has(id)) {
+      // Another equivalent subscription may release after this value moved to
+      // the warm cache. Its request and freshness still belong to that value.
       this.reviewRequests.delete(id);
+      this.reviewAsOf.delete(id);
     }
     this.reviewValues.delete(id);
     this.reviewDirty.delete(id);
@@ -702,6 +764,7 @@ export class DataRefreshCoordinator {
       this.reviewRetained.delete(oldest);
       this.reviewRetainedDirty.delete(oldest);
       this.reviewRequests.delete(oldest);
+      this.reviewAsOf.delete(oldest);
     }
   }
 

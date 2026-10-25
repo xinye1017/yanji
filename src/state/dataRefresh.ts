@@ -114,10 +114,12 @@ export function useReviewDataVisibility(
   requests: ReadonlyArray<ReviewRequestKey>,
   visible: boolean
 ): void {
+  // Update the reader atomically so retained week/month windows survive changes
+  // to the other requested windows. Only unmount/reader-id changes release all.
   useEffect(() => {
     dataRefreshCoordinator.setReviewReader(readerId, visible ? requests : null);
-    return () => dataRefreshCoordinator.setReviewReader(readerId, null);
   }, [readerId, requests, visible]);
+  useEffect(() => () => dataRefreshCoordinator.setReviewReader(readerId, null), [readerId]);
 }
 
 export function refreshDailySnapshot(date: string): Promise<void> {
