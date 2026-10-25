@@ -74,16 +74,17 @@
 - [x] TypeScript 检查与受影响的 JS/组件测试通过。
 - [x] 原生查询、业务行为及涉及的迁移测试通过。
 - [x] 新字节码 bundle、同步守卫和 Android Debug APK 构建通过。
-- [ ] 审阅最终 diff，精准提交并推送；工作区无本轮遗留在途修改。
+- [x] 审阅最终 diff，精准提交并推送；工作区无本轮遗留在途修改。
 
 ## 集成结果
 
-- `npm run typecheck` 通过；`npm test` 293/293 通过。
-- `./gradlew.bat :app:testDebugUnitTest` 323 项通过（含迁移、查询计划、成就等价性、回顾窗口）。
-- `npm run bundle:android` 产出 HBC 98 字节码；`npm run test:guards` 两项守卫通过；`./gradlew.bat assembleDebug` 成功，APK 内 `assets/index.android.bundle` 为 3,045,977 字节、magic `c61fbc03c103191f`。
-- 每项按独立提交推送：`8c2f8b5`（字节码构建）、`5620c1d`（全历史读取与 v27）、`e8eb101`（回顾窗口）、`e0dd965`（更新范围）、`c10e347`（列表虚拟化）。
+- `npm run typecheck` 通过；`npm test` 293/293 通过；`npm run test:guards` 两项守卫通过。
+- `./gradlew.bat :app:testDebugUnitTest` 318 项通过（含迁移、查询计划、成就等价性与回顾窗口）；`compileDebugAndroidTestKotlin` 通过。
+- `npm run bundle:android` 产出 HBC 98 字节码；`./gradlew.bat assembleDebug` 成功，APK 内 `assets/index.android.bundle` 为 3,045,977 字节、magic `c61fbc03c103191f`。
+- 按独立提交推送：`8c2f8b5`（字节码构建）、`5620c1d`（全历史读取与 v27）、`e8eb101`（回顾窗口）、`e0dd965`（更新范围）、`c10e347`（列表虚拟化）、`ee632e7` 与 `c68b0dc`（每日读取与成就读取量断言收紧）、`6039bf7`（移除失去调用方的 `StudyStats`）。
+- 真机做过一次覆盖安装与启动（保留用户数据），首页、专注、回顾三页渲染正常、无崩溃；「今日学习节奏」在当天 0 分钟时无柱是既有空态，不是回归。
 - FlashList 2.3.3 属 v2 纯 JS 实现，无原生依赖，因此不需要也不应添加 Fabric codegen 或 Gradle include；本轮未改动任何原生构建配置。
 
 ## 未验证边界
 
-没有真机安装、滚动、帧率、内存或启动耗时采样。本轮所有结论来自构建产物校验、独立测试数据库与组件级替身；字节码相对原 JS 体积约 +39.9%，不宣称缩包或真机加速。启动改善、滚动流畅度与省电收益需要在设备上实测。
+没有真机滚动、帧率、内存或启动耗时采样，因此启动改善、滚动流畅度与省电收益均未证实；字节码相对原 JS 体积约 +39.9%，不宣称缩包或真机加速。所有结论来自构建产物校验、独立测试数据库与组件级替身。`DailySnapshotInstrumentedTest` 的插桩断言只在编译层验证过，尚未在设备上执行。
