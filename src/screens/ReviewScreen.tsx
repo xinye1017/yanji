@@ -18,6 +18,7 @@ import {
 } from '../components/YanjiUI';
 import { EditingNote, RecordMomentModal } from '../components/RecordMomentModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
+import { JournalLibraryView } from './review/JournalLibraryView';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { useYanjiTheme } from '../theme/ThemeProvider';
@@ -45,8 +46,8 @@ import {
 } from './reviewViewLogic';
 import { todayIso } from '../state/settingsViewLogic';
 
-type ReviewView = 'timeline' | 'trend';
-const VIEWS = [{ value: 'timeline', label: '时间线' }, { value: 'trend', label: '趋势统计' }] as const;
+type ReviewView = 'timeline' | 'trend' | 'journal';
+const VIEWS = [{ value: 'timeline', label: '时间线' }, { value: 'trend', label: '趋势统计' }, { value: 'journal', label: '随笔库' }] as const;
 const SCOPES: readonly { value: ReviewScope; label: string }[] = [
   { value: 'TODAY', label: '当日' }, { value: 'CALENDAR_WEEK', label: '本周' },
   { value: 'CALENDAR_MONTH', label: '本月' },
@@ -71,6 +72,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
    */
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayIso()));
   const [view, setView] = useState<ReviewView>('timeline');
+  const [roamingVisible, setRoamingVisible] = useState(false);
   const [scope, setScope] = useState<ReviewScope>('TODAY');
   /** Anchored 「···」 menu: the entry it acts on plus the button's window rect. */
   const [timelineMenu, setTimelineMenu] = useState<{ entry: TimelineEntry; anchor: PopoverAnchor } | null>(null);
@@ -481,7 +483,17 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
             }}
             onOpenMenu={(entry, anchor) => setTimelineMenu({ entry, anchor })} />}
         />
-      : <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>}
+      : view === 'trend'
+      ? <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>
+      : <JournalLibraryView
+          visible={visible && view === 'journal'}
+          contentPadding={contentPadding}
+          onOpenRoaming={() => setRoamingVisible(true)}
+          onEditNote={note => {
+            setEditingNote(note);
+            setConfirmDeleteNote(false);
+          }}
+        />}
 
     {timelineMenu ? (
       <TimelineActionPopover

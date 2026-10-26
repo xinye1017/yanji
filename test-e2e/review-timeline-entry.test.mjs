@@ -178,6 +178,7 @@ function screenHarness(daySnapshot, {
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    './review/JournalLibraryView': { JournalLibraryView: 'JournalLibraryView' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
@@ -664,4 +665,15 @@ test('tapping a day in a paged-back week selects it and brings the strip home', 
   assert.equal(home.start, '2026-09-28', 'the strip stays on the week of the newly selected day');
   const chosen = home.cells.find(item => item.label.startsWith('2026-10-01'));
   assert.equal(chosen.selected, true, 'the tapped day is now the selection');
+});
+
+test('VIEWS expands to 3 options including journal library view', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  const tree = h.render();
+  const segment = nodes(tree, node => node.type === 'YanjiPaperSegmentedControl' && node.props.accessibilityLabel === '回顾视图')[0];
+  assert.ok(segment, 'segmented control for review view must be rendered');
+  assert.equal(segment.props.options.length, 3);
+  assert.equal(segment.props.options[0].value, 'timeline');
+  assert.equal(segment.props.options[1].value, 'trend');
+  assert.equal(segment.props.options[2].value, 'journal');
 });
