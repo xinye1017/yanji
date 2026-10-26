@@ -581,7 +581,7 @@ export function registerReviewViewLogicTests() {
 
     it('marks the selected, today and future cells without inventing a dot', () => {
       const dots = new Map([['2026-10-13', '#16A34A']]);
-      const cells = logic.buildFilmstrip('2026-10-14', '2026-10-14', dots);
+      const cells = logic.buildFilmstrip('2026-10-14', '2026-10-14', '2026-10-14', dots);
       assertEqual(cells.length, 7);
       assertEqual(cells[2].date, '2026-10-14');
       assertEqual(cells[2].isSelected, true);
@@ -593,6 +593,33 @@ export function registerReviewViewLogicTests() {
       assertEqual(cells[6].isFuture, true);
       assertEqual(cells[0].weekdayLabel, '一', 'Columns are labelled by weekday initial');
       assertEqual(cells[6].weekdayLabel, '日');
+    });
+
+    it('shows a paged week while the selection stays on its own day', () => {
+      // The strip was rolled back one week; the timeline still reads 10-14.
+      const cells = logic.buildFilmstrip('2026-10-05', '2026-10-14', '2026-10-14', new Map());
+      assertEqual(cells[0].date, '2026-10-05');
+      assertEqual(cells[6].date, '2026-10-11');
+      assertEqual(cells.some(cell => cell.isSelected), false,
+        'A paged-back week holds no selected cell — the selection is elsewhere');
+      assertEqual(cells.every(cell => !cell.isFuture), true,
+        'A fully past week has no future cells');
+    });
+
+    it('refuses to page past the current week but always allows going back', () => {
+      // 2026-10-14 is a Wednesday; its week is Mon 12 → Sun 18.
+      assertEqual(logic.weekStartOf('2026-10-14'), '2026-10-12');
+      assertEqual(logic.weekStartOf('2026-10-18'), '2026-10-12', 'A Sunday belongs to the week that opened six days earlier');
+      assertEqual(logic.canPageWeek('2026-10-12', '2026-10-14', 1), false,
+        'The week containing today is the forward ceiling');
+      assertEqual(logic.canPageWeek('2026-10-05', '2026-10-14', 1), true,
+        'An earlier week may roll forward');
+      assertEqual(logic.canPageWeek('2026-10-12', '2026-10-14', -1), true,
+        'The current week may always roll back');
+      assertEqual(logic.canPageWeek('2026-10-05', '2026-10-14', -1), true,
+        'Backwards there is no floor — an empty week is a legitimate answer');
+      assertEqual(logic.canPageWeek('2026-09-28', '2026-10-05', 1), true,
+        'A week immediately before the current one may roll forward onto it');
     });
 
     it('picks each day\'s dominant subject and ignores zero-minute slices', () => {

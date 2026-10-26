@@ -61,6 +61,8 @@ function todayHarness(snapshot, nativeOverrides = {}) {
       useCallback: fn => fn,
       useRef: value => ({ current: value }),
       useEffect: () => {},
+      // The filmstrip positions itself before paint; run it inline here.
+      useLayoutEffect: fn => fn(),
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
@@ -161,14 +163,24 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
       useCallback: fn => fn,
       useRef: value => ({ current: value }),
       useEffect: () => {},
+      // The filmstrip positions itself before paint; run it inline here.
+      useLayoutEffect: fn => fn(),
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
       useWindowDimensions: () => ({ fontScale: 1, width: 390, height: 844 }),
+      PanResponder: { create: config => ({ panHandlers: config }) },
     },
     // Same windowed double as the Today harness.
     '@shopify/flash-list': flashList,
-    'react-native-reanimated': { useReducedMotion: () => true },
+    'react-native-reanimated': {
+      default: { View: 'Animated.View' },
+      useSharedValue: initial => ({ value: initial }),
+      useAnimatedStyle: style => style(),
+      withTiming: to => to,
+      runOnUI: fn => (...args) => fn(...args),
+      useReducedMotion: () => true,
+    },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
     '../bridge': {
       YanjiDataNative: {

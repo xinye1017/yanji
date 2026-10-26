@@ -141,12 +141,25 @@ function screenHarness(daySnapshot, {
       useMemo: fn => fn(),
       useCallback: fn => fn,
       useEffect: () => {},
+      // The strip positions itself in a layout effect, before paint. The double
+      // runs it inline so a test sees the same offset the device would paint.
+      useLayoutEffect: fn => fn(),
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
       useWindowDimensions: () => ({ fontScale: 1, width: 390, height: 844 }),
+      PanResponder: { create: config => ({ panHandlers: config }) },
     },
-    'react-native-reanimated': { useReducedMotion: () => true },
+    // The strip pages with a shared value; the double keeps the animation
+    // out of the way and hands back the raw target so tests read a real number.
+    'react-native-reanimated': {
+      default: { View: 'Animated.View' },
+      useSharedValue: initial => ({ value: initial }),
+      useAnimatedStyle: style => style(),
+      withTiming: to => to,
+      runOnUI: fn => (...args) => fn(...args),
+      useReducedMotion: () => true,
+    },
     // The timeline view is a FlashList now. The shared double windows its cells,
     // so a test can tell "the rows go through the virtualised list" apart from
     // "the page mounted every row and called it virtualization".
@@ -570,4 +583,85 @@ test('the review retry re-reads the selected day and its overview window', () =>
   // The banner repairs exactly what it warns about: the day's records and the
   // window being summarised, both re-read through the page's existing path.
   assert.deepEqual(h.refreshCalls, [['daily', date], ['review', 'TODAY', date]]);
+});
+
+/**
+ * The filmstrip's drag handler, found by the container that owns it.
+ *
+ * The strip measures itself before it can page — a drag with no width has
+ * nothing to translate against — so the double fires the layout pass the
+ * renderer would have delivered first.
+ */
+function filmstripPan(tree) {
+  const strip = nodes(tree, node => typeof node.props.onPanResponderRelease === 'function')[0];
+  assert.ok(strip, 'the filmstrip owns a horizontal drag');
+  strip.props.onLayout({ nativeEvent: { layout: { width: 350, height: 72 } } });
+  return strip.props;
+}
+
+/**
+ * The week in frame, as `{ start, cells }`.
+ *
+ * The strip lays three weeks side by side; only the middle page is on screen,
+ * so a test must read that page rather than all 21 cells.
+ */
+function inFrameWeek(tree) {
+  const pages = nodes(tree, node => typeof node.props.testID === 'string'
+    && node.props.testID.startsWith('filmstrip-page-'));
+  assert.ok(pages.length === 2 || pages.length === 3,
+    `the strip lays out the weeks it has, not more (${pages.length})`);
+  const framed = pages.find(page => page.props.accessibilityElementsHidden !== true);
+  assert.ok(framed, 'one page is in frame');
+  const cells = nodes(framed, node => node.type === 'Pressable' && node.props.accessibilityLabel?.startsWith('2026-'))
+    .map(node => ({
+      label: node.props.accessibilityLabel,
+      selected: node.props.accessibilityState.selected,
+      disabled: node.props.accessibilityState.disabled,
+      onPress: node.props.onPress,
+    }));
+  return { start: framed.props.testID.slice('filmstrip-page-'.length), cells };
+}
+
+test('swiping the filmstrip pages the week without changing the selected day', () => {
+  // 2026-10-06 is a Tuesday; its week is Mon 10-05 → Sun 10-11.
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  const before = h.render();
+  const weekBefore = inFrameWeek(before);
+  assert.equal(weekBefore.start, '2026-10-05', 'the strip opens on the selected week');
+  assert.equal(weekBefore.cells.filter(cell => cell.selected).length, 1,
+    'the selected day is marked in its own week');
+
+  // A leftward drag would reveal the following week, but the page is already on
+  // the current week: that direction is refused and the frame must not move.
+  const pan = filmstripPan(before);
+  pan.onPanResponderRelease({}, { dx: -80, dy: 4, vx: -0.9 });
+  assert.equal(inFrameWeek(h.render()).start, '2026-10-05',
+    'the current week is the forward ceiling');
+
+  // A rightward drag goes back a week. The timeline keeps 10-06 — nothing is
+  // selected in the week being shown, because paging is not a selection.
+  pan.onPanResponderRelease({}, { dx: 80, dy: 4, vx: 0.9 });
+  const after = h.render();
+  const weekAfter = inFrameWeek(after);
+  assert.equal(weekAfter.start, '2026-09-28', 'the strip rolled back one week');
+  assert.equal(weekAfter.cells.filter(cell => cell.selected).length, 0,
+    'a paged-back week holds no selected cell');
+  assert.equal(nodes(after, node => node.type === 'TimelineCompactRow').length,
+    nodes(before, node => node.type === 'TimelineCompactRow').length,
+    'the timeline still lists the selected day, unchanged by the swipe');
+});
+
+test('tapping a day in a paged-back week selects it and brings the strip home', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  filmstripPan(h.render()).onPanResponderRelease({}, { dx: 80, dy: 4, vx: 0.9 });
+  const paged = inFrameWeek(h.render());
+  assert.equal(paged.start, '2026-09-28', 'the drag landed on the previous week');
+  const cell = paged.cells.find(item => item.label.startsWith('2026-10-01'));
+  assert.ok(cell, 'the paged-back week offers its own days');
+  cell.onPress();
+
+  const home = inFrameWeek(h.render());
+  assert.equal(home.start, '2026-09-28', 'the strip stays on the week of the newly selected day');
+  const chosen = home.cells.find(item => item.label.startsWith('2026-10-01'));
+  assert.equal(chosen.selected, true, 'the tapped day is now the selection');
 });

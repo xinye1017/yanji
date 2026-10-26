@@ -1,7 +1,11 @@
 /** Paper journal: event times are native facts; completed tasks have no time. */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Modal, PanResponder, Pressable, ScrollView, Text, useWindowDimensions, View,
+} from 'react-native';
+import Animated, {
+  runOnUI, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { YanjiDataNative } from '../bridge';
@@ -29,13 +33,14 @@ import { reviewWindowKey } from '../state/dataRefreshCoordinator';
 import { lineChartXCenters } from '../components/lineChartGeometry';
 import {
   buildFilmstrip, buildHourBuckets, buildTimelineEntries, buildTrendColumns,
+  canPageWeek,
   computeAxisLabelsLayout, countElapsedDays, countWorkedDays, dominantSubjectColors,
   formatClockFromEpoch, formatDailyAverageDuration, formatDuration, formatDurationMetric,
   durationMetricMinutes,
   formatPercent, goalReachedDays, peakHourBucket, peakTrendDay,
   periodDelta, periodDeltaPercent, previousWindowArgs, scopeDateRangeLabel,
   shiftIsoDate, shiftMonthAnchor, stepForwardWithinToday, stepMonthForwardWithinToday,
-  weekNumberOfYear,
+  weekStartOf,
   type FilmstripDay, type TimelineEntry,
 } from './reviewViewLogic';
 import { todayIso } from '../state/settingsViewLogic';
@@ -57,6 +62,14 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const [date, setDate] = useState(todayIso);
+  /**
+   * The week the filmstrip is showing, as its Monday.
+   *
+   * Deliberately independent of `date`: paging the strip is a look-ahead, not a
+   * selection. The timeline keeps the selected day until the user taps a cell,
+   * so a swipe can never blank the page or change which records are listed.
+   */
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(todayIso()));
   const [view, setView] = useState<ReviewView>('timeline');
   const [scope, setScope] = useState<ReviewScope>('TODAY');
   /** Anchored 「···」 menu: the entry it acts on plus the button's window rect. */
@@ -69,13 +82,16 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const overviewRequest = useMemo(() => ({ scope, periodsBack: 0, anchorDate: date }), [date, scope]);
   const previousRequest = useMemo(() => previousWindowArgs(scope, date), [date, scope]);
   /**
-   * The filmstrip reads the selected day's own calendar week, which is a
-   * different window from the trend scope. It is only needed for its subject
-   * dots, so it stays a separate bounded request rather than widening `scope`.
+   * The filmstrip reads the week it is showing, which is a different window
+   * from the trend scope and from the selected day. It is only needed for its
+   * subject dots, so it stays a separate bounded request rather than widening
+   * `scope`. `anchorDate` takes the strip's Monday: a calendar-week window is
+   * keyed by its Monday anyway, so every day of the same week resolves to one
+   * cached window instead of seven aliases of it.
    */
   const weekRequest = useMemo(
-    () => ({ scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: date }),
-    [date]
+    () => ({ scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: weekStart }),
+    [weekStart]
   );
   const reviewRequests = useMemo(
     () => scope === 'CALENDAR_WEEK'
@@ -126,14 +142,36 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   useEffect(() => { if (!visible) setTimelineMenu(null); }, [visible]);
   const today = todayIso();
   const selectedDate = new Date(`${date}T12:00:00`);
-  const filmstrip = useMemo(
-    () => buildFilmstrip(
-      date,
-      today,
-      dominantSubjectColors(weekOverview?.days ?? [], weekOverview?.subjectDistribution ?? [])
-    ),
-    [date, today, weekOverview]
-  );
+  /**
+   * Three weeks for the strip: the one in frame, and one on either side so a
+   * drag pulls a real neighbouring week in. A week after today holds nothing but
+   * future cells, so the forward page is simply omitted rather than rendered
+   * blank — that is what makes the current week the end of the strip.
+   */
+  const filmstripPages = useMemo(() => {
+    const dotColors = dominantSubjectColors(weekOverview?.days ?? [], weekOverview?.subjectDistribution ?? []);
+    const build = (start: string) => ({ start, cells: buildFilmstrip(start, date, today, dotColors) });
+    const previous = shiftIsoDate(weekStart, -7);
+    return [
+      build(previous),
+      build(weekStart),
+      ...(canPageWeek(weekStart, today, 1) ? [build(shiftIsoDate(weekStart, 7))] : []),
+    ];
+  }, [weekStart, date, today, weekOverview]);
+
+  /**
+   * Picking a day moves the selection, and the strip follows it.
+   *
+   * Selecting from a paged-back week is the one case where the two diverge: the
+   * strip would otherwise keep showing the week the user is not looking at.
+   */
+  const selectDay = (nextDate: string) => {
+    setDate(nextDate);
+    setWeekStart(weekStartOf(nextDate));
+  };
+  const stepWeek = (deltaWeeks: number) => {
+    setWeekStart(previous => shiftIsoDate(previous, deltaWeeks * 7));
+  };
 
   /**
    * 预取计划：让「切日期」的第一帧就命中真实数据。
@@ -167,6 +205,16 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         requests.set(reviewWindowKey(request), request);
       });
     });
+    // 周表可以左右翻页，且翻页不改变选中日：它显示的那一周与相邻两周都要预取，
+    // 否则每滑一格，点阵都要等一次桥读取才出现。
+    if (view === 'timeline') {
+      [shiftIsoDate(weekStart, -7), weekStart, shiftIsoDate(weekStart, 7)]
+        .filter(week => week <= today)
+        .forEach(week => {
+          const request = { scope: 'CALENDAR_WEEK' as ReviewScope, periodsBack: 0, anchorDate: week };
+          requests.set(reviewWindowKey(request), request);
+        });
+    }
     const dailyDates = view === 'timeline'
       ? [shiftIsoDate(date, -1), date, stepForwardWithinToday(shiftIsoDate(date, 1), today)]
       : scope === 'TODAY' ? anchors : [date];
@@ -174,7 +222,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       requests: [...requests.values()],
       dailyDates: dailyDates.filter((item, index, all) => all.indexOf(item) === index),
     };
-  }, [date, scope, today, view]);
+  }, [date, scope, today, view, weekStart]);
 
   useEffect(() => {
     if (!visible) return;
@@ -312,7 +360,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           out by the filmstrip and the period bar below, so an eyebrow above the
           title only repeated it. The view switch rides the right edge as a
           borderless capsule. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 6 }}>
         <Text accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink, fontFamily: 'serif' }]}>
           备考手帐
         </Text>
@@ -344,7 +392,12 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   const timelineHeader = (
     <>
       {pageHeader}
-      <WeekFilmstrip cells={filmstrip} onSelect={setDate} />
+      <WeekFilmstrip
+        pages={filmstripPages}
+        onSelect={selectDay}
+        onStep={stepWeek}
+        canStepForward={canPageWeek(weekStart, today, 1)}
+      />
       <DaySummary snapshot={snapshot} />
       <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
       {/* The rows used to sit under this gap inside their own wrapper. Now they
@@ -468,50 +521,175 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
 }
 
 // ---------------------------------------------------------------------------
-// The date filmstrip — a fixed week frame, one cell per day
+// The date filmstrip — a week frame the finger can page, one cell per day
+//
+// Three weeks are laid side by side and only the middle one is in frame, so a
+// drag pulls the neighbouring week in rather than sliding the row off a blank
+// edge. Paging is a way to look around, not a selection: the timeline keeps the
+// selected day until a cell is tapped.
 // ---------------------------------------------------------------------------
 
-function WeekFilmstrip({ cells, onSelect }: {
-  cells: readonly FilmstripDay[]; onSelect: (date: string) => void;
+export interface FilmstripPage {
+  /** The page's Monday — the identity React keys the row by. */
+  start: string;
+  cells: FilmstripDay[];
+}
+
+/** A drag must clear this much travel (or flick this fast) to commit a page. */
+const FILMSTRIP_DRAG_THRESHOLD = 24;
+const FILMSTRIP_FLICK_VELOCITY = 0.4;
+const FILMSTRIP_SETTLE_MS = 220;
+
+function WeekFilmstrip({ pages, onSelect, onStep, canStepForward }: {
+  pages: readonly FilmstripPage[];
+  onSelect: (date: string) => void;
+  onStep: (deltaWeeks: number) => void;
+  canStepForward: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  return <View style={{
-    flexDirection: 'row',
-    gap: YanjiSpacing.xs,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: layout.hairlineWidth,
-    borderColor: colors.hairline,
-  }}>
-    {cells.map(cell => <Pressable key={cell.date} disabled={cell.isFuture} onPress={() => onSelect(cell.date)}
-      accessibilityRole="button"
-      accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
-      accessibilityState={{ selected: cell.isSelected, disabled: cell.isFuture }}
-      // The selected day follows the Focus page's selected-subject card: a light
-      // brand wash with no rim, so the mark is the same accent family everywhere
-      // instead of an ink-filled block on a paper page.
-      style={({ pressed }) => ({
-        flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
-        alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
-        backgroundColor: cell.isSelected ? colors.brandSubtle : 'transparent',
-        opacity: pressed ? 0.65 : 1,
-      })}>
-      <Text style={[typography.captionMeta, {
-        color: cell.isSelected ? colors.brandInk : colors.secondary,
-        fontWeight: cell.isSelected ? '700' : '500',
-      }]}>{cell.weekdayLabel}</Text>
-      <Text style={[typography.bodyPrimary, {
-        color: cell.isSelected ? colors.brandInk : cell.isFuture ? colors.secondary : colors.ink,
-        fontWeight: cell.isFuture ? '500' : '700',
-        marginTop: YanjiSpacing.xs,
-      }]}>{cell.dayOfMonth}</Text>
-      {/* The dot only exists where study time does — a zero day must not
-          borrow the visual weight of a recorded one. */}
-      {cell.dotColor ? <View style={{
-        width: 5, height: 5, borderRadius: radius.pill, marginTop: YanjiSpacing.xs, backgroundColor: cell.dotColor,
-      }} /> : <View style={{ height: 5, marginTop: YanjiSpacing.xs }} />}
-    </Pressable>)}
+  const reduceMotion = useReducedMotion();
+  const translateX = useSharedValue(0);
+  const [width, setWidth] = useState(0);
+  const widthRef = useRef(0);
+  /** A committed page: how far the finger had moved when it let go. */
+  const releaseOffsetRef = useRef<number | null>(null);
+  const stepRef = useRef(onStep);
+  const canStepForwardRef = useRef(canStepForward);
+  stepRef.current = onStep;
+  canStepForwardRef.current = canStepForward;
+
+  const settle = (to: number) => {
+    translateX.value = reduceMotion ? to : withTiming(to, { duration: FILMSTRIP_SETTLE_MS });
+  };
+
+  const panResponder = useMemo(() => PanResponder.create({
+    // Taps belong to the day cells and vertical drags to the list underneath;
+    // only a clearly horizontal drag takes the gesture away from them.
+    onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) =>
+      Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy) * 1.5,
+    onPanResponderMove: (_evt, { dx }) => {
+      const frame = widthRef.current;
+      if (frame <= 0) return;
+      // There is no week after the current one to reveal, so that direction is
+      // a hard wall: moving the row would only expose the blank container.
+      if (dx < 0 && !canStepForwardRef.current) return;
+      translateX.value = Math.max(-2 * frame, Math.min(0, -frame + dx));
+    },
+    onPanResponderRelease: (_evt, { dx, vx }) => {
+      const frame = widthRef.current;
+      if (frame <= 0) return;
+      const direction = dx < 0 ? 1 : -1;
+      const travelled = Math.abs(dx) > Math.max(FILMSTRIP_DRAG_THRESHOLD, frame * 0.18)
+        || Math.abs(vx) > FILMSTRIP_FLICK_VELOCITY;
+      if (!travelled || (direction > 0 && !canStepForwardRef.current)) {
+        settle(-frame);
+        return;
+      }
+      // Committing re-centres the row on the incoming week, which moves that
+      // page from its old slot (one frame away) into the middle one. Re-basing
+      // the offset by exactly that distance keeps it under the finger, and the
+      // strip then settles home from there — so the turn is continuous instead
+      // of jumping a frame.
+      const travel = Math.max(-frame, Math.min(frame, dx));
+      releaseOffsetRef.current = -frame + travel + direction * frame;
+      stepRef.current(direction);
+    },
+    onPanResponderTerminate: () => settle(-widthRef.current),
+  }), [reduceMotion, translateX]);
+
+  /**
+   * Put the strip back in frame whenever the middle page or the frame changes.
+   *
+   * After a committed page this runs in the same commit that swaps the rows, so
+   * the incoming week is positioned before the frame is painted.
+   */
+  const middleStart = pages[1]?.start;
+  useLayoutEffect(() => {
+    if (width <= 0) return;
+    const released = releaseOffsetRef.current;
+    releaseOffsetRef.current = null;
+    if (released === null || reduceMotion) {
+      translateX.value = -width;
+      return;
+    }
+    // Both writes must land in one UI-thread job: a JS-side assignment is
+    // scheduled, so the settle could start from the pre-rebase value and show
+    // the incoming week one frame off.
+    runOnUI((from: number, to: number) => {
+      'worklet';
+      translateX.value = from;
+      translateX.value = withTiming(to, { duration: FILMSTRIP_SETTLE_MS });
+    })(released, -width);
+  }, [width, middleStart, reduceMotion, translateX]);
+  const stripStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  return <View
+    {...panResponder.panHandlers}
+    onLayout={event => {
+      const next = event.nativeEvent.layout.width;
+      widthRef.current = next;
+      setWidth(next);
+    }}
+    style={{
+      paddingTop: 2,
+      paddingBottom: 12,
+      borderBottomWidth: layout.hairlineWidth,
+      borderColor: colors.hairline,
+      overflow: 'hidden',
+    }}>
+    <Animated.View style={[{ flexDirection: 'row' }, stripStyle]}>
+      {pages.map((page, index) => <View
+        key={page.start}
+        testID={`filmstrip-page-${page.start}`}
+        // Only the middle page is in frame; the neighbouring weeks are there to
+        // be dragged in, and reading them out would duplicate every day of the
+        // month for a screen reader.
+        accessibilityElementsHidden={index !== 1}
+        importantForAccessibility={index === 1 ? 'auto' : 'no-hide-descendants'}
+        style={{ width, flexDirection: 'row', gap: YanjiSpacing.xs }}>
+        {page.cells.map(cell => <Pressable key={cell.date} disabled={cell.isFuture} onPress={() => onSelect(cell.date)}
+          accessibilityRole="button"
+          accessibilityLabel={`${cell.date} ${cell.weekdayLabel}${cell.dotColor ? '，有学习记录' : ''}`}
+          accessibilityState={{ selected: cell.isSelected, disabled: cell.isFuture }}
+          // Swiping is the visual affordance; these two actions are the same
+          // page step for a screen reader, which cannot perform a drag.
+          accessibilityActions={[
+            { name: 'decrement', label: '上一周' },
+            { name: 'increment', label: '下一周' },
+          ]}
+          onAccessibilityAction={event => {
+            if (event.nativeEvent.actionName === 'decrement') stepRef.current(-1);
+            else if (event.nativeEvent.actionName === 'increment' && canStepForwardRef.current) stepRef.current(1);
+          }}
+          // The selected day follows the Focus page's selected-subject card: a light
+          // brand wash with no rim, so the mark is the same accent family everywhere
+          // instead of an ink-filled block on a paper page.
+          style={({ pressed }) => ({
+            flex: 1, minHeight: layout.filmstripCellMinHeight, paddingVertical: YanjiSpacing.sm,
+            alignItems: 'center', justifyContent: 'center', borderRadius: radius.surface,
+            backgroundColor: cell.isSelected ? colors.brandSubtle : 'transparent',
+            opacity: pressed ? 0.65 : 1,
+          })}>
+          <Text style={[typography.captionMeta, {
+            color: cell.isSelected ? colors.brandInk : colors.secondary,
+            fontWeight: cell.isSelected ? '700' : '500',
+          }]}>{cell.weekdayLabel}</Text>
+          <Text style={[typography.bodyPrimary, {
+            color: cell.isSelected ? colors.brandInk : cell.isFuture ? colors.secondary : colors.ink,
+            fontWeight: cell.isFuture ? '500' : '700',
+            marginTop: YanjiSpacing.xs,
+          }]}>{cell.dayOfMonth}</Text>
+          {/* The dot only exists where study time does — a zero day must not
+              borrow the visual weight of a recorded one. */}
+          {cell.dotColor ? <View style={{
+            width: 5, height: 5, borderRadius: radius.pill, marginTop: YanjiSpacing.xs, backgroundColor: cell.dotColor,
+          }} /> : <View style={{ height: 5, marginTop: YanjiSpacing.xs }} />}
+        </Pressable>)}
+      </View>)}
+    </Animated.View>
   </View>;
 }
 

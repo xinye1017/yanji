@@ -245,6 +245,11 @@ function weekdayInitialOf(iso: string): string {
   return WEEKDAY_INITIALS[new Date(`${iso}T12:00:00`).getDay()];
 }
 
+/** The Monday that opens the calendar week containing `iso`. */
+export function weekStartOf(iso: string): string {
+  return shiftIsoDate(iso, -((new Date(`${iso}T12:00:00`).getDay() + 6) % 7));
+}
+
 /**
  * The calendar week (周一 → 周日) that contains `iso`.
  *
@@ -253,31 +258,46 @@ function weekdayInitialOf(iso: string): string {
  * rolls the whole frame rather than sliding one cell at a time.
  */
 export function weekDatesOf(iso: string): string[] {
-  const monday = shiftIsoDate(iso, -((new Date(`${iso}T12:00:00`).getDay() + 6) % 7));
+  const monday = weekStartOf(iso);
   return Array.from({ length: 7 }, (_, index) => shiftIsoDate(monday, index));
 }
 
 /**
  * The filmstrip's seven cells.
  *
- * `dotColorsByDate` carries one colour per date (the day's dominant subject).
- * It comes from the week overview the trend view already reads, so the dots
- * never need a query of their own.
+ * `weekDate` is the Monday of the week to show, which is not always the week of
+ * `selectedDate`: the strip can be paged to an earlier week while the timeline
+ * underneath still shows the selected day. `dotColorsByDate` carries one colour
+ * per date (the day's dominant subject); it comes from the week overview the
+ * trend view already reads, so the dots never need a query of their own.
  */
 export function buildFilmstrip(
-  anchorDate: string,
+  weekDate: string,
+  selectedDate: string,
   today: string,
   dotColorsByDate: ReadonlyMap<string, string>
 ): FilmstripDay[] {
-  return weekDatesOf(anchorDate).map(date => ({
+  return weekDatesOf(weekDate).map(date => ({
     date,
     weekdayLabel: weekdayInitialOf(date),
     dayOfMonth: String(Number(date.slice(8))),
-    isSelected: date === anchorDate,
+    isSelected: date === selectedDate,
     isToday: date === today,
     isFuture: date > today,
     dotColor: dotColorsByDate.get(date) ?? null,
   }));
+}
+
+/**
+ * Whether the strip may roll one more week backwards / forwards.
+ *
+ * Backwards there is no floor in the product: a week before the first record is
+ * a legitimately empty week, and the page already knows how to say so. Forwards
+ * the current week is the hard ceiling — a later week holds nothing but future
+ * days, so paging into it would only ever show an empty frame.
+ */
+export function canPageWeek(weekDate: string, today: string, direction: -1 | 1): boolean {
+  return direction < 0 || weekStartOf(weekDate) < weekStartOf(today);
 }
 
 /**
