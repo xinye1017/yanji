@@ -385,7 +385,7 @@ test('the pending category choice travels with the unsaved capture draft', () =>
   const restored = modal.render({ visible: true });
   assert.equal(restored.input.props.value, '未保存的想法', 'the text is still buffered');
   assert.equal(restored.categoryControl.props.value, 'DOUBT', 'and so is the category the user picked');
-  assert.equal(modal.refs[1].current.chosen, true, 'reopening must not hand the decision back to the model');
+  assert.equal(modal.refs[1].current, 'DOUBT', 'reopening must not hand the decision back to the model');
 });
 
 test('a successful new save resets the category choice for the next capture', async () => {
@@ -398,25 +398,63 @@ test('a successful new save resets the category choice for the next capture', as
 
   const reopened = modal.render({ visible: true });
   assert.equal(reopened.categoryControl.props.value, 'AUTO', 'the next capture starts fresh at 智能识别');
-  assert.equal(modal.refs[1].current.chosen, false, 'and the model may suggest again');
+  assert.equal(modal.refs[1].current, 'AUTO', 'and the model may suggest again');
 });
 
-test('editing shows the stored category and leaves it untouched when unchanged', async () => {
-  const modal = modalHarness();
+test('editing starts at 智能识别 and reclassifies the text on save', async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
 
   // A parent holds the note being edited in its own state, so the reference is
   // stable across re-renders while typing. Reusing one object here mirrors that;
   // passing a fresh literal every render would re-run the seeding effect and
   // reset the control, which never happens in the app.
+  const inspiration = { id: 'note-insp', content: '昨天随手记的一句心得', category: 'INSPIRATION' };
+  const editor = modal.render({ visible: true, editingNote: inspiration });
+  assert.equal(editor.categoryControl.props.value, 'AUTO', 'an edit defaults to 智能识别, not the stored category');
+
+  const typed = modal.typeInto(editor, '为什么这道题的辅助函数要这样构造，完全没弄懂');
+  await typed.save.props.onPress();
+
+  assert.deepEqual(modal.calls.updateNote, [['note-insp', '为什么这道题的辅助函数要这样构造，完全没弄懂']]);
+  assert.deepEqual(modal.calls.classifyInputs, ['为什么这道题的辅助函数要这样构造，完全没弄懂'],
+    'saving an untouched 智能识别 edit actually asks the model');
+  assert.deepEqual(modal.calls.setNoteCategory, [['note-insp', 'DOUBT']], 'the model verdict is committed');
+});
+
+test('editing writes no category when the verdict matches what is stored', async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
+
   const doubtNote = { id: 'note-doubt', content: '之前存下来的疑点', category: 'DOUBT' };
   const editor = modal.render({ visible: true, editingNote: doubtNote });
-  assert.equal(editor.categoryControl.props.value, 'DOUBT', 'the sheet reflects what is already stored');
+  assert.equal(editor.categoryControl.props.value, 'AUTO');
 
-  const typed = modal.typeInto(editor, '只改了正文');
+  const typed = modal.typeInto(editor, '之前的疑点，补一句详细描述');
   await typed.save.props.onPress();
-  assert.deepEqual(modal.calls.updateNote, [['note-doubt', '只改了正文']]);
-  assert.deepEqual(modal.calls.setNoteCategory, [], 'an unchanged category is not rewritten');
-  assert.equal(modal.calls.classifyInputs.length, 0, 'editing never re-runs the model');
+
+  assert.deepEqual(modal.calls.updateNote, [['note-doubt', '之前的疑点，补一句详细描述']]);
+  assert.deepEqual(modal.calls.setNoteCategory, [], 'an agreeing verdict is not rewritten');
+});
+
+test('a failed classification keeps the stored category when editing', async () => {
+  const modal = modalHarness({ classify: async () => null });
+
+  const doubtNote = { id: 'note-doubt', content: '一个疑点', category: 'DOUBT' };
+  const typed = modal.typeInto(modal.render({ visible: true, editingNote: doubtNote }), '一个疑点，改了个错别字');
+  await typed.save.props.onPress();
+
+  assert.deepEqual(modal.calls.updateNote, [['note-doubt', '一个疑点，改了个错别字']]);
+  assert.deepEqual(modal.calls.setNoteCategory, [],
+    'a timeout must never silently rewrite a doubt as an inspiration');
+});
+
+test('a failed classification still falls back to 灵感 for a new capture', async () => {
+  const modal = modalHarness({ classify: async () => null });
+
+  const typed = modal.typeInto(modal.render({ visible: true }), '新建的一条记录');
+  await typed.save.props.onPress();
+
+  assert.equal(modal.calls.saveQuickNote[0][3], 'INSPIRATION',
+    'a new capture has no stored category to protect, so the bridge fallback stands');
 });
 
 test('editing commits a category correction through setNoteCategory', async () => {
@@ -450,19 +488,38 @@ test('a failed category write on edit reports the failure instead of a false sav
   assert.deepEqual(modal.calls.setNoteCategory, [['note-x', 'DOUBT']], 'the category write was attempted');
 });
 
-test('tapping AUTO while editing triggers immediate classification and commits on save', async () => {
+test('tapping AUTO while editing classifies immediately and shows the verdict', async () => {
   const modal = modalHarness({ classify: async () => 'DOUBT' });
 
   const note = { id: 'note-auto', content: '为什么这里要用换元积分法？', category: 'INSPIRATION' };
   const editor = modal.render({ visible: true, editingNote: note });
-  assert.equal(editor.categoryControl.props.value, 'INSPIRATION', 'initially uses stored category');
+  assert.equal(editor.categoryControl.props.value, 'AUTO', 'an edit starts at 智能识别');
 
-  await modal.chooseCategory(editor, 'AUTO');
-  // allow microtask to complete async classifyMoment
+  // Leaving 智能识别 and coming back is what re-runs the model on demand.
+  await modal.chooseCategory(editor, 'INSPIRATION');
+  await modal.chooseCategory(modal.render({ visible: true, editingNote: note }), 'AUTO');
   await new Promise(r => setImmediate(r));
   assert.deepEqual(modal.calls.classifyInputs, ['为什么这里要用换元积分法？'], 'calls classify immediately');
 
   const settled = modal.render({ visible: true, editingNote: note });
+  assert.ok(settled.text('已智能识别为：疑点'), 'the verdict is shown before saving');
+
   await settled.save.props.onPress();
   assert.deepEqual(modal.calls.setNoteCategory, [['note-auto', 'DOUBT']], 'saves the classified category');
+});
+
+test('an on-demand verdict is discarded once the text changes', async () => {
+  const modal = modalHarness({ classify: async () => 'DOUBT' });
+
+  const opened = modal.render({ visible: true });
+  modal.typeInto(opened, '一段很长的正文');
+  await modal.chooseCategory(modal.render({ visible: true }), 'DOUBT');
+  await modal.chooseCategory(modal.render({ visible: true }), 'AUTO');
+  await new Promise(r => setImmediate(r));
+
+  const edited = modal.typeInto(modal.render({ visible: true }), '一段完全不同的正文');
+  await edited.save.props.onPress();
+
+  assert.deepEqual(modal.calls.classifyInputs, ['一段很长的正文', '一段完全不同的正文'],
+    'the stale verdict about the old text is not reused');
 });

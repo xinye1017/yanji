@@ -128,16 +128,20 @@ const DOUBT_CRITERIA_FALSE =
  *
  * 铁律约束：
  * 1. 快速判定（上限 1500ms），绝不阻塞用户正常随笔保存；
- * 2. 失败安全（Fail-Closed）：未配置 Key、网络超时或接口异常时静默回落为 INSPIRATION；
- * 3. 严格使用决策模型（Decisions API / System One），非传统 Chat Completions。
+ * 2. 严格使用决策模型（Decisions API / System One），非传统 Chat Completions。
+ *
+ * 返回 `null` 表示**这次没拿到任何答案**（未配置 Key、超时、接口异常、响应
+ * 无法解析），与「模型判定为灵感」严格区分。调用方据此决定降级：新建记录可以
+ * 把 null 当成灵感（这是 `saveQuickNote` 的既有回落语义），**编辑已有记录绝不能**
+ * ——那会把一条用户亲手标成疑点的记录在断网时静默改写成灵感。
  */
 export async function classifyMoment(
   content: string,
   providedConfig?: Partial<DecisionConfig>
-): Promise<NoteCategory> {
+): Promise<NoteCategory | null> {
   const text = content.trim();
   if (!text) {
-    return 'INSPIRATION';
+    return null;
   }
 
   try {
@@ -161,7 +165,7 @@ export async function classifyMoment(
 
     const apiKey = await YanjiDataNative.getDecisionApiKey().catch(() => '');
     if (!apiKey || !apiKey.trim()) {
-      return 'INSPIRATION';
+      return null;
     }
 
     const isNoul = provider === 'openrouter' || endpoint.includes('openrouter.ai') || endpoint.includes('decisions');
@@ -205,13 +209,13 @@ export async function classifyMoment(
     clearTimeout(timer);
 
     if (!res.ok) {
-      return 'INSPIRATION';
+      return null;
     }
 
     const data = await res.json();
     const answer = data?.answers?.q_doubt;
     if (!answer) {
-      return 'INSPIRATION';
+      return null;
     }
 
     let probability = 0;
@@ -226,7 +230,7 @@ export async function classifyMoment(
 
     return probability >= DOUBT_THRESHOLD ? 'DOUBT' : 'INSPIRATION';
   } catch {
-    return 'INSPIRATION';
+    return null;
   }
 }
 

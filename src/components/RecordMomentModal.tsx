@@ -11,11 +11,14 @@
  *
  * Category contract:
  * - Three choices: 'AUTO' (智能识别), 'INSPIRATION' (灵感), 'DOUBT' (疑点).
- * - Defaults to 'AUTO'. When saving with 'AUTO', the decision model classifies
- *   the text, failing closed to 'INSPIRATION'.
+ * - Both new captures and edits default to 'AUTO', so the model runs on save
+ *   unless the user has explicitly picked 灵感 or 疑点.
  * - While in the modal (new or editing), tapping 'AUTO' triggers immediate
  *   classification on the current content and displays the result.
  * - Explicit user selection of 'INSPIRATION' or 'DOUBT' commits that category directly.
+ * - A new capture falls back to 'INSPIRATION' when the model gives no answer.
+ *   An edit keeps the note's stored category in that case: silently rewriting a
+ *   doubt the user set by hand would be worse than leaving it untouched.
  * - Editing writes nothing until 保存: content and category commit together.
  */
 
@@ -100,17 +103,19 @@ export function RecordMomentModal({
   const [isFavorite, setIsFavorite] = useState(false);
   const captureDraft = useRef('');
   const [categoryOption, setCategoryOption] = useState<CaptureCategoryOption>('AUTO');
-  const captureDraftCategory = useRef<{ option: CaptureCategoryOption; chosen: boolean }>({
-    option: 'AUTO',
-    chosen: false,
-  });
+  // The pending choice alone says whether the user has decided: anything but
+  // 'AUTO' *is* an explicit pick, so no separate "chosen" flag can drift from it.
+  const captureDraftCategory = useRef<CaptureCategoryOption>('AUTO');
 
   // Editing starts from the saved note; new captures keep a separate unsaved
   // draft across closing the sheet and switching mounted tabs.
   useEffect(() => {
     if (!visible) return;
     setText(editingNote?.content ?? captureDraft.current);
-    setCategoryOption(editingNote ? editingNote.category : captureDraftCategory.current.option);
+    // An edit always starts at 智能识别: the stored category is what the last
+    // save decided, not a decision the user is making now. The new-capture
+    // draft's pending choice must not leak into an edit either.
+    setCategoryOption(editingNote ? 'AUTO' : captureDraftCategory.current);
     setIsFavorite(Boolean(editingNote?.isFavorite));
     setError(null);
     setAiFeedback(null);
@@ -122,20 +127,23 @@ export function RecordMomentModal({
   const chooseCategory = useCallback(async (next: CaptureCategoryOption) => {
     setCategoryOption(next);
     setError(null);
-    const chosen = next !== 'AUTO';
     if (!editingNote) {
-      captureDraftCategory.current = { option: next, chosen };
+      captureDraftCategory.current = next;
     }
     if (next === 'AUTO') {
       const content = text.trim();
       if (content.length > 0) {
         setIdentifying(true);
         try {
-          const resolved = await classifyMoment(content);
+          const resolved = await classifyMoment(content).catch(() => null);
+          // `null` means the model gave no answer at all. Saying what it
+          // "identified" then would be inventing a result.
           setPredictedCategory(resolved);
-          setAiFeedback(`已智能识别为：${resolved === 'INSPIRATION' ? '灵感' : '疑点'}`);
-        } catch {
-          setAiFeedback('识别超时，保存时将重试');
+          setAiFeedback(
+            resolved === null
+              ? '识别超时，保存时将重试'
+              : `已智能识别为：${resolved === 'INSPIRATION' ? '灵感' : '疑点'}`
+          );
         } finally {
           setIdentifying(false);
         }
@@ -173,20 +181,19 @@ export function RecordMomentModal({
     setError(null);
     let stage: 'content' | 'category' = 'content';
     try {
-      let resolvedCategory: NoteCategory;
-      if (categoryOption === 'AUTO') {
-        if (predictedCategory) {
-          resolvedCategory = predictedCategory;
-        } else {
-          try {
-            resolvedCategory = await classifyMoment(content);
-          } catch {
-            resolvedCategory = 'INSPIRATION';
-          }
-        }
-      } else {
-        resolvedCategory = categoryOption;
+      // A tap on 智能识别 classifies the text as it stood at that moment, and
+      // typing discards that answer — so anything still held here describes the
+      // exact text being saved. Without one, the model answers the commit.
+      let suggestion = predictedCategory;
+      if (categoryOption === 'AUTO' && suggestion === null) {
+        suggestion = await classifyMoment(content).catch(() => null);
       }
+      // No answer: a new capture keeps the bridge's 灵感 fallback, but an edit
+      // keeps the category the note already has — a timeout must never rewrite
+      // a doubt the user set by hand.
+      const resolvedCategory: NoteCategory = categoryOption === 'AUTO'
+        ? (suggestion ?? editingNote?.category ?? 'INSPIRATION')
+        : categoryOption;
 
       if (editingNote) {
         await YanjiDataNative.updateNote(editingNote.id, content);
@@ -209,7 +216,7 @@ export function RecordMomentModal({
       }
       if (!editingNote) {
         captureDraft.current = '';
-        captureDraftCategory.current = { option: 'AUTO', chosen: false };
+        captureDraftCategory.current = 'AUTO';
       }
       setText('');
       setCategoryOption('AUTO');
@@ -359,6 +366,10 @@ export function RecordMomentModal({
               setText(next);
               if (!editingNote) captureDraft.current = next;
               setAiFeedback(null);
+              // The prediction describes the text it was asked about. Once the
+              // words change it no longer does, so saving must ask again rather
+              // than commit an answer about a different sentence.
+              setPredictedCategory(null);
             }}
             placeholder="一个想法、一处卡点、一点收获…"
             multiline

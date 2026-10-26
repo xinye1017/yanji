@@ -24,16 +24,46 @@ function createClientHarness({ apiKey = '', settings = {} } = {}) {
   return { client, bridge };
 }
 
-test('classifyMoment returns INSPIRATION if content is empty or whitespace', async () => {
+test('classifyMoment returns null for empty content: no text, no answer', async () => {
   const { client } = createClientHarness();
   const result = await client.classifyMoment('   ');
-  assert.equal(result, 'INSPIRATION');
+  assert.equal(result, null);
 });
 
-test('classifyMoment fails closed to INSPIRATION if no API key is present', async () => {
+test('classifyMoment returns null when no API key is configured', async () => {
   const { client } = createClientHarness({ apiKey: '' });
   const result = await client.classifyMoment('这道二重积分的轮换对称性完全没有看懂，为什么积出来是零？');
-  assert.equal(result, 'INSPIRATION');
+  assert.equal(result, null, 'an unanswered call must be distinguishable from a model verdict of 灵感');
+});
+
+test('classifyMoment returns null on a network failure instead of claiming 灵感', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-or-test',
+    settings: { decisionProvider: 'openrouter', decisionModel: 'm', decisionEndpoint: 'https://openrouter.ai/api/v1' },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('Network failure'); };
+
+  try {
+    assert.equal(await client.classifyMoment('这条其实是疑点'), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('classifyMoment returns null when the endpoint answers with an error status', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-or-test',
+    settings: { decisionProvider: 'openrouter', decisionModel: 'm', decisionEndpoint: 'https://openrouter.ai/api/v1' },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => ({}) });
+
+  try {
+    assert.equal(await client.classifyMoment('这条其实是疑点'), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('classifyMoment correctly parses OpenRouter noul response >= 0.7 as DOUBT', async () => {
