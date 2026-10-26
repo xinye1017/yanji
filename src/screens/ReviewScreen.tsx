@@ -17,6 +17,7 @@ import {
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { EditingNote, RecordMomentModal } from '../components/RecordMomentModal';
+import { RoamingNotesModal } from '../components/RoamingNotesModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { JournalLibraryView } from './review/JournalLibraryView';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
@@ -515,6 +516,15 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       initialConfirmDelete={confirmDeleteNote}
       onClose={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
       onSaved={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
+    />
+    <RoamingNotesModal
+      visible={roamingVisible}
+      onClose={() => setRoamingVisible(false)}
+      onEditNote={note => {
+        setRoamingVisible(false);
+        setEditingNote(note);
+        setConfirmDeleteNote(false);
+      }}
     />
     <Modal visible={pendingDelete !== null} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => { if (!deletingRef.current) setPendingDelete(null); }}>
       <View style={{ flex: 1, backgroundColor: paper.colors.scrim, justifyContent: 'flex-end' }}>

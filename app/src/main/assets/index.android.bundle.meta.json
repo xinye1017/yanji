@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "7ea3dcba4dada9735da25ffeaaeaba97382842e15ad4fcdac3e350f081a52062",
+    "sha256": "d3c0f531541fbb1b28a315d6ef0ec444c3921b2d679adedc37fa261c686f4059",
     "files": [
       {
         "path": "App.tsx",
@@ -106,6 +106,10 @@
         "sha256": "434b1cca9e9c56f466606e43a892887d5053a4b655bf5b4d19f434d4e1d7344e"
       },
       {
+        "path": "src/components/RoamingNotesModal.tsx",
+        "sha256": "0d1af2a48ef12b3c4c25f2d46ce5ee309f1bd58991c108782408f286fe273259"
+      },
+      {
         "path": "src/components/RollingTimeDisplay.tsx",
         "sha256": "dab32366ba72638790f1ddfc4f7510e88c27f40fc5d2b0d6de04e3eca4c721e6"
       },
@@ -171,7 +175,7 @@
       },
       {
         "path": "src/screens/ReviewScreen.tsx",
-        "sha256": "514873f30ae72be0ff2b2c651db9b5d110d3e95a2c351d2dc46aa9c4b601353a"
+        "sha256": "cf3ef60f10053e0486ebb3ee6107544fdc546e9d73bb703d6475d21e0d33400a"
       },
       {
         "path": "src/screens/SettingsScreen.tsx",
@@ -236,15 +240,15 @@
     ]
   },
   "metro": {
-    "bytes": 2194105,
-    "sha256": "46a7035178c14c2e5462b357cca69f34d4e29f0d70b092d8a52cf6c581ca125e",
-    "sha1": "e772c60a839eb1874e8c65f28aa146152441d375"
+    "bytes": 2206272,
+    "sha256": "ee0b650623d144c49831adba0ed1ae6710dd3b85dd766eeb97137045596f119e",
+    "sha1": "d2226e0b002b011bd66c1c8ed456f21bed056243"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "e772c60a839eb1874e8c65f28aa146152441d375",
-    "bytes": 3069181,
-    "sha256": "7c6a09cfa2655b995166c05612a398a10db9b40a1c83c7c26305a6109f9ea161"
+    "sourceSha1": "d2226e0b002b011bd66c1c8ed456f21bed056243",
+    "bytes": 3082502,
+    "sha256": "1b087744a94898ce6090584e155197e6e00ad2c912b724297b82b395e762cac7"
   },
   "assets": []
 }

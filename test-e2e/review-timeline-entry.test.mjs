@@ -178,6 +178,7 @@ function screenHarness(daySnapshot, {
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/RoamingNotesModal': { RoamingNotesModal: 'RoamingNotesModal' },
     './review/JournalLibraryView': { JournalLibraryView: 'JournalLibraryView' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
