@@ -247,6 +247,9 @@ interface NoteEntryDao {
     @Query("SELECT * FROM journal_entries ORDER BY date DESC, createdAt DESC")
     suspend fun getAllOnce(): List<NoteEntryEntity>
 
+    @Query("SELECT * FROM journal_entries ORDER BY RANDOM() LIMIT :limit")
+    suspend fun getRandomNotes(limit: Int): List<NoteEntryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: NoteEntryEntity)
 

@@ -182,7 +182,8 @@ data class NoteEntryEntity(
     /** v23 新增：疑点解决状态（0/1） */
     val isResolved: Int = 0,
     /** v23 新增：解决时间戳 */
-    val resolvedAt: Long? = null
+    val resolvedAt: Long? = null,
+    val imageUri: String? = null
 ) {
     fun toDomainModel(): NoteEntry {
         return NoteEntry(
@@ -203,7 +204,8 @@ data class NoteEntryEntity(
             sessionId = sessionId?.ifBlank { null },
             category = category,
             isResolved = isResolved != 0,
-            resolvedAt = resolvedAt
+            resolvedAt = resolvedAt,
+            imageUri = imageUri
         )
     }
 
@@ -227,7 +229,8 @@ data class NoteEntryEntity(
                 sessionId = model.sessionId?.ifBlank { null },
                 category = model.category,
                 isResolved = if (model.isResolved) 1 else 0,
-                resolvedAt = model.resolvedAt
+                resolvedAt = model.resolvedAt,
+                imageUri = model.imageUri
             )
         }
     }

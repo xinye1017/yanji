@@ -573,6 +573,8 @@ class YanjiRepository private constructor() {
 
     fun deleteNote(id: String) = noteStore.delete(id)
 
+    suspend fun getRandomNotes(limit: Int = 30): List<NoteEntry> = noteStore.getRandomNotes(limit)
+
     /** 决策模型 API Key 读写（通过 SecretStore 加密存储在 Keystore） */
     fun saveDecisionApiKey(key: String): Boolean {
         val store = secretStore ?: return false

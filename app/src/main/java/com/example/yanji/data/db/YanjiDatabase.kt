@@ -23,7 +23,7 @@ import java.io.File
         SubjectEntity::class,
         AiAnalysisEntity::class
     ],
-    version = 28,
+    version = 29,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -299,7 +299,7 @@ abstract class YanjiDatabase : RoomDatabase() {
                 if (legacyKey.isNotBlank()) {
                     runCatching { persistLegacyApiKey(legacyKey) }
                 }
-            }
+                }
         }
 
         /**
@@ -785,6 +785,15 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v28 → v29: 给 `journal_entries` 添加 `imageUri` 列（可空，存量行默认 NULL）。
+         */
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.exec("ALTER TABLE `journal_entries` ADD COLUMN `imageUri` TEXT DEFAULT NULL")
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -818,7 +827,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
-            MIGRATION_27_28
+            MIGRATION_27_28,
+            MIGRATION_28_29
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {

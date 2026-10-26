@@ -6,6 +6,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -43,7 +44,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 28
+    private val CURRENT_VERSION = 29
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -196,7 +197,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_24_25,
         YanjiDatabase.MIGRATION_25_26,
         YanjiDatabase.MIGRATION_26_27,
-        YanjiDatabase.MIGRATION_27_28
+        YanjiDatabase.MIGRATION_27_28,
+        YanjiDatabase.MIGRATION_28_29
     )
 
     /**
@@ -1366,6 +1368,40 @@ class YanjiMigrationTest {
         assertEquals(1, db.intValue("SELECT COUNT(*) FROM journal_entries"))
         assertEquals("一条记录", db.textValue("SELECT content FROM journal_entries WHERE id = 'n-keep'"))
         assertEquals(1, db.intValue("SELECT COUNT(*) FROM check_ins"))
+        db.close()
+    }
+
+    /**
+     * v28 -> v29: 给 `journal_entries` 添加 `imageUri` 列，存量行为 NULL。
+     */
+    @Test
+    fun migration_28_to_29_adds_imageUri_column() {
+        helper.createDatabase(28).use { db ->
+            db.execute(
+                "INSERT INTO journal_entries (" +
+                    "id, date, title, content, moodScore, energyScore, studySatisfaction, " +
+                    "tomorrowPlan, blockers, tags, createdAt, updatedAt, isFavorite, " +
+                    "isDraft, category, isResolved) " +
+                    "VALUES ('n-pre', '2026-10-26', '', '一条未配图随笔', 3, 3, 0, '', '', '[]', 1000, 1000, 0, 0, " +
+                    "'INSPIRATION', 0)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(28))
+
+        assertTrue(
+            "imageUri column must be present in journal_entries",
+            "imageUri" in db.columnNames("journal_entries")
+        )
+        assertEquals(
+            "legacy row must have NULL imageUri",
+            1,
+            db.intValue("SELECT imageUri IS NULL FROM journal_entries WHERE id = 'n-pre'")
+        )
+        assertEquals(
+            "一条未配图随笔",
+            db.textValue("SELECT content FROM journal_entries WHERE id = 'n-pre'")
+        )
         db.close()
     }
 

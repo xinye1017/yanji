@@ -313,7 +313,8 @@ data class NoteEntry(
     /** 疑点是否已解决（v23 新增）：仅对 DOUBT 生效 */
     val isResolved: Boolean = false,
     /** 解决时间戳（v23 新增）：解决时记录 */
-    val resolvedAt: Long? = null
+    val resolvedAt: Long? = null,
+    val imageUri: String? = null
 )
 
 @Serializable

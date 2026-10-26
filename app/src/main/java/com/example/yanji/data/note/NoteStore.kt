@@ -124,6 +124,11 @@ internal class NoteStore(
         return true
     }
 
+    suspend fun getRandomNotes(limit: Int): List<NoteEntry> {
+        val db = dbProvider() ?: return emptyList()
+        return db.noteEntryDao().getRandomNotes(limit).map { it.toDomainModel() }
+    }
+
     fun delete(id: String) {
         scope.launch {
             deleteAndAwait(id)
