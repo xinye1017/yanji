@@ -67,6 +67,8 @@ export interface NoteEntry {
   isResolved: boolean;
   /** Timestamp when the doubt was resolved, or null */
   resolvedAt: number | null;
+  /** Internal file URI for photo cover, or null if no photo attached */
+  imageUri: string | null;
 }
 
 /**
@@ -338,11 +340,15 @@ interface YanjiDataModuleNative {
     content: string,
     date: string,
     sessionId: string | null,
-    category?: string | null
+    category?: string | null,
+    imageUri?: string | null
   ): Promise<NoteEntry>;
   toggleFavoriteNote(noteId: string): Promise<boolean>;
   toggleNoteResolved(noteId: string): Promise<boolean>;
   deleteNote(noteId: string): Promise<boolean>;
+  takePhoto(): Promise<string | null>;
+  getRandomNotes(limit?: number): Promise<NoteEntry[]>;
+  getAllNotes(): Promise<NoteEntry[]>;
   /**
    * 人工纠正一条记录的分类（灵感 ⇄ 疑点）。
    *
@@ -455,7 +461,20 @@ function requireNativeModule<T>(name: string): T {
 }
 
 export const YanjiTimerNative = requireNativeModule<YanjiTimerModuleNative>('YanjiTimerModule');
-export const YanjiDataNative = requireNativeModule<YanjiDataModuleNative>('YanjiDataModule');
+const rawDataNative = requireNativeModule<YanjiDataModuleNative>('YanjiDataModule');
+export const YanjiDataNative: YanjiDataModuleNative = {
+  ...rawDataNative,
+  saveQuickNote: (
+    content: string,
+    date: string,
+    sessionId: string | null = null,
+    category?: string | null,
+    imageUri?: string | null
+  ) => rawDataNative.saveQuickNote(content, date, sessionId, category ?? null, imageUri ?? null),
+  getRandomNotes: (limit: number = 30) => rawDataNative.getRandomNotes(limit),
+  getAllNotes: () => rawDataNative.getAllNotes(),
+  takePhoto: () => rawDataNative.takePhoto(),
+};
 export const YanjiThemeNative = requireNativeModule<YanjiThemeModuleNative>('YanjiThemeModule');
 export const YanjiBackupNative = requireNativeModule<YanjiBackupModuleNative>('YanjiBackupModule');
 

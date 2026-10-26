@@ -307,7 +307,7 @@ export class MockYanjiBridge {
     };
   }
 
-  async saveQuickNote(content, date, sessionId = null, category = 'INSPIRATION') {
+  async saveQuickNote(content, date, sessionId = null, category = 'INSPIRATION', imageUri = null) {
     if (!content || content.trim().length === 0) {
       throw new Error('Note content cannot be empty');
     }
@@ -321,10 +321,30 @@ export class MockYanjiBridge {
       category: category === 'DOUBT' ? 'DOUBT' : 'INSPIRATION',
       isResolved: false,
       resolvedAt: null,
+      imageUri: imageUri || null,
     };
     this.notes.push(newNote);
     this._emitDataChanged('notes');
     return { ...newNote };
+  }
+
+  async takePhoto() {
+    return 'file:///mock/journal_photos/mock-photo.jpg';
+  }
+
+  async getRandomNotes(limit = 30) {
+    return this.notes
+      .slice()
+      .sort(() => 0.5 - Math.random())
+      .slice(0, limit)
+      .map(n => ({ ...n }));
+  }
+
+  async getAllNotes() {
+    return this.notes
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map(n => ({ ...n }));
   }
 
   async getNotes(page = 1, limit = 20) {

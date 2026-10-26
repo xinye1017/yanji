@@ -1,6 +1,14 @@
 package com.example.yanji.bridge
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.BaseActivityEventListener
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -19,6 +27,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 /**
@@ -37,8 +46,46 @@ class YanjiDataModule(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val repository: YanjiRepository get() = YanjiRepository.getInstance()
 
+    private var pendingPhotoPromise: Promise? = null
+    private var pendingPhotoFile: File? = null
+
+    private val activityListener = object : BaseActivityEventListener() {
+        override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
+            if (requestCode != REQUEST_TAKE_PHOTO) return
+            val promise = pendingPhotoPromise ?: return
+            val photoFile = pendingPhotoFile
+            pendingPhotoPromise = null
+            pendingPhotoFile = null
+
+            if (resultCode == Activity.RESULT_OK && photoFile != null && photoFile.exists() && photoFile.length() > 0) {
+                promise.resolve(Uri.fromFile(photoFile).toString())
+            } else {
+                if (photoFile != null && photoFile.exists() && photoFile.length() == 0L) {
+                    photoFile.delete()
+                }
+                promise.resolve(null)
+            }
+        }
+    }
+
+    private val lifecycleListener = object : LifecycleEventListener {
+        override fun onHostResume() = Unit
+        override fun onHostPause() = Unit
+        override fun onHostDestroy() {
+            val waiting = pendingPhotoPromise
+            pendingPhotoPromise = null
+            pendingPhotoFile?.let { file ->
+                if (file.exists() && file.length() == 0L) file.delete()
+            }
+            pendingPhotoFile = null
+            waiting?.resolve(null)
+        }
+    }
+
     init {
         observeDataChanges()
+        reactContext.addActivityEventListener(activityListener)
+        reactContext.addLifecycleEventListener(lifecycleListener)
     }
 
     override fun getName(): String = "YanjiDataModule"
@@ -60,6 +107,11 @@ class YanjiDataModule(
     }
 
     override fun invalidate() {
+        reactContext.removeActivityEventListener(activityListener)
+        reactContext.removeLifecycleEventListener(lifecycleListener)
+        pendingPhotoPromise?.resolve(null)
+        pendingPhotoPromise = null
+        pendingPhotoFile = null
         scope.cancel()
         super.invalidate()
     }
@@ -177,7 +229,14 @@ class YanjiDataModule(
      * JS 侧紧接着读取一定能看到这一条。
      */
     @ReactMethod
-    fun saveQuickNote(content: String, date: String, sessionId: String?, category: String?, promise: Promise) {
+    fun saveQuickNote(
+        content: String,
+        date: String,
+        sessionId: String?,
+        category: String?,
+        imageUri: String?,
+        promise: Promise
+    ) {
         val cleanContent = content.trim()
         if (cleanContent.isEmpty()) {
             promise.reject("E_EMPTY_NOTE", "Note content cannot be empty")
@@ -195,10 +254,88 @@ class YanjiDataModule(
                 sessionId = sessionId?.takeIf { it.isNotBlank() },
                 category = validCategory,
                 isResolved = false,
-                resolvedAt = null
+                resolvedAt = null,
+                imageUri = imageUri?.takeIf { it.isNotBlank() }
             )
             repository.addOrUpdateNoteAndAwait(entry)
             promise.resolve(noteMap(BridgeMappers.noteFields(entry)))
+        }
+    }
+
+    @ReactMethod
+    fun takePhoto(promise: Promise) {
+        val activity = reactContext.currentActivity
+        if (activity == null) {
+            promise.reject("E_ACTIVITY_NULL", "当前活动页面不可用，无法唤起相机")
+            return
+        }
+        if (pendingPhotoPromise != null) {
+            promise.reject("E_PHOTO_IN_PROGRESS", "拍照正在进行中")
+            return
+        }
+        try {
+            val photosDir = File(reactContext.filesDir, "journal_photos").apply {
+                if (!exists()) mkdirs()
+            }
+            val photoFile = File(photosDir, "${UUID.randomUUID()}.jpg")
+            val photoUri = FileProvider.getUriForFile(
+                reactContext,
+                "${reactContext.packageName}.fileprovider",
+                photoFile
+            )
+            val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            if (cameraIntent.resolveActivity(reactContext.packageManager) == null) {
+                promise.reject("E_NO_CAMERA", "未找到可用的系统相机应用")
+                return
+            }
+            pendingPhotoPromise = promise
+            pendingPhotoFile = photoFile
+            @Suppress("DEPRECATION")
+            activity.startActivityForResult(cameraIntent, REQUEST_TAKE_PHOTO)
+        } catch (e: Exception) {
+            pendingPhotoPromise = null
+            pendingPhotoFile = null
+            promise.reject("E_CAMERA_LAUNCH_FAILED", e.message ?: "唤起相机失败", e)
+        }
+    }
+
+    @ReactMethod
+    fun getRandomNotes(limit: Double, promise: Promise) {
+        val count = limit.toInt().coerceIn(1, 100)
+        scope.launch {
+            try {
+                val notes = repository.getRandomNotes(count)
+                val array = Arguments.createArray()
+                for (note in notes) {
+                    array.pushMap(noteMap(BridgeMappers.noteFields(note)))
+                }
+                promise.resolve(array)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_RANDOM_NOTES", error.message ?: "Failed to get random notes")
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getAllNotes(promise: Promise) {
+        scope.launch {
+            try {
+                val notes = repository.getAllNotes()
+                val array = Arguments.createArray()
+                for (note in notes) {
+                    array.pushMap(noteMap(BridgeMappers.noteFields(note)))
+                }
+                promise.resolve(array)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_ALL_NOTES", error.message ?: "Failed to get all notes")
+            }
         }
     }
 
@@ -766,6 +903,7 @@ class YanjiDataModule(
         }
 
     companion object {
+        private const val REQUEST_TAKE_PHOTO = 9201
         const val EVENT_DATA_CHANGED = "onDataChanged"
 
         /** 一次补录至少要有一分钟，否则它在任何统计里都不成立。 */

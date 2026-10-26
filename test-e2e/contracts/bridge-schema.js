@@ -56,7 +56,8 @@ export const BridgeSchemas = {
       (obj.sessionId === null || (typeof obj.sessionId === 'string' && obj.sessionId.length > 0)) &&
       (obj.category === 'INSPIRATION' || obj.category === 'DOUBT') &&
       typeof obj.isResolved === 'boolean' &&
-      (obj.resolvedAt === null || typeof obj.resolvedAt === 'number')
+      (obj.resolvedAt === null || typeof obj.resolvedAt === 'number') &&
+      (obj.imageUri === undefined || obj.imageUri === null || (typeof obj.imageUri === 'string' && obj.imageUri.length > 0))
     );
   },
 

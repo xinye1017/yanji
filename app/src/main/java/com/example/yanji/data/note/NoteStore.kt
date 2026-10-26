@@ -124,6 +124,11 @@ internal class NoteStore(
         return true
     }
 
+    suspend fun getAllNotes(): List<NoteEntry> {
+        val db = dbProvider() ?: return emptyList()
+        return db.noteEntryDao().getAllOnce().map { it.toDomainModel() }
+    }
+
     suspend fun getRandomNotes(limit: Int): List<NoteEntry> {
         val db = dbProvider() ?: return emptyList()
         return db.noteEntryDao().getRandomNotes(limit).map { it.toDomainModel() }

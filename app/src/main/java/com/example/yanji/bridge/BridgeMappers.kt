@@ -196,7 +196,8 @@ object BridgeMappers {
         val sessionId: String?,
         val category: String,
         val isResolved: Boolean,
-        val resolvedAt: Double?
+        val resolvedAt: Double?,
+        val imageUri: String? = null
     )
 
     fun noteFields(note: NoteEntry): NoteFields = NoteFields(
@@ -208,7 +209,8 @@ object BridgeMappers {
         sessionId = note.sessionId?.takeIf { it.isNotBlank() },
         category = note.category,
         isResolved = note.isResolved,
-        resolvedAt = note.resolvedAt?.toDouble()
+        resolvedAt = note.resolvedAt?.toDouble(),
+        imageUri = note.imageUri?.takeIf { it.isNotBlank() }
     )
 
     // ------------------------------------------------------------------ 设置

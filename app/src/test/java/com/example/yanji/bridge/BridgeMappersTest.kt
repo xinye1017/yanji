@@ -119,6 +119,31 @@ class BridgeMappersTest {
         assertEquals("复盘", fields.content)
         assertTrue(fields.isFavorite)
         assertEquals("focus-1", fields.sessionId)
+        assertNull(fields.imageUri)
+    }
+
+    @Test
+    fun noteFields_carriesImageUriWhenPresent() {
+        val note = NoteEntry(
+            id = "n-5",
+            date = "2026-10-08",
+            content = "带图随笔",
+            imageUri = "file:///data/user/0/com.example.yanji/files/journal_photos/p1.jpg"
+        )
+        val fields = BridgeMappers.noteFields(note)
+        assertEquals("file:///data/user/0/com.example.yanji/files/journal_photos/p1.jpg", fields.imageUri)
+    }
+
+    @Test
+    fun noteFields_blankImageUriIsNormalisedToNull() {
+        val note = NoteEntry(
+            id = "n-6",
+            date = "2026-10-08",
+            content = "空图随笔",
+            imageUri = "   "
+        )
+        val fields = BridgeMappers.noteFields(note)
+        assertNull(fields.imageUri)
     }
 
     // ------------------------------------------------------------------ F8 removed settings

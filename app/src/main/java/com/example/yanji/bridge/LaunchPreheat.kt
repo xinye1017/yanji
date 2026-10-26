@@ -245,4 +245,5 @@ internal fun noteMap(fields: BridgeMappers.NoteFields): WritableMap =
         putString("category", fields.category)
         putBoolean("isResolved", fields.isResolved)
         if (fields.resolvedAt == null) putNull("resolvedAt") else putDouble("resolvedAt", fields.resolvedAt)
+        if (fields.imageUri == null) putNull("imageUri") else putString("imageUri", fields.imageUri)
     }
