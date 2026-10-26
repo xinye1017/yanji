@@ -182,6 +182,33 @@ test('the System One surface uses the same noul schema as the Decisions surface'
   }
 });
 
+test('the question is about unanswered questions, not about studying', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-jev-test',
+    settings: { decisionProvider: 'typesafe', decisionModel: 'jev-latest', decisionEndpoint: 'https://api.typesafe.ai/v1' },
+  });
+
+  let capturedBody = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    capturedBody = JSON.parse(opts.body);
+    return { ok: true, status: 200, json: async () => ({ answers: { q_doubt: { type: 'noul', noul: 0.9 } } }) };
+  };
+
+  try {
+    // Not a study note at all, and still a doubt: unanswered is the axis, not
+    // the topic. The prompt must not narrow the judgement to coursework.
+    assert.equal(await client.classifyMoment('为什么我把闹钟设在六点，早上还是起不来？'), 'DOUBT');
+    const question = capturedBody.questions.q_doubt;
+    assert.match(question.instructions, /Is this a question\?/, 'the asked question stays plain');
+    const toldToTheModel = `${question.instructions} ${question.criteria.true} ${question.criteria.false}`;
+    assert.doesNotMatch(toldToTheModel, /考研|做题|知识点/, 'the judge is not scoped to exam study');
+    assert.match(question.criteria.true, /stuck/i, 'still-open is what makes a doubt');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('an answer without a usable noul value is treated as no answer, not as 灵感', async () => {
   const { client } = createClientHarness({
     apiKey: 'sk-jev-test',

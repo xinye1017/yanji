@@ -121,24 +121,29 @@ export function toBaseUrl(
 const DOUBT_THRESHOLD = 0.7;
 
 /**
- * 判定轴：问题是否**仍然开放**。
+ * 判定轴：**这条记录里作者是否抛出了一个待回答的问题**。
  *
- * 不用「疑点类名词 vs 灵感类名词」的清单，是因为两边的词天然重叠——
- * 「今天这道题做错了」到底算错题还是算状态记录，没有判据。改用单一的语义标准后，
- * 同一句话只有一种归属：作者还困在里面就是疑点，已经得出了结论就是灵感。
- * 这也和产品里「待解决 / 已解决」的流程是同一个轴。
+ * 刻意不绑定「做题 / 学习」场景。随笔记的是任何值得一提的事——今天为什么某件事
+ * 失败了、某段代码为什么崩、为什么某个决定做不下去——这些都和错题一样是疑点：
+ * 作者此刻还没有答案。反过来，想通了、总结出方法、只是记录发生了什么，都不是疑点。
+ *
+ * 判据是单一的：**作者是否在向自己（或别人）提问／承认还答不上来**，
+ * 而不是这篇记录「像不像学习内容」。与产品里「待解决 / 已解决」是同一个轴。
  */
 const DOUBT_INSTRUCTIONS =
-  '这条学习记录里，作者是否还留下了一个尚未解决的问题？' +
-  '若记录中既有已经想通的部分、也有仍然卡住的部分，以「是否还有一处没解决」为准。';
+  'Is this a question? ' +
+  'Does the author still not have an answer — something they are asking themselves ' +
+  'or admitting they have not figured out yet?';
 
 const DOUBT_CRITERIA_TRUE =
-  '作者仍被某个知识点、步骤或题目困住：提出尚未解答的疑问、说明某处没弄懂、' +
-  '记下错题但还没弄清错因，或卡在某一步无法继续。';
+  'The author raises something they cannot yet answer: an explicit question, a problem ' +
+  'they are stuck on, a cause or step they have not figured out, or a mistake whose ' +
+  'reason is still unclear. It does not matter what the topic is.';
 
 const DOUBT_CRITERIA_FALSE =
-  '作者没有留下未解决的问题：写的是想通的心得、总结出的方法、完成情况或状态感受；' +
-  '即使提到做错的题，也已经给出或弄清了出错原因。';
+  'The author is not asking anything and is not stuck: they record what happened, ' +
+  'what they did, how they feel, or a conclusion, method or insight they have already ' +
+  'worked out — including a mistake they have already explained.';
 
 /**
  * 「是否疑点」的判定问题。
