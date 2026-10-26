@@ -142,7 +142,7 @@ test('classifyMoment correctly parses OpenRouter noul response < 0.7 as INSPIRAT
   }
 });
 
-test('classifyMoment correctly parses TypeSafe choice response', async () => {
+test('the System One surface uses the same noul schema as the Decisions surface', async () => {
   const { client } = createClientHarness({
     apiKey: 'sk-jev-test',
     settings: {
@@ -162,16 +162,7 @@ test('classifyMoment correctly parses TypeSafe choice response', async () => {
       status: 200,
       json: async () => ({
         model: 'jev-latest',
-        answers: {
-          q_doubt: {
-            choice: 'match',
-            confidence: 0.92,
-            probabilities: {
-              match: 0.92,
-              other: 0.08,
-            },
-          },
-        },
+        answers: { q_doubt: { type: 'noul', noul: 0.92 } },
       }),
     };
   };
@@ -179,10 +170,63 @@ test('classifyMoment correctly parses TypeSafe choice response', async () => {
   try {
     const result = await client.classifyMoment('反常积分收敛性审敛法在分母含有对数时到底该怎么放缩？');
     assert.equal(result, 'DOUBT');
-    assert.equal(capturedBody.questions.q_doubt.type, 'choice');
+    // Both surfaces share one schema, so the question type never depends on
+    // which endpoint the key points at.
+    assert.equal(capturedBody.questions.q_doubt.type, 'noul', 'no provider-specific question type');
+    assert.equal(capturedBody.state.note, '反常积分收敛性审敛法在分母含有对数时到底该怎么放缩？',
+      'the state carries the note in a named field');
+    assert.equal(capturedBody.questions.q_doubt.criteria.true.length > 0, true);
+    assert.equal(capturedBody.questions.q_doubt.criteria.false.length > 0, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('an answer without a usable noul value is treated as no answer, not as 灵感', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-jev-test',
+    settings: { decisionProvider: 'typesafe', decisionModel: 'jev-latest', decisionEndpoint: 'https://api.typesafe.ai/v1' },
+  });
+  const originalFetch = globalThis.fetch;
+
+  // `confidence` is a model statistic, not the probability of the answer, and a
+  // choice answer is not what this question asked for. Neither may be reused.
+  for (const answer of [
+    { type: 'choice', choice: 'match', confidence: 0.92 },
+    { type: 'noul' },
+    { type: 'noul', noul: 'high' },
+    { type: 'noul', noul: 1.4 },
+  ]) {
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ answers: { q_doubt: answer } }) });
+    try {
+      assert.equal(await client.classifyMoment('一个正在求解的疑点'), null, `unusable answer: ${JSON.stringify(answer)}`);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
+
+test('the model verdict is compared against a 0.7 doubt threshold', async () => {
+  const { client } = createClientHarness({
+    apiKey: 'sk-jev-test',
+    settings: { decisionProvider: 'typesafe', decisionModel: 'jev-latest', decisionEndpoint: 'https://api.typesafe.ai/v1' },
+  });
+  const originalFetch = globalThis.fetch;
+
+  const verdictFor = async noul => {
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ answers: { q_doubt: { type: 'noul', noul } } }) });
+    try {
+      // Awaited inside the try: returning the promise would let `finally`
+      // restore the real fetch before the request is ever made.
+      return await client.classifyMoment('一段记录');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  assert.equal(await verdictFor(0.69), 'INSPIRATION');
+  assert.equal(await verdictFor(0.7), 'DOUBT', 'the threshold is inclusive');
+  assert.equal(await verdictFor(0.1), 'INSPIRATION');
 });
 
 test('testDecisionConnection handles network errors gracefully', async () => {
