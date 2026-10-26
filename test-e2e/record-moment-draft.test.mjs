@@ -87,6 +87,7 @@ function modalHarness({ save, activeSession = null, classify = async () => 'INSP
       },
       getUserSettings: () => Promise.resolve({}),
       getDecisionApiKey: () => Promise.resolve(''),
+      takePhoto: () => Promise.resolve('file:///mock/photo.jpg'),
     },
     YanjiTimerNative: {
       getActiveSession: () => {
@@ -98,11 +99,13 @@ function modalHarness({ save, activeSession = null, classify = async () => 'INSP
 
   const component = loadTypeScript('src/components/RecordMomentModal.tsx', {
     react,
-    'react-native': { Modal: 'Modal', Pressable: 'Pressable', Text: 'Text', View: 'View' },
+    'react-native': { Modal: 'Modal', Pressable: 'Pressable', Text: 'Text', View: 'View', Image: 'Image', StyleSheet: { absoluteFill: {} } },
+    'react-native-svg': { default: 'Svg', Svg: 'Svg', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     'react-native-reanimated': { useReducedMotion: () => false },
     '../bridge': bridge,
     './YanjiUI': {
+      YanjiIcon: 'YanjiIcon',
       YanjiHairline: 'YanjiHairline',
       YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
       YanjiPaperSheetHeading: 'YanjiPaperSheetHeading',
@@ -239,7 +242,7 @@ test('a successful new save clears the draft and writes the selected target date
   const typed = modal.typeInto(opened, '  目标日期必须来自可见的 prop  ');
   await typed.save.props.onPress();
 
-  assert.deepEqual(modal.calls.saveQuickNote, [['目标日期必须来自可见的 prop', '2026-10-09', 'session-7', 'INSPIRATION']]);
+  assert.deepEqual(modal.calls.saveQuickNote, [['目标日期必须来自可见的 prop', '2026-10-09', 'session-7', 'INSPIRATION', null]]);
   assert.equal(modal.calls.activeSessionReads, 1, 'the active session is resolved once for the binding');
   assert.equal(modal.refs[0].current, '', 'a successful new save clears the retained draft');
 
@@ -522,4 +525,26 @@ test('an on-demand verdict is discarded once the text changes', async () => {
 
   assert.deepEqual(modal.calls.classifyInputs, ['一段很长的正文', '一段完全不同的正文'],
     'the stale verdict about the old text is not reused');
+});
+
+test('taking a photo sets imageUri and passes it to saveQuickNote', async () => {
+  const modal = modalHarness({ activeSession: { sessionId: 'session-photo' } });
+  const opened = modal.render({ visible: true, date: '2026-10-27' });
+
+  const cameraBtn = opened.pressables.find(p => p.props.accessibilityLabel === '拍照封面');
+  assert.ok(cameraBtn, 'camera button must be present in header');
+  await cameraBtn.props.onPress();
+
+  const updated = modal.render({ visible: true });
+  const typed = modal.typeInto(updated, '带封面的随笔记录');
+  await typed.save.props.onPress();
+
+  assert.equal(modal.calls.saveQuickNote.length, 1);
+  assert.deepEqual(modal.calls.saveQuickNote[0], [
+    '带封面的随笔记录',
+    '2026-10-27',
+    'session-photo',
+    'INSPIRATION',
+    'file:///mock/photo.jpg',
+  ]);
 });

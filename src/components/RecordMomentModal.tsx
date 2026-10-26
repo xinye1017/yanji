@@ -23,7 +23,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { NoteCategory, YanjiDataNative, YanjiTimerNative } from '../bridge';
@@ -61,6 +62,7 @@ export interface EditingNote {
   content: string;
   category: NoteCategory;
   isFavorite?: boolean;
+  imageUri?: string | null;
 }
 
 interface RecordMomentModalProps {
@@ -106,6 +108,8 @@ export function RecordMomentModal({
   // The pending choice alone says whether the user has decided: anything but
   // 'AUTO' *is* an explicit pick, so no separate "chosen" flag can drift from it.
   const captureDraftCategory = useRef<CaptureCategoryOption>('AUTO');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const captureDraftImageUri = useRef<string | null>(null);
 
   // Editing starts from the saved note; new captures keep a separate unsaved
   // draft across closing the sheet and switching mounted tabs.
@@ -117,6 +121,7 @@ export function RecordMomentModal({
     // draft's pending choice must not leak into an edit either.
     setCategoryOption(editingNote ? 'AUTO' : captureDraftCategory.current);
     setIsFavorite(Boolean(editingNote?.isFavorite));
+    setImageUri(editingNote?.imageUri ?? captureDraftImageUri.current);
     setError(null);
     setAiFeedback(null);
     setPredictedCategory(null);
@@ -170,6 +175,25 @@ export function RecordMomentModal({
     }
   }, [isFavorite, editingNote]);
 
+  const handleTakePhoto = useCallback(async () => {
+    if (saving || identifying) return;
+    setError(null);
+    try {
+      const uri = await YanjiDataNative.takePhoto();
+      if (uri) {
+        setImageUri(uri);
+        if (!editingNote) captureDraftImageUri.current = uri;
+      }
+    } catch {
+      setError('拍照失败，请重试');
+    }
+  }, [saving, identifying, editingNote]);
+
+  const handleRemovePhoto = useCallback(() => {
+    setImageUri(null);
+    if (!editingNote) captureDraftImageUri.current = null;
+  }, [editingNote]);
+
   const handleSave = useCallback(async () => {
     if (saving || identifying) return;
     const content = text.trim();
@@ -209,7 +233,7 @@ export function RecordMomentModal({
         } catch {
           sessionId = null;
         }
-        const created = await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory);
+        const created = await YanjiDataNative.saveQuickNote(content, date, sessionId, resolvedCategory, imageUri);
         if (isFavorite && created?.id) {
           await YanjiDataNative.toggleFavoriteNote(created.id).catch(() => {});
         }
@@ -217,7 +241,9 @@ export function RecordMomentModal({
       if (!editingNote) {
         captureDraft.current = '';
         captureDraftCategory.current = 'AUTO';
+        captureDraftImageUri.current = null;
       }
+      setImageUri(null);
       setText('');
       setCategoryOption('AUTO');
       setPredictedCategory(null);
@@ -230,7 +256,7 @@ export function RecordMomentModal({
     } finally {
       setSaving(false);
     }
-  }, [saving, identifying, text, categoryOption, predictedCategory, isFavorite, editingNote, date, onClose, onSaved]);
+  }, [saving, identifying, text, categoryOption, predictedCategory, isFavorite, editingNote, date, imageUri, onClose, onSaved]);
 
   const handleDelete = useCallback(async () => {
     if (saving || identifying || !editingNote) return;
@@ -265,9 +291,31 @@ export function RecordMomentModal({
   const sheetBorderColor = paper.colors.hairline;
   const scrimColor = paper.colors.scrim;
 
-  // Header trailing component: Bookmark and Trash icons
+  // Header trailing component: Camera, Bookmark and Trash icons
   const headerRight = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs }}>
+      {/* Camera Icon button */}
+      <Pressable
+        onPress={handleTakePhoto}
+        disabled={saving || identifying}
+        accessibilityRole="button"
+        accessibilityLabel="拍照封面"
+        hitSlop={8}
+        style={({ pressed }) => ({
+          width: 34,
+          height: 34,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <YanjiIcon
+          name="camera"
+          size={19}
+          color={imageUri ? paper.colors.brand : paper.colors.secondary}
+        />
+      </Pressable>
+
       {/* Bookmark Icon button */}
       <Pressable
         onPress={handleToggleFavorite}
@@ -333,6 +381,7 @@ export function RecordMomentModal({
               borderTopRightRadius: paper.radius.sheet,
               borderTopWidth: 1,
               borderColor: sheetBorderColor,
+              overflow: 'hidden',
               paddingHorizontal: paper.layout.pageGutter,
               paddingTop: YanjiSpacing.md,
               paddingBottom: YanjiSpacing.md + insets.bottom,
@@ -340,6 +389,82 @@ export function RecordMomentModal({
             theme.shadow.floating(theme.isDark),
           ]}
         >
+          {imageUri ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 150,
+                overflow: 'hidden',
+              }}
+              pointerEvents="box-none"
+            >
+              <Image
+                source={{ uri: imageUri }}
+                style={{ width: '100%', height: 150 }}
+                resizeMode="cover"
+              />
+              <Svg height={150} width="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Defs>
+                  <LinearGradient id="paperFadeHeader" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor={sheetBackground} stopOpacity="0" />
+                    <Stop offset="35%" stopColor={sheetBackground} stopOpacity="0.12" />
+                    <Stop offset="75%" stopColor={sheetBackground} stopOpacity="0.8" />
+                    <Stop offset="100%" stopColor={sheetBackground} stopOpacity="1" />
+                  </LinearGradient>
+                </Defs>
+                <Rect x="0" y="0" width="100%" height="100%" fill="url(#paperFadeHeader)" />
+              </Svg>
+              <View
+                style={{
+                  position: 'absolute',
+                  top: YanjiSpacing.sm,
+                  left: paper.layout.pageGutter,
+                  flexDirection: 'row',
+                  gap: YanjiSpacing.xs,
+                  zIndex: 10,
+                }}
+              >
+                <Pressable
+                  onPress={handleTakePhoto}
+                  disabled={saving || identifying}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 8,
+                    paddingVertical: 2.5,
+                    borderRadius: paper.radius.pill,
+                    backgroundColor: theme.isDark ? 'rgba(30, 28, 25, 0.72)' : 'rgba(255, 255, 255, 0.85)',
+                    borderWidth: 1,
+                    borderColor: paper.colors.hairline,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                  accessibilityRole="button"
+                  accessibilityLabel="重拍照片"
+                >
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.ink, fontSize: 11 }]}>重拍</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleRemovePhoto}
+                  disabled={saving || identifying}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 8,
+                    paddingVertical: 2.5,
+                    borderRadius: paper.radius.pill,
+                    backgroundColor: theme.isDark ? 'rgba(30, 28, 25, 0.72)' : 'rgba(255, 255, 255, 0.85)',
+                    borderWidth: 1,
+                    borderColor: paper.colors.hairline,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                  accessibilityRole="button"
+                  accessibilityLabel="移除照片"
+                >
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.danger, fontSize: 11 }]}>移除</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <View
             style={{
               alignSelf: 'center',
@@ -382,7 +507,7 @@ export function RecordMomentModal({
           <View style={{ minHeight: 18, justifyContent: 'center', marginBottom: YanjiSpacing.xs }}>
             {identifying ? (
               <Text style={[paper.typography.captionMeta, { color: paper.colors.brand }]}>
-                ⚡ AI 正在分析意图…
+                AI 正在分析意图…
               </Text>
             ) : aiFeedback ? (
               <Text style={[paper.typography.captionMeta, { color: paper.colors.brand }]}>
