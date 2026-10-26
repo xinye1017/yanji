@@ -462,19 +462,24 @@ function requireNativeModule<T>(name: string): T {
 
 export const YanjiTimerNative = requireNativeModule<YanjiTimerModuleNative>('YanjiTimerModule');
 const rawDataNative = requireNativeModule<YanjiDataModuleNative>('YanjiDataModule');
-export const YanjiDataNative: YanjiDataModuleNative = {
-  ...rawDataNative,
-  saveQuickNote: (
-    content: string,
-    date: string,
-    sessionId: string | null = null,
-    category?: string | null,
-    imageUri?: string | null
-  ) => rawDataNative.saveQuickNote(content, date, sessionId, category ?? null, imageUri ?? null),
-  getRandomNotes: (limit: number = 30) => rawDataNative.getRandomNotes(limit),
-  getAllNotes: () => rawDataNative.getAllNotes(),
-  takePhoto: () => rawDataNative.takePhoto(),
-};
+export const YanjiDataNative: YanjiDataModuleNative = new Proxy(rawDataNative, {
+  get(target, prop, receiver) {
+    if (prop === 'saveQuickNote') {
+      return (
+        content: string,
+        date: string,
+        sessionId: string | null = null,
+        category?: string | null,
+        imageUri?: string | null
+      ) => target.saveQuickNote(content, date, sessionId, category ?? null, imageUri ?? null);
+    }
+    if (prop === 'getRandomNotes') {
+      return (limit: number = 30) => target.getRandomNotes(limit);
+    }
+    const value = Reflect.get(target, prop, receiver);
+    return typeof value === 'function' ? value.bind(target) : value;
+  },
+});
 export const YanjiThemeNative = requireNativeModule<YanjiThemeModuleNative>('YanjiThemeModule');
 export const YanjiBackupNative = requireNativeModule<YanjiBackupModuleNative>('YanjiBackupModule');
 

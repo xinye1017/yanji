@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "d3c0f531541fbb1b28a315d6ef0ec444c3921b2d679adedc37fa261c686f4059",
+    "sha256": "77a9bf5851ff063f8635580d13f87d9429c99a4114362572a5552cc403bd334f",
     "files": [
       {
         "path": "App.tsx",
@@ -83,7 +83,7 @@
       },
       {
         "path": "src/bridge/index.ts",
-        "sha256": "b8dbaddc2f29d8c2548c19e9e32b4ffdea915a1a8502858a44598e8503b220b4"
+        "sha256": "03d28ad6ed3bd7e0af1faad7030c002d7279573d8ef7925c196000eb8da7c905"
       },
       {
         "path": "src/components/BackfillFocusModal.tsx",
@@ -240,15 +240,15 @@
     ]
   },
   "metro": {
-    "bytes": 2206272,
-    "sha256": "ee0b650623d144c49831adba0ed1ae6710dd3b85dd766eeb97137045596f119e",
-    "sha1": "d2226e0b002b011bd66c1c8ed456f21bed056243"
+    "bytes": 2206326,
+    "sha256": "2a078c17fc9663daf43c0bc6a1d5169539056537d65ae9e217882f40f59db35e",
+    "sha1": "58fbd4b1c5573537f61d84174f79ad514e5de4d1"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "d2226e0b002b011bd66c1c8ed456f21bed056243",
-    "bytes": 3082502,
-    "sha256": "1b087744a94898ce6090584e155197e6e00ad2c912b724297b82b395e762cac7"
+    "sourceSha1": "58fbd4b1c5573537f61d84174f79ad514e5de4d1",
+    "bytes": 3082486,
+    "sha256": "29ae83bc53c801a74c72d46f1de7c5499043c6f4814f22285a5657f7d4fbee6a"
   },
   "assets": []
 }
