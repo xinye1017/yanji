@@ -139,6 +139,20 @@ class BackupCodecTest {
 
     private fun fullJson(backup: YanjiBackup = sampleBackup()): String = BackupCodec.encode(backup)
 
+    @Test
+    fun `schedule without a subject survives backup round trip`() {
+        val backup = sampleBackup()
+        val template = backup.scheduleTemplates.single()
+        val changed = template.copy(blocks = template.blocks.map { block ->
+            if (block.id == "b-2") block.copy(subjectIds = emptyList(), subjectLabel = "", title = "休息") else block
+        })
+        val decoded = BackupCodec.decode(fullJson(backup.copy(scheduleTemplates = listOf(changed))))
+        assertTrue(decoded is BackupDecodeResult.Success)
+        val restored = (decoded as BackupDecodeResult.Success).backup.scheduleTemplates.single().blocks.last()
+        assertEquals("", restored.subjectLabel)
+        assertEquals("休息", restored.title)
+    }
+
     private fun fullObject(backup: YanjiBackup = sampleBackup()): JsonObject =
         Json.parseToJsonElement(fullJson(backup)).jsonObject
 

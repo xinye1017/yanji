@@ -235,7 +235,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const windowSize = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const {
-    openSettings, openTimetable, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset,
+    openSettings, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset,
   } = useNavigationActions();
   const { taskEditorOpen } = useNavigationState();
   const [now, setNow] = useState(() => new Date());
@@ -771,8 +771,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 </Text>
               ) : null}
             </View>
-            <YanjiIconButton icon="calendar" onPress={openTimetable} accessibilityLabel="每日时间表"
-              size={32} iconSize={19} />
             <YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标"
               size={32} iconSize={19} />
           </View>

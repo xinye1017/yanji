@@ -48,7 +48,7 @@ class ScheduleValidationTest {
     }
 
     @Test
-    fun invalidBoundariesTitlesAndLabelsAreRejected() {
+    fun invalidBoundariesAndTitlesAreRejected() {
         assertEquals(
             "E_SCHEDULE_BLOCK_INVALID",
             (runCatching { ScheduleValidation.cleanBlocks(listOf(block(630, 510))) }
@@ -64,11 +64,7 @@ class ScheduleValidationTest {
             (runCatching { ScheduleValidation.cleanBlocks(listOf(block(510, 630, title = " "))) }
                 .exceptionOrNull() as ScheduleValidationException).code
         )
-        assertEquals(
-            "E_SCHEDULE_BLOCK_INVALID",
-            (runCatching { ScheduleValidation.cleanBlocks(listOf(block(510, 630, label = ""))) }
-                .exceptionOrNull() as ScheduleValidationException).code
-        )
+        assertEquals("", ScheduleValidation.cleanBlocks(listOf(block(510, 630, label = "", ids = emptyList()))).single().subjectLabel)
     }
 
     @Test

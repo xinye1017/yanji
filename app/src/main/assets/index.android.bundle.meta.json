@@ -19,11 +19,11 @@
     ]
   },
   "inputs": {
-    "sha256": "efee78536c3b385c639957b4ccfee6ae7fe1333206f9a18e2e3617ca4fb1b965",
+    "sha256": "97964ec9d0506e6fef126c67e71f45cfad4e243b1bbf9228dd5b9a8cae9aaa72",
     "files": [
       {
         "path": "App.tsx",
-        "sha256": "3f1f843f4633de350559c630a802f8fb732b832f2f52a2f7629fee2258db74d4"
+        "sha256": "3dcf9ba9533aa89b98c99c31864473e35a8605f6145b4c384f0e804a0ccae763"
       },
       {
         "path": "assets/branding/launcher-icon.jpg",
@@ -119,7 +119,11 @@
       },
       {
         "path": "src/components/ScheduleTemplateSheets.tsx",
-        "sha256": "bcb2cfda88159ab855e995dd39cebd52f3a798a59bddb3585a753c428ffacf91"
+        "sha256": "e23372409258251ef5930cfa74580cfb2ca34f95afd0be9f82461ebb707415dd"
+      },
+      {
+        "path": "src/components/ScheduleTimeline.tsx",
+        "sha256": "eccbb32690a3909bcb21688c63ac2aaa9491ef0af9a480cb0abdbb79bb82dea6"
       },
       {
         "path": "src/components/SessionNoteModal.tsx",
@@ -167,7 +171,7 @@
       },
       {
         "path": "src/navigation/NavigationShell.tsx",
-        "sha256": "df36cf6a69409ae7e183988cb80209f1a3cf957d6afd8bba6bd535703316e3b0"
+        "sha256": "319903d16ce34da7bdfdb31aecc7fe503e4f7639b4ba8e8938c1499ffa8c64fe"
       },
       {
         "path": "src/navigation/useBottomTabLayout.ts",
@@ -187,15 +191,15 @@
       },
       {
         "path": "src/screens/SettingsScreen.tsx",
-        "sha256": "a1446ce786909aa9b582788c9933ccccbdcf659a2c40ed248294bd39e1abeeff"
+        "sha256": "8bef10d7812634fab7c75c1a21cf3859b7d7780e2d6705eb6623b7cb69be7058"
       },
       {
         "path": "src/screens/TimetableScreen.tsx",
-        "sha256": "fbdf6c2585dec2cfc9aaf49cfbc2d8f98f2697e892f8b9fb741ed394af785e58"
+        "sha256": "86cdb8268c58375e028a2bc22f8da63a0eedf0a73f8e6fd680d0ae15160f3def"
       },
       {
         "path": "src/screens/TodayScreen.tsx",
-        "sha256": "4803f02d0e11dc5514e41d2edc52aa452e5373da2512cfe4828a69baa91b8b31"
+        "sha256": "d367c613284b4723d7a59be5ffc5162d84b46d0f7a8144bf7346eb9b8a1e643b"
       },
       {
         "path": "src/screens/focusViewLogic.ts",
@@ -211,7 +215,7 @@
       },
       {
         "path": "src/screens/timetableViewLogic.ts",
-        "sha256": "c64a260bead83944f4986c5fd2fc10c102ee9ecc6e0048d238b5e1bc798fc329"
+        "sha256": "263797b2628cf04bbb8ff7123337044224e02be76882ef67f753deb545cb0165"
       },
       {
         "path": "src/screens/todayViewLogic.ts",
@@ -256,15 +260,15 @@
     ]
   },
   "metro": {
-    "bytes": 2252694,
-    "sha256": "b62ccdb8dc89074ef086eba49679053823152d551fce0fb940ceabb8efa21302",
-    "sha1": "55abc039fe978576483ec223fed7bed09e94d0fa"
+    "bytes": 2245281,
+    "sha256": "c4a9edb9a3636c138e1e11f36741f7d34c5e8183925edca3b38c330a9e111824",
+    "sha1": "1c62b4ee62b363e77df90bafc4230dfc41210f87"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "55abc039fe978576483ec223fed7bed09e94d0fa",
-    "bytes": 3147388,
-    "sha256": "f0d10275a88f5d843cf354531cd8e354c8c4dbc981b8620e846ec7843f1eee47"
+    "sourceSha1": "1c62b4ee62b363e77df90bafc4230dfc41210f87",
+    "bytes": 3140594,
+    "sha256": "a1ab2db08267c49004febf94ff5ee3098ef72fa02f272cd3b279c50417479b8d"
   },
   "assets": []
 }

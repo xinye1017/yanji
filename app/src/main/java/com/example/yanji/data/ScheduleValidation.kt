@@ -67,9 +67,6 @@ internal object ScheduleValidation {
                 )
             }
             val label = input.subjectLabel.trim()
-            if (label.isEmpty()) {
-                throw ScheduleValidationException("E_SCHEDULE_BLOCK_INVALID", "时间段需要一个科目名称")
-            }
             if (label.length > MAX_SUBJECT_LABEL) {
                 throw ScheduleValidationException(
                     "E_SCHEDULE_BLOCK_INVALID",

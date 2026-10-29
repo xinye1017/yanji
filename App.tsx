@@ -152,12 +152,12 @@ function AppShell(): React.JSX.Element {
         closeTaskEditor();
         return true;
       }
-      if (settingsOpen) {
-        closeSettings();
-        return true;
-      }
       if (timetableOpen) {
         closeTimetable();
+        return true;
+      }
+      if (settingsOpen) {
+        closeSettings();
         return true;
       }
       if (focusImmersive) {
@@ -231,6 +231,24 @@ function AppShell(): React.JSX.Element {
         visible={foreground && !settingsOpen && !taskEditorOpen && !timetableOpen && !focusImmersive}
       />
 
+      {settingsOpen ? (
+        <View
+          pointerEvents={timetableOpen ? 'none' : 'auto'}
+          importantForAccessibility={timetableOpen ? 'no-hide-descendants' : 'auto'}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            backgroundColor: theme.paper.colors.canvas,
+            paddingTop: topInset,
+          }}
+        >
+          <SettingsScreen />
+        </View>
+      ) : null}
+
       {timetableOpen ? (
         <View
           style={{
@@ -244,22 +262,6 @@ function AppShell(): React.JSX.Element {
           }}
         >
           <TimetableScreen onClose={closeTimetable} />
-        </View>
-      ) : null}
-
-      {settingsOpen ? (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            backgroundColor: theme.paper.colors.canvas,
-            paddingTop: topInset,
-          }}
-        >
-          <SettingsScreen />
         </View>
       ) : null}
     </View>

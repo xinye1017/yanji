@@ -13,8 +13,22 @@ import type {
 } from '../bridge';
 
 export const MINUTES_PER_DAY = 24 * 60;
-export const SCHEDULE_MINUTE_STEP = 5;
+export const SCHEDULE_MINUTE_STEP = 15;
 export const SCHEDULE_MAX_BLOCKS = 32;
+
+/** Snap both endpoints only after the user actively drags an existing block. */
+export function adjustScheduleTime<T extends { startMinute: number; endMinute: number }>(block: T, mode: 'move' | 'start' | 'end', deltaMinutes: number): T {
+  const snap = (minute: number) => Math.round(minute / SCHEDULE_MINUTE_STEP) * SCHEDULE_MINUTE_STEP;
+  const start = Math.max(0, Math.min(MINUTES_PER_DAY - SCHEDULE_MINUTE_STEP, snap(block.startMinute)));
+  const end = Math.max(start + SCHEDULE_MINUTE_STEP, Math.min(MINUTES_PER_DAY, snap(block.endMinute)));
+  if (mode === 'move') {
+    const duration = end - start;
+    const next = Math.max(0, Math.min(MINUTES_PER_DAY - duration, snap(block.startMinute + deltaMinutes)));
+    return { ...block, startMinute: next, endMinute: next + duration };
+  }
+  if (mode === 'start') return { ...block, startMinute: Math.max(0, Math.min(end - SCHEDULE_MINUTE_STEP, snap(block.startMinute + deltaMinutes))), endMinute: end };
+  return { ...block, startMinute: start, endMinute: Math.min(MINUTES_PER_DAY, Math.max(start + SCHEDULE_MINUTE_STEP, snap(block.endMinute + deltaMinutes))) };
+}
 
 export interface ScheduleFocusOption {
   /** 真正写进专注记录的学科 id（大类会解析到第一个启用子类）。 */
@@ -228,7 +242,6 @@ export function validateBlockDraft(
     return '结束时间必须晚于开始时间，且不晚于 24:00';
   }
   if (draft.title.trim().length === 0) return '先填写这一段时间要做什么';
-  if (draft.subjectLabel.trim().length === 0) return '先选择或填写科目';
   const overlap = others.find(other =>
     other !== draft && draft.startMinute < other.endMinute && other.startMinute < draft.endMinute
   );
@@ -249,7 +262,7 @@ export function nextBlockDraft(
   let cursor = 8 * 60;
   for (const block of ordered) {
     if (cursor + 60 <= block.startMinute) break;
-    cursor = Math.max(cursor, block.endMinute);
+    cursor = Math.max(cursor, Math.ceil(block.endMinute / SCHEDULE_MINUTE_STEP) * SCHEDULE_MINUTE_STEP);
   }
   if (cursor + 60 <= MINUTES_PER_DAY) {
     return {

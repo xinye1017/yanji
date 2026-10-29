@@ -327,7 +327,7 @@ function settingsHarness({
       '../theme/tokens': tokens,
     }),
     '../navigation/NavigationShell': {
-      useNavigationActions: () => ({ closeSettings: () => calls.push(['closeSettings']) }),
+      useNavigationActions: () => ({ closeSettings: () => calls.push(['closeSettings']), openTimetable: () => calls.push(['openTimetable']) }),
     },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../theme/tokens': tokens,
@@ -378,14 +378,17 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   const tree = harness.render();
 
   const rows = nodes(tree, byComponent('YanjiSettingRow'));
-  assert.equal(rows.length, 3, 'the page has editable value rows');
+  assert.equal(rows.length, 4, 'the page has editable value rows');
   assert.equal(rows[0].props.label, '考试日期');
   assert.equal(rows[0].props.value, '2026年12月19日');
   assert.equal(rows[0].props.hint, '距初试 63 天');
   assert.equal(rows[1].props.label, '每日学习时长');
   assert.equal(rows[1].props.value, '6 小时 30 分钟');
-  assert.equal(rows[2].props.label, '专注学科名称');
-  assert.equal(rows[2].props.value, '点击自定义');
+  assert.equal(rows[2].props.label, '时间表设置');
+  rows[2].props.onPress();
+  assert.ok(harness.calls.some(call => call[0] === 'openTimetable'));
+  assert.equal(rows[3].props.label, '专注学科名称');
+  assert.equal(rows[3].props.value, '点击自定义');
 });
 
 test('every settings group title uses the group scale', () => {
@@ -505,7 +508,7 @@ test('a settings snapshot that has not arrived yet is not reported as 未设置'
   // before the bridged read returned, while the stored values were in fact
   // 2026-12-19 and 8 hours. "Not read yet" and "not set" are different facts.
   const tree = settingsHarness({ settings: null }).render();
-  const rows = nodes(tree, byComponent('YanjiSettingRow')).filter(r => r.props.label !== '专注学科名称');
+  const rows = nodes(tree, byComponent('YanjiSettingRow')).filter(r => ['考试日期', '每日学习时长'].includes(r.props.label));
   assert.equal(rows.length, 2);
 
   for (const row of rows) {

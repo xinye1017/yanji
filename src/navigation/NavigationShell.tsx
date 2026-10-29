@@ -56,7 +56,7 @@ interface NavigationState {
   settingsOpen: boolean;
   /** Task editor overlay (Today only). */
   taskEditorOpen: boolean;
-  /** Daily timetable overlay (reached from the Today header). */
+  /** Timetable settings overlay. */
   timetableOpen: boolean;
   /** Task the Focus tab should prepare a session for; null once consumed. */
   focusPreset: FocusPreset | null;
@@ -105,7 +105,6 @@ export function NavigationProvider({
   const openTaskEditor = useCallback(() => setTaskEditorOpen(true), []);
   const closeTaskEditor = useCallback(() => setTaskEditorOpen(false), []);
   const openTimetable = useCallback(() => {
-    setSettingsOpen(false);
     setTaskEditorOpen(false);
     setTimetableOpen(true);
   }, []);

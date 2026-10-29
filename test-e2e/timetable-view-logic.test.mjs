@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MINUTES_PER_DAY,
+  adjustScheduleTime,
   addDays,
   blockActualSeconds,
   blockDurationMinutes,
@@ -185,7 +186,19 @@ test('block draft validation matches the native rules', () => {
   assert.match(validateBlockDraft({ ...existing, startMinute: 1440 }, [existing]), /开始时间/);
   assert.match(validateBlockDraft({ ...existing, startMinute: 510.5 }, [existing]), /整分钟/);
   assert.match(validateBlockDraft({ ...existing, title: '  ' }, [existing]), /做什么/);
-  assert.match(validateBlockDraft({ ...existing, subjectLabel: '' }, [existing]), /科目/);
+  assert.equal(validateBlockDraft({ ...valid, subjectLabel: '', subjectIds: [] }, [existing]), null);
+});
+
+test('dragging snaps to 15 minutes and remains within the day', () => {
+  const old = block('old', 485, 565);
+  assert.deepEqual([old.startMinute, old.endMinute], [485, 565]);
+  const moved = adjustScheduleTime(old, 'move', 30);
+  assert.deepEqual([moved.startMinute, moved.endMinute], [510, 600]);
+  const start = adjustScheduleTime(old, 'start', 1000);
+  assert.deepEqual([start.startMinute, start.endMinute], [555, 570]);
+  const end = adjustScheduleTime(old, 'end', 2000);
+  assert.deepEqual([end.startMinute, end.endMinute], [480, 1440]);
+  assert.equal(adjustScheduleTime(old, 'move', -1000).startMinute, 0);
 });
 
 test('a new block takes the first 60-minute gap from 08:00 and falls back when full', () => {
@@ -194,6 +207,7 @@ test('a new block takes the first 60-minute gap from 08:00 and falls back when f
   });
   const morning = [block('a', 480, 540)];
   assert.equal(nextBlockDraft(morning).startMinute, 540);
+  assert.equal(nextBlockDraft([block('old', 480, 545)]).startMinute, 555);
   const packed = [block('a', 0, 1440)];
   const fallback = nextBlockDraft(packed);
   assert.equal(fallback.startMinute, 0);

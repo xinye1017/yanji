@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import { YanjiDataNative } from '../bridge';
@@ -277,7 +277,7 @@ export function ScheduleTemplateManagerSheet({
     <SheetShell
       visible={visible}
       title="时间表模板"
-      subtitle={`${templates.length} 套模板 · 可为任意日期指定`}
+      subtitle={`${templates.length} 套作息`}
       pending={pendingId !== null}
       scrollKey={renamingId ?? deletingId}
       onClose={onClose}
@@ -508,6 +508,7 @@ export function ScheduleTemplateEditor({
   error,
   onClose,
   onSave,
+  initialBlock,
 }: {
   /** null 表示编辑器关闭；每次打开由页面传入新的草稿对象。 */
   draft: ScheduleTemplateDraft | null;
@@ -516,6 +517,7 @@ export function ScheduleTemplateEditor({
   error: string | null;
   onClose: () => void;
   onSave: (draft: ScheduleTemplateDraft) => void;
+  initialBlock?: { index?: number; startMinute?: number } | null;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
@@ -534,12 +536,17 @@ export function ScheduleTemplateEditor({
     if (!draft) return;
     setName(draft.name);
     setBlocks(toInputs(draft.blocks));
-    setEditingIndex(null);
-    setBlockDraft(null);
+    const index = initialBlock?.index;
+    setEditingIndex(index ?? null);
+    setBlockDraft(initialBlock
+      ? index !== undefined
+        ? toInputs([draft.blocks[index]])[0]
+        : { id: null, startMinute: initialBlock.startMinute ?? 480, endMinute: Math.min(MINUTES_PER_DAY, (initialBlock.startMinute ?? 480) + 60), subjectIds: [], subjectLabel: '', title: '' }
+      : null);
     setBlockError(null);
     setNameError(null);
     setTimeField(null);
-  }, [draft]);
+  }, [draft, initialBlock]);
 
   const categories = useMemo(
     () => subjects.filter(subject => subject.isCategory && subject.enabled),
@@ -607,24 +614,28 @@ export function ScheduleTemplateEditor({
       return;
     }
     const next = sortBlocks([...others, candidate]);
+    if (initialBlock) {
+      onSave({ id: draft?.id ?? null, name: draft?.name ?? '', blocks: next });
+      return;
+    }
     setBlocks(next);
     closeBlockForm();
-  }, [blockDraft, blocks, editingIndex, closeBlockForm]);
+  }, [blockDraft, blocks, editingIndex, closeBlockForm, initialBlock, draft, onSave]);
 
   const deleteBlock = useCallback(() => {
     if (editingIndex === null) return;
+    if (initialBlock) {
+      onSave({ id: draft?.id ?? null, name: draft?.name ?? '', blocks: blocks.filter((_, index) => index !== editingIndex) });
+      return;
+    }
     setBlocks(current => current.filter((_, index) => index !== editingIndex));
     closeBlockForm();
-  }, [editingIndex, closeBlockForm]);
+  }, [editingIndex, closeBlockForm, initialBlock, draft, blocks, onSave]);
 
   const saveTemplate = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) {
       setNameError('先给模板起个名字');
-      return;
-    }
-    if (blocks.length === 0) {
-      setNameError('至少添加一个时间段');
       return;
     }
     setNameError(null);
@@ -635,10 +646,8 @@ export function ScheduleTemplateEditor({
   const changeStart = useCallback(
     (next: number) => {
       if (!blockDraft) return;
-      const duration = Math.max(
-        SCHEDULE_MINUTE_STEP,
-        blockDraft.endMinute - blockDraft.startMinute
-      );
+      const duration = Math.max(SCHEDULE_MINUTE_STEP,
+        Math.round((blockDraft.endMinute - blockDraft.startMinute) / SCHEDULE_MINUTE_STEP) * SCHEDULE_MINUTE_STEP);
       const end = Math.min(MINUTES_PER_DAY, next + duration);
       setBlockDraft({ ...blockDraft, startMinute: next, endMinute: end });
       setBlockError(null);
@@ -649,7 +658,9 @@ export function ScheduleTemplateEditor({
   const changeEnd = useCallback(
     (next: number) => {
       if (!blockDraft) return;
-      setBlockDraft({ ...blockDraft, endMinute: next });
+      const start = Math.max(0, Math.min(MINUTES_PER_DAY - SCHEDULE_MINUTE_STEP,
+        Math.round(blockDraft.startMinute / SCHEDULE_MINUTE_STEP) * SCHEDULE_MINUTE_STEP));
+      setBlockDraft({ ...blockDraft, startMinute: start, endMinute: next });
       setBlockError(null);
     },
     [blockDraft]
@@ -671,7 +682,7 @@ export function ScheduleTemplateEditor({
     <Modal
       visible
       animationType="slide"
-      onRequestClose={editingBlock ? closeBlockForm : onClose}
+      onRequestClose={editingBlock && !initialBlock ? closeBlockForm : onClose}
     >
       <View
         style={{
@@ -700,7 +711,7 @@ export function ScheduleTemplateEditor({
                 }}
               >
                 <Pressable
-                  onPress={closeBlockForm}
+                  onPress={initialBlock ? onClose : closeBlockForm}
                   accessibilityRole="button"
                   accessibilityLabel="返回模板"
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -722,7 +733,7 @@ export function ScheduleTemplateEditor({
                   </Text>
                 </Pressable>
                 {editingIndex !== null ? (
-                  <SheetAction label="删除这段" onPress={deleteBlock} tone="danger" />
+                  <SheetAction label="删除这段" onPress={() => Alert.alert('删除时间段？', '这段时间以往的完成记录也会一并删除。', [{ text: '取消', style: 'cancel' }, { text: '删除', style: 'destructive', onPress: deleteBlock }])} tone="danger" />
                 ) : null}
               </View>
 
@@ -818,21 +829,8 @@ export function ScheduleTemplateEditor({
                   ]}
                 >
                   时间表显示为「{blockDraft.subjectLabel}」
-                  {selectedIds.length > 1 ? ' · 开始专注时可选择记入哪一科' : ''}
                 </Text>
-              ) : (
-                <View style={{ marginTop: YanjiSpacing.sm }}>
-                  <YanjiTextInput
-                    value={blockDraft.subjectLabel}
-                    onChangeText={value => {
-                      setBlockDraft({ ...blockDraft, subjectLabel: value });
-                      setBlockError(null);
-                    }}
-                    placeholder="科目名称，例如：复盘"
-                    accessibilityLabel="科目名称"
-                  />
-                </View>
-              )}
+              ) : null}
 
               <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
 
@@ -858,12 +856,14 @@ export function ScheduleTemplateEditor({
                   {blockError}
                 </Text>
               ) : null}
+              {error ? <Text accessibilityRole="alert" style={[typography.captionMeta, { color: colors.danger, marginTop: YanjiSpacing.sm }]}>{error}</Text> : null}
 
               <View style={{ marginTop: YanjiSpacing.xl }}>
                 <YanjiBreathButton
                   icon="check"
-                  label={editingIndex === null ? '添加时间段' : '保存时间段'}
+                  label={saving ? '保存中' : editingIndex === null ? '添加时间段' : '保存时间段'}
                   onPress={saveBlock}
+                  disabled={saving}
                 />
               </View>
             </>
@@ -1028,7 +1028,7 @@ export function ScheduleTemplateEditor({
                   },
                 ]}
               >
-                保存后，使用这套模板的日期会立即更新；历史专注记录不受影响。
+                保存后可以在时间轴上安排作息。
               </Text>
               <View style={{ height: YanjiSpacing.xs }} />
             </>
@@ -1176,7 +1176,7 @@ function TimePickerPanel({
               label={pad2(value)}
               selected={value === hour}
               onPress={() => {
-                const nextMinute = value === 24 ? 0 : minutePart;
+                const nextMinute = value === 24 ? 0 : Math.min(45, Math.round(minutePart / SCHEDULE_MINUTE_STEP) * SCHEDULE_MINUTE_STEP);
                 onChange(value * 60 + nextMinute);
               }}
             />

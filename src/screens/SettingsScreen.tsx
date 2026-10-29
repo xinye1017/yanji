@@ -60,7 +60,7 @@ export function SettingsScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const { colors, typography, layout } = paper;
-  const { closeSettings } = useNavigationActions();
+  const { closeSettings, openTimetable } = useNavigationActions();
   const settingsSnapshot = useSettingsSnapshot('settings', true);
   const settings = settingsSnapshot?.settings ?? null;
   // The decision-model form is the only editor on this page that opens the
@@ -255,9 +255,15 @@ export function SettingsScreen(): React.JSX.Element {
             label="每日学习时长"
             value={formatGoalDuration(goalHours)}
             accessibilityLabel={`每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
-            isLast
             pending={loading}
             onPress={() => openSheetWith('dailyGoal')}
+          />
+          <YanjiSettingRow
+            label="时间表设置"
+            value="管理每日作息"
+            accessibilityLabel="时间表设置，管理每日作息"
+            isLast
+            onPress={openTimetable}
           />
         </View>
 

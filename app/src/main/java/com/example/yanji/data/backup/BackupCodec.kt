@@ -146,7 +146,7 @@ object BackupCodec {
         ) return "备份文件中的时间表模板结构无效，无法安全恢复"
         if (backup.scheduleTemplates.any { template ->
                 template.blocks.any { block ->
-                    block.title.isBlank() || block.subjectLabel.isBlank() ||
+                    block.title.isBlank() ||
                         block.startMinute < 0 || block.startMinute >= ScheduleValidation.MINUTES_PER_DAY ||
                         block.endMinute <= block.startMinute ||
                         block.endMinute > ScheduleValidation.MINUTES_PER_DAY
