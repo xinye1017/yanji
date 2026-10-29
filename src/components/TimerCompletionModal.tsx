@@ -55,10 +55,11 @@ export function TimerCompletionModal({ foreground }: { foreground: boolean }): R
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: paper.layout.pageGutter, backgroundColor: paper.colors.scrim }}>
         <View accessibilityViewIsModal style={{ width: '100%', maxWidth: paper.layout.completionDialogMaxWidth, maxHeight: '85%', backgroundColor: paper.colors.surface, borderRadius: paper.radius.sheet, padding: YanjiSpacing.xl }}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text accessibilityRole="header" style={[paper.typography.titleSection, { color: paper.colors.ink, textAlign: 'center' }]}>已计时完成</Text>
+            <Text accessibilityRole="header" style={[paper.typography.titleSection, { color: paper.colors.ink, textAlign: 'center' }]}>{completion.recorded ? '已计时完成' : '专注已结束'}</Text>
             <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.lg }]}>{completion.subjectName}</Text>
             <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.md }]}>{completion.isExam ? '本次模考时长' : '本次专注时长'}</Text>
             <Text style={[paper.typography.titleGroup, { color: paper.colors.ink, textAlign: 'center', marginTop: YanjiSpacing.xs }]}>{completionDuration(completion.elapsedSeconds)}</Text>
+            {!completion.recorded ? <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.md }]}>不足 1 分钟，本次不计入统计</Text> : null}
             {error ? <Text accessibilityRole="alert" style={[paper.typography.captionMeta, { color: paper.colors.danger, marginTop: YanjiSpacing.md }]}>{error}</Text> : null}
             <View style={{ marginTop: YanjiSpacing.xl }}><YanjiPrimaryButton label="完成" onPress={() => void dismiss()} disabled={dismissing} /></View>
           </ScrollView>

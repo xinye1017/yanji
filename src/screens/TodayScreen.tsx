@@ -22,6 +22,7 @@ import {
   YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { TodayScheduleCard } from '../components/TodayScheduleCard';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
@@ -235,7 +236,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const windowSize = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const {
-    openSettings, openTaskEditor, closeTaskEditor, selectTab, requestFocusPreset,
+    openSettings, openTaskEditor, closeTaskEditor, openTimetable, selectTab, requestFocusPreset,
   } = useNavigationActions();
   const { taskEditorOpen } = useNavigationState();
   const [now, setNow] = useState(() => new Date());
@@ -892,6 +893,12 @@ export function TodayScreen({ visible, foregroundRevision }: {
           ) : null}
         </View>
         <YanjiHairline />
+        <TodayScheduleCard
+          date={date}
+          visible={visible}
+          onEdit={openTimetable}
+          onStart={requestFocusPreset}
+        />
         {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
         <YanjiPaperSectionHeading

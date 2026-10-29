@@ -14,7 +14,8 @@ export const BridgeSchemas = {
       typeof obj.sessionId === 'string' && obj.sessionId.length > 0 &&
       typeof obj.subjectName === 'string' &&
       Number.isFinite(obj.elapsedSeconds) && obj.elapsedSeconds >= 0 &&
-      typeof obj.isExam === 'boolean';
+      typeof obj.isExam === 'boolean' &&
+      typeof obj.recorded === 'boolean';
   },
   isValidActiveSessionState(obj) {
     if (!obj || typeof obj !== 'object') return false;

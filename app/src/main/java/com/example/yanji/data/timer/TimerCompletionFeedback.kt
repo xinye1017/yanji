@@ -7,7 +7,9 @@ data class TimerCompletion(
     val sessionId: String,
     val subjectName: String,
     val elapsedSeconds: Long,
-    val isExam: Boolean
+    val isExam: Boolean,
+    /** False when the session was too short to be written to Room (see TimerStore). */
+    val recorded: Boolean
 )
 
 /** Presentation only. The service calls this after the coordinator successfully completes. */

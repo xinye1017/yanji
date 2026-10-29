@@ -14,6 +14,7 @@ import com.example.yanji.data.timer.Idle
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerMachine
 import com.example.yanji.data.timer.TimerPhase
+import com.example.yanji.data.timer.TimerStore
 import com.example.yanji.data.timer.focusLiveStateOf
 import com.example.yanji.data.timer.Finished
 import com.example.yanji.data.timer.TimerCompletion
@@ -474,11 +475,13 @@ class FocusTimerService : Service() {
         liveActivity.cancelOngoing()
         val finished = _liveState.value as? Finished
         if (finished != null) {
+            val isExam = kind == FocusKind.EXAM
             val shownInApp = TimerCompletionFeedback.state.present(TimerCompletion(
                 sessionId = finished.sessionId,
                 subjectName = finished.subject,
                 elapsedSeconds = finished.elapsedSeconds,
-                isExam = kind == FocusKind.EXAM
+                isExam = isExam,
+                recorded = isExam || TimerStore.isRecordableFocus(finished.elapsedSeconds)
             ))
             if (!shownInApp) liveActivity.finish(finished, kind)
         }

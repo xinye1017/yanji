@@ -332,33 +332,16 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const immersionFade = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(0)).current;
   const isPaused = session?.isPaused ?? false;
   const pauseAnim = useRef(new (Animated?.Value || function(this: any, v: number) { this.value = v; })(isPaused ? 1 : 0)).current;
-  const [showPausedActions, setShowPausedActions] = useState(isPaused);
 
   useEffect(() => {
     if (!session) return;
-    if (session.isPaused) {
-      setShowPausedActions(true);
-      if (Animated && Animated.timing) {
-        Animated.timing(pauseAnim, {
-          toValue: 1,
-          duration: 250,
-          easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
-          useNativeDriver: false,
-        }).start();
-      }
-    } else {
-      if (Animated && Animated.timing) {
-        Animated.timing(pauseAnim, {
-          toValue: 0,
-          duration: 250,
-          easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
-          useNativeDriver: false,
-        }).start(({ finished }) => {
-          if (finished) setShowPausedActions(false);
-        });
-      } else {
-        setShowPausedActions(false);
-      }
+    if (Animated && Animated.timing) {
+      Animated.timing(pauseAnim, {
+        toValue: session.isPaused ? 1 : 0,
+        duration: 250,
+        easing: Easing?.bezier ? Easing.bezier(0.25, 0.1, 0.25, 1) : undefined,
+        useNativeDriver: false,
+      }).start();
     }
   }, [session?.isPaused, session, pauseAnim]);
 
@@ -404,7 +387,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { focusPreset } = useNavigationState();
-  const { clearFocusPreset } = useNavigationActions();
+  const { clearFocusPreset, selectTab } = useNavigationActions();
   /**
    * The measured slot the ring has to live in, between the header and the
    * action block. `null` until the first layout pass, which the ring reads as
@@ -997,25 +980,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
       })
     : immersed.canvas;
 
-  const row2Opacity = pauseAnim?.interpolate
-    ? pauseAnim.interpolate({
-        inputRange: [0, 0.35, 1],
-        outputRange: [0, 0, 1],
-      })
-    : (isPaused ? 1 : 0);
-  const row2TranslateY = pauseAnim?.interpolate
-    ? pauseAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [14, 0],
-      })
-    : 0;
-  const row2Scale = pauseAnim?.interpolate
-    ? pauseAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.94, 1],
-      })
-    : 1;
-
   return (
     <AnimatedView testID={isPaused ? 'focus-paused' : 'focus-running'} style={{ flex: 1, backgroundColor: animatedCanvasBg }}>
       <AnimatedView
@@ -1059,8 +1023,30 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           paddingBottom: Math.max(safe.bottom, YanjiSpacing.md) + 12,
         }}
       >
-        {/* Top Header: Clean, quiet, and minimal — only the subject badge */}
+        {/* Top Header: subject badge centred, with a quiet way back to Today.
+            Immersion hides the tab bar, so this is the visible exit; the system
+            back gesture stays as the second path. */}
         <View style={{ alignItems: 'center', height: 48, justifyContent: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="收起专注界面，计时继续"
+            hitSlop={8}
+            onPress={() => selectTab('today')}
+            style={({ pressed }) => ({
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 2,
+              paddingRight: YanjiSpacing.md,
+              opacity: pressed ? 0.55 : 1,
+            })}
+          >
+            <YanjiIcon name="chevronDown" size={18} color={immersed.secondary} />
+            <Text style={[paper.typography.captionMeta, { color: immersed.secondary }]}>收起</Text>
+          </Pressable>
           <View
             style={{
               flexDirection: 'row',
@@ -1141,26 +1127,18 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             )}
           </View>
 
-          {/* Row 2: 提前结束 + 放弃本轮 (Smooth slide up and fade in on pause) */}
-          {showPausedActions ? (
-            <AnimatedView
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 16,
-                marginTop: 14,
-                opacity: row2Opacity,
-                transform: [{ translateY: row2TranslateY }, { scale: row2Scale }],
-              }}
-            >
-              <ImmersiveAction
-                label="提前结束"
-                icon="check"
-                variant="ghost"
-                paused
-                disabled={busy}
-                onPress={() => { void handleTimerAction('complete'); }}
-              />
+          {/* Row 2: 提前结束 stays reachable while running; 放弃本轮 only appears
+              once paused so a running session cannot be discarded by a stray tap. */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 14 }}>
+            <ImmersiveAction
+              label="提前结束"
+              icon="check"
+              variant="ghost"
+              paused={isPaused}
+              disabled={busy}
+              onPress={() => { void handleTimerAction('complete'); }}
+            />
+            {isPaused ? (
               <ImmersiveAction
                 label="放弃本轮"
                 icon="delete"
@@ -1169,8 +1147,8 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 disabled={busy}
                 onPress={confirmDiscard}
               />
-            </AnimatedView>
-          ) : null}
+            ) : null}
+          </View>
 
           {actionError ? (
             <Text

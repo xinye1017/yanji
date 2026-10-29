@@ -328,6 +328,8 @@ export interface TimerCompletion {
   subjectName: string;
   elapsedSeconds: number;
   isExam: boolean;
+  /** False when the session was too short to be written to Room. */
+  recorded: boolean;
 }
 
 export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings' | 'subjects' | 'schedule';

@@ -4,7 +4,7 @@ import { loadTypeScript } from './framework/load-typescript.js';
 import { BridgeSchemas } from './contracts/bridge-schema.js';
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
-const sample = { sessionId: 'one', subjectName: '高等数学', elapsedSeconds: 1500, isExam: false };
+const sample = { sessionId: 'one', subjectName: '高等数学', elapsedSeconds: 1500, isExam: false, recorded: true };
 function fixture({ initial = null, acknowledge = async () => true } = {}) {
   const states = [], effects = [], calls = [];
   let cursor = 0, listener, mounted = false;
@@ -82,6 +82,17 @@ test('a pending foreground completion survives remount and failed dismissal rema
   await find(f.render(), 'PrimaryButton').props.onPress(); await settle();
   assert.match(text(f.render()), /暂时无法关闭/);
   assert.match(text(f.render()), /25 分钟/);
+});
+
+test('a too-short session says it was not recorded instead of claiming a saved result', () => {
+  const f = fixture();
+  f.render();
+  f.emit({ ...sample, elapsedSeconds: 34, recorded: false });
+  const tree = f.render();
+  assert.match(text(tree), /专注已结束/);
+  assert.doesNotMatch(text(tree), /已计时完成/);
+  assert.match(text(tree), /34 秒/);
+  assert.match(text(tree), /不足 1 分钟，本次不计入统计/);
 });
 
 test('result duration keeps seconds and hours instead of rounding away short sessions', () => {

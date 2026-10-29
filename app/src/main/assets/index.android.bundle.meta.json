@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "5a9511e7804f1eeb1699d2cddb8c3744cd99548e9d9461a45e686dd6c41c1a93",
+    "sha256": "e919223a11b1819a1ae2a4588dfe2d2142350df3d3016a5122c92d37ccb218d0",
     "files": [
       {
         "path": "App.tsx",
@@ -83,7 +83,7 @@
       },
       {
         "path": "src/bridge/index.ts",
-        "sha256": "313c035e411731497b253941ecce4638b1f9f49d5a092af4e4c079084fe7f233"
+        "sha256": "b3f2370d4c04b711daadb045d29c9203414e9ac395977ffb7a2985d343e66c69"
       },
       {
         "path": "src/components/BackfillFocusModal.tsx",
@@ -155,7 +155,11 @@
       },
       {
         "path": "src/components/TimerCompletionModal.tsx",
-        "sha256": "dff9f51f549ed172255cc71f5330af22d0ab2f5b1f1b446e57a8844d87dd5346"
+        "sha256": "ce003e0c5194c655ebb2cc8b91965fdd52b812fa816dc06be44e04567e283e70"
+      },
+      {
+        "path": "src/components/TodayScheduleCard.tsx",
+        "sha256": "d0e65509193f2fcfd567f9b214fb47a9254d057df5358cc60c07a4775488312a"
       },
       {
         "path": "src/components/YanjiUI.tsx",
@@ -187,7 +191,7 @@
       },
       {
         "path": "src/screens/FocusScreen.tsx",
-        "sha256": "314b4c332a9311cad87fa7d60d29409e43e96658ca9f2b3b8be9e14386e5cbfd"
+        "sha256": "3562d32cc19beb8fb8632e32f4b946f203adfe733a21f14f8928896a2326f679"
       },
       {
         "path": "src/screens/ReviewScreen.tsx",
@@ -203,7 +207,7 @@
       },
       {
         "path": "src/screens/TodayScreen.tsx",
-        "sha256": "d367c613284b4723d7a59be5ffc5162d84b46d0f7a8144bf7346eb9b8a1e643b"
+        "sha256": "6d580a00042f63bd9c83c45fdca743ad70de8f5413aa76e246b7c9adddff09b7"
       },
       {
         "path": "src/screens/focusViewLogic.ts",
@@ -264,15 +268,15 @@
     ]
   },
   "metro": {
-    "bytes": 2248740,
-    "sha256": "25f6875f4848ecc1bd015ce1fd5177d0ff74db3356ece53f66bf36331877ade4",
-    "sha1": "3e4be026566b2a2031303f8607da08f81d23c9fc"
+    "bytes": 2254403,
+    "sha256": "ac2e070b88f55a728435d962e5857c129f4b43dbea81b04c634dd6b1edfe4bd6",
+    "sha1": "4a169a3b3bf790ede9735515fa4ad1190873fc5f"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "3e4be026566b2a2031303f8607da08f81d23c9fc",
-    "bytes": 3146128,
-    "sha256": "8e2a0000655df09a3b88c8cc1d873af55b1c1ea86a4e12c3cac82a9c0c791363"
+    "sourceSha1": "4a169a3b3bf790ede9735515fa4ad1190873fc5f",
+    "bytes": 3153130,
+    "sha256": "6def9af4673a254107305911a4f5d78e8e8541fbb5d873e2b2f55ab40488f888"
   },
   "assets": []
 }

@@ -102,6 +102,7 @@ class YanjiTimerModule(
         putString("subjectName", completion.subjectName)
         putDouble("elapsedSeconds", completion.elapsedSeconds.toDouble())
         putBoolean("isExam", completion.isExam)
+        putBoolean("recorded", completion.recorded)
     }
 
     /**

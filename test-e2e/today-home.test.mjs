@@ -322,6 +322,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       },
     },
     '../components/YanjiUI': ui,
+    '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
@@ -329,7 +330,8 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     '../navigation/NavigationShell': {
       useNavigationActions: () => ({
         selectTab: tab => calls.push(['tab', tab]), requestFocusPreset: preset => calls.push(['preset', preset]),
-        openSettings: () => calls.push(['openSettings']), openTaskEditor: () => {}, closeTaskEditor: () => {},
+        openSettings: () => calls.push(['openSettings']), openTimetable: () => calls.push(['openTimetable']),
+        openTaskEditor: () => {}, closeTaskEditor: () => {},
       }),
       useNavigationState: () => ({ taskEditorOpen: false }),
     },
@@ -611,6 +613,23 @@ test('the goal is edited on the settings page, not in a page-owned sheet', () =>
   assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
     'Today must not render its own goal modal');
   assert.match(text(tree), /目标 6:00/, 'the metric still reports the stored goal');
+});
+
+test('the timetable is reachable from Today and a block starts as a focus preset', () => {
+  // The schedule used to be reachable only through Settings. It is now a
+  // section of the day it governs: editing opens the timetable, and a block
+  // with an enabled subject starts a focus session without leaving Today.
+  const harness = screenHarness(snapshot());
+  const tree = harness.render();
+  const card = nodes(tree, node => node.type === 'TodayScheduleCard')[0];
+  assert.ok(card, 'Today renders the timetable section');
+  assert.equal(card.props.date, date);
+  assert.equal(card.props.visible, true);
+  card.props.onEdit();
+  assert.deepEqual(harness.calls, [['openTimetable']], 'editing opens the timetable overlay');
+  const preset = { taskId: null, subjectId: 'math', subjectName: '数学一', title: '积分练习', plannedMinutes: 45 };
+  card.props.onStart(preset);
+  assert.deepEqual(harness.calls.at(-1), ['preset', preset]);
 });
 
 test('the journal heading carries order and fold, and the plan keeps the reading order', () => {
