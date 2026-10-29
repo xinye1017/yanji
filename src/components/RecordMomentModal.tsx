@@ -10,9 +10,13 @@
  *   active focus session id.
  *
  * Category contract:
- * - Three choices: 'AUTO' (智能识别), 'INSPIRATION' (灵感), 'DOUBT' (疑点).
- * - Both new captures and edits default to 'AUTO', so the model runs on save
- *   unless the user has explicitly picked 灵感 or 疑点.
+ * - With an API key: three choices, 'AUTO' (智能识别), 'INSPIRATION' (灵感),
+ *   'DOUBT' (疑点). Both new captures and edits default to 'AUTO', so the model
+ *   runs on save unless the user has explicitly picked 灵感 or 疑点.
+ * - Without a key the 智能识别 choice is not offered at all: it could only ever
+ *   fall back to 灵感, so the sheet defaults to 灵感 (or, for an edit, to the
+ *   category the note already has) and says why the option is missing. A failed
+ *   classification with a key says 识别超时 — the two states never share copy.
  * - While in the modal (new or editing), tapping 'AUTO' triggers immediate
  *   classification on the current content and displays the result.
  * - Explicit user selection of 'INSPIRATION' or 'DOUBT' commits that category directly.
@@ -105,11 +109,18 @@ export function RecordMomentModal({
   const [isFavorite, setIsFavorite] = useState(false);
   const captureDraft = useRef('');
   const [categoryOption, setCategoryOption] = useState<CaptureCategoryOption>('AUTO');
+  /**
+   * Whether an API key is stored. `null` = still asking. This is a display and
+   * defaulting concern only: the save path never trusts it over the bridge.
+   */
+  const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
   // The pending choice alone says whether the user has decided: anything but
   // 'AUTO' *is* an explicit pick, so no separate "chosen" flag can drift from it.
   const captureDraftCategory = useRef<CaptureCategoryOption>('AUTO');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const captureDraftImageUri = useRef<string | null>(null);
+  // Mirrors the key state for callbacks already in flight when the read lands.
+  const aiConfiguredRef = useRef<boolean | null>(null);
 
   // Editing starts from the saved note; new captures keep a separate unsaved
   // draft across closing the sheet and switching mounted tabs.
@@ -129,6 +140,37 @@ export function RecordMomentModal({
     setConfirmDelete(initialConfirmDelete);
   }, [visible, editingNote, initialConfirmDelete]);
 
+  // Asked on every open: the key can be saved or cleared while the app runs, and
+  // the answer decides both the offered choices and the default category.
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    aiConfiguredRef.current = null;
+    setAiConfigured(null);
+    const markUnconfigured = () => {
+      aiConfiguredRef.current = false;
+      setAiConfigured(false);
+      // 智能识别 would be a dead option, so the sheet starts on a category the
+      // user can actually mean: the note's own, or 灵感 for a new one.
+      setCategoryOption(prev => prev === 'AUTO' ? (editingNote?.category ?? 'INSPIRATION') : prev);
+      setIdentifying(false);
+      setPredictedCategory(null);
+      setAiFeedback(null);
+    };
+    YanjiDataNative.getDecisionApiKey()
+      .then(key => {
+        if (cancelled) return;
+        const configured = key.trim().length > 0;
+        aiConfiguredRef.current = configured;
+        setAiConfigured(configured);
+        if (!configured) markUnconfigured();
+      })
+      // A failed read is indistinguishable from "no key" for this sheet's
+      // purpose: either way the model cannot answer.
+      .catch(() => { if (!cancelled) markUnconfigured(); });
+    return () => { cancelled = true; };
+  }, [visible, editingNote]);
+
   const chooseCategory = useCallback(async (next: CaptureCategoryOption) => {
     setCategoryOption(next);
     setError(null);
@@ -136,11 +178,21 @@ export function RecordMomentModal({
       captureDraftCategory.current = next;
     }
     if (next === 'AUTO') {
+      if (aiConfigured === false) {
+        setAiFeedback('未配置 AI，无法自动识别');
+        setPredictedCategory(null);
+        return;
+      }
       const content = text.trim();
       if (content.length > 0) {
         setIdentifying(true);
         try {
           const resolved = await classifyMoment(content).catch(() => null);
+          if (aiConfiguredRef.current === false) {
+            setPredictedCategory(null);
+            setAiFeedback('未配置 AI，无法自动识别');
+            return;
+          }
           // `null` means the model gave no answer at all. Saying what it
           // "identified" then would be inventing a result.
           setPredictedCategory(resolved);
@@ -160,7 +212,7 @@ export function RecordMomentModal({
       setAiFeedback(null);
       setPredictedCategory(null);
     }
-  }, [editingNote, text]);
+  }, [editingNote, text, aiConfigured]);
 
   const handleToggleFavorite = useCallback(async () => {
     const next = !isFavorite;
@@ -209,7 +261,9 @@ export function RecordMomentModal({
       // typing discards that answer — so anything still held here describes the
       // exact text being saved. Without one, the model answers the commit.
       let suggestion = predictedCategory;
-      if (categoryOption === 'AUTO' && suggestion === null) {
+      // Without a key the request cannot succeed; skipping it keeps 保存 instant
+      // and leaves the honest 灵感 default in place.
+      if (categoryOption === 'AUTO' && suggestion === null && aiConfigured !== false) {
         suggestion = await classifyMoment(content).catch(() => null);
       }
       // No answer: a new capture keeps the bridge's 灵感 fallback, but an edit
@@ -256,7 +310,7 @@ export function RecordMomentModal({
     } finally {
       setSaving(false);
     }
-  }, [saving, identifying, text, categoryOption, predictedCategory, isFavorite, editingNote, date, imageUri, onClose, onSaved]);
+  }, [saving, identifying, text, categoryOption, predictedCategory, aiConfigured, isFavorite, editingNote, date, imageUri, onClose, onSaved]);
 
   const handleDelete = useCallback(async () => {
     if (saving || identifying || !editingNote) return;
@@ -510,8 +564,12 @@ export function RecordMomentModal({
                 AI 正在分析意图…
               </Text>
             ) : aiFeedback ? (
-              <Text style={[paper.typography.captionMeta, { color: paper.colors.brand }]}>
-                ✓ {aiFeedback}
+              <Text style={[paper.typography.captionMeta, { color: predictedCategory ? paper.colors.brand : paper.colors.secondary }]}>
+                {predictedCategory ? `✓ ${aiFeedback}` : aiFeedback}
+              </Text>
+            ) : aiConfigured === false ? (
+              <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                未配置 AI，可手动选择分类
               </Text>
             ) : error ? (
               <Text style={[paper.typography.captionMeta, { color: paper.colors.danger }]}>
@@ -564,7 +622,9 @@ export function RecordMomentModal({
             <View style={{ flexShrink: 1 }}>
               <YanjiPaperSegmentedControl
                 value={categoryOption}
-                options={CATEGORY_OPTIONS}
+                options={aiConfigured === false
+                  ? CATEGORY_OPTIONS.filter(option => option.value !== 'AUTO')
+                  : CATEGORY_OPTIONS}
                 onChange={chooseCategory}
                 accessibilityLabel="记录分类"
                 compact={true}

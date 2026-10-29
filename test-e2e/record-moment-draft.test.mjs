@@ -30,7 +30,7 @@ const theme = {
   },
 };
 
-function modalHarness({ save, activeSession = null, classify = async () => 'INSPIRATION', updateNote = async () => true, setNoteCategory = async () => true } = {}) {
+function modalHarness({ save, activeSession = null, decisionKey = 'test-key', classify = async () => 'INSPIRATION', updateNote = async () => true, setNoteCategory = async () => true } = {}) {
   const calls = { saveQuickNote: [], updateNote: [], deleteNote: [], setNoteCategory: [], activeSessionReads: 0, classifyInputs: [] };
   const states = [];
   const refs = [];
@@ -86,7 +86,7 @@ function modalHarness({ save, activeSession = null, classify = async () => 'INSP
         return setNoteCategory(...args);
       },
       getUserSettings: () => Promise.resolve({}),
-      getDecisionApiKey: () => Promise.resolve(''),
+      getDecisionApiKey: () => Promise.resolve(decisionKey),
       takePhoto: () => Promise.resolve('file:///mock/photo.jpg'),
     },
     YanjiTimerNative: {
@@ -460,6 +460,54 @@ test('a failed classification still falls back to 灵感 for a new capture', asy
     'a new capture has no stored category to protect, so the bridge fallback stands');
 });
 
+test('without an API key the sheet offers only the manual categories and starts on 灵感', async () => {
+  const modal = modalHarness({ decisionKey: '' });
+
+  modal.render({ visible: true });
+  await new Promise(r => setImmediate(r));
+  const opened = modal.render({ visible: true });
+  assert.equal(opened.categoryControl.props.value, 'INSPIRATION', 'the default is a category that can be saved as-is');
+  // `Array.from` reads the VM-context array into this realm's prototype.
+  assert.deepEqual(Array.from(opened.categoryControl.props.options, option => option.value), ['INSPIRATION', 'DOUBT'],
+    '智能识别 is not offered when it could only ever fall back');
+  assert.ok(opened.text('未配置 AI，可手动选择分类'), 'the sheet says why the option is missing');
+
+  const typed = modal.typeInto(opened, '没有配置也能记');
+  await typed.save.props.onPress();
+  assert.equal(modal.calls.classifyInputs.length, 0, 'no request is attempted without a key');
+  assert.equal(modal.calls.saveQuickNote[0][3], 'INSPIRATION');
+});
+
+test('without an API key an edit keeps the stored category instead of reclassifying', async () => {
+  const modal = modalHarness({ decisionKey: '' });
+  const note = { id: 'note-doubt', content: '一个疑点', category: 'DOUBT' };
+
+  modal.render({ visible: true, editingNote: note });
+  await new Promise(r => setImmediate(r));
+  const editor = modal.render({ visible: true, editingNote: note });
+  assert.equal(editor.categoryControl.props.value, 'DOUBT', 'the stored category is the honest default');
+  assert.deepEqual(Array.from(editor.categoryControl.props.options, option => option.value), ['INSPIRATION', 'DOUBT']);
+
+  const typed = modal.typeInto(editor, '一个疑点，改了个错别字');
+  await typed.save.props.onPress();
+  assert.equal(modal.calls.classifyInputs.length, 0);
+  assert.deepEqual(modal.calls.setNoteCategory, []);
+});
+
+test('a configured model that gives no answer says 识别超时, never 未配置', async () => {
+  const modal = modalHarness({ classify: async () => null });
+
+  const opened = modal.render({ visible: true });
+  modal.typeInto(opened, '一段文字');
+  await modal.chooseCategory(modal.render({ visible: true }), 'DOUBT');
+  await modal.chooseCategory(modal.render({ visible: true }), 'AUTO');
+  await new Promise(r => setImmediate(r));
+
+  const settled = modal.render({ visible: true });
+  assert.ok(settled.text('识别超时，保存时将重试'));
+  assert.equal(settled.text('未配置 AI，无法自动识别'), undefined, 'the two states never share copy');
+});
+
 test('editing commits a category correction through setNoteCategory', async () => {
   const modal = modalHarness();
 
@@ -505,7 +553,7 @@ test('tapping AUTO while editing classifies immediately and shows the verdict', 
   assert.deepEqual(modal.calls.classifyInputs, ['为什么这里要用换元积分法？'], 'calls classify immediately');
 
   const settled = modal.render({ visible: true, editingNote: note });
-  assert.ok(settled.text('已智能识别为：疑点'), 'the verdict is shown before saving');
+  assert.ok(settled.text('✓ 已智能识别为：疑点'), 'the verdict is shown before saving');
 
   await settled.save.props.onPress();
   assert.deepEqual(modal.calls.setNoteCategory, [['note-auto', 'DOUBT']], 'saves the classified category');

@@ -107,8 +107,8 @@ function text(tree) {
 }
 
 const UI_NAMES = [
-  'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
-  'YanjiLineChart', 'YanjiPaperSectionHeading',
+  'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
+  'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
   'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
   'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
 ];
@@ -183,6 +183,9 @@ function screenHarness(daySnapshot, {
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
+    '../navigation/NavigationShell': {
+      useNavigationActions: () => ({ openSettings: () => { calls.push(['settings']); } }),
+    },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
@@ -666,6 +669,24 @@ test('tapping a day in a paged-back week selects it and brings the strip home', 
   assert.equal(home.start, '2026-09-28', 'the strip stays on the week of the newly selected day');
   const chosen = home.cells.find(item => item.label.startsWith('2026-10-01'));
   assert.equal(chosen.selected, true, 'the tapped day is now the selection');
+});
+
+test('the timeline offers a blank record and the page its own settings entry', () => {
+  const h = screenHarness(snapshot());
+  const tree = h.render();
+
+  const capture = nodes(tree, node => node.type === 'YanjiCaptureCard')[0];
+  assert.ok(capture, 'the timeline header offers a capture entry');
+  assert.equal(capture.props.title, '写一条记录');
+  capture.props.onPress();
+  const modal = h.recordModal(h.render());
+  assert.equal(modal.props.visible, true, 'the shared sheet opens in create mode');
+  assert.equal(modal.props.editingNote, null, 'nothing is being edited');
+
+  const gear = nodes(tree, node => node.type === 'YanjiIconButton' && node.props.accessibilityLabel === '设置与目标')[0];
+  assert.ok(gear, 'review has its own settings entry');
+  gear.props.onPress();
+  assert.deepEqual(plain(h.calls), [['settings']]);
 });
 
 test('VIEWS expands to 3 options including journal library view', () => {

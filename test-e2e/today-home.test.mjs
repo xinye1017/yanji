@@ -322,6 +322,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
       },
     },
     '../components/YanjiUI': ui,
+    '../components/SettingsSheets': { DailyGoalSheet: 'DailyGoalSheet' },
     '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
@@ -449,6 +450,16 @@ test('production homepage routes free focus and running focus without a page-lev
   assert.equal(nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '开始一轮专注').length, 0);
   nodes(tree, node => node.type === 'Pressable' && node.props.accessibilityLabel === '返回专注工作台')[0].props.onPress();
   assert.deepEqual(harness.calls, [['tab', 'focus'], ['tab', 'focus']]);
+});
+
+test('pending tasks demote the free-focus CTA instead of removing it', () => {
+  const harness = screenHarness(snapshot({ tasks: [task()] }));
+  const tree = harness.render();
+  const cta = nodes(tree, node => node.type === 'YanjiPrimaryButton' && node.props.label === '开始一轮专注')[0];
+  assert.ok(cta, 'a planned day still offers a free session');
+  assert.equal(cta.props.variant, 'secondary', 'it yields the primary tier to the plan rows');
+  cta.props.onPress();
+  assert.deepEqual(harness.calls, [['tab', 'focus']]);
 });
 
 test('compact session reads countdown, stopwatch and pause ticks without adding them to saved totals', () => {
@@ -599,19 +610,32 @@ test('production homepage keeps loading distinct from an empty saved day', () =>
   assert.equal(nodes(tree, node => node.type === 'YanjiChronoSpectrum')[0].props.accessibilityLabel, '正在读取今日专注');
 });
 
-test('the goal is edited on the settings page, not in a page-owned sheet', () => {
-  // Today used to open its own goal modal and write updateUserSettings itself,
-  // so two screens could hold two drafts of one Room column. The route to
-  // Settings is now the only path, and the page must own no goal sheet at all.
-  const harness = screenHarness(snapshot());
-  const tree = harness.render();
+test('the goal opens a page-owned sheet that writes the same stored value', async () => {
+  // A goal is a number the user adjusts while looking at the day's progress, so
+  // it opens where the number is. The sheet reuses the same component and the
+  // same Room column as Settings — one writer, two doors.
+  const writes = [];
+  const harness = screenHarness(snapshot(), {
+    updateUserSettings: async settings => { writes.push(settings); return true; },
+  });
+  let tree = harness.render();
   const goalTrigger = nodes(tree, node => node.props.accessibilityLabel === '调整日常学习目标')[0];
   assert.ok(goalTrigger, 'the metric block still offers a way to change the goal');
   goalTrigger.props.onPress();
-  assert.deepEqual(harness.calls, [['openSettings']],
-    'the goal tap routes to the settings page and does nothing else');
-  assert.equal(nodes(tree, node => node.type === 'Modal').length, 0,
-    'Today must not render its own goal modal');
+  tree = harness.render();
+  const sheet = nodes(tree, node => node.type === 'DailyGoalSheet')[0];
+  assert.ok(sheet, 'the goal opens without leaving Today');
+  assert.equal(sheet.props.visible, true);
+  assert.equal(sheet.props.initialHours, 6, 'the sheet starts from the stored goal');
+  assert.deepEqual(harness.calls, [], 'no navigation is involved');
+
+  sheet.props.onSave(450);
+  await harness.flush();
+  tree = harness.render();
+  assert.deepEqual(JSON.parse(JSON.stringify(writes)), [{ dailyGoalHours: 7.5 }],
+    'the sheet writes the same column Settings writes');
+  assert.equal(nodes(tree, node => node.type === 'DailyGoalSheet')[0].props.visible, false,
+    'a saved goal closes the sheet');
   assert.match(text(tree), /目标 6:00/, 'the metric still reports the stored goal');
 });
 

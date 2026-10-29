@@ -229,15 +229,18 @@ test('template copy names avoid collisions', () => {
   assert.equal(uniqueTemplateName(['真题冲刺', '真题冲刺 2'], '真题冲刺'), '真题冲刺 3');
 });
 
-test('focus options resolve a category to its first enabled child and dedupe', () => {
+test('focus options keep the block subject itself, including whole categories', () => {
   const options = focusOptionsForBlock(['math', 'english', 'major'], SUBJECTS);
-  assert.deepEqual(options.map(option => option.subjectId), ['calc', 'english', 'ds']);
+  // A timetable block stores the category id, so the session records against
+  // that category — not against a child the user never chose.
+  assert.deepEqual(options.map(option => option.subjectId), ['math', 'english', 'major']);
   assert.deepEqual(options.map(option => option.label), ['数学一', '英语一', '408专业课']);
 
   // A disabled category yields nothing; a missing id is ignored.
   assert.deepEqual(focusOptionsForBlock(['old', 'ghost'], SUBJECTS), []);
-  // Two categories resolving to the same leaf appear once.
-  assert.equal(focusOptionsForBlock(['math', 'calc'], SUBJECTS).length, 1);
+  // A repeated id appears once; a category and its child are two real choices.
+  assert.equal(focusOptionsForBlock(['math', 'math'], SUBJECTS).length, 1);
+  assert.equal(focusOptionsForBlock(['math', 'calc'], SUBJECTS).length, 2);
   // A block with no subject cannot start focus.
   assert.deepEqual(focusOptionsForBlock([], SUBJECTS), []);
 });

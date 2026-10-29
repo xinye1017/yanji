@@ -23,12 +23,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
-import type { ActiveSessionState, Subject, TimerMode } from '../bridge';
-import { YanjiIcon, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
+import type { ActiveSessionState, StudyTask, Subject, TimerMode } from '../bridge';
+import { YanjiIcon, YanjiIconButton, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
 import { RollingTimeDisplay } from '../components/RollingTimeDisplay';
 import { BackfillFocusModal } from '../components/BackfillFocusModal';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { TaskPickerSheet } from '../components/TaskPickerSheet';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { useYanjiTheme } from '../theme/ThemeProvider';
@@ -385,9 +386,10 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [taskBinding, setTaskBinding] = useState<TaskBinding | null>(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { focusPreset } = useNavigationState();
-  const { clearFocusPreset, selectTab } = useNavigationActions();
+  const { clearFocusPreset, openSettings, selectTab } = useNavigationActions();
   /**
    * The measured slot the ring has to live in, between the header and the
    * action block. `null` until the first layout pass, which the ring reads as
@@ -429,9 +431,10 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
    * Two-level subject grouping.
    *
    * A top-level subject with enabled children is a category: its card selects
-   * the first child and reveals the child strip. A top-level subject with no
-   * children (英语一 / 政治) is itself the choice — it must still get a card,
-   * which is why every root is kept rather than only the ones with children.
+   * the category itself and reveals the strip where 「整个大类」 and each child
+   * are explicit choices. A top-level subject with no children (英语一 / 政治)
+   * is itself the choice — it must still get a card, which is why every root is
+   * kept rather than only the ones with children.
    */
   const subjectGroups = useMemo<SubjectGroup[]>(() => {
     const roots = enabledSubjects.filter(
@@ -443,9 +446,14 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     }));
   }, [enabledSubjects]);
 
-  /** Leaf subjects a session may actually be started against. */
+  /**
+   * Subjects a session may actually be started against. A category with
+   * children is included: 「整个大类」 is a real choice, not a synonym for its
+   * first child. Tapping a category used to silently record the session under
+   * whichever child happened to sort first.
+   */
   const selectableSubjects = useMemo(
-    () => subjectGroups.flatMap(group => group.children.length > 0 ? group.children : [group.category]),
+    () => subjectGroups.flatMap(group => group.children.length > 0 ? [group.category, ...group.children] : [group.category]),
     [subjectGroups]
   );
 
@@ -526,8 +534,39 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   }, []);
 
   const handleSelectCategory = useCallback((group: SubjectGroup) => {
-    handleSelect(group.children[0]?.id ?? group.category.id);
+    handleSelect(group.category.id);
   }, [handleSelect]);
+
+  const pendingTasks = useMemo(
+    () => (daily?.tasks ?? []).filter(task => !task.completed),
+    [daily]
+  );
+
+  const canBindTask = useCallback(
+    (task: StudyTask) => selectableSubjects.some(subject => subject.id === task.subjectId),
+    [selectableSubjects]
+  );
+
+  /**
+   * Bind a planned task the same way a Today plan row does: its subject and
+   * planned duration become the session's, and the start call carries taskId.
+   */
+  const bindTask = useCallback((task: StudyTask | null) => {
+    setTaskPickerOpen(false);
+    if (!task) {
+      setTaskBinding(null);
+      return;
+    }
+    const planned = task.plannedMinutes;
+    const minutes = Number.isFinite(planned) && planned >= MIN_MINUTES
+      ? Math.min(MAX_MINUTES, planned)
+      : DEFAULT_MINUTES;
+    commitDuration(minutes);
+    setTimerMode('COUNTDOWN');
+    setSelectedSubjectId(task.subjectId);
+    setTaskBinding({ taskId: task.id, subjectId: task.subjectId, title: task.title });
+    setActionError(null);
+  }, [commitDuration]);
 
   const handleStart = useCallback(async () => {
     if (busy || !selectedSubject) return;
@@ -681,7 +720,15 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 borderless
               />
 
-              <View style={{ minWidth: 84, minHeight: YanjiTouch.min }} />
+              <View style={{ minWidth: 84, minHeight: YanjiTouch.min, alignItems: 'flex-end', justifyContent: 'center' }}>
+                <YanjiIconButton
+                  icon="settings"
+                  onPress={openSettings}
+                  accessibilityLabel="设置与目标"
+                  size={32}
+                  iconSize={19}
+                />
+              </View>
             </View>
 
             <View style={{ marginTop: YanjiSpacing.md }}>
@@ -754,52 +801,29 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                 </View>
               )}
 
-              {/* Level 2: the active category's children, only when it has any. */}
+              {/* Level 2: the active category itself and its children. 「整个大类」
+                  is a real choice, so selecting the category can no longer be
+                  mistaken for selecting its first child. */}
               {activeGroup && activeGroup.children.length > 0 ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ gap: YanjiSpacing.lg, paddingTop: YanjiSpacing.md, paddingBottom: YanjiSpacing.xs }}
                 >
-                  {activeGroup.children.map(child => {
-                    const selected = child.id === selectedSubjectId;
-                    return (
-                      <Pressable
-                        key={child.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={child.name}
-                        accessibilityState={{ selected }}
-                        onPress={() => handleSelect(child.id)}
-                        style={({ pressed }) => ({
-                          minHeight: YanjiTouch.min,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: pressed ? 0.72 : 1,
-                        })}
-                      >
-                        <Text
-                          style={[
-                            paper.typography.bodyPrimary,
-                            {
-                              color: selected ? paper.colors.ink : paper.colors.secondary,
-                              fontWeight: selected ? '700' : '500',
-                            },
-                          ]}
-                        >
-                          {child.name}
-                        </Text>
-                        <View
-                          style={{
-                            marginTop: 4,
-                            height: 2.5,
-                            width: '100%',
-                            borderRadius: paper.radius.pill,
-                            backgroundColor: selected ? paper.colors.brand : 'transparent',
-                          }}
-                        />
-                      </Pressable>
-                    );
-                  })}
+                  <SubjectUnderlineChoice
+                    label="整个大类"
+                    accessibilityLabel={`整个大类：${activeGroup.category.name}`}
+                    selected={selectedSubjectId === activeGroup.category.id}
+                    onPress={() => handleSelect(activeGroup.category.id)}
+                  />
+                  {activeGroup.children.map(child => (
+                    <SubjectUnderlineChoice
+                      key={child.id}
+                      label={child.name}
+                      selected={child.id === selectedSubjectId}
+                      onPress={() => handleSelect(child.id)}
+                    />
+                  ))}
                 </ScrollView>
               ) : null}
 
@@ -856,6 +880,27 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     <YanjiIcon name="close" size={16} color={paper.colors.secondary} />
                   </Pressable>
                 </View>
+              ) : pendingTasks.length > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`关联今日计划，${pendingTasks.length} 项待办`}
+                  onPress={() => setTaskPickerOpen(true)}
+                  style={({ pressed }) => ({
+                    height: taskSlotHeight,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    opacity: pressed ? 0.65 : 1,
+                  })}
+                >
+                  <YanjiIcon name="tasks" size={15} color={paper.colors.secondary} />
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>
+                    关联今日计划
+                  </Text>
+                  <Text style={[paper.typography.captionMeta, { color: paper.colors.muted }]}>
+                    · {pendingTasks.length} 项待办
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
 
@@ -964,6 +1009,14 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
           visible={backfillOpen}
           onClose={() => setBackfillOpen(false)}
           initialSubjectId={selectedSubjectId}
+        />
+        <TaskPickerSheet
+          visible={taskPickerOpen}
+          tasks={pendingTasks}
+          selectedTaskId={taskBinding?.taskId ?? null}
+          canBind={canBindTask}
+          onSelect={bindTask}
+          onClose={() => setTaskPickerOpen(false)}
         />
       </View>
     );
@@ -1290,6 +1343,56 @@ function FocusTimerReadout({
         </Text>
       </View>
     </View>
+  );
+}
+
+/** One choice in the category strip: a label with the brand underline. */
+function SubjectUnderlineChoice({
+  label,
+  accessibilityLabel,
+  selected,
+  onPress,
+}: {
+  label: string;
+  accessibilityLabel?: string;
+  selected: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: YanjiTouch.min,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.72 : 1,
+      })}
+    >
+      <Text
+        style={[
+          paper.typography.bodyPrimary,
+          {
+            color: selected ? paper.colors.ink : paper.colors.secondary,
+            fontWeight: selected ? '700' : '500',
+          },
+        ]}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          marginTop: 4,
+          height: 2.5,
+          width: '100%',
+          borderRadius: paper.radius.pill,
+          backgroundColor: selected ? paper.colors.brand : 'transparent',
+        }}
+      />
+    </Pressable>
   );
 }
 

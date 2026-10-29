@@ -92,6 +92,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
       },
     },
     '../components/YanjiUI': ui,
+    '../components/SettingsSheets': { DailyGoalSheet: 'DailyGoalSheet' },
     '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
     '../components/RoamingNotesModal': { RoamingNotesModal: 'RoamingNotesModal' },
@@ -149,7 +150,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
   const calls = [];
   const flashList = createFlashListDouble();
   const names = [
-    'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
+    'YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
     'YanjiIcon', 'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
     'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
@@ -204,6 +205,9 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
+    '../navigation/NavigationShell': {
+      useNavigationActions: () => ({ openSettings: () => {} }),
+    },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {

@@ -31,7 +31,7 @@ export function adjustScheduleTime<T extends { startMinute: number; endMinute: n
 }
 
 export interface ScheduleFocusOption {
-  /** 真正写进专注记录的学科 id（大类会解析到第一个启用子类）。 */
+  /** 真正写进专注记录的学科 id（与时间表所选科目一致）。 */
   subjectId: string;
   subjectName: string;
   /** 时间表里展示的科目名，例如「数学」「408」。 */
@@ -296,9 +296,10 @@ export function uniqueTemplateName(existing: readonly string[], base: string): s
 /**
  * 一个时间段可以启动的专注学科。
  *
- * 大类（数学一 / 408专业课）在专注页不是可直接开始的叶子，因此解析到第一个
- * 启用子类；没有子类的大类（英语一 / 政治）就是它自己。展示仍用时间表的
- * 科目名（「数学」），让用户看到的是自己写下的计划。
+ * 时间表只让人选大类（数学一 / 408专业课），所以「整个大类」就是这段计划
+ * 真正记录到的学科——不能再悄悄解析到第一个子类。停用或缺失的 id 被忽略，
+ * 同一学科只出现一次；展示仍用时间表的科目名（「数学」），让用户看到的是
+ * 自己写下的计划。
  */
 export function focusOptionsForBlock(
   subjectIds: readonly string[],
@@ -309,16 +310,11 @@ export function focusOptionsForBlock(
   const seen = new Set<string>();
   for (const id of subjectIds) {
     const subject = byId.get(id);
-    if (!subject || !subject.enabled) continue;
-    const children = subjects
-      .filter(child => child.parentId === id && child.enabled)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-    const resolved = children[0] ?? subject;
-    if (seen.has(resolved.id)) continue;
-    seen.add(resolved.id);
+    if (!subject || !subject.enabled || seen.has(subject.id)) continue;
+    seen.add(subject.id);
     options.push({
-      subjectId: resolved.id,
-      subjectName: resolved.name,
+      subjectId: subject.id,
+      subjectName: subject.name,
       label: subject.name,
       colorHex: subject.colorHex,
     });

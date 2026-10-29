@@ -22,6 +22,7 @@ import {
   YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { DailyGoalSheet } from '../components/SettingsSheets';
 import { TodayScheduleCard } from '../components/TodayScheduleCard';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
@@ -41,7 +42,7 @@ import {
   greeting, hourRangeLabel, legendDuration, rhythmSummary, spectrumLegend,
   summarizeSubjects, taskMeta,
 } from './todayViewLogic';
-import { examCountdownText, todayIso } from '../state/settingsViewLogic';
+import { examCountdownText, goalHoursFromMinutes, todayIso } from '../state/settingsViewLogic';
 
 /**
  * What the page is currently explaining.
@@ -259,6 +260,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
   const [journalExpanded, setJournalExpanded] = useState(true);
   const [selection, setSelection] = useState<Selection>(null);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalError, setGoalError] = useState<string | null>(null);
+  const goalSavingRef = useRef(false);
   const [editingNote, setEditingNote] = useState<NoteEntry | null>(null);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   /** Anchored 「···」 menu: the note it acts on plus the button's window rect. */
@@ -546,9 +551,27 @@ export function TodayScreen({ visible, foregroundRevision }: {
     finally { setBusyNote(null); }
   };
   const openGoal = () => {
-    // The goal is edited on the settings page only: one writer per stored value
-    // means Today can never save a goal the settings row does not show.
-    openSettings();
+    setGoalError(null);
+    setGoalOpen(true);
+  };
+  const saveGoal = async (minutes: number) => {
+    if (goalSavingRef.current) return;
+    goalSavingRef.current = true;
+    setGoalSaving(true);
+    setGoalError(null);
+    try {
+      if (!await YanjiDataNative.updateUserSettings({ dailyGoalHours: goalHoursFromMinutes(minutes) })) {
+        throw new Error('refused');
+      }
+    } catch {
+      setGoalError('每日学习时长未保存，请稍后再试。');
+      return;
+    } finally {
+      goalSavingRef.current = false;
+      setGoalSaving(false);
+    }
+    setGoalOpen(false);
+    try { await refreshSettingsSnapshot(); } catch { /* the snapshot keeps its last value */ }
   };
   const newNote = () => { setEditingNote(null); setConfirmDeleteNote(false); setRecordOpen(true); };
   const openNote = (note: NoteEntry, confirmDelete = false) => {
@@ -800,6 +823,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                   {snapshot && goalReached ? (
                     <Text style={{ color: colors.positive, fontWeight: '600' }}>{'  已达成'}</Text>
                   ) : null}
+                  <Text style={{ color: colors.muted }}>{'  ›'}</Text>
                 </Text>
               ) : (
                 <Text style={[typography.captionMeta, { color: colors.brandInk }]}>
@@ -886,11 +910,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
                 <Text style={[typography.captionMeta, { color: colors.brandInk }]}>返回专注</Text>
               </Pressable>
             </View>
-          ) : pending.length === 0 ? (
+          ) : (
             <View style={{ marginTop: YanjiSpacing.md }}>
-              <YanjiPrimaryButton label="开始一轮专注" icon="play" onPress={() => selectTab('focus')} />
+              {/* A planned day must not remove the free-focus entry. With plan
+                  rows present it steps back to the secondary tier so the rows
+                  stay the primary path. */}
+              <YanjiPrimaryButton
+                label="开始一轮专注"
+                icon="play"
+                variant={pending.length === 0 ? 'primary' : 'secondary'}
+                onPress={() => selectTab('focus')}
+              />
             </View>
-          ) : null}
+          )}
         </View>
         <YanjiHairline />
         <TodayScheduleCard
@@ -1104,6 +1136,14 @@ export function TodayScreen({ visible, foregroundRevision }: {
         initialConfirmDelete={confirmDeleteNote}
         onClose={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
         onSaved={() => { setRecordOpen(false); setEditingNote(null); setConfirmDeleteNote(false); }}
+      />
+      <DailyGoalSheet
+        visible={goalOpen}
+        initialHours={settings?.dailyGoalHours}
+        saving={goalSaving}
+        error={goalError}
+        onClose={() => { if (!goalSavingRef.current) setGoalOpen(false); }}
+        onSave={minutes => void saveGoal(minutes)}
       />
       <TaskEditorModal
         visible={taskEditorOpen || !!taskInfo}

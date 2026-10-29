@@ -188,6 +188,7 @@ function focusScreenHarness({ windowWidth = 393, windowHeight = 800 } = {}) {
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
     '../components/RecordMomentModal': { RecordMomentModal: noop },
+    '../components/TaskPickerSheet': { TaskPickerSheet: 'TaskPickerSheet' },
     '../components/BackfillFocusModal': { BackfillFocusModal: noop },
     '../navigation/NavigationShell': {
       useNavigationState: () => ({ focusPreset: null }),

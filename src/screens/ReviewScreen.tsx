@@ -11,8 +11,8 @@ import { FlashList } from '@shopify/flash-list';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
-  YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
-  YanjiLineChart, YanjiPaperSectionHeading,
+  YanjiCaptureCard, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
+  YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
@@ -23,6 +23,7 @@ import { JournalLibraryView } from './review/JournalLibraryView';
 import { TimelineActionPopover } from '../components/TimelineActionPopover';
 import type { PopoverAnchor, TimelineAction } from '../components/TimelineActionPopover';
 import { useYanjiTheme } from '../theme/ThemeProvider';
+import { useNavigationActions } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
 import { YanjiSpacing } from '../theme/tokens';
 import {
@@ -59,6 +60,7 @@ const TREND_CHART_HEIGHT = 108;
 export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
+  const { openSettings } = useNavigationActions();
   const { contentPadding } = useBottomTabLayout();
   const { fontScale, width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -131,6 +133,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     sessionId: string; isExam: boolean; subjectName: string;
   } | null>(null);
   const [editingNote, setEditingNote] = useState<EditingNote | null>(null);
+  /** A blank record for the selected day, opened from the timeline's capture card. */
+  const [createOpen, setCreateOpen] = useState(false);
   const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [busyNote, setBusyNote] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -363,18 +367,22 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           out by the filmstrip and the period bar below, so an eyebrow above the
           title only repeated it. The view switch rides the right edge as a
           borderless capsule. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 6 }}>
-        <Text accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink, fontFamily: 'serif' }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingBottom: 6 }}>
+        <Text numberOfLines={1} accessibilityRole="header" style={[typography.titleEditorial, { color: colors.ink, fontFamily: 'serif', flexShrink: 1 }]}>
           备考手帐
         </Text>
-        <YanjiPaperSegmentedControl
-          value={view}
-          options={VIEWS}
-          onChange={setView}
-          accessibilityLabel="回顾视图"
-          compact
-          borderless
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <YanjiPaperSegmentedControl
+            value={view}
+            options={VIEWS}
+            onChange={setView}
+            accessibilityLabel="回顾视图"
+            compact
+            borderless
+          />
+          <YanjiIconButton icon="settings" onPress={openSettings} accessibilityLabel="设置与目标"
+            size={32} iconSize={19} />
+        </View>
       </View>
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
@@ -402,6 +410,12 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         canStepForward={canPageWeek(weekStart, today, 1)}
       />
       <DaySummary snapshot={snapshot} />
+      <YanjiCaptureCard
+        title="写一条记录"
+        hint="补记这一天的想法或卡点"
+        accessibilityLabel="写一条记录"
+        onPress={() => setCreateOpen(true)}
+      />
       <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
       {/* The rows used to sit under this gap inside their own wrapper. Now they
           are list items, so the header has to carry the separation itself. */}
@@ -512,12 +526,12 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     ) : null}
 
     <RecordMomentModal
-      visible={editingNote !== null}
+      visible={editingNote !== null || createOpen}
       date={date}
       editingNote={editingNote}
       initialConfirmDelete={confirmDeleteNote}
-      onClose={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
-      onSaved={() => { setEditingNote(null); setConfirmDeleteNote(false); }}
+      onClose={() => { setEditingNote(null); setCreateOpen(false); setConfirmDeleteNote(false); }}
+      onSaved={() => { setEditingNote(null); setCreateOpen(false); setConfirmDeleteNote(false); }}
     />
     <RoamingNotesModal
       visible={roamingVisible}

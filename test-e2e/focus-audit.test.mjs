@@ -379,7 +379,8 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
       },
     },
     '../components/YanjiUI': {
-      YanjiIcon: noop, YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
+      YanjiIcon: noop, YanjiIconButton: 'YanjiIconButton',
+      YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
       YanjiPrimaryButton: 'YanjiPrimaryButton',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
@@ -387,10 +388,11 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
     '../components/RecordMomentModal': { RecordMomentModal: noop },
     // 补录专注是独立弹窗；这里只验证 FocusScreen 的装配，弹窗本身由自己的用例覆盖。
     '../components/BackfillFocusModal': { BackfillFocusModal: noop },
+    '../components/TaskPickerSheet': { TaskPickerSheet: 'TaskPickerSheet' },
     '../navigation/NavigationShell': {
       // A preset is how a plan reaches the ready screen with its task attached.
       useNavigationState: () => ({ focusPreset }),
-      useNavigationActions: () => ({ clearFocusPreset: noop, selectTab: noop }),
+      useNavigationActions: () => ({ clearFocusPreset: noop, selectTab: noop, openSettings: noop }),
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 110 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
@@ -626,7 +628,13 @@ test('ready subject selection uses clean brand border and indicator underline wi
     const h = focusScreenHarness({ session: null, subjects, isDark });
     let tree = await h.loadSubjects();
     const subject = name => findAll(tree, n => n.props?.accessibilityLabel === name)[0];
-    
+    // The underline choices are a local component, so the tree holds the
+    // component element rather than its Pressable; expand it to inspect one.
+    const choice = name => {
+      const node = findAll(tree, n => n.props?.accessibilityLabel === name || n.props?.label === name)[0];
+      return node ? h.expand(node) : node;
+    };
+
     // Level 1 category check
     const cat = subject('Math');
     assert.equal(cat.props.accessibilityState.selected, true);
@@ -635,19 +643,63 @@ test('ready subject selection uses clean brand border and indicator underline wi
     assert.equal(catStyle.borderWidth, tokens.YanjiPaperLayout.hairlineWidth);
     assert.equal(findAll(cat, n => n.props?.style?.backgroundColor === subjects[0].colorHex).length, 0);
 
-    // Level 2 sub-subject check
-    const child = subject('Algebra');
-    assert.equal(child.props.accessibilityState.selected, true);
-    assert.ok(child.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
-    const indicator = findAll(child, n => n.props?.style?.backgroundColor === h.paper.colors.brand)[0];
-    assert.ok(indicator, 'selected sub-subject has brand indicator underline');
-    assert.equal(findAll(child, n => n.props?.style?.backgroundColor === subjects[1].colorHex).length, 0);
+    // Level 2: the whole category is an explicit, selected-by-default choice —
+    // no child is silently picked on the user's behalf.
+    const whole = choice('整个大类：Math');
+    assert.equal(whole.props.accessibilityState.selected, true);
+    assert.ok(whole.props.style({ pressed: false }).minHeight >= tokens.YanjiTouch.min);
+    const indicator = findAll(whole, n => n.props?.style?.backgroundColor === h.paper.colors.brand)[0];
+    assert.ok(indicator, 'the whole-category choice has a brand indicator underline');
+    assert.equal(choice('Algebra').props.accessibilityState.selected, false);
 
-    subject('Calculus').props.onPress();
+    choice('Calculus').props.onPress();
     tree = h.render();
-    assert.equal(subject('Calculus').props.accessibilityState.selected, true);
-    assert.equal(subject('Algebra').props.accessibilityState.selected, false);
+    assert.equal(choice('Calculus').props.accessibilityState.selected, true);
+    assert.equal(choice('整个大类：Math').props.accessibilityState.selected, false);
+    assert.equal(choice('Algebra').props.accessibilityState.selected, false);
   }
+});
+
+test('the ready screen can bind a pending plan task without leaving Focus', async () => {
+  const subjects = [
+    { id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: true, sortOrder: 1 },
+    { id: 'algebra', name: 'Algebra', colorHex: '#2D7A5E', enabled: true, parentId: 'math', isCategory: false, sortOrder: 2 },
+  ];
+  const tasks = [
+    {
+      id: 'task-1', date: '2026-10-16', subjectId: 'math', subjectName: 'Math', subjectColor: '#356AE6',
+      title: '积分练习', plannedMinutes: 45, actualMinutes: 0, completed: false, carriedOverToId: null, createdAt: 0,
+    },
+    {
+      id: 'task-done', date: '2026-10-16', subjectId: 'math', subjectName: 'Math', subjectColor: '#356AE6',
+      title: '已做完的计划', plannedMinutes: 30, actualMinutes: 30, completed: true, carriedOverToId: null, createdAt: 0,
+    },
+  ];
+  const h = focusScreenHarness({ session: null, subjects, tasks });
+  let tree = await h.loadSubjects();
+
+  const opener = findAll(tree, n => n.props?.accessibilityLabel === '关联今日计划，1 项待办')[0];
+  assert.ok(opener, 'an unbound ready screen offers the day\'s pending plan');
+  opener.props.onPress();
+  tree = h.render();
+
+  const sheet = findAll(tree, n => n.type === 'TaskPickerSheet')[0];
+  assert.ok(sheet, 'the picker is mounted by the page');
+  assert.equal(sheet.props.visible, true);
+  assert.deepEqual(sheet.props.tasks.map(task => task.id), ['task-1'], 'only unfinished tasks are offered');
+  assert.equal(sheet.props.selectedTaskId, null);
+
+  sheet.props.onSelect(sheet.props.tasks[0]);
+  tree = h.render();
+  assert.equal(findAll(tree, n => n.type === 'TaskPickerSheet')[0].props.visible, false,
+    'choosing closes the sheet');
+  assert.match(textOf(tree), /积分练习/, 'the slot names the bound task');
+  assert.ok(findAll(tree, n => n.props?.accessibilityLabel === '取消关联任务')[0],
+    'the binding can be cleared again');
+
+  await findAll(tree, n => n.type === 'YanjiPrimaryButton')[0].props.onPress();
+  assert.deepEqual(h.calls[0].slice(0, 7), ['start', 'math', 'Math', 'COUNTDOWN', '', 'task-1', 45],
+    'the started session carries the task id and the plan duration');
 });
 
 test('start button uses clean 开始专注 without detail duration', async () => {
