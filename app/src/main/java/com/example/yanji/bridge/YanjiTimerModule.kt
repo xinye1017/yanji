@@ -14,6 +14,8 @@ import com.example.yanji.data.timer.CoordinatorState
 import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerCalculator
 import com.example.yanji.data.timer.TimerPhase
+import com.example.yanji.data.timer.TimerCompletion
+import com.example.yanji.data.timer.TimerCompletionFeedback
 import com.example.yanji.service.FocusTimerService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,11 @@ class YanjiTimerModule(
     init {
         observeCoordinator()
         observeTicker()
+        scope.launch {
+            TimerCompletionFeedback.state.pending.collectLatest { completion ->
+                if (completion != null) emit("onTimerCompleted", completionMap(completion))
+            }
+        }
     }
 
     override fun getName(): String = "YanjiTimerModule"
@@ -78,6 +85,24 @@ class YanjiTimerModule(
     }
 
     // ---------------------------------------------------------------- 动作
+
+    @ReactMethod
+    fun getTimerCompletion(promise: Promise) {
+        promise.resolve(TimerCompletionFeedback.state.pending.value?.let(::completionMap))
+    }
+
+    @ReactMethod
+    fun acknowledgeTimerCompletion(sessionId: String, promise: Promise) {
+        TimerCompletionFeedback.state.acknowledge(sessionId)
+        promise.resolve(true)
+    }
+
+    private fun completionMap(completion: TimerCompletion): WritableMap = Arguments.createMap().apply {
+        putString("sessionId", completion.sessionId)
+        putString("subjectName", completion.subjectName)
+        putDouble("elapsedSeconds", completion.elapsedSeconds.toDouble())
+        putBoolean("isExam", completion.isExam)
+    }
 
     /**
      * 开始一次专注。
@@ -110,6 +135,12 @@ class YanjiTimerModule(
             return
         }
         scope.launch {
+            try {
+                prepareTimerNotifications(reactContext)
+            } catch (error: Exception) {
+                promise.reject("E_NOTIFICATION_PERMISSION", "无法请求通知权限，请重试", error)
+                return@launch
+            }
             val started = com.example.yanji.data.YanjiRepository.getInstance()
                 .startFocus(
                     subjectId = subjectId,

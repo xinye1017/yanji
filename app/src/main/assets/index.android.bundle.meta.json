@@ -19,11 +19,11 @@
     ]
   },
   "inputs": {
-    "sha256": "97964ec9d0506e6fef126c67e71f45cfad4e243b1bbf9228dd5b9a8cae9aaa72",
+    "sha256": "669fef771bc9f0559a4b9466d30258e6c72f4c2aa763f64002a54f4408d6b711",
     "files": [
       {
         "path": "App.tsx",
-        "sha256": "3dcf9ba9533aa89b98c99c31864473e35a8605f6145b4c384f0e804a0ccae763"
+        "sha256": "634ffa981fd1c1580d45dc154e9e16234fc57601737f567311188b6350e695f8"
       },
       {
         "path": "assets/branding/launcher-icon.jpg",
@@ -83,7 +83,7 @@
       },
       {
         "path": "src/bridge/index.ts",
-        "sha256": "bdf7e353f309b5f524898dc419984bea9ca953cf4530368045a08ed784a8ae59"
+        "sha256": "313c035e411731497b253941ecce4638b1f9f49d5a092af4e4c079084fe7f233"
       },
       {
         "path": "src/components/BackfillFocusModal.tsx",
@@ -152,6 +152,10 @@
       {
         "path": "src/components/TimelineCompactRow.tsx",
         "sha256": "a28988856f6d883afb5d9214ca9d74166b596eefcef1702a4b52555c3960ee98"
+      },
+      {
+        "path": "src/components/TimerCompletionModal.tsx",
+        "sha256": "dff9f51f549ed172255cc71f5330af22d0ab2f5b1f1b446e57a8844d87dd5346"
       },
       {
         "path": "src/components/YanjiUI.tsx",
@@ -251,7 +255,7 @@
       },
       {
         "path": "src/theme/tokens.ts",
-        "sha256": "ef4494fab4b8c0711a5f17ac6dfa06d8d8fabecc36c9bca4bdc1343db9b3a111"
+        "sha256": "703079e76935da74fd82aade7ac4f45ab4eeacd36bc8a4f64e3f2ac08e7ea08b"
       },
       {
         "path": "tsconfig.json",
@@ -260,15 +264,15 @@
     ]
   },
   "metro": {
-    "bytes": 2245281,
-    "sha256": "c4a9edb9a3636c138e1e11f36741f7d34c5e8183925edca3b38c330a9e111824",
-    "sha1": "1c62b4ee62b363e77df90bafc4230dfc41210f87"
+    "bytes": 2248716,
+    "sha256": "64154c072d482606fbe74d5ccb4f989d732a692a21fb7aeed65dd311326141bf",
+    "sha1": "ea82e2be9b5a56f682a39761365d27730ec2a39e"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "1c62b4ee62b363e77df90bafc4230dfc41210f87",
-    "bytes": 3140594,
-    "sha256": "a1ab2db08267c49004febf94ff5ee3098ef72fa02f272cd3b279c50417479b8d"
+    "sourceSha1": "ea82e2be9b5a56f682a39761365d27730ec2a39e",
+    "bytes": 3146022,
+    "sha256": "338f8ee0e0f2e81c2b9416137ffbb72fd95bc675487f1993eb94f27c42cba585"
   },
   "assets": []
 }

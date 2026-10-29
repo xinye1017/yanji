@@ -323,6 +323,13 @@ export interface TimerStateChangedEvent {
   session: ActiveSessionState | null;
 }
 
+export interface TimerCompletion {
+  sessionId: string;
+  subjectName: string;
+  elapsedSeconds: number;
+  isExam: boolean;
+}
+
 export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings' | 'subjects' | 'schedule';
 
 export interface DataChangedEvent {
@@ -357,6 +364,8 @@ interface YanjiTimerModuleNative {
   completeTimer(): Promise<boolean>;
   discardTimer(): Promise<boolean>;
   getActiveSession(): Promise<ActiveSessionState | null>;
+  getTimerCompletion(): Promise<TimerCompletion | null>;
+  acknowledgeTimerCompletion(sessionId: string): Promise<boolean>;
 }
 
 interface YanjiDataModuleNative {
@@ -558,6 +567,11 @@ export function onTimerTick(callback: (event: TimerTickEvent) => void): () => vo
   const subscription = emitter?.addListener('onTimerTick', (payload: object) =>
     callback(payload as TimerTickEvent)
   );
+  return () => subscription?.remove();
+}
+
+export function onTimerCompleted(callback: (event: TimerCompletion) => void): () => void {
+  const subscription = emitter?.addListener('onTimerCompleted', (payload: object) => callback(payload as TimerCompletion));
   return () => subscription?.remove();
 }
 

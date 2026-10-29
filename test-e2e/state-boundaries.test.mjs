@@ -64,6 +64,7 @@ test('App shell reconciles a foreground transition that happened before its list
     'react-native-blur-overlay': { BlurTarget: dummy },
     './src/theme/liquidGlass': { YanjiLiquidGlass: { targetId: 'test' } },
     './src/navigation/BottomTabBar': { BottomTabBar: dummy },
+    './src/components/TimerCompletionModal': { TimerCompletionModal: dummy },
     './src/navigation/NavigationShell': { NavigationProvider: dummy,
       useNavigationState: () => ({
         activeTab: 'today', settingsOpen: false, taskEditorOpen: false, timetableOpen: false,
@@ -139,6 +140,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
       'react-native-blur-overlay': { BlurTarget: dummy },
       './src/theme/liquidGlass': { YanjiLiquidGlass: { targetId: 'test' } },
       './src/navigation/BottomTabBar': { BottomTabBar: MockDock },
+      './src/components/TimerCompletionModal': { TimerCompletionModal: dummy },
       './src/navigation/NavigationShell': {
         NavigationProvider: dummy,
         useNavigationState: () => nav,

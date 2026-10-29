@@ -57,21 +57,34 @@ class StandardNotificationController(private val context: Context) {
             lockscreenVisibility = CHANNEL_LOCK_SCREEN_VISIBILITY
         }
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val completion = NotificationChannel(
+            FocusNotificationSpecs.COMPLETION_CHANNEL_ID,
+            "研迹 · 计时完成提醒",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "专注或模考计时完成、保存失败时提醒"
+            enableVibration(true)
+            setShowBadge(false)
+            lockscreenVisibility = CHANNEL_LOCK_SCREEN_VISIBILITY
+        }
+        context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(completion)
     }
 
     /** 暴露 builder 而不是成品 notification：Live Update 需要在同一 builder 上追加样式。 */
     fun builderFor(spec: FocusNotificationSpec): NotificationCompat.Builder {
-        val builder = NotificationCompat.Builder(context, FocusNotificationSpecs.CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, if (spec.ongoing) FocusNotificationSpecs.CHANNEL_ID else FocusNotificationSpecs.COMPLETION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_focus)
             .setContentTitle(spec.title)
             .setContentText(spec.contentText)
             .setOngoing(spec.ongoing)
             .setAutoCancel(spec.autoCancel)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(spec.ongoing)
             .setContentIntent(openAppIntent())
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(if (spec.ongoing) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NOTIFICATION_VISIBILITY)
-            .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
+            .setCategory(if (spec.ongoing) NotificationCompat.CATEGORY_STOPWATCH else NotificationCompat.CATEGORY_ALARM)
+
+        if (!spec.ongoing) builder.setDefaults(NotificationCompat.DEFAULT_ALL)
 
         spec.subText?.let { builder.setSubText(it) }
 

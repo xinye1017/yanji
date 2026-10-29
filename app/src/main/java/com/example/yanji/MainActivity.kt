@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.yanji.bridge.LaunchPreheat
+import com.example.yanji.data.timer.TimerCompletionFeedback
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultReactActivityDelegate
@@ -13,6 +14,16 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
  * 研迹的唯一 Activity —— React Native 新架构宿主。
  */
 class MainActivity : ReactActivity() {
+
+    override fun onStart() {
+        super.onStart()
+        TimerCompletionFeedback.state.appVisible = true
+    }
+
+    override fun onStop() {
+        TimerCompletionFeedback.state.appVisible = false
+        super.onStop()
+    }
 
     override fun getMainComponentName(): String = "YanjiApp"
 

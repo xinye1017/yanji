@@ -5,7 +5,6 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.media.RingtoneManager
 import android.os.*
 import com.example.yanji.data.YanjiRepository
 import com.example.yanji.data.timer.ActiveSessionCoordinator
@@ -16,6 +15,9 @@ import com.example.yanji.data.timer.SystemMonotonicClock
 import com.example.yanji.data.timer.TimerMachine
 import com.example.yanji.data.timer.TimerPhase
 import com.example.yanji.data.timer.focusLiveStateOf
+import com.example.yanji.data.timer.Finished
+import com.example.yanji.data.timer.TimerCompletion
+import com.example.yanji.data.timer.TimerCompletionFeedback
 import com.example.yanji.liveactivity.FocusKind
 import com.example.yanji.liveactivity.FocusLiveActivityController
 import com.example.yanji.liveactivity.FocusTimerActions
@@ -320,7 +322,7 @@ class FocusTimerService : Service() {
             if (outcome != CommitOutcome.SUCCESS) return@launch
             machine.finish()
             publishSemanticState(elapsedSeconds = seconds)
-            finishAndRelease(postCompletion = true)
+            finishAndRelease()
         }
     }
 
@@ -353,8 +355,7 @@ class FocusTimerService : Service() {
             if (outcome != CommitOutcome.SUCCESS) return@launch
             machine.finish()
             publishSemanticState(elapsedSeconds = elapsed)
-            // 正向计时由用户主动收尾时，App 内结算弹窗已经给出反馈，不再额外打扰。
-            finishAndRelease(postCompletion = machine.snapshot.isCountdown)
+            finishAndRelease()
         }
     }
 
@@ -461,7 +462,7 @@ class FocusTimerService : Service() {
         liveActivity.updateOngoing(state, kind)
     }
 
-    private fun finishAndRelease(postCompletion: Boolean) {
+    private fun finishAndRelease() {
         timerJob?.cancel()
         // 完成瞬间立刻释放 WakeLock：旧实现只在 onDestroy 释放，
         // 如果完成事件没有及时被 UI 接管，唤醒锁会一直持有到 12 小时超时。
@@ -470,11 +471,16 @@ class FocusTimerService : Service() {
         // 先撤掉 ongoing 前台通知，再按需发完成通知——顺序反了会出现
         // 「完成通知已到、常驻胶囊还挂着」的假状态。
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (postCompletion) {
-            liveActivity.finish(_liveState.value, kind)
-            triggerAlertSoundAndVibration()
-        } else {
-            liveActivity.cancelOngoing()
+        liveActivity.cancelOngoing()
+        val finished = _liveState.value as? Finished
+        if (finished != null) {
+            val shownInApp = TimerCompletionFeedback.state.present(TimerCompletion(
+                sessionId = finished.sessionId,
+                subjectName = finished.subject,
+                elapsedSeconds = finished.elapsedSeconds,
+                isExam = kind == FocusKind.EXAM
+            ))
+            if (!shownInApp) liveActivity.finish(finished, kind)
         }
         stopSelf()
     }
@@ -490,32 +496,6 @@ class FocusTimerService : Service() {
         val lock = wakeLock ?: return
         if (lock.isHeld) {
             runCatching { lock.release() }
-        }
-    }
-
-    private fun triggerAlertSoundAndVibration() {
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vm?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 200, 500, 200, 800), -1))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(longArrayOf(0, 500, 200, 500, 200, 800), -1)
-            }
-
-            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val ringtone = RingtoneManager.getRingtone(applicationContext, notificationUri)
-            ringtone?.play()
-        } catch (e: Exception) {
-            // 闹铃属于"尽力而为"的辅助能力：设备静音 / 振动权限缺失都不应影响计时结果。
-            android.util.Log.w("FocusTimer", "提醒动作失败：${e.message}")
         }
     }
 

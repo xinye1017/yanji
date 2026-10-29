@@ -27,6 +27,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { BlurTarget } from 'react-native-blur-overlay';
 import { YanjiLiquidGlass } from './src/theme/liquidGlass';
 import { BottomTabBar } from './src/navigation/BottomTabBar';
+import { TimerCompletionModal } from './src/components/TimerCompletionModal';
 import { NavigationProvider, useNavigationActions, useNavigationState } from './src/navigation/NavigationShell';
 import type { TabKey } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
@@ -264,6 +265,7 @@ function AppShell(): React.JSX.Element {
           <TimetableScreen onClose={closeTimetable} />
         </View>
       ) : null}
+      <TimerCompletionModal foreground={foreground} />
     </View>
   );
 }

@@ -9,6 +9,13 @@
 const REVIEW_SCOPES = ['TODAY', 'CALENDAR_WEEK', 'CALENDAR_MONTH'];
 
 export const BridgeSchemas = {
+  isValidTimerCompletion(obj) {
+    return obj !== null && typeof obj === 'object' &&
+      typeof obj.sessionId === 'string' && obj.sessionId.length > 0 &&
+      typeof obj.subjectName === 'string' &&
+      Number.isFinite(obj.elapsedSeconds) && obj.elapsedSeconds >= 0 &&
+      typeof obj.isExam === 'boolean';
+  },
   isValidActiveSessionState(obj) {
     if (!obj || typeof obj !== 'object') return false;
     const hasRequiredFields =

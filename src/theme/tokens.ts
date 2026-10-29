@@ -432,6 +432,7 @@ export const YanjiPaperTypography = {
 } as const;
 
 export const YanjiPaperLayout = {
+  completionDialogMaxWidth: 340,
   pageGutter: 22,
   sectionGap: 24,
   rowMinHeight: 48,

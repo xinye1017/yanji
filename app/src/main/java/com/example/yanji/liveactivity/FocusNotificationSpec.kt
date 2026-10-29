@@ -102,6 +102,7 @@ object FocusNotificationSpecs {
     const val COMPLETION_FAILURE_NOTIFICATION_ID = 1003
 
     const val CHANNEL_ID = "yanji_timer_channel"
+    const val COMPLETION_CHANNEL_ID = "yanji_timer_completion"
 
     /**
      * 构建常驻通知描述。
