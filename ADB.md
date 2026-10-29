@@ -68,15 +68,13 @@ emulator-check accel
   adb wait-for-device shell getprop sys.boot_completed   # 返回 1 即开机完成
   ```
 
-#### 720p 渲染与动画收敛（提升帧率）
+#### 720p 渲染（提升帧率）
 ```bash
 adb -s emulator-5554 shell wm size 720x1600
 adb -s emulator-5554 shell wm density 320
-adb -s emulator-5554 shell settings put global window_animation_scale 0
-adb -s emulator-5554 shell settings put global transition_animation_scale 0
-adb -s emulator-5554 shell settings put global animator_duration_scale 0
 ```
 - 720p + host GPU + 6 核实测约 30 fps；继续降到 540p 无明显收益，不必再降。
+- **不要关闭系统动画**：`transition_animation_scale=0` 会被 Reanimated 的 `useReducedMotion()` 识别为「减弱动态效果」，导致应用内过渡（如专注时长数字的上下翻滚、滚动吸附动画）被静默跳过，看起来像功能缺失。`window_animation_scale` / `transition_animation_scale` / `animator_duration_scale` 均保持 `1`；若曾改过，恢复后必须重启应用进程才生效（该值在 RN 运行时初始化时读取一次）。
 
 #### scrcpy 投屏（模拟器画面）
 ```bash
@@ -181,6 +179,7 @@ adb connect 192.168.0.103:38201; Start-Sleep -Seconds 1; adb devices -l
 - `x86_64 emulation currently requires hardware acceleration!` → 安装 AEHD（§2.0）。
 - `can't find the emulator executable` → 缺少带窗口的 emulator 二进制，改用 `-no-window` + scrcpy。
 - 长时间 `offline`、QEMU CPU 时间几乎为 0 → 陈旧快照，加 `-no-snapshot-load` 重启。
+- **应用内过渡动画不播放**（如专注时长数字不上下翻滚）→ 检查 `settings get global transition_animation_scale`；为 `0` 时 Reanimated 的 `useReducedMotion()` 返回 true，动画被按无障碍偏好跳过。改回 `1` 后重启应用进程。
 
 ---
 
