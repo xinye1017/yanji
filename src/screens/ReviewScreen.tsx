@@ -126,7 +126,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
    */
   const staleRead = view === 'trend'
     ? (overview !== null && overviewReadFailed)
-    : (snapshot !== null && dailyReadFailed);
+    : view === 'timeline' && snapshot !== null && dailyReadFailed;
   const [pendingDelete, setPendingDelete] = useState<{
     sessionId: string; isExam: boolean; subjectName: string;
   } | null>(null);
@@ -486,15 +486,17 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         />
       : view === 'trend'
       ? <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>
-      : <JournalLibraryView
-          visible={visible && view === 'journal'}
-          contentPadding={contentPadding}
-          onOpenRoaming={() => setRoamingVisible(true)}
-          onEditNote={note => {
-            setEditingNote(note);
-            setConfirmDeleteNote(false);
-          }}
-        />}
+      : <ScrollView {...listProps} style={{ flex: 1 }}>
+          {pageHeader}
+          <JournalLibraryView
+            visible={visible && view === 'journal'}
+            onOpenRoaming={() => setRoamingVisible(true)}
+            onEditNote={note => {
+              setEditingNote(note);
+              setConfirmDeleteNote(false);
+            }}
+          />
+        </ScrollView>}
 
     {timelineMenu ? (
       <TimelineActionPopover

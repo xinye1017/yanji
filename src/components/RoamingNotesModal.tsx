@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCategory, NoteEntry, YanjiDataNative } from '../bridge';
 import { YanjiIcon } from './YanjiUI';
@@ -188,7 +188,15 @@ export function RoamingNotesModal({
     >
       <View style={[styles.scrim, { paddingTop: insets.top + YanjiSpacing.sm, paddingBottom: insets.bottom + YanjiSpacing.md }]}>
         {/* Ambient Glow */}
-        <View style={styles.ambientGlow} pointerEvents="none" />
+        <Svg width={260} height={260} style={styles.ambientGlow} pointerEvents="none">
+          <Defs>
+            <RadialGradient id="roamingAmbientGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor={colors.brand} stopOpacity="0.16" />
+              <Stop offset="100%" stopColor={colors.brand} stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="260" height="260" fill="url(#roamingAmbientGlow)" />
+        </Svg>
 
         {/* Header */}
         <View style={styles.headerRow}>
@@ -473,10 +481,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '30%',
     left: '20%',
-    width: 260,
-    height: 260,
-    borderRadius: 260 / 2,
-    backgroundColor: 'rgba(200, 75, 49, 0.12)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -540,25 +544,33 @@ const styles = StyleSheet.create({
   },
   cardsStack: {
     width: 295,
-    alignItems: 'center',
-    justifyContent: 'center',
     position: 'relative',
   },
+  /**
+   * The deck follows the active card's layout box: `top` / `bottom` insets
+   * resolve against the stack, whose height is the card's own content height.
+   * A fixed height would leave a short note floating over a tall grey slab and
+   * disappear behind a long one.
+   */
   depthDeck2: {
     position: 'absolute',
-    width: 265,
-    height: 340,
+    top: 14,
+    bottom: -14,
+    left: 15,
+    right: 15,
     borderWidth: 1,
     opacity: 0.2,
-    transform: [{ rotate: '-5deg' }, { translateY: 14 }],
+    transform: [{ rotate: '-5deg' }],
   },
   depthDeck1: {
     position: 'absolute',
-    width: 280,
-    height: 360,
+    top: 8,
+    bottom: -8,
+    left: 8,
+    right: 8,
     borderWidth: 1,
     opacity: 0.35,
-    transform: [{ rotate: '3.5deg' }, { translateY: 8 }],
+    transform: [{ rotate: '3.5deg' }],
   },
   activeCard: {
     width: 295,

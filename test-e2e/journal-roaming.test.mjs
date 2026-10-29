@@ -151,6 +151,7 @@ function roamingHarness({
       Svg: 'Svg',
       Defs: 'Defs',
       LinearGradient: 'LinearGradient',
+      RadialGradient: 'RadialGradient',
       Rect: 'Rect',
       Stop: 'Stop',
     },

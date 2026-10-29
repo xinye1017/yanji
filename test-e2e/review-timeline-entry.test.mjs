@@ -678,3 +678,21 @@ test('VIEWS expands to 3 options including journal library view', () => {
   assert.equal(segment.props.options[1].value, 'trend');
   assert.equal(segment.props.options[2].value, 'journal');
 });
+
+test('the journal library keeps the page header and its view capsule so the user can switch back', () => {
+  const h = screenHarness(snapshot());
+  const initial = h.render();
+  const capsule = nodes(initial, node => node.type === 'YanjiPaperSegmentedControl' && node.props.accessibilityLabel === '回顾视图')[0];
+  assert.ok(capsule, 'the view capsule exists before switching');
+  capsule.props.onChange('journal');
+
+  const tree = h.render();
+  const journal = nodes(tree, node => node.type === 'JournalLibraryView')[0];
+  assert.ok(journal, 'the journal view renders');
+  const scroll = nodes(tree, node => node.type === 'ScrollView' && node.props.testID === 'scroll-review')[0];
+  assert.ok(scroll, 'the journal view scrolls through the page container');
+  const header = nodes(tree, node => node.type === 'YanjiPaperSegmentedControl' && node.props.accessibilityLabel === '回顾视图')[0];
+  assert.ok(header, 'the view capsule stays visible inside the journal view');
+  assert.ok(nodes(tree, node => node.type === 'Text' && text(node) === '备考手帐').length > 0,
+    'the page title stays visible inside the journal view');
+});

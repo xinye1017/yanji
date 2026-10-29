@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +16,6 @@ export type JournalCategoryTab = 'favorite' | 'unresolved' | 'resolved';
 
 export interface JournalLibraryViewProps {
   visible: boolean;
-  contentPadding?: number;
   onOpenRoaming: () => void;
   onEditNote?: (note: {
     id: string;
@@ -30,12 +28,11 @@ export interface JournalLibraryViewProps {
 
 export function JournalLibraryView({
   visible,
-  contentPadding = 80,
   onOpenRoaming,
   onEditNote,
 }: JournalLibraryViewProps): React.JSX.Element {
   const theme = useYanjiTheme();
-  const { colors, typography, layout, radius } = theme.paper;
+  const { colors, typography, radius } = theme.paper;
 
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [activeTab, setActiveTab] = useState<JournalCategoryTab>('favorite');
@@ -111,14 +108,7 @@ export function JournalLibraryView({
   });
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{
-        paddingHorizontal: layout.pageGutter,
-        paddingTop: YanjiSpacing.sm,
-        paddingBottom: contentPadding + YanjiSpacing.xl,
-      }}
-    >
+    <View>
       {/* 1. Hero Card: 漫游随笔 入口 */}
       <Pressable
         onPress={onOpenRoaming}
@@ -448,6 +438,6 @@ export function JournalLibraryView({
           </View>
         ))
       )}
-    </ScrollView>
+    </View>
   );
 }
