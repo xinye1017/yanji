@@ -361,7 +361,7 @@ export const YanjiPaperTypography = {
     fontWeight: '600' as const,
   },
   /**
-   * A section heading inside a page — 「今日计划」「记录此刻」「今日学习节奏」.
+   * A section heading inside a page — 「今日计划」「今日随笔」「今日学习节奏」.
    *
    * It ranks above the body by *weight* more than by size: these are set at
    * 16/900 with a hair of tracking, so a group title outranks the 15sp body

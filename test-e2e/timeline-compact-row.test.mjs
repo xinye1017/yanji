@@ -7,9 +7,9 @@ import { loadTypeScript } from './framework/load-typescript.js';
  * 「记录此刻」 and the Review timeline.
  *
  * These are the contracts both screens depend on: one line per event
- * (clock · tag · preview · meta · 「···」), a dot/chip colour that comes from the
- * theme, and a floating menu that never changes the row's height while closing
- * before it acts.
+ * (clock · tag · preview · meta · one action — 「···」 for a note, a direct trash
+ * button for a session), a dot/chip colour that comes from the theme, and a
+ * floating menu that never changes the row's height while closing before it acts.
  */
 
 const tokens = loadTypeScript('src/theme/tokens.ts');
@@ -68,7 +68,7 @@ const rowProps = () => ({
   isLast: true,
   disabled: false,
   onPressContent() {},
-  onMore() {},
+  action: { kind: 'menu', onOpen() {} },
 });
 
 function rowHarness(measure) {
@@ -154,7 +154,7 @@ const menuView = tree => nodes(tree, n => n.type === 'View' &&
 test('an event is a rounded card: capsule tag on line 1, content below (up to 3 lines) and 「···」', () => {
   const calls = [];
   const h = rowHarness({ measureInWindow: callback => callback(300, 200, 44, 44) });
-  const tree = h.render({ onMore: anchor => calls.push(anchor) });
+  const tree = h.render({ action: { kind: 'menu', onOpen: anchor => calls.push(anchor) } });
 
   const preview = nodes(tree, n => n.type === 'Text' && n.props.numberOfLines === 3 && n.props.ellipsizeMode === 'tail')[0];
   assert.ok(preview, 'the body is a multi-line preview (up to 3 lines)');
@@ -166,9 +166,11 @@ test('an event is a rounded card: capsule tag on line 1, content below (up to 3 
   const card = nodes(tree, n => n.type === 'View' && n.props.style?.borderRadius === theme.paper.radius.surface)[0];
   assert.ok(card, 'the card container has radius.surface');
 
-  const presses = nodes(tree, n => n.type === 'Pressable');
+  // The action button lives in its own component so both row shapes share one
+  // hit target, so these lookups descend through component functions.
+  const presses = deepNodes(tree, n => n.type === 'Pressable');
   assert.equal(presses.length, 2, 'only the body and the 「···」 are targets');
-  const more = nodes(tree, n => n.type === 'Pressable' && n.props.accessibilityLabel?.startsWith('更多记录操作'))[0];
+  const more = deepNodes(tree, n => n.type === 'Pressable' && n.props.accessibilityLabel?.startsWith('更多记录操作'))[0];
   assert.ok(more, 'the more button exists');
   more.props.onPress();
   assert.equal(calls.length, 1);
@@ -176,6 +178,36 @@ test('an event is a rounded card: capsule tag on line 1, content below (up to 3 
   assert.equal(calls[0].y, 200);
   assert.equal(calls[0].width, 44);
   assert.equal(calls[0].height, 44, 'the menu is anchored to the button that was actually pressed');
+});
+
+test('a one-action row deletes directly: trash button, no menu, no measurement', () => {
+  let measured = 0;
+  const h = rowHarness({ measureInWindow: () => { measured++; } });
+  const calls = [];
+  const tree = h.render({
+    tagLabel: '数据结构', tagIcon: 'clock3', tagTone: 'neutral', content: undefined,
+    action: { kind: 'delete', label: '删除记录：数据结构，15:11 起', onPress: () => calls.push('delete') },
+  });
+
+  const button = deepNodes(tree, n => n.type === 'Pressable' && n.props.accessibilityLabel === '删除记录：数据结构，15:11 起')[0];
+  assert.ok(button, 'the row exposes its one action as a labelled button');
+  assert.equal(button.props.accessibilityHint, '删除前会再确认一次');
+  const icon = deepNodes(button, n => n.type === 'YanjiIcon')[0];
+  assert.equal(icon.props.name, 'delete', 'the affordance is the trash can, not 「···」');
+  assert.equal(deepNodes(tree, n => n.type === 'YanjiIcon' && n.props.name === 'more').length, 0);
+
+  button.props.onPress();
+  assert.deepEqual(calls, ['delete']);
+  assert.equal(measured, 0, 'a direct action never measures itself for a menu');
+
+  // A busy page locks the row: the trash button must be inert like the menu was.
+  const disabledTree = h.render({
+    tagLabel: '数据结构', tagIcon: 'clock3', tagTone: 'neutral', content: undefined, disabled: true,
+    action: { kind: 'delete', label: '删除记录：数据结构，15:11 起', onPress: () => calls.push('delete') },
+  });
+  const disabledButton = deepNodes(disabledTree, n => n.type === 'Pressable' && n.props.accessibilityLabel === '删除记录：数据结构，15:11 起')[0];
+  assert.equal(disabledButton.props.disabled, true);
+  assert.equal(disabledButton.props.accessibilityState.disabled, true);
 });
 
 test('every tag carries a fixed-width icon slot: bulb, question or clock', () => {

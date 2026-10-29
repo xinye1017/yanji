@@ -4,7 +4,8 @@
  * Shape of the page: five short groups, one line per setting, no cards.
  *  1. 备考 — the two values the product actually measures against (考试日期 /
  *     每日学习时长). Both are edited here, in the sheet that owns them.
- *  2. 学科 — the names used by focus sessions.
+ *  2. 学习安排 — the two management screens: 时间表设置 and 学科管理. Each row
+ *     opens the screen that owns its list, so neither claims to be a value.
  *  3. 外观 — the app theme preference.
  *  4. 高级 — the decision-model configuration, collapsed by default. It is a
  *     long form that is configured once and then never touched, so letting it
@@ -256,27 +257,27 @@ export function SettingsScreen(): React.JSX.Element {
             value={formatGoalDuration(goalHours)}
             accessibilityLabel={`每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
             pending={loading}
-            onPress={() => openSheetWith('dailyGoal')}
-          />
-          <YanjiSettingRow
-            label="时间表设置"
-            value="管理每日作息"
-            accessibilityLabel="时间表设置，管理每日作息"
             isLast
-            onPress={openTimetable}
+            onPress={() => openSheetWith('dailyGoal')}
           />
         </View>
 
         <View>
           <YanjiPaperSectionHeading
-            title="学科"
+            title="学习安排"
             spaceBefore={layout.sectionGap}
             titleStyle={typography.titleGroup}
           />
           <YanjiSettingRow
-            label="专注学科名称"
-            value="点击自定义"
-            accessibilityLabel="专注学科名称，点击自定义"
+            label="时间表设置"
+            value="管理每日作息"
+            accessibilityLabel="时间表设置，管理每日作息"
+            onPress={openTimetable}
+          />
+          <YanjiSettingRow
+            label="学科管理"
+            value="学科、分类与配色"
+            accessibilityLabel="学科管理，编辑学科、分类与配色"
             isLast
             onPress={() => openSheetWith('subjects')}
           />

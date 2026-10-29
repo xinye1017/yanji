@@ -184,7 +184,9 @@ export function rhythmSummary(
   // is the more useful statement than an arbitrary pick among equals.
   const peak = measured.reduce((best, bucket) => (bucket.seconds > best.seconds ? bucket : best), measured[0]);
   const window = `${String(RHYTHM_FIRST_HOUR).padStart(2, '0')}:00 之后`;
-  return `${window}已确认 ${compactDuration(total)} 连续专注，分布在 ${measured.length} 个小时；最集中的是 ${hourLabel(peak.hour)}。`;
+  // A sentence spells its units out; `compactDuration` (`2h38m`) is the chip
+  // and legend form, and a screen reader must not read 「30m」 aloud in Chinese.
+  return `${window}已确认 ${goalDelta(total)} 连续专注，分布在 ${measured.length} 个小时；最集中的是 ${hourLabel(peak.hour)}。`;
 }
 
 /** 24h clock label for a bucket hour, e.g. `09:00–10:00`. */

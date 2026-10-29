@@ -1,11 +1,12 @@
 /**
- * One compact event on a day's spine — shared by Today's 「记录此刻」 and the
- * Review timeline.
+ * One compact event on a day's spine — shared by Today's 「今日随笔」 list and
+ * the Review timeline.
  *
- * The clock sits left of the node, the entry is a single line (tag · preview ·
- * optional meta · 「···」), and every management action lives in the anchored
- * menu the screen opens. Presentation only: the screen owns identity and every
- * write.
+ * The clock sits left of the node and the entry is a single line (tag · preview ·
+ * optional meta · one action). A note needs a menu (resolve / edit / delete), so
+ * it shows 「···」; a focus session has exactly one action, so its trash button is
+ * direct instead of hiding a one-line menu behind another tap. Presentation
+ * only: the screen owns identity and every write.
  */
 import React, { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -17,6 +18,15 @@ import type { PopoverAnchor } from './TimelineActionPopover';
 
 /** Semantic colour families for the tag; the dot follows unless overridden. */
 type CompactTagTone = 'positive' | 'brand' | 'neutral';
+
+/**
+ * The row's single management affordance. A menu receives the button's window
+ * rect so the screen can anchor the popover to it; a direct action just runs.
+ * `label` falls back to the row's own 「更多记录操作：…」 wording.
+ */
+type RowAction =
+  | { kind: 'menu'; label?: string; onOpen: (anchor: PopoverAnchor) => void }
+  | { kind: 'delete'; label: string; onPress: () => void };
 
 interface TimelineCompactRowProps {
   timeLabel: string;
@@ -38,10 +48,8 @@ interface TimelineCompactRowProps {
   disabled: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
-  moreAccessibilityLabel?: string;
+  action: RowAction;
   onPressContent?: () => void;
-  /** Receives the 「···」 button's window rect so the menu can anchor to it. */
-  onMore: (anchor: PopoverAnchor) => void;
 }
 
 /**
@@ -50,6 +58,53 @@ interface TimelineCompactRowProps {
  */
 function previewOf(content: string): string {
   return content.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || '无标题记录';
+}
+
+/**
+ * The 28dp icon button at the row's right edge, identical in both layouts so
+ * the two row shapes share one hit target. Window coordinates are the only
+ * space both the row and the overlay agree on; the screen converts them into
+ * the overlay's own origin.
+ */
+function RowActionButton({ action, disabled, label }: {
+  action: RowAction;
+  disabled: boolean;
+  /** Resolved by the row: a delete action names itself, a menu may fall back. */
+  label: string;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, layout, radius } = paper;
+  const buttonRef = useRef<React.ComponentRef<typeof View>>(null);
+  const onPress = action.kind === 'menu'
+    ? () => buttonRef.current?.measureInWindow((x, y, width, height) => action.onOpen({ x, y, width, height }))
+    : action.onPress;
+  return (
+    <Pressable
+      ref={buttonRef}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={action.kind === 'delete' ? '删除前会再确认一次' : undefined}
+      accessibilityState={{ disabled }}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={({ pressed }) => ({
+        width: 28,
+        height: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radius.pill,
+        backgroundColor: pressed ? colors.subtle : 'transparent',
+        opacity: disabled ? 0.5 : 1,
+      })}
+    >
+      <YanjiIcon
+        name={action.kind === 'menu' ? 'more' : 'delete'}
+        size={layout.momentPreviewIconSize}
+        color={colors.secondary}
+      />
+    </Pressable>
+  );
 }
 
 export function TimelineCompactRow({
@@ -66,13 +121,11 @@ export function TimelineCompactRow({
   disabled,
   accessibilityLabel,
   accessibilityHint,
-  moreAccessibilityLabel,
+  action,
   onPressContent,
-  onMore,
 }: TimelineCompactRowProps): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  const moreRef = useRef<React.ComponentRef<typeof View>>(null);
   const hasContent = Boolean(content && content.trim());
   const title = hasContent ? previewOf(content!) : '';
 
@@ -93,12 +146,12 @@ export function TimelineCompactRow({
   // Single-line compact row (focus session) centers at 16; multi-line card row (note) centers at 24
   const center = hasContent ? 24 : 16;
   const nodeRadius = layout.timelineNodeSize / 2;
-
-  // Window coordinates are the only space both the row and the overlay agree
-  // on; the screen converts them into the overlay's own origin.
-  const openMenu = () => {
-    moreRef.current?.measureInWindow((x, y, width, height) => onMore({ x, y, width, height }));
-  };
+  /** A menu without its own label borrows the row's wording; delete must name itself. */
+  const actionLabel = action.kind === 'delete'
+    ? action.label
+    : action.label ?? (hasContent
+      ? `更多记录操作：${title.replace(/\n+/g, ' ')}`
+      : `更多记录操作：${tagLabel ?? ''}`);
 
   return (
     <View style={{ marginBottom: isLast ? 0 : layout.momentItemGap }}>
@@ -219,26 +272,7 @@ export function TimelineCompactRow({
                   </Text>
                 ) : null}
 
-                <Pressable
-                  ref={moreRef}
-                  onPress={openMenu}
-                  disabled={disabled}
-                  accessibilityRole="button"
-                  accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${title.replace(/\n+/g, ' ')}`}
-                  accessibilityState={{ disabled }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={({ pressed }) => ({
-                    width: 28,
-                    height: 28,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: radius.pill,
-                    backgroundColor: pressed ? colors.subtle : 'transparent',
-                    opacity: disabled ? 0.5 : 1,
-                  })}
-                >
-                  <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
-                </Pressable>
+                <RowActionButton action={action} disabled={disabled} label={actionLabel} />
               </View>
             </View>
 
@@ -310,26 +344,7 @@ export function TimelineCompactRow({
               ) : null}
             </View>
 
-            <Pressable
-              ref={moreRef}
-              onPress={openMenu}
-              disabled={disabled}
-              accessibilityRole="button"
-              accessibilityLabel={moreAccessibilityLabel ?? `更多记录操作：${tagLabel ?? ''}`}
-              accessibilityState={{ disabled }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => ({
-                width: 28,
-                height: 28,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: radius.pill,
-                backgroundColor: pressed ? colors.subtle : 'transparent',
-                opacity: disabled ? 0.5 : 1,
-              })}
-            >
-              <YanjiIcon name="more" size={layout.momentPreviewIconSize} color={colors.secondary} />
-            </Pressable>
+            <RowActionButton action={action} disabled={disabled} label={actionLabel} />
           </View>
         )}
       </View>

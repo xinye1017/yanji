@@ -387,14 +387,22 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   assert.equal(rows[2].props.label, '时间表设置');
   rows[2].props.onPress();
   assert.ok(harness.calls.some(call => call[0] === 'openTimetable'));
-  assert.equal(rows[3].props.label, '专注学科名称');
-  assert.equal(rows[3].props.value, '点击自定义');
+  assert.equal(rows[3].props.label, '学科管理');
+  assert.equal(rows[3].props.value, '学科、分类与配色');
+  // The row opens the management screen, not a value editor.
+  rows[3].props.onPress();
+  const subjectsSheet = nodes(harness.render(), node => node.type === 'SubjectsSheet')[0];
+  assert.equal(subjectsSheet.props.visible, true, '学科管理 opens the subjects sheet');
+
+  // Each group's last row carries the divider, and only the last one.
+  assert.deepEqual(rows.map(row => Boolean(row.props.isLast)), [false, true, false, true],
+    '备考 and 学习安排 each end on a divider');
 });
 
 test('every settings group title uses the group scale', () => {
   const tree = settingsHarness({ settings: stored() }).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
-  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '学科', '外观', '高级']);
+  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '学习安排', '外观', '高级']);
   for (const heading of headings) {
     assert.deepEqual(
       plain(heading.props.titleStyle),
@@ -410,7 +418,7 @@ test('settings composes the backup data-management section without changing its 
   assert.equal(backup.length, 1, 'the settings page owns one backup section');
   assert.deepEqual(
     nodes(tree, node => node.type === 'YanjiPaperSectionHeading').map(heading => heading.props.title),
-    ['备考', '学科', '外观', '高级'],
+    ['备考', '学习安排', '外观', '高级'],
     'the existing page headings remain unchanged because the section owns its own heading'
   );
 });

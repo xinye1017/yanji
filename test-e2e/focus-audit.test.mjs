@@ -531,6 +531,9 @@ test('the ready screen offers the countdown ruler without preset or custom-durat
   assert.equal(presetChips.length, 6, 'provides 6 quick preset duration chips');
   const chip45 = walk(root, n => n.props?.testID === 'focus-preset-45')[0];
   assert.equal(chip45.props.accessibilityState.selected, true);
+  // The chips read in Chinese like the rest of the page: 「45分」, not 「45m」.
+  const chip45Text = walk(chip45, n => n.type === 'Text')[0];
+  assert.deepEqual([...chip45Text.props.children].join(''), '45分');
   assert.equal(walk(root, n => /^(预设 |自定义专注时长)/.test(n.props?.accessibilityLabel ?? '')).length, 0);
   assert.equal(walk(root, n => n.type === 'Modal').length, 0, 'the removed custom picker leaves no hidden modal');
   assert.equal(walk(root, n => n.props?.testID === 'focus-duration-value')[0].props.children, '45:00');
@@ -700,6 +703,16 @@ test('the ready screen can bind a pending plan task without leaving Focus', asyn
   await findAll(tree, n => n.type === 'YanjiPrimaryButton')[0].props.onPress();
   assert.deepEqual(h.calls[0].slice(0, 7), ['start', 'math', 'Math', 'COUNTDOWN', '', 'task-1', 45],
     'the started session carries the task id and the plan duration');
+});
+
+test('the ready screen names its backfill entry 补录专注, distinct from 记录此刻', async () => {
+  const subjects = [{ id: 'math', name: 'Math', colorHex: '#356AE6', enabled: true, parentId: null, isCategory: false, sortOrder: 1 }];
+  const h = focusScreenHarness({ session: null, subjects });
+  const tree = await h.loadSubjects();
+  const backfill = findAll(tree, n => n.props?.accessibilityLabel === '补录专注，记录一段已经发生的专注')[0];
+  assert.ok(backfill, 'the ready screen offers the backfill entry by its new name');
+  assert.match(textOf(backfill), /补录专注/);
+  assert.doesNotMatch(textOf(backfill), /补录记录/);
 });
 
 test('start button uses clean 开始专注 without detail duration', async () => {

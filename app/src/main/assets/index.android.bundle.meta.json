@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "371be6e2427987a41ea5a285bd50e6b5c7e7efbebd80af4c1881ba90b96eaa01",
+    "sha256": "e70d7ab75f54cf4ef6968226ca668aa3ea0700be0e8c9b026ce9adcc31283e45",
     "files": [
       {
         "path": "App.tsx",
@@ -102,6 +102,10 @@
         "sha256": "bfb23b5bd35d33e1b9939fd25b5188b28ade0c33294bfab82ea586f9d64342e2"
       },
       {
+        "path": "src/components/LiveSessionReadout.tsx",
+        "sha256": "d97ebc3ccb801fa0543549e352ff0b78a804ecaea612a4993baffffb4b346445"
+      },
+      {
         "path": "src/components/RecordMomentModal.tsx",
         "sha256": "8e479d8cf3de8c6ccda527972addbd6e785ed2fc8f0939be28507ccd20564c4c"
       },
@@ -111,7 +115,7 @@
       },
       {
         "path": "src/components/RollingTimeDisplay.tsx",
-        "sha256": "dab32366ba72638790f1ddfc4f7510e88c27f40fc5d2b0d6de04e3eca4c721e6"
+        "sha256": "c1fbaeef2ed3c5df9b123bda922783e6ae1faf19f672172d6c5e4c4a63a7c0fc"
       },
       {
         "path": "src/components/ScheduleBlockRow.tsx",
@@ -123,7 +127,7 @@
       },
       {
         "path": "src/components/ScheduleTimeline.tsx",
-        "sha256": "eccbb32690a3909bcb21688c63ac2aaa9491ef0af9a480cb0abdbb79bb82dea6"
+        "sha256": "705c94d8725cb5d69fed2a2ec1266f485193fe7e0be0ac1219fe7bab4ca1a9ae"
       },
       {
         "path": "src/components/SessionNoteModal.tsx",
@@ -155,7 +159,7 @@
       },
       {
         "path": "src/components/TimelineCompactRow.tsx",
-        "sha256": "a28988856f6d883afb5d9214ca9d74166b596eefcef1702a4b52555c3960ee98"
+        "sha256": "cbe6e74ae85132c9644d5752c7f55967ac109341b2480f02f2149e076178d129"
       },
       {
         "path": "src/components/TimerCompletionModal.tsx",
@@ -195,15 +199,15 @@
       },
       {
         "path": "src/screens/FocusScreen.tsx",
-        "sha256": "7fdce4951aa63124ed61af299f065825021a4a5c451c8a81ce3d38c34f06bcae"
+        "sha256": "78541a3a0883d0ee10b29cca6789543f41113f0efe2e390426e202bcf4cc3773"
       },
       {
         "path": "src/screens/ReviewScreen.tsx",
-        "sha256": "01b3dad523b0bcfe4d18fd55278c1893fe24b496d4b0e35985c101a63d597c55"
+        "sha256": "677e6ed6e95477974d56551542faed788969221d99c68b3ecc97804fed723839"
       },
       {
         "path": "src/screens/SettingsScreen.tsx",
-        "sha256": "8bef10d7812634fab7c75c1a21cf3859b7d7780e2d6705eb6623b7cb69be7058"
+        "sha256": "b529df89e43fd081a3a410e8216f88b19d8bc377ecfd6d85c5084cdd5f328817"
       },
       {
         "path": "src/screens/TimetableScreen.tsx",
@@ -211,7 +215,7 @@
       },
       {
         "path": "src/screens/TodayScreen.tsx",
-        "sha256": "751d10f7584b56933be4367bb0b52d44db60f03d0280571496e1dc2581300fb7"
+        "sha256": "f499b4dfd7e5a3e92396f92eeaa896348cc7f6de3285eeab8d50cc06bdb7ae8a"
       },
       {
         "path": "src/screens/focusViewLogic.ts",
@@ -231,7 +235,7 @@
       },
       {
         "path": "src/screens/todayViewLogic.ts",
-        "sha256": "e28c757e85441b80fccb499846550c5ae3dc41ffd19b5c9440672e19cef3e9cb"
+        "sha256": "45ad2c158e03060652e05d20ee319428b51da9b5e6cdab8a9e2b7e4ff6e75fb7"
       },
       {
         "path": "src/services/decisionClient.ts",
@@ -263,7 +267,7 @@
       },
       {
         "path": "src/theme/tokens.ts",
-        "sha256": "703079e76935da74fd82aade7ac4f45ab4eeacd36bc8a4f64e3f2ac08e7ea08b"
+        "sha256": "f9cac452bca306a8831e552da4ee3f90de103ee83096b070acc4ba507d78abac"
       },
       {
         "path": "tsconfig.json",
@@ -272,15 +276,15 @@
     ]
   },
   "metro": {
-    "bytes": 2261254,
-    "sha256": "da49cf04efea80abb3ee0ec18e0ebe5d9aae062aa8bf278924c7cec8808a0a7f",
-    "sha1": "cfca34fb157d54caf13ad1c9f3774046fbe7e18a"
+    "bytes": 2264577,
+    "sha256": "0ea8c86ad23d7a4d31c0fef16bc48f4a25c57dd98ba02814a81993d17453731d",
+    "sha1": "ef898ee9bdbf6e32012e9a292c78a0be2a103e85"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "cfca34fb157d54caf13ad1c9f3774046fbe7e18a",
-    "bytes": 3161990,
-    "sha256": "6608d2cf57f5b8a10f099c9b902331583ebe378b4f448d8e4dc69cea955318d9"
+    "sourceSha1": "ef898ee9bdbf6e32012e9a292c78a0be2a103e85",
+    "bytes": 3166542,
+    "sha256": "2de21bbabeaf24ce67070f933f3b0e32415db3c3f6d12e22baa4cf43c97e6956"
   },
   "assets": []
 }

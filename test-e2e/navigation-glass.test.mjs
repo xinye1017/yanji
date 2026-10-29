@@ -92,7 +92,7 @@ test('timeline entries share the compact spine and spacing contract', () => {
   const row = readFileSync(new URL('../src/components/TimelineCompactRow.tsx', import.meta.url), 'utf8');
   assert.match(review, /<TimelineCompactRow/);
   assert.match(review, /isFirst=\{isFirst\}\s+isLast=\{isLast\}/);
-  assert.match(review, /onMore=\{anchor => onOpenMenu\(entry, anchor\)\}/);
+  assert.match(review, /onOpen: anchor => onOpenMenu\(entry, anchor\)/);
   // The row owns the clearance around the node and the inter-row gap, so Today
   // and Review cannot drift into two different spines.
   assert.match(row, /clearance|center - nodeRadius - YanjiSpacing\.xs/);

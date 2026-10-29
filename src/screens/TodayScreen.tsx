@@ -14,7 +14,7 @@ import {
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
-import type { ActiveSessionState, NoteEntry, StudyTask } from '../bridge';
+import type { NoteEntry, StudyTask } from '../bridge';
 import {
   YanjiBadge, YanjiCaptureCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton, YanjiLedgerChip,
@@ -22,6 +22,7 @@ import {
   YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
+import { LiveSessionReadout } from '../components/LiveSessionReadout';
 import { DailyGoalSheet } from '../components/SettingsSheets';
 import { TodayScheduleCard } from '../components/TodayScheduleCard';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
@@ -36,7 +37,7 @@ import {
   refreshDailySnapshot, refreshSettingsSnapshot,
   useDailyReadFailed, useDailySnapshot, useSettingsSnapshot,
 } from '../state/dataRefresh';
-import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
+import { syncActiveSession, useActiveSession } from '../state/timerStore';
 import {
   buildRhythmBuckets, compactDuration, DAY_PARTS, displayDate, goalClock,
   greeting, hourRangeLabel, legendDuration, rhythmSummary, spectrumLegend,
@@ -62,7 +63,7 @@ type Selection =
   }
   | null;
 
-/** 「记录此刻」 reading order: `newest` = 倒序 (default), `oldest` = 正序. */
+/** 「今日随笔」 reading order: `newest` = 倒序 (default), `oldest` = 正序. */
 type JournalOrder = 'newest' | 'oldest';
 
 /** How many rows a folded journal keeps — the number the old hard slice showed. */
@@ -72,12 +73,14 @@ const JOURNAL_FOLDED_ROWS = 2;
  * One recyclable row of the page.
  *
  * The page is a single vertical surface: the greeting, the day's summary and the
- * three section headings are its header, and everything that repeats — plan
- * rows, the 「写一条记录」 entry, journal rows and the rhythm detail — is a list
- * item. Two kinds only, so FlashList keeps two recycling pools instead of one
- * oversized one: a plan row and a journal row have different heights and
- * different content shapes, and mixing them would make every recycled cell pay
- * to re-layout as the other kind.
+ * 「今日计划」 heading are its header, and everything else is a list item — plan
+ * rows, the rhythm section, the 「今日随笔」 heading, the capture entry and the
+ * notes themselves. Each kind is its own recycling pool: a plan row, a chart and
+ * a journal card have different heights and content shapes, and sharing a pool
+ * would make every recycled cell pay to re-layout as the other kind. The rhythm
+ * sits between the plan and the journal because it describes the day both of
+ * them belong to; listing it here is what stops it from being buried under an
+ * arbitrarily long journal.
  */
 type TodayRow =
   | {
@@ -93,7 +96,12 @@ type TodayRow =
     key: string;
   }
   | {
-    /** 「记录此刻」 heading, which must follow the plan rows it succeeds. */
+    /** 今日学习节奏 — the day's shape, read between the plan and the journal. */
+    kind: 'rhythm';
+    key: string;
+  }
+  | {
+    /** 「今日随笔」 heading, which must follow the plan rows it succeeds. */
     kind: 'journal-heading';
     key: string;
   }
@@ -132,13 +140,6 @@ function goalDelta(seconds: number): string {
   const rest = minutes % 60;
   if (hours === 0) return `${minutes} 分钟`;
   return rest ? `${hours} 小时 ${rest} 分` : `${hours} 小时`;
-}
-function clock(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(whole / 3600);
-  const minutes = String(Math.floor((whole % 3600) / 60)).padStart(2, '0');
-  const remainder = String(whole % 60).padStart(2, '0');
-  return hours ? `${hours}:${minutes}:${remainder}` : `${minutes}:${remainder}`;
 }
 function timeLabel(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -417,7 +418,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   /**
    * The journal is ordered and folded by the reader, not by a fixed rule.
    *
-   * 「记录此刻」 used to hard-slice the two newest notes and then link away for
+   * 「今日随笔」 used to hard-slice the two newest notes and then link away for
    * the rest, so a day with five notes silently hid three of them. The order is
    * now a state the reader sets (倒序 = newest first, the default), and the fold
    * is a control they press. Nothing is hidden unless they ask for it.
@@ -439,8 +440,8 @@ export function TodayScreen({ visible, foregroundRevision }: {
    * The recyclable rows, in the order the page reads.
    *
    * The order is the same one the page rendered inline: plan rows (pending
-   * before completed), then the 「待处理计划」 entry, then the 「记录此刻」
-   * heading, then its write entry, then the notes. The two section headings are
+   * before completed), then the 「待处理计划」 entry, then the 「今日随笔」
+   * heading, then its capture entry, then the notes. The two section headings are
    * rows rather than part of the header because the rows they title sit below
    * them — a heading pinned into the header would strand the plan rows above the
    * journal heading that has to follow them.
@@ -461,6 +462,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
     if (carryOverVisible) {
       list.push({ kind: 'carry-over', key: 'carry-over' });
     }
+    // The rhythm belongs to the plan half of the page: it answers "how did the
+    // day actually go" before the journal starts, not after every note. It used
+    // to sit in the footer, where a long journal buried it.
+    list.push({ kind: 'rhythm', key: 'rhythm' });
     list.push({ kind: 'journal-heading', key: 'journal-heading' });
     if (snapshot) list.push({ kind: 'capture', key: 'capture' });
     journalNotes.forEach((note, index) => {
@@ -619,7 +624,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
    *
    * These are the same components the page used to `map` inline, so nothing about
    * a row's content, order or actions changes — only when it is mounted. The
-   * 「写一条记录」 entry is a row rather than part of the header so it stays
+   * 「记录此刻」 entry is a row rather than part of the header so it stays
    * adjacent to the journal heading and first in that section's reading order.
    */
   const renderRow = useCallback<ListRenderItem<TodayRow>>(({ item }) => {
@@ -658,10 +663,132 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </Pressable>
       );
     }
+    if (item.kind === 'rhythm') {
+      return (
+        <View>
+          {/* 今日学习节奏.
+              Collapsed, this used to be a caption, a row of 18 fixed-width ticks
+              and a chevron — a title with no subject, and a strip that read as a
+              pagination indicator. The section now shows the day's shape on a
+              labelled clock, so the collapsed state
+              already answers "what is this?" without repeating the 06:00–24:00
+              range that the axis labels already carry. Expanding is a named
+              control, not just an arrow. */}
+          {/* Same rule as the journal: the heading owns the section gap alone. */}
+          <YanjiPaperSectionHeading
+            title="今日学习节奏"
+            titleStyle={typography.titlePageSection}
+            spaceBefore={layout.sectionGap}
+            right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
+              accessibilityRole="button"
+              accessibilityLabel={rhythmToggleLabel}
+              accessibilityState={{ expanded: rhythmExpanded }}
+              accessibilityHint={rhythmExpanded ? '收起专注时段详情' : '展开专注时段详情'}
+              // No 48dp floor here: a min-height on the heading accessory
+              // inflates the whole row, so this section reads as ~15dp further
+              // from the block above than the other headings do. hitSlop keeps
+              // the touch target while the glyph stays on the heading baseline.
+              hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
+              {rhythmExpanded ? (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>收起详情</Text>
+              ) : peakHourText ? (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>
+                  最集中 <Text style={{ color: colors.ink, fontWeight: '600' }}>{peakHourText}</Text>
+                </Text>
+              ) : (
+                <Text style={[typography.captionMeta, { color: colors.secondary }]}>展开详情</Text>
+              )}
+            </Pressable>} />
+          {/* Same air under every heading: the chart body starts a step below
+              the title, like the plan rows and the journal timeline do. */}
+          <View style={{ marginTop: YanjiSpacing.sm }}>
+            <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
+              startLabel="06:00" endLabel="24:00"
+              accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
+          </View>
+          {rhythmExpanded ? (
+            <View style={{ marginTop: YanjiSpacing.md }}>
+              {DAY_PARTS.map((part, partIndex) => {
+                const startDate = new Date(`${date}T00:00:00`);
+                startDate.setHours(part.from);
+                const endDate = new Date(`${date}T00:00:00`);
+                endDate.setHours(part.to);
+                const start = startDate.getTime();
+                const end = endDate.getTime();
+                const segments = sessions?.filter(session => {
+                  const sStart = session.startTime;
+                  const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                  return session.durationSeconds > 0 && sEnd > start && sStart < end;
+                }) ?? [];
+                // The detail belongs under the bar it was read from, so a tap
+                // on a highlight explains itself in place instead of in a
+                // footer somewhere below four day parts.
+                const detail = selection?.kind === 'session' && selection.partName === part.name
+                  ? selection
+                  : null;
+                // The last part drops its gap: the journal heading that follows
+                // owns the section gap alone, exactly as every other heading does.
+                return <View key={part.name}
+                  style={{ marginBottom: partIndex === DAY_PARTS.length - 1 ? 0 : YanjiSpacing.md }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
+                    <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
+                    <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
+                  </View>
+                  <View
+                    style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
+                    {segments.map(session => {
+                      const sStart = session.startTime;
+                      const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
+                      const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
+                      const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
+                      const selected = selection?.kind === 'session' && selection.key === `session:${session.id}`;
+                      return (
+                        <Pressable
+                          key={session.id}
+                          onPress={() => selectSegment({
+                            kind: 'session',
+                            key: `session:${session.id}`,
+                            subjectId: session.subjectId,
+                            subjectName: session.subjectName,
+                            seconds: session.durationSeconds,
+                            startTime: sStart,
+                            endTime: sEnd,
+                            partName: part.name,
+                          })}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`${session.subjectName}，${timeLabel(sStart)} 至 ${timeLabel(sEnd)}，${duration(session.durationSeconds)}`}
+                          hitSlop={{ top: 14, bottom: 14, left: 2, right: 2 }}
+                          style={({ pressed }) => ({
+                            position: 'absolute', top: 0, bottom: 0,
+                            left: `${segLeft}%`,
+                            width: `${segWidth}%`,
+                            backgroundColor: session.subjectColor || colors.secondary,
+                            // Once one highlight is selected the others recede,
+                            // so the detail has an obvious source on the strip.
+                            opacity: pressed ? 0.7 : selection && !selected ? 0.35 : 1,
+                          })}
+                        />
+                      );
+                    })}
+                  </View>
+                  {detail ? (
+                    <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>
+                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)}  {detail.subjectName}  {duration(detail.seconds)}
+                    </Text>
+                  ) : null}
+                </View>;
+              })}
+            </View>
+          ) : null}
+        </View>
+      );
+    }
     if (item.kind === 'journal-heading') {
       return (
         <YanjiPaperSectionHeading
-          title="记录此刻"
+          title="今日随笔"
           titleStyle={typography.titlePageSection}
           countText={snapshot ? `${noteCount} 条` : '—'}
           spaceBefore={layout.sectionGap}
@@ -702,9 +829,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
       return (
         <View style={{ marginTop: YanjiSpacing.sm }}>
           <YanjiCaptureCard
-            title="写一条记录"
+            title="记录此刻"
             hint="一个想法、一处卡点、一点收获"
-            accessibilityLabel="新建今日记录"
+            accessibilityLabel="记录此刻，新建今日随笔"
             onPress={newNote}
           />
         </View>
@@ -726,16 +853,19 @@ export function TodayScreen({ visible, foregroundRevision }: {
           isLast={item.isLast}
           disabled={busyNote !== null}
           onPressContent={() => openNote(note)}
-          onMore={anchor => setMomentMenu({ note, anchor })}
+          action={{ kind: 'menu', onOpen: anchor => setMomentMenu({ note, anchor }) }}
         />
       </View>
     );
   }, [
-    busyNote, busyTask, carryOverClosing, carryOverOpen, colors.hairline,
-    journalExpanded, journalOrder, layout.hairlineWidth, layout.rowMinHeight,
-    layout.sectionGap, newNote, noteCount, openCarryOver, openNote, snapshot,
-    startTask, toggleTask, typography.bodyPrimary, typography.titlePageSection,
-    visibleCarryOverTasks.length,
+    busyNote, busyTask, carryOverClosing, carryOverOpen, colors.hairline, colors.ink,
+    colors.secondary, colors.subtle, date, journalExpanded, journalOrder,
+    layout.gridGap, layout.hairlineWidth, layout.rowMinHeight, layout.sectionGap,
+    layout.spectrumHeight, newNote, noteCount, now, openCarryOver, openNote,
+    peakHourText, radius.tag, rhythmBuckets, rhythmExpanded, rhythmSummaryText,
+    rhythmToggleLabel, selectSegment, selection, sessions, snapshot, startTask,
+    toggleTask, typography.bodyPrimary, typography.captionMeta,
+    typography.titlePageSection, visibleCarryOverTasks.length,
   ]);
 
   /**
@@ -963,125 +1093,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
         ) : null}
           </>
         }
-        ListFooterComponent={
-          <>
-        {/* 今日学习节奏.
-            Collapsed, this used to be a caption, a row of 18 fixed-width ticks
-            and a chevron — a title with no subject, and a strip that read as a
-            pagination indicator. The section now shows the day's shape on a
-            labelled clock, so the collapsed state
-            already answers "what is this?" without repeating the 06:00–24:00
-            range that the axis labels already carry. Expanding is a named
-            control, not just an arrow. */}
-        {/* Same rule as the journal: the heading owns the section gap alone. */}
-        <View>
-          <YanjiPaperSectionHeading
-            title="今日学习节奏"
-            titleStyle={typography.titlePageSection}
-            spaceBefore={layout.sectionGap}
-            right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
-              accessibilityRole="button"
-              accessibilityLabel={rhythmToggleLabel}
-              accessibilityState={{ expanded: rhythmExpanded }}
-              accessibilityHint={rhythmExpanded ? '收起专注时段详情' : '展开专注时段详情'}
-              // No 48dp floor here: a min-height on the heading accessory
-              // inflates the whole row, so this section reads as ~15dp further
-              // from the block above than the other headings do. hitSlop keeps
-              // the touch target while the glyph stays on the heading baseline.
-              hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
-              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, opacity: pressed ? 0.65 : 1 })}>
-              {rhythmExpanded ? (
-                <Text style={[typography.captionMeta, { color: colors.secondary }]}>收起详情</Text>
-              ) : peakHourText ? (
-                <Text style={[typography.captionMeta, { color: colors.secondary }]}>
-                  最集中 <Text style={{ color: colors.ink, fontWeight: '600' }}>{peakHourText}</Text>
-                </Text>
-              ) : (
-                <Text style={[typography.captionMeta, { color: colors.secondary }]}>展开详情</Text>
-              )}
-            </Pressable>} />
-          {/* Same air under every heading: the chart body starts a step below
-              the title, like the plan rows and the journal timeline do. */}
-          <View style={{ marginTop: YanjiSpacing.sm }}>
-            <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
-              startLabel="06:00" endLabel="24:00"
-              accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
-          </View>
-          {rhythmExpanded ? (
-            <View style={{ marginTop: YanjiSpacing.md }}>
-              {DAY_PARTS.map(part => {
-                const startDate = new Date(`${date}T00:00:00`);
-                startDate.setHours(part.from);
-                const endDate = new Date(`${date}T00:00:00`);
-                endDate.setHours(part.to);
-                const start = startDate.getTime();
-                const end = endDate.getTime();
-                const segments = sessions?.filter(session => {
-                  const sStart = session.startTime;
-                  const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
-                  return session.durationSeconds > 0 && sEnd > start && sStart < end;
-                }) ?? [];
-                // The detail belongs under the bar it was read from, so a tap
-                // on a highlight explains itself in place instead of in a
-                // footer somewhere below four day parts.
-                const detail = selection?.kind === 'session' && selection.partName === part.name
-                  ? selection
-                  : null;
-                return <View key={part.name} style={{ marginBottom: YanjiSpacing.md }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: layout.gridGap, marginBottom: YanjiSpacing.xs }}>
-                    <Text style={[typography.captionMeta, { color: colors.ink }]}>{part.name}</Text>
-                    <Text style={[typography.captionMeta, { color: colors.secondary }]}>{String(part.from).padStart(2, '0')}:00—{String(part.to).padStart(2, '0')}:00</Text>
-                  </View>
-                  <View
-                    style={{ height: layout.spectrumHeight, backgroundColor: colors.subtle, borderRadius: radius.tag, overflow: 'hidden' }}>
-                    {segments.map(session => {
-                      const sStart = session.startTime;
-                      const sEnd = session.endTime > sStart ? session.endTime : sStart + session.durationSeconds * 1000;
-                      const segLeft = Math.max(0, sStart - start) / (end - start) * 100;
-                      const segWidth = Math.max(1, (Math.min(end, sEnd) - Math.max(start, sStart)) / (end - start) * 100);
-                      const selected = selection?.kind === 'session' && selection.key === `session:${session.id}`;
-                      return (
-                        <Pressable
-                          key={session.id}
-                          onPress={() => selectSegment({
-                            kind: 'session',
-                            key: `session:${session.id}`,
-                            subjectId: session.subjectId,
-                            subjectName: session.subjectName,
-                            seconds: session.durationSeconds,
-                            startTime: sStart,
-                            endTime: sEnd,
-                            partName: part.name,
-                          })}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={`${session.subjectName}，${timeLabel(sStart)} 至 ${timeLabel(sEnd)}，${duration(session.durationSeconds)}`}
-                          hitSlop={{ top: 14, bottom: 14, left: 2, right: 2 }}
-                          style={({ pressed }) => ({
-                            position: 'absolute', top: 0, bottom: 0,
-                            left: `${segLeft}%`,
-                            width: `${segWidth}%`,
-                            backgroundColor: session.subjectColor || colors.secondary,
-                            // Once one highlight is selected the others recede,
-                            // so the detail has an obvious source on the strip.
-                            opacity: pressed ? 0.7 : selection && !selected ? 0.35 : 1,
-                          })}
-                        />
-                      );
-                    })}
-                  </View>
-                  {detail ? (
-                    <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.ink, marginTop: YanjiSpacing.xs }]}>
-                      {timeLabel(detail.startTime)}—{timeLabel(detail.endTime)}  {detail.subjectName}  {duration(detail.seconds)}
-                    </Text>
-                  ) : null}
-                </View>;
-              })}
-            </View>
-          ) : null}
-        </View>
-          </>
-        }
       />
 
       {carryOverOpen && visible ? (
@@ -1159,24 +1170,4 @@ export function TodayScreen({ visible, foregroundRevision }: {
       />
     </View>
   );
-}
-
-function LiveSessionReadout({ session, visible }: {
-  session: ActiveSessionState; visible: boolean;
-}): React.JSX.Element {
-  const { paper } = useYanjiTheme();
-  const tick = useTimerTick(visible);
-  const seconds = session.isCountdown ? tick?.remainingSeconds ?? session.remainingSeconds : tick?.elapsedSeconds ?? session.elapsedSeconds;
-  const isPaused = session.isPaused || tick?.isPaused;
-  return <View style={{ flexGrow: 1, flexBasis: paper.layout.activeSessionReadoutMinWidth }}>
-    <Text style={[paper.typography.captionMeta, { color: isPaused ? paper.colors.secondary : paper.colors.brandInk }]}>
-      {session.subjectName} {isPaused ? '已暂停' : '正在专注'}
-    </Text>
-    <View accessible accessibilityLabel={`${session.isCountdown ? '本轮剩余' : '本轮已持续'} ${clock(seconds)}，${isPaused ? '已暂停' : '正在专注'}`}
-      accessibilityHint="本轮尚未计入今日已保存总量"
-      style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: YanjiSpacing.sm }}>
-      <Text style={[paper.typography.metricSession, { color: paper.colors.ink }]}>{clock(seconds)}</Text>
-      <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>{session.isCountdown ? '本轮剩余' : '已持续'}</Text>
-    </View>
-  </View>;
 }

@@ -80,7 +80,7 @@ test('RollingTimeDisplay renders correct digits and fixed suffix', () => {
   assert.equal(ui5.slots.length, 2, '5 minutes has tens and units slots');
   assert.equal(ui5.slots[0].props.digit, '0');
   assert.equal(ui5.slots[1].props.digit, '5');
-  assert.ok(ui5.textValues.includes('min'), 'includes fixed min suffix');
+  assert.ok(ui5.textValues.includes('分'), 'includes the fixed 「分」 suffix');
 
   // Test 45 minutes -> "4" "5" ":00"
   const ui45 = harness.render(45);
@@ -126,16 +126,16 @@ test('the dial scales once and sizes its slot to match', () => {
         'each digit slot is exactly as tall as the display');
     }
     assert.ok(texts.length > 0, 'the dial renders its digits');
-    // Only the clipped glyphs must match the slot. The 「min」 unit hangs off the
+    // Only the clipped glyphs must match the slot. The 「分」 unit hangs off the
     // digits' lower right on purpose, so it is sized by its own small metric and
     // must NOT be forced to the digit line box.
-    const digitTexts = texts.filter(node => node.props.children !== 'min');
+    const digitTexts = texts.filter(node => node.props.children !== '分');
     assert.ok(digitTexts.length > 0, 'the dial renders digit glyphs');
     for (const text of digitTexts) {
       assert.equal(harness.mergedStyle(text).lineHeight, rootHeight,
         'every digit line box matches the slot it is clipped to');
     }
-    const unit = texts.find(node => node.props.children === 'min');
+    const unit = texts.find(node => node.props.children === '分');
     assert.ok(unit, 'the unit still renders');
     assert.ok(harness.mergedStyle(unit).lineHeight < rootHeight,
       'the unit keeps its own small line box beside the digits');

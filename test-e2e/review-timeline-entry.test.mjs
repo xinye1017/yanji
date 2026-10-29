@@ -126,6 +126,8 @@ function screenHarness(daySnapshot, {
   let refIndex = 0;
   // The retry spies record the exact window the banner re-reads.
   const refreshCalls = [];
+  // Every day the page asked Room for; a paged week must be reflected here.
+  const dailyRequests = [];
   const { ReviewScreen } = loadTypeScript('src/screens/ReviewScreen.tsx', {
     react: {
       useState: initial => {
@@ -178,18 +180,27 @@ function screenHarness(daySnapshot, {
     },
     '../components/YanjiUI': ui,
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/LiveSessionReadout': { LiveSessionCapsule: 'LiveSessionCapsule', LiveSessionReadout: 'LiveSessionReadout' },
     '../components/RoamingNotesModal': { RoamingNotesModal: 'RoamingNotesModal' },
     './review/JournalLibraryView': { JournalLibraryView: 'JournalLibraryView' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/NavigationShell': {
-      useNavigationActions: () => ({ openSettings: () => { calls.push(['settings']); } }),
+      useNavigationActions: () => ({
+        openSettings: () => { calls.push(['settings']); },
+        selectTab: tab => { calls.push(['tab', tab]); },
+      }),
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../state/dataRefresh': {
-      useDailySnapshot: () => daySnapshot,
+      // Answer for whichever day was requested, the way Room does: a page that
+      // moved its selection must re-read that day, not keep the old snapshot.
+      useDailySnapshot: (_scope, requestedDate) => {
+        dailyRequests.push(requestedDate);
+        return daySnapshot === null ? null : { ...daySnapshot, date: requestedDate };
+      },
       useDailyReadFailed: () => dailyReadFailed,
       useSettingsSnapshot: () => ({ settings: { dailyGoalHours: 6 } }),
       useReviewOverview: () => null,
@@ -207,6 +218,7 @@ function screenHarness(daySnapshot, {
   return {
     calls,
     refreshCalls,
+    dailyRequests,
     flashList,
     render,
     rows: tree => nodes(tree, node => node.type === 'TimelineCompactRow'),
@@ -292,30 +304,35 @@ test('sessions omit body text regardless of bound plans or notes, staying single
   })).rows(exam)[0].props.content, undefined);
 });
 
-test('the session menu only offers delete, decoupling focus records from note editing', async () => {
+test('a session deletes directly — no one-action menu stands between the record and its confirmation', async () => {
   const harness = screenHarness(snapshot({ sessions: [session({ note: '已写好的随笔' })] }));
   let tree = harness.render();
-  harness.rows(tree)[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
-  tree = harness.render();
-  const menu = harness.menu(tree);
-  assert.ok(menu, 'the row opens the anchored menu');
-  assert.deepEqual(plain(menu.props.actions.map(action => action.label)), ['删除记录'],
-    'editing note is decoupled from focus session menu');
+  const row = harness.rows(tree)[0];
+  assert.equal(row.props.action.kind, 'delete', 'the session row carries its one action directly');
+  assert.equal(row.props.action.label, '删除记录：数据结构，15:11 起');
+  assert.equal(harness.menu(tree), undefined, 'a session never opens the anchored menu');
 
-  pressMenuAction(menu, '删除记录');
-  const after = harness.render();
-  assert.equal(harness.confirmation(after).props.visible, true, 'the existing confirmation opens');
+  row.props.action.onPress();
+  tree = harness.render();
+  assert.equal(harness.confirmation(tree).props.visible, true, 'the existing confirmation opens');
   assert.deepEqual(plain(harness.calls), [], 'opening the confirmation must not delete a native record');
 
   const exam = screenHarness(snapshot({ sessions: [session({ isExam: true })] }));
-  exam.rows(exam.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
-  assert.deepEqual(plain(exam.menu(exam.render()).props.actions.map(action => action.label)), ['删除记录'],
-    'an exam also only has delete');
+  const examRow = exam.rows(exam.render())[0];
+  assert.equal(examRow.props.action.kind, 'delete', 'an exam also deletes directly');
+  examRow.props.action.onPress();
+  assert.equal(exam.confirmation(exam.render()).props.visible, true);
+  // The confirmation must still carry the record's kind to the write: an exam
+  // record deleted as a plain session would take the wrong row.
+  const confirm = nodes(exam.confirmation(exam.render()), node =>
+    node.type === 'YanjiPrimaryButton' && node.props.label === '确认删除')[0];
+  await confirm.props.onPress();
+  await flush();
+  assert.deepEqual(plain(exam.calls), [['delete', 'focus-a', true]]);
 });
 
 function openSessionDelete(harness) {
-  harness.rows(harness.render())[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
-  pressMenuAction(harness.menu(harness.render()), '删除记录');
+  harness.rows(harness.render())[0].props.action.onPress();
   return {
     confirmation: () => harness.confirmation(harness.render()),
     confirm: () => nodes(harness.confirmation(harness.render()), node =>
@@ -405,7 +422,7 @@ test('note rows keep favorite, resolution, category correction and editing in th
   assert.deepEqual(plain(rows.map(row => row.props.tagTone).sort()), ['brand', 'positive']);
 
   const doubtRow = rows.find(row => row.props.tagLabel === '疑点 待解决');
-  doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  doubtRow.props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   let menu = harness.menu(harness.render());
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
     ['标记为已解决', '编辑记录', '删除记录']);
@@ -415,13 +432,13 @@ test('note rows keep favorite, resolution, category correction and editing in th
   assert.deepEqual(plain(harness.calls), [['resolve', 'doubt-1']]);
 
   const inspRow = harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感');
-  inspRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  inspRow.props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   menu = harness.menu(harness.render());
   assert.deepEqual(plain(menu.props.actions.map(action => action.label)),
     ['编辑记录', '删除记录']);
 
   harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')
-    .props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+    .props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   menu = harness.menu(harness.render());
   pressMenuAction(menu, '编辑记录');
   const editor = harness.recordModal(harness.render());
@@ -432,7 +449,7 @@ test('note rows keep favorite, resolution, category correction and editing in th
   assert.equal(editor.props.initialConfirmDelete, false);
 
   harness.rows(harness.render()).find(row => row.props.tagLabel === '灵感')
-    .props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+    .props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   pressMenuAction(harness.menu(harness.render()), '删除记录');
   assert.equal(harness.recordModal(harness.render()).props.initialConfirmDelete, true,
     'delete only opens the existing confirmation');
@@ -627,7 +644,7 @@ function inFrameWeek(tree) {
   return { start: framed.props.testID.slice('filmstrip-page-'.length), cells };
 }
 
-test('swiping the filmstrip pages the week without changing the selected day', () => {
+test('swiping the filmstrip pages the week and takes the selected day with it', () => {
   // 2026-10-06 is a Tuesday; its week is Mon 10-05 → Sun 10-11.
   const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
   const before = h.render();
@@ -643,17 +660,66 @@ test('swiping the filmstrip pages the week without changing the selected day', (
   assert.equal(inFrameWeek(h.render()).start, '2026-10-05',
     'the current week is the forward ceiling');
 
-  // A rightward drag goes back a week. The timeline keeps 10-06 — nothing is
-  // selected in the week being shown, because paging is not a selection.
+  // A rightward drag goes back a week, and the same weekday (Tuesday 09-29)
+  // becomes the selection: the timeline below must describe the week in frame,
+  // not a day the reader can no longer see.
   pan.onPanResponderRelease({}, { dx: 80, dy: 4, vx: 0.9 });
   const after = h.render();
   const weekAfter = inFrameWeek(after);
   assert.equal(weekAfter.start, '2026-09-28', 'the strip rolled back one week');
-  assert.equal(weekAfter.cells.filter(cell => cell.selected).length, 0,
-    'a paged-back week holds no selected cell');
-  assert.equal(nodes(after, node => node.type === 'TimelineCompactRow').length,
-    nodes(before, node => node.type === 'TimelineCompactRow').length,
-    'the timeline still lists the selected day, unchanged by the swipe');
+  const selected = weekAfter.cells.filter(cell => cell.selected);
+  assert.equal(selected.length, 1, 'the paged-back week carries the selection');
+  assert.match(selected[0].label, /^2026-09-29/, 'the same weekday, one week earlier');
+  assert.equal(weekAfter.cells.filter(cell => cell.disabled).length, 0,
+    'every day of a past week is selectable');
+  assert.equal(h.dailyRequests.at(-1), '2026-09-29',
+    'the page re-reads the day that the strip now frames');
+});
+
+test('paging forward from a past week clamps a future weekday to today', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  const pan = filmstripPan(h.render());
+  pan.onPanResponderRelease({}, { dx: 80, dy: 4, vx: 0.9 });
+  let tree = h.render();
+  // Pick Friday 10-02 in the previous week, then page forward: the same
+  // weekday in the current week (10-09) has not happened yet.
+  const friday = inFrameWeek(tree).cells.find(cell => cell.label.startsWith('2026-10-02'));
+  assert.ok(friday, 'the previous week offers its Friday');
+  friday.onPress();
+  tree = h.render();
+  pan.onPanResponderRelease({}, { dx: -80, dy: 4, vx: -0.9 });
+  tree = h.render();
+  const week = inFrameWeek(tree);
+  assert.equal(week.start, '2026-10-05', 'the strip returns to the current week');
+  const selected = week.cells.filter(cell => cell.selected);
+  assert.equal(selected.length, 1, 'the current week carries the selection');
+  assert.match(selected[0].label, /^2026-10-06/, 'a future weekday clamps to today');
+  assert.equal(h.dailyRequests.at(-1), '2026-10-06', 'Room is asked for today, not a future day');
+});
+
+test('returning to the timeline brings the strip to the day the trend bar moved to', () => {
+  const h = screenHarness(snapshot({ totalDurationSeconds: 1800, focusCount: 1 }));
+  let tree = h.render();
+  const viewSwitch = () => nodes(h.render(), node => node.type === 'YanjiPaperSegmentedControl'
+    && node.props.accessibilityLabel === '回顾视图')[0];
+  viewSwitch().props.onChange('trend');
+  tree = h.render();
+  // 当日 scope: ‹ steps the selected day back by one.
+  const previous = nodes(tree, node => node.type === 'Pressable'
+    && node.props.accessibilityLabel === '上一周期')[0];
+  assert.ok(previous, 'the trend bar owns its own period stepper');
+  previous.props.onPress();
+  tree = h.render();
+  const moved = h.dailyRequests.at(-1);
+  assert.equal(moved, '2026-10-05', 'the trend bar moved the selected day');
+  // Back to the timeline: the strip must frame that day, not the old week.
+  viewSwitch().props.onChange('timeline');
+  tree = h.render();
+  const week = inFrameWeek(tree);
+  assert.equal(week.start, '2026-10-05', 'the strip follows the selection');
+  const selected = week.cells.filter(cell => cell.selected);
+  assert.equal(selected.length, 1, 'the selected day is in frame');
+  assert.match(selected[0].label, /^2026-10-05/);
 });
 
 test('tapping a day in a paged-back week selects it and brings the strip home', () => {
@@ -677,7 +743,8 @@ test('the timeline offers a blank record and the page its own settings entry', (
 
   const capture = nodes(tree, node => node.type === 'YanjiCaptureCard')[0];
   assert.ok(capture, 'the timeline header offers a capture entry');
-  assert.equal(capture.props.title, '写一条记录');
+  assert.equal(capture.props.title, '记录此刻');
+  assert.equal(capture.props.accessibilityLabel, '记录此刻，补记这一天的随笔');
   capture.props.onPress();
   const modal = h.recordModal(h.render());
   assert.equal(modal.props.visible, true, 'the shared sheet opens in create mode');
@@ -687,6 +754,24 @@ test('the timeline offers a blank record and the page its own settings entry', (
   assert.ok(gear, 'review has its own settings entry');
   gear.props.onPress();
   assert.deepEqual(plain(h.calls), [['settings']]);
+});
+
+test('a running session is offered on every Review view and returns to Focus', () => {
+  const h = screenHarness(snapshot());
+  let tree = h.render();
+  const capsule = nodes(tree, node => node.type === 'LiveSessionCapsule')[0];
+  assert.ok(capsule, 'the timeline shows the running-session capsule');
+  capsule.props.onPress();
+  assert.deepEqual(h.calls, [['tab', 'focus']], 'one tap returns to the focus workbench');
+
+  const viewSwitch = () => nodes(h.render(), node => node.type === 'YanjiPaperSegmentedControl'
+    && node.props.accessibilityLabel === '回顾视图')[0];
+  viewSwitch().props.onChange('trend');
+  assert.equal(nodes(h.render(), node => node.type === 'LiveSessionCapsule').length, 1,
+    'the trend view keeps the capsule');
+  viewSwitch().props.onChange('journal');
+  assert.equal(nodes(h.render(), node => node.type === 'LiveSessionCapsule').length, 1,
+    'the journal view keeps the capsule');
 });
 
 test('VIEWS expands to 3 options including journal library view', () => {

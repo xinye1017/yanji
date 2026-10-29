@@ -200,7 +200,7 @@ export function RollingTimeDisplay({
     includeFontPadding: false,
   };
 
-  // The unit sits *under* the digits' baseline rather than beside them: 「84 min」
+  // The unit sits *under* the digits' baseline rather than beside them: 「84 分」
   // on one line made the block wider than the ruler beneath it, and dropping the
   // unit to the lower right keeps the number itself the widest thing on the page.
   const unitSize = Math.round(24 * effectiveScale);
@@ -264,7 +264,7 @@ export function RollingTimeDisplay({
           bottom of its line box, and the unit is a small label tucked just under
           the last stroke rather than a second word beside it. */}
       <View style={{ justifyContent: 'flex-end', marginLeft: Math.round(2 * effectiveScale) }}>
-        <Text allowFontScaling={false} style={[unitStyle, { marginBottom: Math.round(slotHeight * 0.04) }]}>min</Text>
+        <Text allowFontScaling={false} style={[unitStyle, { marginBottom: Math.round(slotHeight * 0.04) }]}>分</Text>
       </View>
     </View>
   );

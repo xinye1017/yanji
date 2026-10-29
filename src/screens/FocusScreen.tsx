@@ -261,7 +261,11 @@ function DurationPicker({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: YanjiSpacing.xs + 2,
+          // Six chips carry a Chinese unit now (「120分」 is wider than 「120m」):
+          // trimmed padding and gap keep one line at the default scale on a
+          // 360dp phone, and a larger font scale wraps instead of clipping.
+          flexWrap: 'wrap',
+          gap: YanjiSpacing.xs,
           marginTop: YanjiSpacing.md,
         }}
       >
@@ -281,7 +285,7 @@ function DurationPicker({
               }}
               style={({ pressed }) => [
                 {
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 10,
                   paddingVertical: 5,
                   borderRadius: paper.radius.pill,
                   backgroundColor: isSelected
@@ -302,7 +306,7 @@ function DurationPicker({
                   },
                 ]}
               >
-                {preset}m
+                {preset}分
               </Text>
             </Pressable>
           );
@@ -381,7 +385,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
   }, []);
   const [timerMode, setTimerMode] = useState<TimerMode>('COUNTDOWN');
   const [recordOpen, setRecordOpen] = useState(false);
-  // 补录专注 ≠ 补录随笔：ready 态的「补录记录」写一条真实的 focus_sessions，
+  // 补录专注 ≠ 记录此刻：ready 态的「补录专注」写一条真实的 focus_sessions，
   // 沉浸态的「记录此刻」仍然只是随笔，两者用的是两张表、两个入口。
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -694,7 +698,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="补录专注记录"
+                accessibilityLabel="补录专注，记录一段已经发生的专注"
                 hitSlop={8}
                 onPress={() => setBackfillOpen(true)}
                 style={({ pressed }) => ({
@@ -707,7 +711,7 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
               >
                 <YanjiIcon name="compose" size={15} color={paper.colors.secondary} />
                 <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary, marginLeft: 5 }]}>
-                  补录记录
+                  补录专注
                 </Text>
               </Pressable>
 

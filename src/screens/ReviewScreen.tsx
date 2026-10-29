@@ -17,6 +17,7 @@ import {
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { EditingNote, RecordMomentModal } from '../components/RecordMomentModal';
+import { LiveSessionCapsule } from '../components/LiveSessionReadout';
 import { RoamingNotesModal } from '../components/RoamingNotesModal';
 import { TimelineCompactRow } from '../components/TimelineCompactRow';
 import { JournalLibraryView } from './review/JournalLibraryView';
@@ -49,6 +50,8 @@ import {
 import { todayIso } from '../state/settingsViewLogic';
 
 type ReviewView = 'timeline' | 'trend' | 'journal';
+/** The note half of a timeline entry — the only kind with a menu. */
+type NoteEntry = Extract<TimelineEntry, { kind: 'note' }>;
 const VIEWS = [{ value: 'timeline', label: '时间线' }, { value: 'trend', label: '趋势统计' }, { value: 'journal', label: '随笔库' }] as const;
 const SCOPES: readonly { value: ReviewScope; label: string }[] = [
   { value: 'TODAY', label: '当日' }, { value: 'CALENDAR_WEEK', label: '本周' },
@@ -60,7 +63,7 @@ const TREND_CHART_HEIGHT = 108;
 export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
-  const { openSettings } = useNavigationActions();
+  const { openSettings, selectTab } = useNavigationActions();
   const { contentPadding } = useBottomTabLayout();
   const { fontScale, width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -69,16 +72,20 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   /**
    * The week the filmstrip is showing, as its Monday.
    *
-   * Deliberately independent of `date`: paging the strip is a look-ahead, not a
-   * selection. The timeline keeps the selected day until the user taps a cell,
-   * so a swipe can never blank the page or change which records are listed.
+   * Paging the strip selects the same weekday in the week it lands on, so the
+   * timeline below always describes the week in frame instead of leaving the
+   * previous selection stranded off-screen. Tapping a cell still selects that
+   * day and pulls the strip to its week.
    */
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayIso()));
   const [view, setView] = useState<ReviewView>('timeline');
   const [roamingVisible, setRoamingVisible] = useState(false);
   const [scope, setScope] = useState<ReviewScope>('TODAY');
-  /** Anchored 「···」 menu: the entry it acts on plus the button's window rect. */
-  const [timelineMenu, setTimelineMenu] = useState<{ entry: TimelineEntry; anchor: PopoverAnchor } | null>(null);
+  /**
+   * Anchored 「···」 menu: the note it acts on plus the button's window rect.
+   * Sessions never open it — their one action is a direct trash button.
+   */
+  const [timelineMenu, setTimelineMenu] = useState<{ entry: NoteEntry; anchor: PopoverAnchor } | null>(null);
   const daily = useDailySnapshot('review', date, visible);
   const snapshot = daily?.date === date ? daily : null;
   const settingsSnapshot = useSettingsSnapshot('review', visible);
@@ -167,17 +174,39 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
   }, [weekStart, date, today, weekOverview]);
 
   /**
-   * Picking a day moves the selection, and the strip follows it.
-   *
-   * Selecting from a paged-back week is the one case where the two diverge: the
-   * strip would otherwise keep showing the week the user is not looking at.
+   * Picking a day moves the selection, and the strip follows it — including a
+   * cell tapped on a neighbouring page, so the two never disagree about which
+   * week is in frame.
    */
   const selectDay = (nextDate: string) => {
     setDate(nextDate);
     setWeekStart(weekStartOf(nextDate));
   };
+  /**
+   * Paging a week moves the selected day with it: the same weekday in the week
+   * that lands in frame. Without this, a swipe changed only the strip and the
+   * timeline kept listing a day the reader could no longer see.
+   *
+   * The forward page stops at the current week, but its same-weekday cell can
+   * still be in the future — that day has not happened, so the selection clamps
+   * to today.
+   */
   const stepWeek = (deltaWeeks: number) => {
     setWeekStart(previous => shiftIsoDate(previous, deltaWeeks * 7));
+    setDate(previous => {
+      const shifted = shiftIsoDate(previous, deltaWeeks * 7);
+      return shifted > today ? today : shifted;
+    });
+  };
+  /**
+   * The trend view's period bar moves `date` without touching the strip. On the
+   * way back to the timeline the strip follows that selection — otherwise it
+   * shows a week that no longer contains the selected day, and the next swipe
+   * would carry the gap along with it.
+   */
+  const selectView = (next: ReviewView) => {
+    setView(next);
+    if (next === 'timeline') setWeekStart(weekStartOf(date));
   };
 
   /**
@@ -212,8 +241,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         requests.set(reviewWindowKey(request), request);
       });
     });
-    // 周表可以左右翻页，且翻页不改变选中日：它显示的那一周与相邻两周都要预取，
-    // 否则每滑一格，点阵都要等一次桥读取才出现。
+    // 周表可以左右翻页，翻页会把选中日带到目标周的同一天：它显示的那一周与
+    // 相邻两周都要预取，否则每滑一格，点阵与时间线都要等一次桥读取才出现。
     if (view === 'timeline') {
       [shiftIsoDate(weekStart, -7), weekStart, shiftIsoDate(weekStart, 7)]
         .filter(week => week <= today)
@@ -288,52 +317,42 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       setDeleting(false);
     }
   };
-  /** Every management action of a timeline row lives in its anchored menu. */
-  const timelineActions = (entry: TimelineEntry): TimelineAction[] => {
-    if (entry.kind === 'session') {
-      const session = entry.session;
-      return [
-        {
-          key: 'delete',
-          icon: 'delete' as const,
-          label: '删除记录',
-          danger: true,
-          onPress: () => {
-            setDeleteError(null);
-            setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
-          },
-        },
-      ];
-    }
-    const note = entry;
-    return [
-      ...(note.category === 'DOUBT' ? [{
-        key: 'resolve',
-        icon: 'check' as const,
-        label: note.isResolved ? '标记为待解决' : '标记为已解决',
-        onPress: () => void toggleResolved(note.noteId),
-      }] : []),
-      {
-        key: 'edit',
-        icon: 'compose' as const,
-        label: '编辑记录',
-        onPress: () => {
-          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
-          setConfirmDeleteNote(false);
-        },
-      },
-      {
-        key: 'delete',
-        icon: 'delete' as const,
-        label: '删除记录',
-        danger: true,
-        onPress: () => {
-          setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
-          setConfirmDeleteNote(true);
-        },
-      },
-    ];
+  /**
+   * A session's only action is deleting it, so the row's trash button asks for
+   * the same confirmation the menu used to lead to.
+   */
+  const requestDeleteSession = (session: DailySession) => {
+    setDeleteError(null);
+    setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
   };
+  /** The actions a note's anchored menu holds; sessions never reach it. */
+  const noteActions = (note: NoteEntry): TimelineAction[] => [
+    ...(note.category === 'DOUBT' ? [{
+      key: 'resolve',
+      icon: 'check' as const,
+      label: note.isResolved ? '标记为待解决' : '标记为已解决',
+      onPress: () => void toggleResolved(note.noteId),
+    }] : []),
+    {
+      key: 'edit',
+      icon: 'compose' as const,
+      label: '编辑记录',
+      onPress: () => {
+        setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
+        setConfirmDeleteNote(false);
+      },
+    },
+    {
+      key: 'delete',
+      icon: 'delete' as const,
+      label: '删除记录',
+      danger: true,
+      onPress: () => {
+        setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION', isFavorite: note.isFavorite });
+        setConfirmDeleteNote(true);
+      },
+    },
+  ];
   const days = overview?.days ?? [];
   const columns = useMemo(() => buildTrendColumns(days, overview?.subjectDistribution ?? []), [days, overview]);
   const peak = peakTrendDay(columns);
@@ -375,7 +394,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           <YanjiPaperSegmentedControl
             value={view}
             options={VIEWS}
-            onChange={setView}
+            onChange={selectView}
             accessibilityLabel="回顾视图"
             compact
             borderless
@@ -384,6 +403,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
             size={32} iconSize={19} />
         </View>
       </View>
+      {/* A running session belongs on every view of the page, not just Focus:
+          the reader can see it is still going and return in one tap. */}
+      <LiveSessionCapsule visible={visible} onPress={() => selectTab('focus')} />
       {actionError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{actionError}</Text> : null}
 
       {staleRead ? (
@@ -411,9 +433,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       />
       <DaySummary snapshot={snapshot} />
       <YanjiCaptureCard
-        title="写一条记录"
+        title="记录此刻"
         hint="补记这一天的想法或卡点"
-        accessibilityLabel="写一条记录"
+        accessibilityLabel="记录此刻，补记这一天的随笔"
         onPress={() => setCreateOpen(true)}
       />
       <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
@@ -496,7 +518,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
               setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
               setConfirmDeleteNote(false);
             }}
-            onOpenMenu={(entry, anchor) => setTimelineMenu({ entry, anchor })} />}
+            onOpenMenu={(note, anchor) => setTimelineMenu({ entry: note, anchor })}
+            onDeleteSession={requestDeleteSession} />}
         />
       : view === 'trend'
       ? <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>
@@ -520,7 +543,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         containerHeight={windowHeight - insets.top}
         bottomInset={contentPadding}
         disabled={busyNote !== null}
-        actions={timelineActions(timelineMenu.entry)}
+        actions={noteActions(timelineMenu.entry)}
         onClose={() => setTimelineMenu(null)}
       />
     ) : null}
@@ -563,8 +586,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
 //
 // Three weeks are laid side by side and only the middle one is in frame, so a
 // drag pulls the neighbouring week in rather than sliding the row off a blank
-// edge. Paging is a way to look around, not a selection: the timeline keeps the
-// selected day until a cell is tapped.
+// edge. A committed page is a selection too: it moves the selected day to the
+// same weekday in the week that lands in frame, so the timeline below always
+// describes the week on screen.
 // ---------------------------------------------------------------------------
 
 export interface FilmstripPage {
@@ -843,13 +867,14 @@ function DaySummary({ snapshot }: {
 // and therefore cannot recycle anything.
 // ---------------------------------------------------------------------------
 
-function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu }: {
+function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu, onDeleteSession }: {
   entry: TimelineEntry;
   isFirst: boolean;
   isLast: boolean;
   busyNote: boolean;
-  onEditNote: (note: Extract<TimelineEntry, { kind: 'note' }>) => void;
-  onOpenMenu: (entry: TimelineEntry, anchor: PopoverAnchor) => void;
+  onEditNote: (note: NoteEntry) => void;
+  onOpenMenu: (note: NoteEntry, anchor: PopoverAnchor) => void;
+  onDeleteSession: (session: DailySession) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors } = paper;
@@ -864,8 +889,11 @@ function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu
       metaText={formatDuration(session.durationSeconds)}
       isFirst={isFirst} isLast={isLast} disabled={busyNote}
       accessibilityLabel={`${session.subjectName}，${formatDuration(session.durationSeconds)}`}
-      moreAccessibilityLabel={`更多操作：${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起`}
-      onMore={anchor => onOpenMenu(entry, anchor)}
+      action={{
+        kind: 'delete',
+        label: `删除记录：${session.subjectName}，${formatClockFromEpoch(session.startTime)} 起`,
+        onPress: () => onDeleteSession(session),
+      }}
     />;
   }
   const tagLabel = entry.category === 'DOUBT'
@@ -881,9 +909,12 @@ function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu
     isFirst={isFirst} isLast={isLast} disabled={busyNote}
     accessibilityLabel={`编辑随笔：${entry.content}`}
     accessibilityHint="打开这条记录，可阅读全文或编辑"
-    moreAccessibilityLabel={`更多操作：${entry.content.slice(0, 24)}`}
     onPressContent={() => onEditNote(entry)}
-    onMore={anchor => onOpenMenu(entry, anchor)}
+    action={{
+      kind: 'menu',
+      label: `更多操作：${entry.content.slice(0, 24)}`,
+      onOpen: anchor => onOpenMenu(entry, anchor),
+    }}
   />;
 }
 

@@ -95,6 +95,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     '../components/SettingsSheets': { DailyGoalSheet: 'DailyGoalSheet' },
     '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/LiveSessionReadout': { LiveSessionReadout: 'LiveSessionReadout', LiveSessionCapsule: 'LiveSessionCapsule' },
     '../components/RoamingNotesModal': { RoamingNotesModal: 'RoamingNotesModal' },
     './review/JournalLibraryView': { JournalLibraryView: 'JournalLibraryView' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
@@ -200,13 +201,14 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     '../components/YanjiUI': ui,
     '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/LiveSessionReadout': { LiveSessionCapsule: 'LiveSessionCapsule', LiveSessionReadout: 'LiveSessionReadout' },
     '../components/RoamingNotesModal': { RoamingNotesModal: 'RoamingNotesModal' },
     './review/JournalLibraryView': { JournalLibraryView: 'JournalLibraryView' },
     '../components/SessionNoteModal': { SessionNoteModal: 'SessionNoteModal' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../navigation/NavigationShell': {
-      useNavigationActions: () => ({ openSettings: () => {} }),
+      useNavigationActions: () => ({ openSettings: () => {}, selectTab: () => {} }),
     },
     '../navigation/useBottomTabLayout': { useBottomTabLayout: () => ({ contentPadding: 96 }) },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
@@ -265,7 +267,7 @@ test('TodayScreen hides 今日疑点 card when no doubts exist', () => {
   assert.equal(headings.length, 0, 'When no doubts exist, 今日疑点 section heading must be absent');
 });
 
-test('TodayScreen renders doubts inside 记录此刻 without redundant 今日疑点 section', async () => {
+test('TodayScreen renders doubts inside 今日随笔 without redundant 今日疑点 section', async () => {
   const harness = todayHarness({
     date,
     totalDurationSeconds: 1200,
@@ -290,7 +292,7 @@ test('TodayScreen renders doubts inside 记录此刻 without redundant 今日疑
 
   const tree = harness.render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props?.title === '今日疑点');
-  assert.equal(headings.length, 0, '今日疑点 section heading must be absent; doubts are displayed in 记录此刻');
+  assert.equal(headings.length, 0, '今日疑点 section heading must be absent; doubts are displayed in 今日随笔');
 
   const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
   assert.equal(rows.length, 1);
@@ -340,7 +342,7 @@ test('ReviewScreen tags doubts/inspirations and resolves them through the anchor
 
   // The row itself no longer toggles resolution: the anchored menu does.
   const doubtRow = rows.find(row => row.props.tagLabel === '疑点 待解决');
-  doubtRow.props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  doubtRow.props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   const menu = nodes(harness.render(), node => node.type === 'TimelineActionPopover')[0];
   const resolve = menu.props.actions.find(action => action.label === '标记为已解决');
   assert.ok(resolve, 'the menu offers the resolution action');

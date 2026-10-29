@@ -45,6 +45,17 @@ function TimelineBlock({ block, disabled, onEdit, onChange }: {
   }, []);
   const shown = preview ?? block;
   const height = (shown.endMinute - shown.startMinute) / 60 * HOUR_HEIGHT;
+  /**
+   * Visible grab affordances. A block's body has always been draggable and its
+   * top/bottom edges resizable, but nothing said so: the only hint was that a
+   * drag happened to work. The grip says "move me" and the two caps mark the
+   * resize edges. They are decoration only — the responders keep owning the
+   * gestures — so they must not intercept touches, and a block too short to
+   * hold them stays clean.
+   */
+  const showGrip = height >= 40;
+  const showEdgeCaps = height >= 28;
+  const edge = Math.min(16, height / 3);
   return (
     <View style={{ position: 'absolute', left: TIME_WIDTH + 5, right: 4, top: shown.startMinute / 60 * HOUR_HEIGHT, height, zIndex: preview ? 5 : 2 }}>
       <View
@@ -53,15 +64,40 @@ function TimelineBlock({ block, disabled, onEdit, onChange }: {
         accessibilityRole="button"
         accessibilityState={{ disabled }}
         accessibilityLabel={`${formatMinuteOfDay(block.startMinute)}至${formatMinuteOfDay(block.endMinute)}，${block.subjectLabel} ${block.title}，点击编辑`}
+        accessibilityHint="上下拖动移动时间段，拖动上下边缘调整时长"
         accessibilityActions={[{ name: 'activate', label: '编辑时间段' }]}
         onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'activate') onEdit(); }}
-        style={{ flex: 1, overflow: 'hidden', borderRadius: paper.radius.tag, backgroundColor: paper.colors.brandSubtle, borderLeftWidth: 3, borderLeftColor: paper.colors.brand, paddingHorizontal: 8, justifyContent: 'center' }}
+        style={{ flex: 1, overflow: 'hidden', borderRadius: paper.radius.tag, backgroundColor: paper.colors.brandSubtle, borderLeftWidth: 3, borderLeftColor: paper.colors.brand, paddingLeft: 8, paddingRight: showGrip ? 24 : 8, justifyContent: 'center' }}
       >
         <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: paper.colors.brandInk, fontWeight: '700' }]}>{shown.title}{shown.subjectLabel ? ` · ${shown.subjectLabel}` : ''}</Text>
         {height >= 45 ? <Text numberOfLines={1} style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>{formatMinuteOfDay(shown.startMinute)}–{formatMinuteOfDay(shown.endMinute)}</Text> : null}
       </View>
-      <View {...responders.start.panHandlers} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: Math.min(12, height / 3) }} />
-      <View {...responders.end.panHandlers} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: Math.min(12, height / 3) }} />
+      <View {...responders.start.panHandlers} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: edge }} />
+      <View {...responders.end.panHandlers} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: edge }} />
+      <View pointerEvents="none" accessible={false} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}>
+        {showGrip ? (
+          <View style={{ position: 'absolute', right: 7, top: 0, bottom: 0, justifyContent: 'center', gap: 2 }}>
+            {[0, 1, 2].map(row => <View key={row} style={{
+              width: 12, height: 2, borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.brandInk, opacity: 0.45,
+            }} />)}
+          </View>
+        ) : null}
+        {showEdgeCaps ? (
+          <>
+            <View style={{
+              position: 'absolute', top: 3, left: '50%', marginLeft: -10,
+              width: 20, height: 3, borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.brandInk, opacity: 0.4,
+            }} />
+            <View style={{
+              position: 'absolute', bottom: 3, left: '50%', marginLeft: -10,
+              width: 20, height: 3, borderRadius: paper.radius.pill,
+              backgroundColor: paper.colors.brandInk, opacity: 0.4,
+            }} />
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }

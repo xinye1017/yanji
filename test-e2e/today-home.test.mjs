@@ -325,6 +325,7 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
     '../components/SettingsSheets': { DailyGoalSheet: 'DailyGoalSheet' },
     '../components/TodayScheduleCard': { TodayScheduleCard: 'TodayScheduleCard' },
     '../components/RecordMomentModal': { RecordMomentModal: 'RecordMomentModal' },
+    '../components/LiveSessionReadout': { LiveSessionReadout: 'LiveSessionReadout', LiveSessionCapsule: 'LiveSessionCapsule' },
     '../components/TimelineCompactRow': { TimelineCompactRow: 'TimelineCompactRow' },
     '../components/TimelineActionPopover': { TimelineActionPopover: 'TimelineActionPopover' },
     '../components/TaskEditorModal': { TaskEditorModal: 'TaskEditorModal' },
@@ -462,25 +463,23 @@ test('pending tasks demote the free-focus CTA instead of removing it', () => {
   assert.deepEqual(harness.calls, [['tab', 'focus']]);
 });
 
-test('compact session reads countdown, stopwatch and pause ticks without adding them to saved totals', () => {
+test('the running session is handed to the live readout leaf, not ticked at the page root', () => {
+  // The clock itself lives in the leaf (covered by live-session-readout.test.mjs).
+  // What the page owns is the hand-off: the active snapshot goes to the readout
+  // and the page root still never subscribes to ticks.
   const harness = screenHarness(snapshot({ totalDurationSeconds: 3600 }));
   const active = {
     sessionId: 'active', subjectName: '概率论与数理统计', isPaused: false,
     isCountdown: true, remainingSeconds: 1200, elapsedSeconds: 60,
   };
   harness.setActive(active);
-  assert.match(text(harness.render()), /概率论与数理统计 正在专注20:00本轮剩余/);
-  harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 61, isPaused: false });
-  let tree = harness.render();
-  assert.match(text(tree), /19:59本轮剩余/);
+  const tree = harness.render();
+  const readout = nodes(tree, node => node.type === 'LiveSessionReadout')[0];
+  assert.ok(readout, 'the active block mounts the live readout');
+  assert.equal(readout.props.session, active, 'the leaf owns the clock, not the page');
+  assert.equal(harness.tickReads, 0, 'the page root never subscribes to timer ticks');
   const saved = nodes(tree, n => n.props.accessibilityLabel === '今日已保存专注 1小时');
   assert.equal(saved.length, 1, 'a live tick does not inflate the persisted daily result');
-  harness.setActive({ ...active, isCountdown: false });
-  harness.setTick({ remainingSeconds: 1199, elapsedSeconds: 3661, isPaused: true });
-  tree = harness.render();
-  assert.match(text(tree), /概率论与数理统计 已暂停1:01:01已持续/);
-  const readout = nodes(tree, n => n.props.accessibilityHint === '本轮尚未计入今日已保存总量')[0];
-  assert.match(readout.props.accessibilityLabel, /本轮已持续 1:01:01，已暂停/);
 });
 
 test('production homepage shows truthful task metadata and expands rhythm only on request', () => {
@@ -544,7 +543,7 @@ test('the rhythm summary is spoken without displaying text below the chart', () 
   const sessions = [session('a', '09:00', '09:40'), session('b', '14:00', '14:10')];
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 3000, focusCount: 2 })).render();
   const chart = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0];
-  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 50 分钟 连续专注/);
   assert.match(chart.props.accessibilityLabel, /最集中的是 09:00–10:00/);
   assert.doesNotMatch(text(tree), /已确认.*连续专注|最集中的是/);
 });
@@ -556,7 +555,7 @@ test('a pre-dawn session is excluded from the strip and the summary says so', ()
   const tree = screenHarness(snapshot({ sessions, totalDurationSeconds: 4200, focusCount: 2 })).render();
   const summary = nodes(tree, node => node.type === 'YanjiDayRhythmChart')[0].props.accessibilityLabel;
   assert.match(summary, /06:00 之后/, 'the summary must name its window');
-  assert.match(summary, /30m/, 'only the in-window 30m is claimed, not the pre-dawn 40m');
+  assert.match(summary, /30 分钟/, 'only the in-window 30 分钟 is claimed, not the pre-dawn 40 分钟');
 });
 
 test('an empty rhythm strip marks no hour at all', () => {
@@ -662,7 +661,7 @@ test('the journal heading carries order and fold, and the plan keeps the reading
   // it is no longer a text link competing with the title.
   const tree = screenHarness(snapshot()).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
-  const journalHeading = headings.find(node => node.props.title === '记录此刻');
+  const journalHeading = headings.find(node => node.props.title === '今日随笔');
   assert.ok(journalHeading, 'the journal section has its own section heading');
   assert.equal(journalHeading.props.countText, '0 条', 'an empty day still states its count');
 
@@ -682,9 +681,9 @@ test('the journal heading carries order and fold, and the plan keeps the reading
   // because it *is* the empty state.
   const capture = nodes(tree, node => node.type === 'YanjiCaptureCard')[0];
   assert.ok(capture, 'the journal offers its capture card even with no notes');
-  assert.equal(capture.props.title, '写一条记录');
+  assert.equal(capture.props.title, '记录此刻');
   assert.equal(capture.props.hint, '一个想法、一处卡点、一点收获');
-  assert.equal(capture.props.accessibilityLabel, '新建今日记录');
+  assert.equal(capture.props.accessibilityLabel, '记录此刻，新建今日随笔');
   assert.doesNotMatch(text(tree), /还没有记录，想到什么就写一条/,
     'the invitation replaces the old empty-state sentence instead of repeating it');
 
@@ -704,10 +703,14 @@ test('the journal orders and folds on request instead of truncating at two', () 
   const h = screenHarness(snapshot({ notes }));
   const rows = tree => nodes(tree, node => node.type === 'TimelineCompactRow');
   const heading = tree => nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
-    .find(node => node.props.title === '记录此刻');
+    .find(node => node.props.title === '今日随笔');
   const control = (tree, testID) => nodes(heading(tree).props.right, node => node.props.testID === testID)[0];
 
   // All four are shown by default — nothing is hidden without being asked.
+  // The rhythm row now sits above the journal, so the window needs one scroll
+  // to mount the last note; the data itself was never truncated.
+  h.listRender();
+  h.flashList.scroll(2, 'scroll-today');
   let tree = h.render();
   assert.deepEqual(rows(tree).map(row => row.props.content),
     ['记录 17:56', '记录 15:12', '记录 11:40', '记录 08:15'], 'newest first, all of them');
@@ -782,7 +785,7 @@ test('the capture card is the first row under the journal heading, before any no
   // than a child, so the walk has to enter it explicitly.
   const fold = () => {
     const heading = nodes(h.render(), node => node.type === 'YanjiPaperSectionHeading'
-      && node.props.title === '记录此刻')[0];
+      && node.props.title === '今日随笔')[0];
     return nodes(heading.props.right, node => node.props.testID === 'journal-fold')[0];
   };
   assert.ok(fold(), 'four notes make folding available');
@@ -791,8 +794,24 @@ test('the capture card is the first row under the journal heading, before any no
     'a folded journal still opens with the write entry');
 });
 
+test('今日学习节奏 reads between the plan and the journal, not after every note', () => {
+  // The rhythm section used to be the list footer, so a long journal buried it
+  // below every note. It now closes the plan half of the page.
+  const notes = ['08:15', '11:40', '15:12', '17:56'].map((time, index) => ({
+    id: `rhythm-note-${index}`, date, timestamp: at(time), content: `记录 ${time}`,
+    category: 'INSPIRATION', isFavorite: false, isResolved: false,
+  }));
+  const h = screenHarness(snapshot({ notes, tasks: [task(), task({ id: 'task-2', title: '计划二' })] }));
+  const kinds = h.listRender().types;
+  const rhythmAt = kinds.indexOf('rhythm');
+  const headingAt = kinds.indexOf('journal-heading');
+  assert.ok(rhythmAt > kinds.lastIndexOf('task'), 'the rhythm follows every plan row');
+  assert.equal(rhythmAt, headingAt - 1, 'and sits immediately before the journal heading');
+  assert.equal(kinds.indexOf('note'), headingAt + 2, 'notes stay below the heading and its capture entry');
+});
+
 test('the page section headings use the page type scale, not the compact one', () => {
-  // 「今日计划」「记录此刻」「今日学习节奏」 are the page's three group titles. They
+  // 「今日计划」「今日随笔」「今日学习节奏」 are the page's three group titles. They
   // were on the compact sheet scale (13/900), which made them sit at the same
   // size as the metadata around them. The page tier is larger and stays a
   // separate token so sheet-internal headings do not grow with it.
@@ -815,7 +834,7 @@ test('order and fold controls appear only when they can do something', () => {
   const rightOf = count => {
     const tree = screenHarness(snapshot({ notes: Array.from({ length: count }, (_, i) => note(`0${i + 8}:00`)) })).render();
     const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
-      .find(node => node.props.title === '记录此刻');
+      .find(node => node.props.title === '今日随笔');
     return heading.props.right;
   };
   assert.equal(rightOf(1), undefined, 'one note has nothing to order or fold');
@@ -846,7 +865,7 @@ test('the journal section renders one compact timeline row per note', () => {
   assert.equal(item.props.tagTone, 'positive');
   assert.equal(item.props.isFirst, true);
   assert.equal(item.props.isLast, true);
-  assert.equal(typeof item.props.onMore, 'function');
+  assert.equal(typeof item.props.action.onOpen, 'function');
   // The row no longer owns favorite/edit/delete; the anchored menu does.
   assert.equal('onToggleFavorite' in item.props, false);
   assert.equal('onToggleResolved' in item.props, false);
@@ -886,7 +905,7 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   assert.equal(items[2].props.isLast, true);
 
   // Opening the menu from the second row anchors it to that row's button.
-  items[1].props.onMore(anchor);
+  items[1].props.action.onOpen(anchor);
   tree = h.render();
   let menu = nodes(tree, n => n.type === 'TimelineActionPopover')[0];
   assert.ok(menu, 'the row opens the anchored menu');
@@ -899,7 +918,7 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
     ['编辑记录', '删除记录'], 'an inspiration has no resolution action');
 
   items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
-  items[0].props.onMore(anchor);
+  items[0].props.action.onOpen(anchor);
   menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
   pressMenuAction(menu, '编辑记录');
   tree = h.render();
@@ -912,7 +931,7 @@ test('the anchored menu keeps note identity, persisted favorite and delete confi
   editor.props.onClose();
 
   items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
-  items[1].props.onMore(anchor);
+  items[1].props.action.onOpen(anchor);
   menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
   pressMenuAction(menu, '删除记录');
   tree = h.render();
@@ -926,7 +945,7 @@ test('a failed resolution surfaces the existing error and keeps the note', async
   const note = { id: 'note-1', date, timestamp: at('10:30'), content: '旧疑点', category: 'DOUBT', isResolved: false };
   const h = screenHarness(snapshot({ notes: [note] }), { toggleNoteResolved: async () => false });
   const items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
-  items[0].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
+  items[0].props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
   const menu = nodes(h.render(), n => n.type === 'TimelineActionPopover')[0];
   pressMenuAction(menu, '标记为已解决');
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -941,8 +960,8 @@ test('one anchored menu at a time, and scrolling closes it', () => {
   const h = screenHarness(snapshot({ notes: [older, latest] }));
   let items = nodes(h.render(), n => n.type === 'TimelineCompactRow');
 
-  items[1].props.onMore({ x: 10, y: 100, width: 44, height: 44 });
-  items[0].props.onMore({ x: 20, y: 200, width: 44, height: 44 });
+  items[1].props.action.onOpen({ x: 10, y: 100, width: 44, height: 44 });
+  items[0].props.action.onOpen({ x: 20, y: 200, width: 44, height: 44 });
   const tree = h.render();
   const menus = nodes(tree, n => n.type === 'TimelineActionPopover');
   assert.equal(menus.length, 1, 'opening another row replaces the menu instead of stacking');
@@ -982,7 +1001,7 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
 
   // The chart's spoken summary retains the measured focus time.
-  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30m 连续专注/);
+  assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30 分钟 连续专注/);
 
   // Expanding rhythm details reveals the session in the morning spectrum
   const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '今日学习节奏')[0];
@@ -1311,8 +1330,8 @@ test('the page hands every record to a windowed list instead of mounting them al
 
   const list = h.listRender();
   assert.ok(list, 'the page renders one vertical list');
-  // 12 plan rows + the 记录此刻 heading + the write entry + 40 notes.
-  assert.equal(list.rowCount, 12 + 1 + 1 + 40,
+  // 12 plan rows + the rhythm + the 今日随笔 heading + the capture entry + 40 notes.
+  assert.equal(list.rowCount, 12 + 1 + 1 + 1 + 40,
     'every plan row and every note reaches the list — nothing is truncated away');
   assert.ok(list.mounted < list.rowCount,
     `the first paint mounts a window, not the whole day (mounted ${list.mounted} of ${list.rowCount})`);
@@ -1320,7 +1339,7 @@ test('the page hands every record to a windowed list instead of mounting them al
     `the initial mount is bounded by the viewport, not by data size (was ${list.mounted})`);
 
   // Two pools: plan rows and journal rows recycle separately.
-  assert.deepEqual([...new Set(list.types)].sort(), ['capture', 'journal-heading', 'note', 'task'],
+  assert.deepEqual([...new Set(list.types)].sort(), ['capture', 'journal-heading', 'note', 'rhythm', 'task'],
     'each row kind is declared, so cells recycle within their own type');
 
   // Scrolling extends the window; every row stays reachable.
@@ -1339,15 +1358,19 @@ test('folding, ordering and the anchored menu behave the same on the virtualized
     category: index % 2 ? 'DOUBT' : 'INSPIRATION', isFavorite: false, isResolved: false,
   }));
   const h = screenHarness(snapshot({ notes }));
+  // The rhythm row now consumes a window slot above the journal, so the window
+  // is grown one scroll before the four notes are read.
+  h.listRender();
+  h.flashList.scroll(2, 'scroll-today');
   const tree = h.render();
   const heading = () => nodes(tree, node => node.type === 'YanjiPaperSectionHeading')
-    .find(node => node.props.title === '记录此刻');
+    .find(node => node.props.title === '今日随笔');
   assert.ok(heading(), 'the journal heading still renders');
   assert.equal(heading().props.countText, '4 条', 'the heading counts the whole day, not the window');
 
   // Default order is newest first and the list receives all four.
   const list = h.listRender();
-  assert.equal(list.rowCount, 1 + 1 + 4, 'heading + write entry + four notes');
+  assert.equal(list.rowCount, 1 + 1 + 1 + 4, 'rhythm + heading + write entry + four notes');
   const rows = nodes(tree, node => node.type === 'TimelineCompactRow');
   assert.deepEqual(rows.map(row => row.props.content),
     ['记录 17:56', '记录 15:12', '记录 11:40', '记录 08:15'],
@@ -1357,8 +1380,8 @@ test('folding, ordering and the anchored menu behave the same on the virtualized
   const control = testID => nodes(heading().props.right, node => node.props.testID === testID)[0];
   control('journal-fold').props.onPress();
   const folded = h.render();
-  assert.equal(h.listRender().rowCount, 1 + 1 + 2,
-    'a folded journal hands the list two rows — it does not hand over all four and hide them');
+  assert.equal(h.listRender().rowCount, 1 + 1 + 1 + 2,
+    'a folded journal hands the list two note rows — it does not hand over all four and hide them');
   assert.deepEqual(nodes(folded, node => node.type === 'TimelineCompactRow').map(row => row.props.content),
     ['记录 17:56', '记录 15:12']);
   assert.equal(heading().props.countText, '4 条', 'the count still reports the whole day after folding');
@@ -1372,7 +1395,7 @@ test('folding, ordering and the anchored menu behave the same on the virtualized
   // The anchored menu still opens from a recycled row and carries its identity.
   const anchor = { x: 210, y: 420, width: 44, height: 44 };
   const target = nodes(reversed, node => node.type === 'TimelineCompactRow')[0];
-  target.props.onMore(anchor);
+  target.props.action.onOpen(anchor);
   const menu = nodes(h.render(), node => node.type === 'TimelineActionPopover')[0];
   assert.ok(menu, 'a row mounted from the recycling window still anchors its menu');
   assert.deepEqual(menu.props.anchor, anchor);
