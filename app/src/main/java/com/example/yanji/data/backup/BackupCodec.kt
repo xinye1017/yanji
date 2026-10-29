@@ -1,5 +1,6 @@
 package com.example.yanji.data.backup
 
+import com.example.yanji.data.ScheduleValidation
 import kotlinx.serialization.json.*
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -37,6 +38,7 @@ object BackupCodec {
         validateRecords(backup)?.let { return BackupDecodeResult.Failure(it) }
         val warnings = buildList {
             if (version < currentSchemaVersion) add("备份由旧版本生成（格式 v$version），缺失字段将使用默认值")
+            if (version < 4) add("旧版备份未包含每日时间表，恢复后本机时间表将保持不变")
             if (version < 3 && backup.settings != null) {
                 add("旧版备份未包含完整的决策模型设置，恢复设置时缺失项将使用当前产品默认值")
             }
@@ -75,6 +77,30 @@ object BackupCodec {
         }
         // No achievement validation: old files may still carry the key, and its shape no
         // longer affects whether the rest of the backup is safe to restore.
+        if (version >= 4) {
+            for (key in listOf(
+                "scheduleTemplates",
+                "scheduleDayAssignments",
+                "scheduleBlockCompletions"
+            )) {
+                val entries = root[key] as? JsonArray
+                    ?: return "这不是完整的 v4 备份：缺少 $key，无法安全恢复"
+                for (entry in entries) {
+                    val record = entry as? JsonObject
+                        ?: return "备份文件中的 $key 记录结构无效"
+                    val identity = when (key) {
+                        "scheduleTemplates" -> "id"
+                        "scheduleDayAssignments" -> "date"
+                        else -> "blockId"
+                    }
+                    val value = (record[identity] as? JsonPrimitive)
+                        ?.takeIf { it.isString }?.content
+                    if (value.isNullOrBlank()) {
+                        return "备份文件中的 $key 缺少有效 $identity"
+                    }
+                }
+            }
+        }
         if (version >= 3 && root["settings"] is JsonObject) {
             val settings = root.getValue("settings") as JsonObject
             if (listOf("decisionProvider", "decisionModel", "decisionEndpoint").any { it !in settings }) {
@@ -100,6 +126,55 @@ object BackupCodec {
         val dates = backup.noteEntries.map { it.date } + backup.checkIns.map { it.date } +
             backup.studyTasks.map { it.date } + listOfNotNull(backup.settings?.targetExamDate?.takeIf { it.isNotBlank() })
         if (dates.any { !validDate(it) }) return "备份文件中存在无效日期，无法安全恢复"
+
+        // ---- 每日时间表（v4）----
+        val scheduleTemplateIds = backup.scheduleTemplates.map { it.id }
+        if (scheduleTemplateIds.size != scheduleTemplateIds.toSet().size) {
+            return "备份文件中存在重复的时间表模板 id，无法安全恢复"
+        }
+        val scheduleBlockIds = backup.scheduleTemplates.flatMap { template ->
+            template.blocks.map { it.id }
+        }
+        if (scheduleBlockIds.size != scheduleBlockIds.toSet().size) {
+            return "备份文件中存在重复的时间段 id，无法安全恢复"
+        }
+        val templateIdSet = scheduleTemplateIds.toSet()
+        if (backup.scheduleTemplates.any { template ->
+                template.name.isBlank() ||
+                    template.blocks.any { it.templateId != template.id }
+            }
+        ) return "备份文件中的时间表模板结构无效，无法安全恢复"
+        if (backup.scheduleTemplates.any { template ->
+                template.blocks.any { block ->
+                    block.title.isBlank() || block.subjectLabel.isBlank() ||
+                        block.startMinute < 0 || block.startMinute >= ScheduleValidation.MINUTES_PER_DAY ||
+                        block.endMinute <= block.startMinute ||
+                        block.endMinute > ScheduleValidation.MINUTES_PER_DAY
+                }
+            }
+        ) return "备份文件中的时间段起止时间或标题无效，无法安全恢复"
+        if (backup.scheduleTemplates.any { template ->
+                template.blocks.sortedBy { it.startMinute }.zipWithNext()
+                    .any { (previous, next) -> next.startMinute < previous.endMinute }
+            }
+        ) return "备份文件中的时间段存在重叠，无法安全恢复"
+
+        val scheduleAssignmentDates = backup.scheduleDayAssignments.map { it.date }
+        if (scheduleAssignmentDates.size != scheduleAssignmentDates.toSet().size) {
+            return "备份文件中存在重复的时间表日期指派，无法安全恢复"
+        }
+        if (backup.scheduleDayAssignments.any { it.templateId !in templateIdSet || !validDate(it.date) }) {
+            return "备份文件中的时间表日期指派无效，无法安全恢复"
+        }
+        val blockIdSet = scheduleBlockIds.toSet()
+        val completionKeys = backup.scheduleBlockCompletions.map { "${it.date}\u0000${it.blockId}" }
+        if (completionKeys.size != completionKeys.toSet().size) {
+            return "备份文件中存在重复的时间段完成状态，无法安全恢复"
+        }
+        if (backup.scheduleBlockCompletions.any { it.blockId !in blockIdSet || !validDate(it.date) }) {
+            return "备份文件中的时间段完成状态无效，无法安全恢复"
+        }
+
         if (backup.focusSessions.any { it.durationSeconds < 0 || it.pausedDurationSeconds < 0 || it.pauseCount < 0 } ||
             backup.examSessions.any { it.plannedDurationSeconds < 0 || it.actualDurationSeconds < 0 } ||
             backup.studyTasks.any { it.plannedMinutes < 0 } || backup.checkIns.any { it.streak < 0 }

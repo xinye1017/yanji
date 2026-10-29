@@ -27,4 +27,20 @@ class DataTableEventMappingTest {
         assertTrue(dataEventTypesForTables(setOf("unknown_table", "chat_messages")).isEmpty())
         assertTrue(dataEventTypesForTables(emptySet()).isEmpty())
     }
+
+    @Test
+    fun everyScheduleTableMapsToOneScheduleEvent() {
+        assertEquals(
+            setOf("schedule"),
+            dataEventTypesForTables(
+                setOf(
+                    "schedule_templates",
+                    "schedule_template_blocks",
+                    "schedule_day_assignments",
+                    "schedule_block_completions"
+                )
+            )
+        )
+        assertEquals(setOf("schedule"), dataEventTypesForTables(setOf("schedule_day_assignments")))
+    }
 }

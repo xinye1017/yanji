@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.yanji.data.security.SecretStore
 import java.io.File
 
@@ -21,9 +22,13 @@ import java.io.File
         QuickStartPresetEntity::class,
         StudyTaskEntity::class,
         SubjectEntity::class,
-        AiAnalysisEntity::class
+        AiAnalysisEntity::class,
+        ScheduleTemplateEntity::class,
+        ScheduleTemplateBlockEntity::class,
+        ScheduleDayAssignmentEntity::class,
+        ScheduleBlockCompletionEntity::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = true
 )
 abstract class YanjiDatabase : RoomDatabase() {
@@ -39,6 +44,7 @@ abstract class YanjiDatabase : RoomDatabase() {
     abstract fun studyTaskDao(): StudyTaskDao
     abstract fun subjectDao(): SubjectDao
     abstract fun aiAnalysisDao(): AiAnalysisDao
+    abstract fun scheduleDao(): ScheduleDao
 
     companion object {
 
@@ -794,6 +800,33 @@ abstract class YanjiDatabase : RoomDatabase() {
         }
 
         /**
+         * v29 → v30：建立每日时间表四张表，并写入两套默认模板。
+         *
+         * 建表 SQL 与 `ScheduleSeed` 共用，种子只在升级时写一次；用户之后删除默认模板
+         * 不会再被重新种回来（全新安装的种子由 [seedCallback] 负责）。
+         */
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(connection: SQLiteConnection) {
+                (ScheduleSeed.createStatements + ScheduleSeed.seedStatements).forEach { statement ->
+                    connection.exec(statement)
+                }
+            }
+        }
+
+        /**
+         * 全新安装：Room 按实体建好表后写入默认模板。
+         *
+         * 只执行种子、不重复建表——表结构由 Room 自己保证，这里再写一份 DDL 只会
+         * 制造第二套需要同步维护的 schema。
+         */
+        private val seedCallback = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                ScheduleSeed.seedStatements.forEach(db::execSQL)
+            }
+        }
+
+        /**
          * 全部历史版本 → 当前版本的迁移集合。
          *
          * **刻意不提供 `fallbackToDestructiveMigration()`**：一旦某个版本的迁移路径缺失，
@@ -828,7 +861,8 @@ abstract class YanjiDatabase : RoomDatabase() {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
-            MIGRATION_28_29
+            MIGRATION_28_29,
+            MIGRATION_29_30
         )
 
         private fun persistLegacyApiKey(context: Context, value: String) {
@@ -847,6 +881,7 @@ abstract class YanjiDatabase : RoomDatabase() {
                     "yanji_study.db"
                 )
                 .addMigrations(*migrations(appContext))
+                .addCallback(seedCallback)
                 .build()
                 .also { instance = it }
             }

@@ -242,6 +242,48 @@ export interface Subject {
   isCategory: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// 每日时间表
+// ---------------------------------------------------------------------------
+
+/** 模板里的一个时间段；`startMinute` / `endMinute` 是当天 0 点起的分钟数。 */
+export interface ScheduleBlock {
+  id: string;
+  startMinute: number;
+  endMinute: number;
+  /** 0..n 个学科 id；空数组表示该时段不启动专注（如「复盘」）。 */
+  subjectIds: string[];
+  /** 展示名快照，例如「数学 / 408」「复盘」。 */
+  subjectLabel: string;
+  title: string;
+}
+
+export interface ScheduleTemplate {
+  id: string;
+  name: string;
+  sortOrder: number;
+  blocks: ScheduleBlock[];
+}
+
+/** 某一天的时间表：`template` 为 null 表示本机还没有任何模板。 */
+export interface ScheduleDay {
+  date: string;
+  template: ScheduleTemplate | null;
+  /** 当天是否有显式模板指派；false 表示当前展示的是默认模板。 */
+  assigned: boolean;
+  completedBlockIds: string[];
+}
+
+/** 模板编辑载荷；`id` 为空表示新增时间段。 */
+export interface ScheduleBlockInput {
+  id: string | null;
+  startMinute: number;
+  endMinute: number;
+  subjectIds: string[];
+  subjectLabel: string;
+  title: string;
+}
+
 export interface BackupPreview {
   token: string;
   fileName: string;
@@ -258,6 +300,7 @@ export interface BackupPreview {
     quickStartPresets: number;
     studyTasks: number;
     subjects: number;
+    scheduleTemplates: number;
   };
   replacesSettings: boolean;
   replacesSubjects: boolean;
@@ -280,7 +323,7 @@ export interface TimerStateChangedEvent {
   session: ActiveSessionState | null;
 }
 
-export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings' | 'subjects';
+export type DataChangedType = 'tasks' | 'notes' | 'sessions' | 'settings' | 'subjects' | 'schedule';
 
 export interface DataChangedEvent {
   type: DataChangedType;
@@ -430,6 +473,27 @@ interface YanjiDataModuleNative {
   getDecisionApiKey(): Promise<string>;
   clearDecisionApiKey(): Promise<boolean>;
   getExamCountdown(): Promise<ExamCountdown>;
+
+  // ---- 每日时间表 ----
+
+  getScheduleTemplates(): Promise<ScheduleTemplate[]>;
+  /** 某一天解析后的模板（无指派时回落到第一个模板）与完成状态。 */
+  getScheduleDay(date: string): Promise<ScheduleDay>;
+  createScheduleTemplate(name: string, blocks: ScheduleBlockInput[]): Promise<ScheduleTemplate>;
+  updateScheduleTemplate(
+    templateId: string,
+    name: string,
+    blocks: ScheduleBlockInput[]
+  ): Promise<ScheduleTemplate>;
+  renameScheduleTemplate(templateId: string, name: string): Promise<boolean>;
+  deleteScheduleTemplate(templateId: string): Promise<boolean>;
+  /** 只改写这一天的模板指派，其他日期与专注记录不受影响。 */
+  setScheduleDayTemplate(date: string, templateId: string): Promise<boolean>;
+  setScheduleBlockCompleted(
+    date: string,
+    blockId: string,
+    completed: boolean
+  ): Promise<boolean>;
 }
 
 interface YanjiThemeModuleNative {

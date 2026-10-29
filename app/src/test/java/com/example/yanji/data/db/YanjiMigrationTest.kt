@@ -44,7 +44,7 @@ class YanjiMigrationTest {
     private val driver = BundledSQLiteDriver()
 
     /** 与 `YanjiDatabase` 的 `@Database(version = ...)` 保持一致。 */
-    private val CURRENT_VERSION = 29
+    private val CURRENT_VERSION = 30
 
     /**
      * 注意 JVM 版 `MigrationTestHelper` 的构造参数顺序是
@@ -198,7 +198,8 @@ class YanjiMigrationTest {
         YanjiDatabase.MIGRATION_25_26,
         YanjiDatabase.MIGRATION_26_27,
         YanjiDatabase.MIGRATION_27_28,
-        YanjiDatabase.MIGRATION_28_29
+        YanjiDatabase.MIGRATION_28_29,
+        YanjiDatabase.MIGRATION_29_30
     )
 
     /**
@@ -1401,6 +1402,67 @@ class YanjiMigrationTest {
         assertEquals(
             "一条未配图随笔",
             db.textValue("SELECT content FROM journal_entries WHERE id = 'n-pre'")
+        )
+        db.close()
+    }
+
+    /**
+     * v29 -> v30：建立每日时间表四张表，并写入两套默认模板。
+     *
+     * 重点不是「表存在」，而是：
+     *  - 两套模板都恰好 8 小时（用户需求里的净学习时长）；
+     *  - 迁移不会碰既有业务数据；
+     *  - 完成状态表是 (date, blockId) 复合主键，切换模板后仍能按日期隔离。
+     */
+    @Test
+    fun migration_29_to_30_createsScheduleTablesAndSeedsBothTemplates() {
+        helper.createDatabase(29).use { db ->
+            db.execute(
+                "INSERT INTO study_tasks (id, date, subjectId, subjectName, title, " +
+                    "plannedMinutes, isCompleted, carriedOverToId, createdAt, updatedAt) " +
+                    "VALUES ('t-keep', '2026-10-29', 'math', '数学一', '保留任务', 45, 0, NULL, 1000, 1000)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(CURRENT_VERSION, chainFrom(29))
+
+        assertEquals(2, db.intValue("SELECT COUNT(*) FROM schedule_templates"))
+        assertEquals(11, db.intValue("SELECT COUNT(*) FROM schedule_template_blocks"))
+        assertEquals(
+            "复习冲刺",
+            db.textValue("SELECT name FROM schedule_templates WHERE id = 'schedule-template-review'")
+        )
+        assertEquals(
+            "真题冲刺",
+            db.textValue("SELECT name FROM schedule_templates WHERE id = 'schedule-template-exam'")
+        )
+        assertEquals(
+            "两套默认模板都必须正好 8 小时",
+            480,
+            db.intValue(
+                "SELECT SUM(endMinute - startMinute) FROM schedule_template_blocks " +
+                    "WHERE templateId = 'schedule-template-review'"
+            )
+        )
+        assertEquals(
+            480,
+            db.intValue(
+                "SELECT SUM(endMinute - startMinute) FROM schedule_template_blocks " +
+                    "WHERE templateId = 'schedule-template-exam'"
+            )
+        )
+        assertEquals(
+            setOf("date", "blockId", "completedAt"),
+            db.columnNames("schedule_block_completions")
+        )
+        assertEquals(
+            "既有业务数据必须原样保留",
+            1,
+            db.intValue("SELECT COUNT(*) FROM study_tasks")
+        )
+        assertEquals(
+            "保留任务",
+            db.textValue("SELECT title FROM study_tasks WHERE id = 't-keep'")
         )
         db.close()
     }

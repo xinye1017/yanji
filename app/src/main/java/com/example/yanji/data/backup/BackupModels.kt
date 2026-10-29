@@ -7,6 +7,9 @@ import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.NoteEntry
 import com.example.yanji.data.QuickStartPreset
+import com.example.yanji.data.ScheduleBlockCompletion
+import com.example.yanji.data.ScheduleDayAssignment
+import com.example.yanji.data.ScheduleTemplate
 import com.example.yanji.data.StudyTask
 import com.example.yanji.data.Subject
 import com.example.yanji.data.UserSettings
@@ -127,7 +130,16 @@ data class YanjiBackup(
      * 带默认值：v1 备份没有这个字段，导入时**不覆盖**本机学科。
      * 空列表同样不覆盖本机学科，与原生预览和 UI 的提示保持一致。
      */
-    val subjects: List<Subject> = emptyList()
+    val subjects: List<Subject> = emptyList(),
+    /**
+     * 每日时间表（v4 新增）。
+     *
+     * 三个列表带默认值：v3 及更早的备份没有这些字段。恢复旧备份时**保留本机时间表**，
+     * 不把「旧文件没有这个字段」误读成「用户删光了模板」。v4 文件里的空列表才是显式清空。
+     */
+    val scheduleTemplates: List<ScheduleTemplate> = emptyList(),
+    val scheduleDayAssignments: List<ScheduleDayAssignment> = emptyList(),
+    val scheduleBlockCompletions: List<ScheduleBlockCompletion> = emptyList()
 ) {
     /** 备份里是否一条业务数据都没有（合法的「清空后导出」状态）。 */
     val isEmpty: Boolean
@@ -140,11 +152,14 @@ data class YanjiBackup(
             quickStartPresets.isEmpty() &&
             studyTasks.isEmpty() &&
             subjects.isEmpty() &&
+            scheduleTemplates.isEmpty() &&
+            scheduleDayAssignments.isEmpty() &&
+            scheduleBlockCompletions.isEmpty() &&
             settings == null
 
     companion object {
         /** 备份格式版本。改动 [YanjiBackup] 的字段语义时递增。 */
-        const val CURRENT_SCHEMA_VERSION = 3
+        const val CURRENT_SCHEMA_VERSION = 4
     }
 }
 

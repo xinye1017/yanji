@@ -640,3 +640,104 @@ interface AiAnalysisDao {
     @Query("DELETE FROM ai_analyses")
     suspend fun deleteAll()
 }
+
+/**
+ * 每日时间表的读写入口。
+ *
+ * 所有跨表写操作（删除模板、替换时间段）由 `ScheduleStore` 包在事务里，
+ * DAO 只提供最小粒度的语句，避免「删了模板留下孤儿时间段」这种半完成状态。
+ */
+@Dao
+interface ScheduleDao {
+    @Query("SELECT * FROM schedule_templates ORDER BY sortOrder ASC, createdAt ASC")
+    suspend fun getTemplates(): List<ScheduleTemplateEntity>
+
+    @Query("SELECT * FROM schedule_templates WHERE id = :templateId LIMIT 1")
+    suspend fun getTemplate(templateId: String): ScheduleTemplateEntity?
+
+    @Query("SELECT * FROM schedule_template_blocks ORDER BY templateId ASC, startMinute ASC, id ASC")
+    suspend fun getBlocks(): List<ScheduleTemplateBlockEntity>
+
+    @Query("SELECT * FROM schedule_template_blocks WHERE templateId = :templateId ORDER BY startMinute ASC, id ASC")
+    suspend fun getBlocksForTemplate(templateId: String): List<ScheduleTemplateBlockEntity>
+
+    @Query("SELECT * FROM schedule_day_assignments WHERE date = :date LIMIT 1")
+    suspend fun getAssignment(date: String): ScheduleDayAssignmentEntity?
+
+    @Query("SELECT * FROM schedule_day_assignments ORDER BY date ASC")
+    suspend fun getAllAssignments(): List<ScheduleDayAssignmentEntity>
+
+    @Query("SELECT * FROM schedule_block_completions WHERE date = :date")
+    suspend fun getCompletions(date: String): List<ScheduleBlockCompletionEntity>
+
+    @Query("SELECT * FROM schedule_block_completions ORDER BY date ASC, blockId ASC")
+    suspend fun getAllCompletions(): List<ScheduleBlockCompletionEntity>
+
+    @Query("SELECT MAX(sortOrder) FROM schedule_templates")
+    suspend fun maxSortOrder(): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTemplate(template: ScheduleTemplateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBlocks(blocks: List<ScheduleTemplateBlockEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBlock(block: ScheduleTemplateBlockEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAssignment(assignment: ScheduleDayAssignmentEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCompletion(completion: ScheduleBlockCompletionEntity)
+
+    @Query("DELETE FROM schedule_block_completions WHERE date = :date AND blockId = :blockId")
+    suspend fun deleteCompletion(date: String, blockId: String)
+
+    @Query("DELETE FROM schedule_block_completions WHERE blockId = :blockId")
+    suspend fun deleteCompletionsForBlock(blockId: String)
+
+    @Query(
+        "DELETE FROM schedule_block_completions WHERE blockId IN " +
+            "(SELECT id FROM schedule_template_blocks WHERE templateId = :templateId)"
+    )
+    suspend fun deleteCompletionsForTemplate(templateId: String)
+
+    @Query("DELETE FROM schedule_template_blocks WHERE id = :blockId")
+    suspend fun deleteBlock(blockId: String)
+
+    @Query("DELETE FROM schedule_template_blocks WHERE templateId = :templateId")
+    suspend fun deleteBlocksForTemplate(templateId: String)
+
+    @Query("DELETE FROM schedule_day_assignments WHERE templateId = :templateId")
+    suspend fun deleteAssignmentsForTemplate(templateId: String)
+
+    @Query("DELETE FROM schedule_templates WHERE id = :templateId")
+    suspend fun deleteTemplate(templateId: String)
+
+    // ---- 备份恢复：整表重建 ----
+
+    @Query("DELETE FROM schedule_templates")
+    suspend fun deleteAllTemplates()
+
+    @Query("DELETE FROM schedule_template_blocks")
+    suspend fun deleteAllBlocks()
+
+    @Query("DELETE FROM schedule_day_assignments")
+    suspend fun deleteAllAssignments()
+
+    @Query("DELETE FROM schedule_block_completions")
+    suspend fun deleteAllCompletions()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTemplates(templates: List<ScheduleTemplateEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllBlocks(blocks: List<ScheduleTemplateBlockEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllAssignments(assignments: List<ScheduleDayAssignmentEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllCompletions(completions: List<ScheduleBlockCompletionEntity>)
+}

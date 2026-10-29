@@ -37,6 +37,7 @@ const COUNT_ROWS: Array<[keyof BackupPreview['counts'], string]> = [
   ['quickStartPresets', '快捷预设'],
   ['studyTasks', '学习任务'],
   ['subjects', '学科'],
+  ['scheduleTemplates', '时间表模板'],
 ];
 
 function errorMessage(error: unknown, fallback: string): string {

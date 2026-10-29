@@ -13,9 +13,15 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.example.yanji.data.NoteEntry
+import com.example.yanji.data.ScheduleBlock
+import com.example.yanji.data.ScheduleBlockInput
+import com.example.yanji.data.ScheduleDay
+import com.example.yanji.data.ScheduleTemplate
+import com.example.yanji.data.ScheduleValidationException
 import com.example.yanji.data.StudyTaskNotCarryableException
 import com.example.yanji.data.SubjectCatalog
 import com.example.yanji.data.YanjiRepository
@@ -832,6 +838,139 @@ class YanjiDataModule(
         promise.resolve(examCountdownMap(repository.settings.value.targetExamDate))
     }
 
+    // ------------------------------------------------------------ 每日时间表
+
+    @ReactMethod
+    fun getScheduleTemplates(promise: Promise) {
+        scope.launch {
+            try {
+                val templates = repository.getScheduleTemplates()
+                promise.resolve(Arguments.createArray().apply {
+                    templates.forEach { pushMap(scheduleTemplateMap(it)) }
+                })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_READ", "读取时间表模板失败", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getScheduleDay(date: String, promise: Promise) {
+        scope.launch {
+            try {
+                promise.resolve(scheduleDayMap(repository.getScheduleDay(date)))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_READ", "读取时间表失败", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun createScheduleTemplate(name: String, blocks: ReadableArray, promise: Promise) {
+        val inputs = readScheduleBlocks(blocks, promise) ?: return
+        scope.launch {
+            try {
+                promise.resolve(scheduleTemplateMap(repository.createScheduleTemplate(name, inputs)))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ScheduleValidationException) {
+                promise.reject(error.code, error.message)
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "保存模板失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun updateScheduleTemplate(
+        templateId: String,
+        name: String,
+        blocks: ReadableArray,
+        promise: Promise
+    ) {
+        val inputs = readScheduleBlocks(blocks, promise) ?: return
+        scope.launch {
+            try {
+                promise.resolve(
+                    scheduleTemplateMap(repository.updateScheduleTemplate(templateId, name, inputs))
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ScheduleValidationException) {
+                promise.reject(error.code, error.message)
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "保存模板失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun renameScheduleTemplate(templateId: String, name: String, promise: Promise) {
+        scope.launch {
+            try {
+                promise.resolve(repository.renameScheduleTemplate(templateId, name))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ScheduleValidationException) {
+                promise.reject(error.code, error.message)
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "重命名失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun deleteScheduleTemplate(templateId: String, promise: Promise) {
+        scope.launch {
+            try {
+                promise.resolve(repository.deleteScheduleTemplate(templateId))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_DELETE", "删除模板失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun setScheduleDayTemplate(date: String, templateId: String, promise: Promise) {
+        scope.launch {
+            try {
+                promise.resolve(repository.setScheduleDayTemplate(date, templateId))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ScheduleValidationException) {
+                promise.reject(error.code, error.message)
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "切换模板失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun setScheduleBlockCompleted(
+        date: String,
+        blockId: String,
+        completed: Boolean,
+        promise: Promise
+    ) {
+        scope.launch {
+            try {
+                promise.resolve(repository.setScheduleBlockCompleted(date, blockId, completed))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: ScheduleValidationException) {
+                promise.reject(error.code, error.message)
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "保存完成状态失败，请重试", error)
+            }
+        }
+    }
+
     // ------------------------------------------------------------ 事件
 
     private fun observeDataChanges() {
@@ -850,6 +989,67 @@ class YanjiDataModule(
     }
 
     // ------------------------------------------------------------ 映射
+
+    private fun scheduleTemplateMap(template: ScheduleTemplate): WritableMap =
+        Arguments.createMap().apply {
+            putString("id", template.id)
+            putString("name", template.name)
+            putInt("sortOrder", template.sortOrder)
+            putArray("blocks", Arguments.createArray().apply {
+                template.blocks.forEach { pushMap(scheduleBlockMap(it)) }
+            })
+        }
+
+    private fun scheduleBlockMap(block: ScheduleBlock): WritableMap =
+        Arguments.createMap().apply {
+            putString("id", block.id)
+            putInt("startMinute", block.startMinute)
+            putInt("endMinute", block.endMinute)
+            putArray("subjectIds", Arguments.fromList(block.subjectIds))
+            putString("subjectLabel", block.subjectLabel)
+            putString("title", block.title)
+        }
+
+    private fun scheduleDayMap(day: ScheduleDay): WritableMap =
+        Arguments.createMap().apply {
+            putString("date", day.date)
+            if (day.template != null) putMap("template", scheduleTemplateMap(day.template))
+            else putNull("template")
+            putBoolean("assigned", day.assigned)
+            putArray("completedBlockIds", Arguments.fromList(day.completedBlockIds))
+        }
+
+    /**
+     * 把 JS 传来的时间段数组解析成领域输入。
+     *
+     * 解析失败直接 reject 并返回 null：调用方不得在参数不完整时继续写库，
+     * 否则一个缺字段的 map 会被 `getInt` 默认成 0，静默变成一段 00:00–00:00 的假计划。
+     */
+    private fun readScheduleBlocks(blocks: ReadableArray, promise: Promise): List<ScheduleBlockInput>? {
+        return try {
+            (0 until blocks.size()).map { index ->
+                val map = blocks.getMap(index)
+                    ?: throw IllegalArgumentException("时间段数据无效")
+                val subjectArray = map.getArray("subjectIds")
+                val subjectIds = if (subjectArray == null) {
+                    emptyList()
+                } else {
+                    (0 until subjectArray.size()).mapNotNull { subjectArray.getString(it) }
+                }
+                ScheduleBlockInput(
+                    id = map.getString("id")?.takeIf { it.isNotBlank() },
+                    startMinute = map.getInt("startMinute"),
+                    endMinute = map.getInt("endMinute"),
+                    subjectIds = subjectIds,
+                    subjectLabel = map.getString("subjectLabel") ?: "",
+                    title = map.getString("title") ?: ""
+                )
+            }
+        } catch (error: Exception) {
+            promise.reject("E_SCHEDULE_BLOCK_INVALID", "时间段数据无效", error)
+            null
+        }
+    }
 
     /**
      * 回顾概览载荷（`ReviewOverview`）。这里只做 `WritableMap` 装配，
@@ -920,4 +1120,5 @@ internal fun dataEventTypesForTables(tables: Set<String>): Set<String> = buildSe
     if ("focus_sessions" in tables || "exam_sessions" in tables) add("sessions")
     if ("user_settings" in tables) add("settings")
     if ("subjects" in tables) add("subjects")
+    if (tables.any { it.startsWith("schedule_") }) add("schedule")
 }

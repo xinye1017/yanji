@@ -65,8 +65,12 @@ test('App shell reconciles a foreground transition that happened before its list
     './src/theme/liquidGlass': { YanjiLiquidGlass: { targetId: 'test' } },
     './src/navigation/BottomTabBar': { BottomTabBar: dummy },
     './src/navigation/NavigationShell': { NavigationProvider: dummy,
-      useNavigationState: () => ({ activeTab: 'today', settingsOpen: false, taskEditorOpen: false }),
-      useNavigationActions: () => ({ closeSettings: dummy, closeTaskEditor: dummy }) },
+      useNavigationState: () => ({
+        activeTab: 'today', settingsOpen: false, taskEditorOpen: false, timetableOpen: false,
+      }),
+      useNavigationActions: () => ({
+        closeSettings: dummy, closeTaskEditor: dummy, closeTimetable: dummy,
+      }) },
     './src/theme/ThemeProvider': { YanjiThemeProvider: dummy,
       useYanjiTheme: () => ({ isDark: false,
         paper: { colors: { canvas: '#f6f4ef' }, immersive: {
@@ -79,7 +83,7 @@ test('App shell reconciles a foreground transition that happened before its list
     }, seedLaunchSnapshot: properties => seeds.push(properties) },
     './src/state/timerStore': { setTimerForeground: dummy, useActiveSession: () => null },
   };
-  for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
+  for (const screen of ['Today', 'Focus', 'Review', 'Settings', 'Timetable']) {
     mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
   }
   const app = loadTypeScript('App.tsx', mocks);
@@ -105,7 +109,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
   function harness(initialAppState = 'active') {
     const dummy = () => null;
     function MockDock() { return null; }
-    const nav = { activeTab: 'focus', settingsOpen: false, taskEditorOpen: false };
+    const nav = { activeTab: 'focus', settingsOpen: false, taskEditorOpen: false, timetableOpen: false };
     let nativeSession = null;
     const sessionReaderGates = [];
     const appState = {
@@ -138,7 +142,9 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
       './src/navigation/NavigationShell': {
         NavigationProvider: dummy,
         useNavigationState: () => nav,
-        useNavigationActions: () => ({ closeSettings: dummy, closeTaskEditor: dummy }),
+        useNavigationActions: () => ({
+          closeSettings: dummy, closeTaskEditor: dummy, closeTimetable: dummy,
+        }),
       },
       './src/theme/ThemeProvider': {
         YanjiThemeProvider: dummy,
@@ -157,7 +163,7 @@ test('App shell keeps one dock mounted and gates its visibility using native ses
         useTimerTick: () => { throw new Error('AppShell must not subscribe to second ticks'); },
       },
     };
-    for (const screen of ['Today', 'Focus', 'Review', 'Settings']) {
+    for (const screen of ['Today', 'Focus', 'Review', 'Settings', 'Timetable']) {
       mocks[`./src/screens/${screen}Screen`] = { [`${screen}Screen`]: dummy };
     }
     const app = loadTypeScript('App.tsx', mocks);

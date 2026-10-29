@@ -178,6 +178,7 @@ class YanjiBackupModule(private val reactContext: ReactApplicationContext) : Rea
             putInt("quickStartPresets", backup.quickStartPresets.size)
             putInt("studyTasks", backup.studyTasks.size)
             putInt("subjects", backup.subjects.size)
+            putInt("scheduleTemplates", backup.scheduleTemplates.size)
         })
     }
 

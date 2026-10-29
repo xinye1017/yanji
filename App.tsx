@@ -32,6 +32,7 @@ import type { TabKey } from './src/navigation/NavigationShell';
 import { FocusScreen } from './src/screens/FocusScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { TimetableScreen } from './src/screens/TimetableScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { YanjiThemeProvider, useYanjiTheme } from './src/theme/ThemeProvider';
 import { onDataChanged } from './src/bridge';
@@ -71,8 +72,8 @@ function TabPane({
 function AppShell(): React.JSX.Element {
   const theme = useYanjiTheme();
   const insets = useSafeAreaInsets();
-  const { activeTab, settingsOpen, taskEditorOpen } = useNavigationState();
-  const { closeSettings, closeTaskEditor, selectTab } = useNavigationActions();
+  const { activeTab, settingsOpen, taskEditorOpen, timetableOpen } = useNavigationState();
+  const { closeSettings, closeTaskEditor, closeTimetable, selectTab } = useNavigationActions();
   const [foreground, setForeground] = useState(() => AppState.currentState === 'active');
   const [foregroundRevision, setForegroundRevision] = useState(0);
   /**
@@ -92,8 +93,10 @@ function AppShell(): React.JSX.Element {
   }, [activeTab]);
   // Session listeners are low-frequency native state transitions, never second ticks.
   // Paused sessions remain immersive; another tab must keep the glass dock visible.
-  const activeSession = useActiveSession(foreground && activeTab === 'focus' && !settingsOpen);
-  const focusImmersive = foreground && activeTab === 'focus' && !settingsOpen
+  const activeSession = useActiveSession(
+    foreground && activeTab === 'focus' && !settingsOpen && !timetableOpen
+  );
+  const focusImmersive = foreground && activeTab === 'focus' && !settingsOpen && !timetableOpen
     && activeSession !== null && activeSession.phase === 'FOCUS';
 
   useEffect(() => {
@@ -153,6 +156,10 @@ function AppShell(): React.JSX.Element {
         closeSettings();
         return true;
       }
+      if (timetableOpen) {
+        closeTimetable();
+        return true;
+      }
       if (focusImmersive) {
         selectTab('today');
         return true;
@@ -160,7 +167,10 @@ function AppShell(): React.JSX.Element {
       return false;
     });
     return () => subscription.remove();
-  }, [taskEditorOpen, settingsOpen, closeSettings, closeTaskEditor, focusImmersive, selectTab]);
+  }, [
+    taskEditorOpen, settingsOpen, timetableOpen, closeSettings, closeTaskEditor, closeTimetable,
+    focusImmersive, selectTab,
+  ]);
 
   // Keep page content below the status bar using the native safe-area inset.
   // StatusBar controls icon contrast; the tab bar owns the bottom safe area.
@@ -183,28 +193,59 @@ function AppShell(): React.JSX.Element {
             switch. Giving the content area its own canvas keeps every capture
             opaque. */}
         <View testID="tab-content" style={{ flex: 1, backgroundColor: backdrop }}>
-          <TabPane testID="pane-today" active={foreground && !settingsOpen && activeTab === 'today'}>
+          <TabPane
+            testID="pane-today"
+            active={foreground && !settingsOpen && !timetableOpen && activeTab === 'today'}
+          >
             {mountedTabs.has('today') ? (
               <TodayScreen
-                visible={foreground && !settingsOpen && activeTab === 'today'}
+                visible={foreground && !settingsOpen && !timetableOpen && activeTab === 'today'}
                 foregroundRevision={foregroundRevision}
               />
             ) : null}
           </TabPane>
-          <TabPane testID="pane-focus" active={foreground && !settingsOpen && activeTab === 'focus'}>
+          <TabPane
+            testID="pane-focus"
+            active={foreground && !settingsOpen && !timetableOpen && activeTab === 'focus'}
+          >
             {mountedTabs.has('focus') ? (
-              <FocusScreen visible={foreground && !settingsOpen && activeTab === 'focus'} />
+              <FocusScreen
+                visible={foreground && !settingsOpen && !timetableOpen && activeTab === 'focus'}
+              />
             ) : null}
           </TabPane>
-          <TabPane testID="pane-review" active={foreground && !settingsOpen && activeTab === 'review'}>
+          <TabPane
+            testID="pane-review"
+            active={foreground && !settingsOpen && !timetableOpen && activeTab === 'review'}
+          >
             {mountedTabs.has('review') ? (
-              <ReviewScreen visible={foreground && !settingsOpen && activeTab === 'review'} />
+              <ReviewScreen
+                visible={foreground && !settingsOpen && !timetableOpen && activeTab === 'review'}
+              />
             ) : null}
           </TabPane>
         </View>
       </BlurTarget>
 
-      <BottomTabBar visible={foreground && !settingsOpen && !taskEditorOpen && !focusImmersive} />
+      <BottomTabBar
+        visible={foreground && !settingsOpen && !taskEditorOpen && !timetableOpen && !focusImmersive}
+      />
+
+      {timetableOpen ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            backgroundColor: theme.paper.colors.canvas,
+            paddingTop: topInset,
+          }}
+        >
+          <TimetableScreen onClose={closeTimetable} />
+        </View>
+      ) : null}
 
       {settingsOpen ? (
         <View

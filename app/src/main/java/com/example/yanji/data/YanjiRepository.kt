@@ -218,6 +218,7 @@ class YanjiRepository private constructor() {
     private val timerStore = TimerStore(scope = repoScope, dbProvider = { database })
     private val noteStore = NoteStore(scope = repoScope, dbProvider = { database })
     private val checkInStore = CheckInStore(scope = repoScope, dbProvider = { database })
+    private val scheduleStore = ScheduleStore(dbProvider = { database })
 
     private val _aiAnalyses = MutableStateFlow<List<AiAnalysis>>(emptyList())
     val aiAnalyses: StateFlow<List<AiAnalysis>> = _aiAnalyses.asStateFlow()
@@ -388,8 +389,44 @@ class YanjiRepository private constructor() {
             "exam_sessions",
             "user_settings",
             "subjects",
+            "schedule_templates",
+            "schedule_template_blocks",
+            "schedule_day_assignments",
+            "schedule_block_completions",
             emitInitialState = false
         )
+
+    // ------------------------------------------------------------ 每日时间表
+
+    suspend fun getScheduleTemplates(): List<ScheduleTemplate> = scheduleStore.templates()
+
+    suspend fun getScheduleDay(date: String): ScheduleDay = scheduleStore.day(date)
+
+    suspend fun createScheduleTemplate(
+        name: String,
+        blocks: List<ScheduleBlockInput>
+    ): ScheduleTemplate = scheduleStore.create(name, blocks)
+
+    suspend fun updateScheduleTemplate(
+        templateId: String,
+        name: String,
+        blocks: List<ScheduleBlockInput>
+    ): ScheduleTemplate = scheduleStore.update(templateId, name, blocks)
+
+    suspend fun renameScheduleTemplate(templateId: String, name: String): Boolean =
+        scheduleStore.rename(templateId, name)
+
+    suspend fun deleteScheduleTemplate(templateId: String): Boolean =
+        scheduleStore.delete(templateId)
+
+    suspend fun setScheduleDayTemplate(date: String, templateId: String): Boolean =
+        scheduleStore.setDayTemplate(date, templateId)
+
+    suspend fun setScheduleBlockCompleted(
+        date: String,
+        blockId: String,
+        completed: Boolean
+    ): Boolean = scheduleStore.setBlockCompleted(date, blockId, completed)
 
     suspend fun getDailySnapshot(date: String): DailyStudySnapshot =
         DailySnapshotReader.read(requireDatabase(), date)

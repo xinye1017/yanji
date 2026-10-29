@@ -37,7 +37,15 @@ internal object BackupTransfer {
                 checkIns = db.checkInDao().getAllFlow().first().map { it.toDomainModel() },
                 quickStartPresets = db.quickStartPresetDao().getAllFlow().first().map { it.toDomainModel() },
                 studyTasks = db.studyTaskDao().getAllFlow().first().map { it.toDomainModel() },
-                subjects = db.subjectDao().getAll().map { it.toDomainModel() }
+                subjects = db.subjectDao().getAll().map { it.toDomainModel() },
+                scheduleTemplates = run {
+                    val blocks = db.scheduleDao().getBlocks().groupBy { it.templateId }
+                    db.scheduleDao().getTemplates().map { entity ->
+                        entity.toDomainModel(blocks[entity.id].orEmpty())
+                    }
+                },
+                scheduleDayAssignments = db.scheduleDao().getAllAssignments().map { it.toDomainModel() },
+                scheduleBlockCompletions = db.scheduleDao().getAllCompletions().map { it.toDomainModel() }
             )
         }
     }
@@ -97,6 +105,35 @@ internal object BackupTransfer {
         if (backup.subjects.isNotEmpty()) {
             db.subjectDao().deleteAll()
             db.subjectDao().insertAll(backup.subjects.map { SubjectEntity.fromDomainModel(it) })
+        }
+
+        // 时间表是 v4 新增的数据。v3 及更早的备份没有这个字段，恢复时保留本机时间表；
+        // 只有 v4 文件才按「备份里有几条就写几条」的整表替换语义处理（含显式清空）。
+        if (backup.schemaVersion >= 4) {
+            db.scheduleDao().deleteAllCompletions()
+            db.scheduleDao().deleteAllAssignments()
+            db.scheduleDao().deleteAllBlocks()
+            db.scheduleDao().deleteAllTemplates()
+            if (backup.scheduleTemplates.isNotEmpty()) {
+                db.scheduleDao().insertTemplates(
+                    backup.scheduleTemplates.map { ScheduleTemplateEntity.fromDomainModel(it) }
+                )
+                db.scheduleDao().insertAllBlocks(
+                    backup.scheduleTemplates.flatMap { template ->
+                        template.blocks.map { ScheduleTemplateBlockEntity.fromDomainModel(it) }
+                    }
+                )
+            }
+            if (backup.scheduleDayAssignments.isNotEmpty()) {
+                db.scheduleDao().insertAllAssignments(
+                    backup.scheduleDayAssignments.map { ScheduleDayAssignmentEntity.fromDomainModel(it) }
+                )
+            }
+            if (backup.scheduleBlockCompletions.isNotEmpty()) {
+                db.scheduleDao().insertAllCompletions(
+                    backup.scheduleBlockCompletions.map { ScheduleBlockCompletionEntity.fromDomainModel(it) }
+                )
+            }
         }
 
         backup.settings?.let {

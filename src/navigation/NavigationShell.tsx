@@ -42,7 +42,8 @@ export const TABS: readonly TabDefinition[] = [
  * once (subject + duration preset + the `taskId` the started session binds to).
  */
 interface FocusPreset {
-  taskId: string;
+  /** null = 从时间表启动，不绑定任何任务。 */
+  taskId: string | null;
   subjectId: string;
   subjectName: string;
   title: string;
@@ -55,6 +56,8 @@ interface NavigationState {
   settingsOpen: boolean;
   /** Task editor overlay (Today only). */
   taskEditorOpen: boolean;
+  /** Daily timetable overlay (reached from the Today header). */
+  timetableOpen: boolean;
   /** Task the Focus tab should prepare a session for; null once consumed. */
   focusPreset: FocusPreset | null;
 }
@@ -65,6 +68,8 @@ interface NavigationActions {
   closeSettings: () => void;
   openTaskEditor: () => void;
   closeTaskEditor: () => void;
+  openTimetable: () => void;
+  closeTimetable: () => void;
   /** Prepare a focus bound to a task and switch to the Focus tab. */
   requestFocusPreset: (preset: FocusPreset) => void;
   clearFocusPreset: () => void;
@@ -83,20 +88,32 @@ export function NavigationProvider({
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
+  const [timetableOpen, setTimetableOpen] = useState(false);
   const [focusPreset, setFocusPreset] = useState<FocusPreset | null>(null);
 
   const selectTab = useCallback((tab: TabKey) => {
     setSettingsOpen(false);
+    setTimetableOpen(false);
     setActiveTab(tab);
   }, []);
 
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openSettings = useCallback(() => {
+    setTimetableOpen(false);
+    setSettingsOpen(true);
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const openTaskEditor = useCallback(() => setTaskEditorOpen(true), []);
   const closeTaskEditor = useCallback(() => setTaskEditorOpen(false), []);
+  const openTimetable = useCallback(() => {
+    setSettingsOpen(false);
+    setTaskEditorOpen(false);
+    setTimetableOpen(true);
+  }, []);
+  const closeTimetable = useCallback(() => setTimetableOpen(false), []);
 
   const requestFocusPreset = useCallback((preset: FocusPreset) => {
     setSettingsOpen(false);
+    setTimetableOpen(false);
     setActiveTab('focus');
     setFocusPreset(preset);
   }, []);
@@ -108,9 +125,10 @@ export function NavigationProvider({
       activeTab,
       settingsOpen,
       taskEditorOpen,
+      timetableOpen,
       focusPreset,
     }),
-    [activeTab, settingsOpen, taskEditorOpen, focusPreset]
+    [activeTab, settingsOpen, taskEditorOpen, timetableOpen, focusPreset]
   );
 
   const actions = useMemo<NavigationActions>(
@@ -120,6 +138,8 @@ export function NavigationProvider({
       closeSettings,
       openTaskEditor,
       closeTaskEditor,
+      openTimetable,
+      closeTimetable,
       requestFocusPreset,
       clearFocusPreset,
     }),
@@ -129,6 +149,8 @@ export function NavigationProvider({
       closeSettings,
       openTaskEditor,
       closeTaskEditor,
+      openTimetable,
+      closeTimetable,
       requestFocusPreset,
       clearFocusPreset,
     ]

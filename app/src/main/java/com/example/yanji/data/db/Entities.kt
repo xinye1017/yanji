@@ -603,3 +603,146 @@ data class AiAnalysisEntity(
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// 每日时间表（v30）
+//
+// 模板与日期分离：模板只描述理想的一天，日期通过 schedule_day_assignments
+// 引用模板，完成状态按 (日期, 时间段 id) 记录。切换某一天的模板只改当天指派，
+// 既不复制专注事实，也不改写其他日期。
+// ---------------------------------------------------------------------------
+
+@Entity(
+    tableName = "schedule_templates",
+    indices = [Index("sortOrder")]
+)
+data class ScheduleTemplateEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val sortOrder: Int,
+    val createdAt: Long,
+    val updatedAt: Long
+) {
+    fun toDomainModel(blocks: List<ScheduleTemplateBlockEntity>): ScheduleTemplate =
+        ScheduleTemplate(
+            id = id,
+            name = name,
+            sortOrder = sortOrder,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            blocks = blocks.map { it.toDomainModel() }
+        )
+
+    companion object {
+        /** 备份恢复用；时间段由 [ScheduleTemplateBlockEntity] 单独写入。 */
+        fun fromDomainModel(model: ScheduleTemplate): ScheduleTemplateEntity =
+            ScheduleTemplateEntity(
+                id = model.id,
+                name = model.name,
+                sortOrder = model.sortOrder,
+                createdAt = model.createdAt,
+                updatedAt = model.updatedAt
+            )
+    }
+}
+
+@Entity(
+    tableName = "schedule_template_blocks",
+    indices = [Index("templateId")]
+)
+data class ScheduleTemplateBlockEntity(
+    @PrimaryKey val id: String,
+    val templateId: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    /** JSON 字符串数组：学科 id 可能为 0..n 个。 */
+    val subjectIds: String,
+    /** 展示名快照，与 StudyTask.subjectName 同口径。 */
+    val subjectLabel: String,
+    val title: String
+) {
+    fun toDomainModel(): ScheduleBlock = ScheduleBlock(
+        id = id,
+        templateId = templateId,
+        startMinute = startMinute,
+        endMinute = endMinute,
+        subjectIds = decodeSubjectIds(subjectIds),
+        subjectLabel = subjectLabel,
+        title = title
+    )
+
+    companion object {
+        fun fromDomainModel(model: ScheduleBlock): ScheduleTemplateBlockEntity =
+            ScheduleTemplateBlockEntity(
+                id = model.id,
+                templateId = model.templateId,
+                startMinute = model.startMinute,
+                endMinute = model.endMinute,
+                subjectIds = encodeSubjectIds(model.subjectIds),
+                subjectLabel = model.subjectLabel,
+                title = model.title
+            )
+
+        fun encodeSubjectIds(ids: List<String>): String =
+            JSONArray().apply { ids.forEach { put(it) } }.toString()
+
+        private fun decodeSubjectIds(raw: String): List<String> {
+            if (raw.isBlank()) return emptyList()
+            return runCatching {
+                val array = JSONArray(raw)
+                (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
+            }.getOrDefault(emptyList())
+        }
+    }
+}
+
+@Entity(
+    tableName = "schedule_day_assignments",
+    indices = [Index("templateId")]
+)
+data class ScheduleDayAssignmentEntity(
+    @PrimaryKey val date: String,
+    val templateId: String,
+    val updatedAt: Long
+) {
+    fun toDomainModel(): ScheduleDayAssignment = ScheduleDayAssignment(
+        date = date,
+        templateId = templateId,
+        updatedAt = updatedAt
+    )
+
+    companion object {
+        fun fromDomainModel(model: ScheduleDayAssignment): ScheduleDayAssignmentEntity =
+            ScheduleDayAssignmentEntity(
+                date = model.date,
+                templateId = model.templateId,
+                updatedAt = model.updatedAt
+            )
+    }
+}
+
+@Entity(
+    tableName = "schedule_block_completions",
+    primaryKeys = ["date", "blockId"],
+    indices = [Index("blockId")]
+)
+data class ScheduleBlockCompletionEntity(
+    val date: String,
+    val blockId: String,
+    val completedAt: Long
+) {
+    fun toDomainModel(): ScheduleBlockCompletion = ScheduleBlockCompletion(
+        date = date,
+        blockId = blockId,
+        completedAt = completedAt
+    )
+
+    companion object {
+        fun fromDomainModel(model: ScheduleBlockCompletion): ScheduleBlockCompletionEntity =
+            ScheduleBlockCompletionEntity(
+                date = model.date,
+                blockId = model.blockId,
+                completedAt = model.completedAt
+            )
+    }
+}

@@ -7,6 +7,10 @@ import com.example.yanji.data.CheckIn
 import com.example.yanji.data.ExamSession
 import com.example.yanji.data.FocusSession
 import com.example.yanji.data.NoteEntry
+import com.example.yanji.data.ScheduleBlock
+import com.example.yanji.data.ScheduleBlockCompletion
+import com.example.yanji.data.ScheduleDayAssignment
+import com.example.yanji.data.ScheduleTemplate
 import com.example.yanji.data.QuickStartPreset
 import com.example.yanji.data.SessionStatus
 import com.example.yanji.data.UserSettings
@@ -95,6 +99,41 @@ class BackupCodecTest {
         checkIns = listOf(CheckIn(date = "2026-09-11", checkInTime = epoch, streak = 3)),
         quickStartPresets = listOf(
             QuickStartPreset(id = "q-1", type = QuickStartPreset.TYPE_START_FOCUS, label = "开始专注", sortOrder = 0)
+        ),
+        scheduleTemplates = listOf(
+            ScheduleTemplate(
+                id = "tpl-1",
+                name = "复习冲刺",
+                sortOrder = 0,
+                createdAt = epoch,
+                updatedAt = epoch,
+                blocks = listOf(
+                    ScheduleBlock(
+                        id = "b-1",
+                        templateId = "tpl-1",
+                        startMinute = 510,
+                        endMinute = 630,
+                        subjectIds = listOf("math"),
+                        subjectLabel = "数学",
+                        title = "核心知识复习"
+                    ),
+                    ScheduleBlock(
+                        id = "b-2",
+                        templateId = "tpl-1",
+                        startMinute = 1200,
+                        endMinute = 1230,
+                        subjectIds = emptyList(),
+                        subjectLabel = "复盘",
+                        title = "错题整理"
+                    )
+                )
+            )
+        ),
+        scheduleDayAssignments = listOf(
+            ScheduleDayAssignment(date = "2026-10-29", templateId = "tpl-1", updatedAt = epoch)
+        ),
+        scheduleBlockCompletions = listOf(
+            ScheduleBlockCompletion(date = "2026-10-29", blockId = "b-1", completedAt = epoch)
         )
     )
 
@@ -137,6 +176,89 @@ class BackupCodecTest {
         assertEquals(ChatSender.JUANJUAN, restored.chatMessages[1].sender)
         assertEquals("开始专注", restored.quickStartPresets.single().label)
         assertEquals("浙江大学 计算机学院", restored.settings!!.targetSchool)
+        assertEquals("复习冲刺", restored.scheduleTemplates.single().name)
+        assertEquals(listOf(510, 1200), restored.scheduleTemplates.single().blocks.map { it.startMinute })
+        assertEquals("tpl-1", restored.scheduleDayAssignments.single().templateId)
+        assertEquals("b-1", restored.scheduleBlockCompletions.single().blockId)
+    }
+
+    @Test
+    fun `v4 rejects an incomplete schedule envelope`() {
+        for (key in listOf(
+            "scheduleTemplates",
+            "scheduleDayAssignments",
+            "scheduleBlockCompletions"
+        )) {
+            assertFailure(fullObject().without(key).toString(), "v4")
+        }
+    }
+
+    @Test
+    fun `v3 backup without schedule tables preserves the local timetable`() {
+        val legacy = fullObject()
+            .without("scheduleTemplates", "scheduleDayAssignments", "scheduleBlockCompletions")
+            .let { JsonObject(it + ("schemaVersion" to JsonPrimitive(3))) }
+
+        val result = BackupCodec.decode(legacy.toString())
+        assertTrue(result is BackupDecodeResult.Success)
+        val success = result as BackupDecodeResult.Success
+        assertTrue(success.warnings.any { it.contains("每日时间表") })
+        assertTrue(success.backup.scheduleTemplates.isEmpty())
+    }
+
+    @Test
+    fun `schedule references and block structure are validated before import`() {
+        val template = sampleBackup().scheduleTemplates.single()
+
+        val badAssignment = sampleBackup().copy(
+            scheduleDayAssignments = listOf(
+                ScheduleDayAssignment(date = "2026-10-29", templateId = "missing", updatedAt = epoch)
+            )
+        )
+        assertFailure(BackupCodec.encode(badAssignment), "日期指派")
+
+        val badCompletion = sampleBackup().copy(
+            scheduleBlockCompletions = listOf(
+                ScheduleBlockCompletion(date = "2026-10-29", blockId = "missing", completedAt = epoch)
+            )
+        )
+        assertFailure(BackupCodec.encode(badCompletion), "完成状态")
+
+        val mismatchedTemplate = template.copy(
+            blocks = template.blocks.map { it.copy(templateId = "other") }
+        )
+        assertFailure(
+            BackupCodec.encode(sampleBackup().copy(scheduleTemplates = listOf(mismatchedTemplate))),
+            "结构无效"
+        )
+
+        val overlapping = template.copy(
+            blocks = listOf(
+                template.blocks[0],
+                template.blocks[0].copy(id = "b-overlap", startMinute = 600, endMinute = 660)
+            )
+        )
+        assertFailure(
+            BackupCodec.encode(sampleBackup().copy(scheduleTemplates = listOf(overlapping))),
+            "重叠"
+        )
+
+        val blankName = template.copy(name = "  ")
+        assertFailure(
+            BackupCodec.encode(sampleBackup().copy(scheduleTemplates = listOf(blankName))),
+            "结构无效"
+        )
+
+        val duplicateTemplate = sampleBackup().copy(
+            scheduleTemplates = listOf(template, template.copy(name = "副本"))
+        )
+        assertFailure(BackupCodec.encode(duplicateTemplate), "重复的时间表模板")
+
+        val completion = sampleBackup().scheduleBlockCompletions.single()
+        val duplicateCompletion = sampleBackup().copy(
+            scheduleBlockCompletions = listOf(completion, completion)
+        )
+        assertFailure(BackupCodec.encode(duplicateCompletion), "重复的时间段完成状态")
     }
 
     @Test

@@ -513,11 +513,17 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
     setSettledDuration(mins);
     setTimerMode('COUNTDOWN');
     setSelectedSubjectId(focusPreset.subjectId);
-    setTaskBinding({
-      taskId: focusPreset.taskId,
-      subjectId: focusPreset.subjectId,
-      title: focusPreset.title,
-    });
+    // 时间表启动的专注不绑定任务：没有 taskId 就没有「关联任务」条，
+    // 但学科与时长仍按计划预选。
+    setTaskBinding(
+      focusPreset.taskId
+        ? {
+            taskId: focusPreset.taskId,
+            subjectId: focusPreset.subjectId,
+            title: focusPreset.title,
+          }
+        : null
+    );
     setActionError(null);
   }, [focusPreset, clearFocusPreset]);
 
