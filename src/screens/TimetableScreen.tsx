@@ -97,6 +97,13 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
     setInitialBlock({ startMinute });
     setDraft(toDraft(template));
   };
+  const editTemplate = (item: ScheduleTemplate) => {
+    setManagerOpen(false);
+    setSelectedId(item.id);
+    setInitialBlock(null);
+    setEditorError(null);
+    setDraft(toDraft(item));
+  };
   const create = () => {
     setManagerOpen(false);
     setInitialBlock(null);
@@ -128,7 +135,7 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
           <ScheduleTimeline blocks={template.blocks} disabled={saving} onAdd={addBlock} onEdit={editBlock} onChange={(index, next) => void changeBlock(index, next)} />
         </ScrollView>
       ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : '还没有作息模板，先新建一套。'}</Text>{!loading ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
-      <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={item => { setManagerOpen(false); setSelectedId(item.id); }} />
+      <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={editTemplate} />
       <ScheduleTemplateEditor draft={draft} subjects={subjects} saving={saving} error={editorError} initialBlock={initialBlock} onClose={() => { if (!saving) { setDraft(null); setInitialBlock(null); } }} onSave={next => void save(next)} />
     </View>
   );

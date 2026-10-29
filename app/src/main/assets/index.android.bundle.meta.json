@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "669fef771bc9f0559a4b9466d30258e6c72f4c2aa763f64002a54f4408d6b711",
+    "sha256": "5a9511e7804f1eeb1699d2cddb8c3744cd99548e9d9461a45e686dd6c41c1a93",
     "files": [
       {
         "path": "App.tsx",
@@ -199,7 +199,7 @@
       },
       {
         "path": "src/screens/TimetableScreen.tsx",
-        "sha256": "86cdb8268c58375e028a2bc22f8da63a0eedf0a73f8e6fd680d0ae15160f3def"
+        "sha256": "57c2637da6118197ac4532333ac7423583eeb1e40dd8f0ee4a347531b66c68ba"
       },
       {
         "path": "src/screens/TodayScreen.tsx",
@@ -264,15 +264,15 @@
     ]
   },
   "metro": {
-    "bytes": 2248716,
-    "sha256": "64154c072d482606fbe74d5ccb4f989d732a692a21fb7aeed65dd311326141bf",
-    "sha1": "ea82e2be9b5a56f682a39761365d27730ec2a39e"
+    "bytes": 2248740,
+    "sha256": "25f6875f4848ecc1bd015ce1fd5177d0ff74db3356ece53f66bf36331877ade4",
+    "sha1": "3e4be026566b2a2031303f8607da08f81d23c9fc"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "ea82e2be9b5a56f682a39761365d27730ec2a39e",
-    "bytes": 3146022,
-    "sha256": "338f8ee0e0f2e81c2b9416137ffbb72fd95bc675487f1993eb94f27c42cba585"
+    "sourceSha1": "3e4be026566b2a2031303f8607da08f81d23c9fc",
+    "bytes": 3146128,
+    "sha256": "8e2a0000655df09a3b88c8cc1d873af55b1c1ea86a4e12c3cac82a9c0c791363"
   },
   "assets": []
 }
