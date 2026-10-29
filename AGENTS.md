@@ -1,4 +1,4 @@
-# 「研迹」Coding Agent 指南 · 工程规范与真机推送工作流
+# 「研迹」Coding Agent 指南 · 工程规范与默认模拟器测试 / 按需真机推送工作流
 
 > 本文档是接手的 **AI Coding Agent**（Claude、Codex、Gemini、Cursor、Cline、Copilot、Antigravity 等）的操作规范与指南。
 > 记录项目的核心架构与工程原则、构建方式、设备连接机制、避坑指南、**默认模拟器测试**与**按需真机推送**工作流。
