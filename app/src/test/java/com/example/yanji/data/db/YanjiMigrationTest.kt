@@ -1410,7 +1410,7 @@ class YanjiMigrationTest {
      * v29 -> v30：建立每日时间表四张表，并写入两套默认模板。
      *
      * 重点不是「表存在」，而是：
-     *  - 两套模板都恰好 8 小时（用户需求里的净学习时长）；
+     *  - 复习冲刺 12 小时 15 分钟、真题冲刺 8 小时（用户需求里的净学习时长）；
      *  - 迁移不会碰既有业务数据；
      *  - 完成状态表是 (date, blockId) 复合主键，切换模板后仍能按日期隔离。
      */
@@ -1437,8 +1437,8 @@ class YanjiMigrationTest {
             db.textValue("SELECT name FROM schedule_templates WHERE id = 'schedule-template-exam'")
         )
         assertEquals(
-            "两套默认模板都必须正好 8 小时",
-            480,
+            "复习冲刺必须正好 12 小时 15 分钟",
+            735,
             db.intValue(
                 "SELECT SUM(endMinute - startMinute) FROM schedule_template_blocks " +
                     "WHERE templateId = 'schedule-template-review'"

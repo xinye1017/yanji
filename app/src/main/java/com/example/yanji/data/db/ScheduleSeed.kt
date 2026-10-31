@@ -7,7 +7,8 @@ package com.example.yanji.data.db
  *  - `MIGRATION_29_30`：老用户升级时建表并写入两套默认模板；
  *  - `RoomDatabase.Callback.onCreate`：全新安装时表已由 Room 建好，只执行种子。
  *
- * 默认模板严格对应用户需求里的两张表（复习冲刺 / 真题冲刺），每天净学习 8 小时。
+ * 默认模板对应用户需求里的两张表（复习冲刺 / 真题冲刺）：复习冲刺 12 小时 15 分钟，
+ * 真题冲刺 8 小时。
  * 时间段 id 固定，便于迁移测试与备份恢复断言；`INSERT OR IGNORE` 让重复执行成为 no-op。
  */
 internal object ScheduleSeed {
@@ -68,13 +69,13 @@ internal object ScheduleSeed {
         insertTemplate(REVIEW_TEMPLATE_ID, "复习冲刺", 0),
         insertTemplate(EXAM_TEMPLATE_ID, "真题冲刺", 1),
 
-        // 复习冲刺：2h + 30m + 2.5h + 1.5h + 1h + 30m = 8h
-        insertBlock("schedule-block-review-1", REVIEW_TEMPLATE_ID, 510, 630, "[\"math\"]", "数学", "核心知识复习"),
-        insertBlock("schedule-block-review-2", REVIEW_TEMPLATE_ID, 645, 675, "[\"math\"]", "数学", "习题巩固"),
-        insertBlock("schedule-block-review-3", REVIEW_TEMPLATE_ID, 780, 930, "[\"major\"]", "408", "知识点学习与练习"),
-        insertBlock("schedule-block-review-4", REVIEW_TEMPLATE_ID, 945, 1035, "[\"english\"]", "英语", "单词、阅读"),
-        insertBlock("schedule-block-review-5", REVIEW_TEMPLATE_ID, 1140, 1200, "[\"politics\"]", "政治", "知识点、选择题"),
-        insertBlock("schedule-block-review-6", REVIEW_TEMPLATE_ID, 1200, 1230, "[]", "复盘", "错题整理"),
+        // 复习冲刺：30m + 2h45m + 4.5h + 1h + 1.5h + 2h = 12h15m
+        insertBlock("schedule-block-review-1", REVIEW_TEMPLATE_ID, 480, 510, "[\"english\"]", "英语", "背单词"),
+        insertBlock("schedule-block-review-2", REVIEW_TEMPLATE_ID, 510, 675, "[\"math\"]", "数学", "学数学"),
+        insertBlock("schedule-block-review-3", REVIEW_TEMPLATE_ID, 750, 1020, "[\"major\"]", "408", "学408"),
+        insertBlock("schedule-block-review-4", REVIEW_TEMPLATE_ID, 1140, 1200, "[\"politics\"]", "政治", "刷政治选择题"),
+        insertBlock("schedule-block-review-5", REVIEW_TEMPLATE_ID, 1200, 1290, "[\"math\"]", "数学", "学数学"),
+        insertBlock("schedule-block-review-6", REVIEW_TEMPLATE_ID, 1290, 1410, "[\"major\"]", "408", "学408"),
 
         // 真题冲刺：3h + 2h + 1.5h + 1h + 30m = 8h
         insertBlock("schedule-block-exam-1", EXAM_TEMPLATE_ID, 510, 690, "[\"math\",\"major\"]", "数学 / 408", "完整真题限时训练"),
