@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { YanjiIcon, YanjiPaperSegmentedControl, YanjiTextAction, YanjiTextInput } from './YanjiUI';
 import { YanjiSettingDisclosureRow } from './SettingsRows';
 import { testDecisionConnection, toBaseUrl } from '../services/decisionClient';
@@ -60,12 +60,17 @@ export function YanjiDecisionModelSection({
   const [model, setModel] = useState(PROVIDER_DEFAULTS.openrouter.model);
   const [endpoint, setEndpoint] = useState(PROVIDER_DEFAULTS.openrouter.endpoint);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
-  const [hasKey, setHasKey] = useState(false);
+  const [hasKey, setHasKey] = useState(!!settings?.hasDecisionApiKey);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [savingAi, setSavingAi] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
-  const savingAiRef = useRef(false);
+  const [clearingKey, setClearingKey] = useState(false);
+  const [confirmClearKey, setConfirmClearKey] = useState(false);
+  const [aiError, setAiError] = useState(false);
+  const busyRef = useRef(false);
+  const busy = savingAi || testing || clearingKey;
+  const disabled = settings === null || busy;
 
   useEffect(() => {
     if (!settings) return;
@@ -74,18 +79,21 @@ export function YanjiDecisionModelSection({
     setModel(settings.decisionModel || PROVIDER_DEFAULTS[currentProvider].model);
     const rawEndpoint = settings.decisionEndpoint || PROVIDER_DEFAULTS[currentProvider].endpoint;
     setEndpoint(toBaseUrl(rawEndpoint, currentProvider));
-    setHasKey(!!settings.hasDecisionApiKey);
   }, [
     settings?.decisionProvider,
     settings?.decisionModel,
     settings?.decisionEndpoint,
-    settings?.hasDecisionApiKey,
   ]);
+
+  useEffect(() => {
+    if (settings) setHasKey(!!settings.hasDecisionApiKey);
+  }, [settings?.hasDecisionApiKey]);
 
   const handleProviderChange = (nextProvider: 'openrouter' | 'typesafe') => {
     setProvider(nextProvider);
     setTestResult(null);
     setAiMessage(null);
+    setConfirmClearKey(false);
     // Only swap the defaults when the field still holds the *other* provider's
     // default: a value the user typed must never be overwritten by a switch.
     if (!model || model === PROVIDER_DEFAULTS.openrouter.model || model === PROVIDER_DEFAULTS.typesafe.model) {
@@ -103,6 +111,8 @@ export function YanjiDecisionModelSection({
   };
 
   const handleTestConnection = async () => {
+    if (busyRef.current || settings === null) return;
+    busyRef.current = true;
     setTesting(true);
     setTestResult(null);
     setAiMessage(null);
@@ -116,19 +126,22 @@ export function YanjiDecisionModelSection({
         keyToTest
       );
       setTestResult(result);
-    } catch (error) {
-      setTestResult({ success: false, message: (error as Error | null)?.message || '测试连接异常' });
+    } catch {
+      setTestResult({ success: false, message: '连接测试未完成，请检查网络与模型配置后重试。' });
     } finally {
+      busyRef.current = false;
       setTesting(false);
     }
   };
 
   const handleSaveAi = async () => {
-    if (savingAiRef.current) return;
-    savingAiRef.current = true;
+    if (busyRef.current || settings === null) return;
+    busyRef.current = true;
     setSavingAi(true);
+    setAiError(false);
     setTestResult(null);
     setAiMessage(null);
+    let configurationSaved = false;
     try {
       const saved = await YanjiDataNative.updateUserSettings({
         decisionProvider: provider,
@@ -136,6 +149,7 @@ export function YanjiDecisionModelSection({
         decisionEndpoint: endpoint.trim(),
       });
       if (!saved) throw new Error('保存配置失败');
+      configurationSaved = true;
 
       if (apiKeyDraft.trim()) {
         const savedKey = await YanjiDataNative.saveDecisionApiKey(apiKeyDraft.trim());
@@ -149,24 +163,46 @@ export function YanjiDecisionModelSection({
       } catch {
         setAiMessage('配置已保存，页面刷新失败。请稍后重新进入设置查看。');
       }
-    } catch (error) {
-      setAiMessage((error as Error | null)?.message || '保存失败，请稍后再试');
+    } catch {
+      setAiError(true);
+      setAiMessage(configurationSaved ? '模型配置已保存，密钥未保存，请重试。' : '保存配置失败，请重试；填写内容已保留。');
     } finally {
-      savingAiRef.current = false;
+      busyRef.current = false;
       setSavingAi(false);
     }
   };
 
   const handleClearKey = async () => {
+    if (busyRef.current || settings === null || !confirmClearKey) return;
+    busyRef.current = true;
+    setClearingKey(true);
+    setAiMessage(null);
+    setTestResult(null);
+    setAiError(false);
     try {
-      await YanjiDataNative.clearDecisionApiKey();
+      if (!await YanjiDataNative.clearDecisionApiKey()) throw new Error('refused');
       setHasKey(false);
       setApiKeyDraft('');
-      await onSaved();
-      setAiMessage('API Key 已清除');
+      setConfirmClearKey(false);
+      try {
+        await onSaved();
+        setAiMessage('API Key 已清除');
+      } catch {
+        setAiMessage('API Key 已清除，页面更新失败，请重新进入设置查看。');
+      }
     } catch {
-      setAiMessage('清除失败');
+      setAiError(true);
+      setAiMessage('密钥未清除，请重试。');
+    } finally {
+      busyRef.current = false;
+      setClearingKey(false);
     }
+  };
+
+  const clearFeedback = () => {
+    setTestResult(null);
+    setAiMessage(null);
+    setConfirmClearKey(false);
   };
 
   return (
@@ -178,8 +214,10 @@ export function YanjiDecisionModelSection({
         summary={settings === null ? '—' : hasKey ? '已配置' : '未配置'}
         icon="sparkles"
         expanded={advancedOpen}
+        disabled={settings === null}
+        busy={busy}
         isLast
-        onPress={() => { if (!savingAiRef.current) setAdvancedOpen(open => !open); }}
+        onPress={() => { if (!disabled) setAdvancedOpen(open => !open); }}
       />
 
       {advancedOpen ? (
@@ -189,9 +227,10 @@ export function YanjiDecisionModelSection({
           </Text>
 
           <YanjiPaperSegmentedControl
+            compact
             accessibilityLabel="决策模型提供商"
             value={provider}
-            disabled={savingAi}
+            disabled={disabled}
             options={DECISION_PROVIDERS}
             onChange={next => handleProviderChange(next as 'openrouter' | 'typesafe')}
           />
@@ -203,8 +242,8 @@ export function YanjiDecisionModelSection({
               </Text>
               <YanjiTextInput
                 value={model}
-                onChangeText={setModel}
-                editable={!savingAi}
+                onChangeText={next => { setModel(next); clearFeedback(); }}
+                editable={!disabled}
                 placeholder={PROVIDER_DEFAULTS[provider].model}
                 autoCapitalize="none"
                 accessibilityLabel="模型标识"
@@ -217,8 +256,8 @@ export function YanjiDecisionModelSection({
               </Text>
               <YanjiTextInput
                 value={endpoint}
-                onChangeText={setEndpoint}
-                editable={!savingAi}
+                onChangeText={next => { setEndpoint(next); clearFeedback(); }}
+                editable={!disabled}
                 placeholder={PROVIDER_DEFAULTS[provider].endpoint}
                 autoCapitalize="none"
                 accessibilityLabel="API Base URL"
@@ -241,19 +280,32 @@ export function YanjiDecisionModelSection({
                   API Key: {hasKey ? '已保存' : '未配置'}
                 </Text>
                 {hasKey ? (
-                  <YanjiTextAction label="清除密钥" onPress={() => void handleClearKey()} disabled={savingAi} />
+                  <YanjiTextAction label="清除密钥" onPress={() => { clearFeedback(); setConfirmClearKey(true); }} disabled={disabled} />
                 ) : null}
               </View>
               <YanjiTextInput
                 value={apiKeyDraft}
-                onChangeText={setApiKeyDraft}
-                editable={!savingAi}
+                onChangeText={next => { setApiKeyDraft(next); clearFeedback(); }}
+                editable={!disabled}
                 placeholder={hasKey ? '已加密保存，输入新密钥以覆盖' : 'sk-...'}
                 secureTextEntry
                 autoCapitalize="none"
                 accessibilityLabel="API Key"
               />
             </View>
+
+            {confirmClearKey ? (
+              <View style={{ gap: YanjiSpacing.sm }}>
+                <Text accessibilityRole="alert" style={[typography.captionMeta, { color: colors.danger }]}>
+                  清除后需重新输入 API Key 才能使用 AI 分类；学习记录和模型配置会保留。
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.md }}>
+                  <YanjiTextAction label="取消" onPress={() => setConfirmClearKey(false)} disabled={busy} />
+                  <YanjiTextAction label="确认清除密钥" onPress={() => void handleClearKey()} disabled={busy} />
+                  {clearingKey ? <ActivityIndicator size="small" color={colors.secondary} /> : null}
+                </View>
+              </View>
+            ) : null}
 
             {testResult ? (
               <View
@@ -272,6 +324,8 @@ export function YanjiDecisionModelSection({
                     />
                   </View>
                   <Text
+                    accessibilityLiveRegion="polite"
+                    accessibilityRole={testResult.success ? undefined : 'alert'}
                     style={[
                       typography.captionMeta,
                       {
@@ -288,16 +342,17 @@ export function YanjiDecisionModelSection({
             ) : null}
 
             {aiMessage ? (
-              <Text style={[typography.captionMeta, { color: colors.brandInk }]}>{aiMessage}</Text>
+              <Text accessibilityLiveRegion="polite" accessibilityRole={aiError ? 'alert' : undefined} style={[typography.captionMeta, { color: aiError ? colors.danger : colors.positive }]}>{aiMessage}</Text>
             ) : null}
 
             <View style={{ flexDirection: 'row', gap: YanjiSpacing.md, marginTop: YanjiSpacing.xs }}>
               <View style={{ flex: 1 }}>
                 <Pressable
                   onPress={() => void handleTestConnection()}
-                  disabled={testing || savingAi || (!hasKey && !apiKeyDraft.trim())}
+                  disabled={disabled || (!hasKey && !apiKeyDraft.trim())}
                   accessibilityRole="button"
                   accessibilityLabel="测试决策模型连通性"
+                  accessibilityState={{ busy: testing, disabled: disabled || (!hasKey && !apiKeyDraft.trim()) }}
                   style={({ pressed }) => ({
                     minHeight: layout.rowMinHeight,
                     alignItems: 'center',
@@ -306,33 +361,35 @@ export function YanjiDecisionModelSection({
                     backgroundColor: colors.subtle,
                     borderWidth: layout.hairlineWidth,
                     borderColor: colors.hairline,
-                    opacity: pressed || (!hasKey && !apiKeyDraft.trim()) ? 0.6 : 1,
+                    opacity: disabled || pressed || (!hasKey && !apiKeyDraft.trim()) ? 0.6 : 1,
                   })}
                 >
                   <Text style={[typography.bodyPrimary, { color: colors.ink, fontWeight: '600' }]}>
-                    {testing ? '测试中…' : '测试连通性'}
+                    测试连通性
                   </Text>
+                  {testing ? <ActivityIndicator size="small" color={colors.secondary} /> : null}
                 </Pressable>
               </View>
               <View style={{ flex: 1 }}>
                 <Pressable
                   onPress={() => void handleSaveAi()}
-                  disabled={savingAi || testing}
+                  disabled={disabled}
                   accessibilityRole="button"
                   accessibilityLabel="保存 AI 决策配置"
-                  accessibilityState={{ busy: savingAi, disabled: savingAi || testing }}
+                  accessibilityState={{ busy: savingAi, disabled }}
                   style={({ pressed }) => ({
                     minHeight: layout.rowMinHeight,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: radius.pill,
                     backgroundColor: colors.ink,
-                    opacity: pressed || savingAi ? 0.7 : 1,
+                    opacity: pressed || disabled ? 0.7 : 1,
                   })}
                 >
                   <Text style={[typography.bodyPrimary, { color: colors.canvas, fontWeight: '700' }]}>
-                    {savingAi ? '保存中…' : '保存配置'}
+                    保存配置
                   </Text>
+                  {savingAi ? <ActivityIndicator size="small" color={colors.canvas} /> : null}
                 </Pressable>
               </View>
             </View>

@@ -247,16 +247,16 @@ export function BackupDataSection(): React.JSX.Element {
       </Text>
       <YanjiSettingRow
         label="导出数据"
-        value={operation === 'export' ? '导出中…' : '本地文件'}
-        hint="将记录保存为本地备份文件"
+        hint={operation === 'export' ? '正在保存备份文件…' : '将记录保存为本地备份文件'}
+        busy={operation === 'export'}
         accessibilityLabel="导出数据，将记录保存为本地备份文件"
         disabled={operation !== null}
         onPress={() => void handleExport()}
       />
       <YanjiSettingRow
         label="从备份恢复"
-        value={operation === 'prepare' ? '校验中…' : '选择文件'}
-        hint="导入前校验文件与记录信息"
+        hint={operation === 'prepare' ? '正在校验备份文件…' : '先预览内容，确认后覆盖本机记录'}
+        busy={operation === 'prepare'}
         accessibilityLabel="从备份恢复，导入前校验文件与记录信息"
         isLast
         disabled={operation !== null}

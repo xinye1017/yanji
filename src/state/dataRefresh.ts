@@ -109,6 +109,11 @@ export function useSettingsSnapshot(readerId: string, visible: boolean) {
   return snapshot;
 }
 
+export function useSettingsReadFailed(): boolean {
+  const getSnapshot = useCallback(() => dataRefreshCoordinator.getSettingsReadFailed(), []);
+  return useSyncExternalStore(subscribeSettings, getSnapshot, getSnapshot);
+}
+
 export function useReviewDataVisibility(
   readerId: string,
   requests: ReadonlyArray<ReviewRequestKey>,

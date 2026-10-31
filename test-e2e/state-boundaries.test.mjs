@@ -569,6 +569,51 @@ test('a repeated foreground signal is not a second read', async () => {
   assert.equal(reads.daily.length, 1, 'only a false → true transition may trigger the repair');
 });
 
+test('settings read failures notify subscribers, retain saved values and clear after retry', async () => {
+  let fail = true;
+  let notifications = 0;
+  const { coordinator } = fixture({ getUserSettings: async () => {
+    if (fail) throw new Error('unavailable');
+    return { examDate: '2026-12-19' };
+  } });
+  coordinator.subscribeSettings(() => notifications++);
+  coordinator.setSettingsReader('settings', true);
+  await settle();
+  assert.equal(coordinator.getSettingsSnapshot(), null);
+  assert.equal(coordinator.getSettingsReadFailed(), true);
+  assert.equal(notifications, 1);
+  fail = false;
+  await coordinator.refreshSettings();
+  const saved = coordinator.getSettingsSnapshot();
+  assert.equal(saved.settings.examDate, '2026-12-19');
+  assert.equal(coordinator.getSettingsReadFailed(), false);
+  fail = true;
+  await assert.rejects(coordinator.refreshSettings());
+  assert.equal(coordinator.getSettingsSnapshot(), saved);
+  assert.equal(coordinator.getSettingsReadFailed(), true);
+  fail = false;
+  await coordinator.refreshSettings();
+  assert.equal(coordinator.getSettingsReadFailed(), false);
+});
+
+test('an obsolete settings failure does not mark the superseding request as failed', async () => {
+  const first = deferred();
+  const second = deferred();
+  let calls = 0;
+  const { coordinator } = fixture({ getUserSettings: () => ++calls === 1 ? first.promise : second.promise });
+  coordinator.setSettingsReader('settings', true);
+  coordinator.enqueueDataChanged('settings');
+  await settle();
+  first.reject(new Error('obsolete'));
+  await settle();
+  assert.equal(calls, 2);
+  assert.equal(coordinator.getSettingsReadFailed(), false);
+  second.resolve({ examDate: '2026-12-19' });
+  await settle();
+  assert.equal(coordinator.getSettingsSnapshot().settings.examDate, '2026-12-19');
+  assert.equal(coordinator.getSettingsReadFailed(), false);
+});
+
 test('event types refresh only their dependent reads', async () => {
   const { coordinator, reads } = fixture();
   coordinator.setDailyReader('review', '2026-10-10');

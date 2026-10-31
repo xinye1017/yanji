@@ -7,10 +7,8 @@
  *  2. 学习安排 — the two management screens: 时间表设置 and 学科管理. Each row
  *     opens the screen that owns its list, so neither claims to be a value.
  *  3. 外观 — the app theme preference.
- *  4. 高级 — the decision-model configuration, collapsed by default. It is a
- *     long form that is configured once and then never touched, so letting it
- *     occupy the first screen was the single biggest source of clutter.
- *  5. 数据管理 — manual backup export and a validated restore preview.
+ *  4. 数据管理 — manual backup export and a validated restore preview.
+ *  5. AI 辅助 — the decision-model configuration, collapsed by default.
  *
  * Everything printed here comes from the native snapshot (`UserSettings`), and
  * regular setting writes use `updateUserSettings` (date, goal, decision model)
@@ -20,8 +18,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { YanjiDataNative, YanjiThemeNative, onThemeChanged } from '../bridge';
+import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { YanjiDataNative, YanjiThemeNative } from '../bridge';
 import type { ThemeMode } from '../bridge';
 import {
   YanjiEditorialHeader,
@@ -40,7 +38,7 @@ import { SubjectsSheet } from '../components/SubjectsSheet';
 import { useNavigationActions } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
-import { refreshSettingsSnapshot, useSettingsSnapshot } from '../state/dataRefresh';
+import { refreshSettingsSnapshot, useSettingsReadFailed, useSettingsSnapshot } from '../state/dataRefresh';
 import {
   examCountdownText,
   formatExamDate,
@@ -61,9 +59,12 @@ export function SettingsScreen(): React.JSX.Element {
   const theme = useYanjiTheme();
   const paper = theme.paper;
   const { colors, typography, layout } = paper;
+  const { width, fontScale } = useWindowDimensions();
+  const stacked = width / fontScale < layout.settingsStackedWidth;
   const { closeSettings, openTimetable } = useNavigationActions();
   const settingsSnapshot = useSettingsSnapshot('settings', true);
   const settings = settingsSnapshot?.settings ?? null;
+  const snapshotReadFailed = useSettingsReadFailed();
   // The decision-model form is the only editor on this page that opens the
   // keyboard. Reserving its real height keeps the fields and the save row
   // reachable instead of leaving them underneath the IME.
@@ -87,14 +88,12 @@ export function SettingsScreen(): React.JSX.Element {
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    YanjiThemeNative.getThemePreference()
-      .then(pref => setMode(pref.mode))
-      .catch(() => {
-        // Keep the current theme selection if the bridge read fails.
-      });
-  }, []);
+    setReadFailed(false);
+  }, [settingsSnapshot]);
 
-  useEffect(() => onThemeChanged(pref => setMode(pref.mode)), []);
+  useEffect(() => {
+    setMode(theme.mode);
+  }, [theme.mode]);
 
   const handleThemeChange = useCallback(async (next: ThemeMode) => {
     if (themeSavingRef.current) return;
@@ -193,6 +192,17 @@ export function SettingsScreen(): React.JSX.Element {
   // Until the settings snapshot arrives, the page must not claim the values are
   // unset: it simply has not read them yet.
   const loading = settings === null;
+  const showReadError = readFailed || snapshotReadFailed;
+  const themeControl = (
+    <YanjiPaperSegmentedControl
+      compact
+      accessibilityLabel="主题外观"
+      value={mode}
+      disabled={themeSaving}
+      options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
+      onChange={next => void handleThemeChange(next)}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
@@ -220,19 +230,20 @@ export function SettingsScreen(): React.JSX.Element {
           }
         />
 
-        {readFailed ? (
+        {showReadError ? (
           <View style={{ marginTop: YanjiSpacing.md }}>
             <Text
               accessibilityRole="alert"
               style={[typography.bodyPrimary, { color: colors.danger }]}
             >
-              设置读取失败，考试日期与每日时长暂时无法修改。
+              {loading ? '设置读取失败，请重新读取后修改。' : '设置更新失败，当前显示的是上次读取的内容。'}
             </Text>
             <YanjiTextAction
-              label={retrying ? '读取中…' : '重新读取'}
+              label="重新读取"
               onPress={() => void retryRead()}
               disabled={retrying}
             />
+            {retrying ? <ActivityIndicator size="small" color={colors.secondary} /> : null}
           </View>
         ) : null}
 
@@ -244,19 +255,21 @@ export function SettingsScreen(): React.JSX.Element {
           />
           <YanjiSettingRow
             label="考试日期"
-            value={examDate ? formatExamDate(examDate) : '未设置'}
+            value={loading && showReadError ? '读取失败' : examDate ? formatExamDate(examDate) : '未设置'}
             // Only the countdown earns a second line here. Why the date matters
             // belongs to the sheet that edits it, not to the page.
             hint={countdownText ?? undefined}
-            accessibilityLabel={`考试日期，${examDate ? formatExamDate(examDate) : '未设置'}${countdownText ? `，${countdownText}` : ''}，点击修改`}
-            pending={loading}
+            accessibilityLabel={loading ? '考试日期，设置尚未读取' : `考试日期，${examDate ? formatExamDate(examDate) : '未设置'}${countdownText ? `，${countdownText}` : ''}，点击修改`}
+            pending={loading && !showReadError}
+            disabled={loading}
             onPress={() => openSheetWith('examDate')}
           />
           <YanjiSettingRow
             label="每日学习时长"
-            value={formatGoalDuration(goalHours)}
-            accessibilityLabel={`每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
-            pending={loading}
+            value={loading && showReadError ? '读取失败' : formatGoalDuration(goalHours)}
+            accessibilityLabel={loading ? '每日学习时长，设置尚未读取' : `每日学习时长，${formatGoalDuration(goalHours)}，点击修改`}
+            pending={loading && !showReadError}
+            disabled={loading}
             isLast
             onPress={() => openSheetWith('dailyGoal')}
           />
@@ -270,13 +283,13 @@ export function SettingsScreen(): React.JSX.Element {
           />
           <YanjiSettingRow
             label="时间表设置"
-            value="管理每日作息"
+            hint="管理每日作息"
             accessibilityLabel="时间表设置，管理每日作息"
             onPress={openTimetable}
           />
           <YanjiSettingRow
             label="学科管理"
-            value="学科、分类与配色"
+            hint="学科、分类与配色"
             accessibilityLabel="学科管理，编辑学科、分类与配色"
             isLast
             onPress={() => openSheetWith('subjects')}
@@ -288,33 +301,25 @@ export function SettingsScreen(): React.JSX.Element {
           spaceBefore={layout.sectionGap}
           titleStyle={typography.titleGroup}
           align="center"
-          right={(
-            <YanjiPaperSegmentedControl
-              compact
-              accessibilityLabel="主题外观"
-              value={mode}
-              disabled={themeSaving}
-              options={THEME_OPTIONS.map(option => ({ value: option.mode, label: option.label }))}
-              onChange={next => void handleThemeChange(next)}
-            />
-          )}
+          right={stacked ? undefined : themeControl}
         />
+        {stacked ? themeControl : null}
         {themeError ? (
           <Text accessibilityRole="alert" style={[typography.captionMeta, { color: colors.danger, marginTop: YanjiSpacing.xs }]}>
             {themeError}
           </Text>
         ) : null}
 
+        <BackupDataSection />
+
         <View>
           <YanjiPaperSectionHeading
-            title="高级"
+            title="AI 辅助"
             spaceBefore={layout.sectionGap}
             titleStyle={typography.titleGroup}
           />
           <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} />
         </View>
-
-        <BackupDataSection />
 
         <YanjiHairline style={{ marginTop: layout.sectionGap }} />
         <Text

@@ -128,6 +128,7 @@ export class DataRefreshCoordinator {
   private readonly settingsReaders = new Set<string>();
   private settingsValue: SettingsSnapshot | null = null;
   private settingsDirty = true;
+  private settingsReadFailed = false;
   private settingsVersion = 0;
   private settingsInFlight: Promise<void> | null = null;
 
@@ -353,6 +354,10 @@ export class DataRefreshCoordinator {
 
   getSettingsSnapshot(): SettingsSnapshot | null {
     return this.settingsValue;
+  }
+
+  getSettingsReadFailed(): boolean {
+    return this.settingsReadFailed;
   }
 
   subscribeSettings(listener: Listener): () => void {
@@ -601,10 +606,14 @@ export class DataRefreshCoordinator {
         if (this.settingsVersion !== version) return;
         this.settingsValue = { settings, examCountdown };
         this.settingsDirty = false;
+        this.settingsReadFailed = false;
         this.notifyAll(this.settingsListeners);
       })
       .catch(() => {
+        if (this.settingsVersion !== version) return;
         this.settingsDirty = true;
+        this.settingsReadFailed = true;
+        this.notifyAll(this.settingsListeners);
       })
       .finally(() => {
         if (this.settingsInFlight === request) this.settingsInFlight = null;

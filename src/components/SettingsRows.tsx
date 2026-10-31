@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { YanjiIcon, YanjiHairline } from './YanjiUI';
 import type { YanjiIconName } from './icons';
 import { useYanjiTheme } from '../theme/ThemeProvider';
@@ -34,22 +34,26 @@ export function YanjiSettingRow({
   accessibilityLabel,
   isLast = false,
   pending = false,
+  busy = false,
   disabled = false,
   onPress,
 }: {
   label: string;
   /** The stored value as the page reports it; `未设置` when nothing is stored. */
-  value: string;
+  value?: string;
   /** Optional second line under the label — only when the value needs a reason. */
   hint?: string;
   accessibilityLabel?: string;
   isLast?: boolean;
   pending?: boolean;
+  busy?: boolean;
   disabled?: boolean;
   onPress: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
+  const { width, fontScale } = useWindowDimensions();
+  const stacked = width / fontScale < layout.settingsStackedWidth;
   const unset = pending || value === '未设置';
   const shown = pending ? '—' : value;
 
@@ -57,10 +61,10 @@ export function YanjiSettingRow({
     <View>
       <Pressable
         onPress={onPress}
-        disabled={disabled || pending}
+        disabled={disabled || pending || busy}
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? `${label}，${shown}`}
-        accessibilityState={{ disabled: disabled || pending }}
+        accessibilityLabel={pending ? `${label}，正在读取` : accessibilityLabel ?? [label, shown, hint].filter(Boolean).join('，')}
+        accessibilityState={{ disabled: disabled || pending || busy, busy: pending || busy }}
         style={({ pressed }) => ({
           minHeight: layout.rowMinHeight,
           flexDirection: 'row',
@@ -68,33 +72,37 @@ export function YanjiSettingRow({
           justifyContent: 'space-between',
           gap: YanjiSpacing.md,
           paddingVertical: YanjiSpacing.sm,
-          opacity: disabled || pending ? 0.45 : pressed ? 0.62 : 1,
+          opacity: disabled || pending || busy ? 0.6 : pressed ? 0.62 : 1,
         })}
       >
-        <View style={{ flexShrink: 1 }}>
+        <View style={{ flex: 1, gap: YanjiSpacing.xs }}>
           <Text style={[typography.bodyPrimary, { color: colors.ink }]}>{label}</Text>
+          {stacked && shown ? (
+            <Text style={[typography.bodyPrimary, { color: unset ? colors.secondary : colors.ink, fontWeight: '600' }]}>
+              {shown}
+            </Text>
+          ) : null}
           {hint ? (
-            <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
+            <Text style={[typography.captionMeta, { color: colors.secondary }]}>
               {hint}
             </Text>
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flexShrink: 1 }}>
-          <Text
-            numberOfLines={1}
+          {!stacked && shown ? <Text
             style={[
               typography.bodyPrimary,
               {
                 color: unset ? colors.secondary : colors.ink,
-                fontWeight: unset ? '500' : '700',
+                fontWeight: unset ? '500' : '600',
                 fontVariant: ['tabular-nums'],
                 flexShrink: 1,
               },
             ]}
           >
             {shown}
-          </Text>
-          <YanjiIcon name="forward" size={15} color={colors.secondary} />
+          </Text> : null}
+          {pending || busy ? <ActivityIndicator size="small" color={colors.secondary} /> : <YanjiIcon name="forward" size={15} color={colors.secondary} />}
         </View>
       </Pressable>
       {isLast ? null : <YanjiHairline />}
@@ -111,6 +119,8 @@ export function YanjiSettingDisclosureRow({
   summary,
   icon,
   expanded,
+  disabled = false,
+  busy = false,
   isLast = false,
   onPress,
 }: {
@@ -118,20 +128,25 @@ export function YanjiSettingDisclosureRow({
   summary: string;
   icon?: YanjiIconName;
   expanded: boolean;
+  disabled?: boolean;
+  busy?: boolean;
   isLast?: boolean;
   onPress: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
+  const { width, fontScale } = useWindowDimensions();
+  const stacked = width / fontScale < layout.settingsStackedWidth;
 
   return (
     <View>
       <Pressable
         onPress={onPress}
+        disabled={disabled || busy}
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityHint={summary}
-        accessibilityState={{ expanded }}
+        accessibilityState={{ expanded, disabled: disabled || busy, busy }}
         style={({ pressed }) => ({
           minHeight: layout.rowMinHeight,
           flexDirection: 'row',
@@ -139,18 +154,21 @@ export function YanjiSettingDisclosureRow({
           justifyContent: 'space-between',
           gap: YanjiSpacing.md,
           paddingVertical: YanjiSpacing.sm,
-          opacity: pressed ? 0.62 : 1,
+          opacity: disabled ? 0.6 : pressed ? 0.62 : 1,
         })}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flexShrink: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flex: 1 }}>
           {icon ? <YanjiIcon name={icon} size={16} color={colors.secondary} /> : null}
-          <Text style={[typography.bodyPrimary, { color: colors.ink }]}>{label}</Text>
+          <View style={{ flex: 1, gap: YanjiSpacing.xs }}>
+            <Text style={[typography.bodyPrimary, { color: colors.ink }]}>{label}</Text>
+            {stacked ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{summary}</Text> : null}
+          </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flexShrink: 1 }}>
-          <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
+          {!stacked ? <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
             {summary}
-          </Text>
-          <YanjiIcon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} color={colors.secondary} />
+          </Text> : null}
+          {busy ? <ActivityIndicator size="small" color={colors.secondary} /> : <YanjiIcon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} color={colors.secondary} />}
         </View>
       </Pressable>
       {isLast ? null : <YanjiHairline />}

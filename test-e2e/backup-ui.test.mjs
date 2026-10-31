@@ -239,7 +239,7 @@ test('the backup section renders its purpose and two data-management rows', () =
   const rows = nodes(tree, node => node.type === 'YanjiSettingRow');
   assert.deepEqual(rows.map(row => row.props.label), ['导出数据', '从备份恢复']);
   assert.equal(rows[0].props.hint, '将记录保存为本地备份文件');
-  assert.equal(rows[1].props.hint, '导入前校验文件与记录信息');
+  assert.equal(rows[1].props.hint, '先预览内容，确认后覆盖本机记录');
 });
 
 test('export stays pending until native confirms a saved file and shares one request', async () => {
@@ -254,8 +254,10 @@ test('export stays pending until native confirms a saved file and shares one req
   assert.equal(harness.calls.filter(call => call[0] === 'exportBackup').length, 1);
   assert.equal(row().props.disabled, true);
   assert.equal(rowByLabel(harness.render(), '从备份恢复').props.disabled, true);
-  assert.equal(row().props.value, '导出中…');
-  assert.equal(rowByLabel(harness.render(), '从备份恢复').props.value, '选择文件');
+  assert.equal(row().props.busy, true);
+  assert.equal(row().props.label, '导出数据');
+  assert.match(row().props.hint, /正在保存/);
+  assert.equal(rowByLabel(harness.render(), '从备份恢复').props.busy, false);
   assert.doesNotMatch(text(harness.render()), /备份已保存/);
 
   write.resolve({ fileName: 'manual-backup.json' });
@@ -296,8 +298,9 @@ test('prepare only opens a preview after staging succeeds and never restores by 
   await flush();
   assert.equal(harness.calls.filter(call => call[0] === 'prepareBackupImport').length, 1);
   assert.equal(modal(harness.render()).props.visible, false);
-  assert.equal(rowByLabel(harness.render(), '导出数据').props.value, '本地文件');
-  assert.equal(importRow().props.value, '校验中…');
+  assert.equal(rowByLabel(harness.render(), '导出数据').props.busy, false);
+  assert.equal(importRow().props.busy, true);
+  assert.match(importRow().props.hint, /正在校验/);
 
   prepare.resolve(backupPreview());
   await flush();

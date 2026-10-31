@@ -192,6 +192,10 @@ function settingsHarness({
   setThemePreference = async () => true,
   getThemePreference = async () => ({ mode: 'SYSTEM', isDark: false }),
   refreshSettingsSnapshot = async () => {},
+  readFailed = false,
+  dimensions = { width: 390, height: 844, fontScale: 1 },
+  testDecisionConnection = async () => ({ success: true, message: 'ok' }),
+  clearDecisionApiKey = async () => true,
 } = {}) {
   const states = {};
   const refs = {};
@@ -215,7 +219,7 @@ function settingsHarness({
   // row, so it needs the same component instance the page would get.
   const rows = loadTypeScript('src/components/SettingsRows.tsx', {
     react: { useState: () => [null, () => {}], useEffect: () => {} },
-    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator', useWindowDimensions: () => dimensions },
     './YanjiUI': ui,
     './icons': { getYanjiIcon: name => name, YANJI_ICON_STROKE: 1.75 },
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
@@ -239,6 +243,7 @@ function settingsHarness({
     },
     'react-native': {
       View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      ActivityIndicator: 'ActivityIndicator', useWindowDimensions: () => dimensions,
     },
     'react-native-reanimated': { useReducedMotion: () => true },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0, top: 0 }) },
@@ -302,7 +307,7 @@ function settingsHarness({
         },
         useEffect: () => {},
       },
-      'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+      'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator' },
       './YanjiUI': ui,
       './SettingsRows': rows,
       '../bridge': {
@@ -312,12 +317,12 @@ function settingsHarness({
             return updateUserSettingsImpl(patch);
           },
           saveDecisionApiKey: async () => true,
-          clearDecisionApiKey: async () => true,
+          clearDecisionApiKey: async () => { calls.push(['clearDecisionApiKey']); return clearDecisionApiKey(); },
           getDecisionApiKey: async () => '',
         },
       },
       '../services/decisionClient': {
-        testDecisionConnection: async () => ({ success: true, message: 'ok' }),
+        testDecisionConnection: async (...args) => { calls.push(['testDecisionConnection']); return testDecisionConnection(...args); },
         toBaseUrl: (url, provider) => {
           if (!url) return provider === 'typesafe' ? 'https://api.typesafe.ai/v1' : 'https://openrouter.ai/api/v1';
           return url.replace(/\/api\/alpha\/decisions$/, '/api/v1').replace(/\/v1\/systemone$/, '/v1');
@@ -332,6 +337,7 @@ function settingsHarness({
     '../theme/ThemeProvider': { useYanjiTheme: () => theme },
     '../theme/tokens': tokens,
     '../state/dataRefresh': {
+      useSettingsReadFailed: () => readFailed,
       // `null` models the window before the bridged settings read returns.
       useSettingsSnapshot: () => (settings === null ? null : {
         settings,
@@ -388,7 +394,8 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   rows[2].props.onPress();
   assert.ok(harness.calls.some(call => call[0] === 'openTimetable'));
   assert.equal(rows[3].props.label, '学科管理');
-  assert.equal(rows[3].props.value, '学科、分类与配色');
+  assert.equal(rows[3].props.value, undefined);
+  assert.equal(rows[3].props.hint, '学科、分类与配色');
   // The row opens the management screen, not a value editor.
   rows[3].props.onPress();
   const subjectsSheet = nodes(harness.render(), node => node.type === 'SubjectsSheet')[0];
@@ -402,7 +409,7 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
 test('every settings group title uses the group scale', () => {
   const tree = settingsHarness({ settings: stored() }).render();
   const headings = nodes(tree, node => node.type === 'YanjiPaperSectionHeading');
-  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '学习安排', '外观', '高级']);
+  assert.deepEqual(headings.map(heading => heading.props.title), ['备考', '学习安排', '外观', 'AI 辅助']);
   for (const heading of headings) {
     assert.deepEqual(
       plain(heading.props.titleStyle),
@@ -418,7 +425,7 @@ test('settings composes the backup data-management section without changing its 
   assert.equal(backup.length, 1, 'the settings page owns one backup section');
   assert.deepEqual(
     nodes(tree, node => node.type === 'YanjiPaperSectionHeading').map(heading => heading.props.title),
-    ['备考', '学习安排', '外观', '高级'],
+    ['备考', '学习安排', '外观', 'AI 辅助'],
     'the existing page headings remain unchanged because the section owns its own heading'
   );
 });
@@ -538,6 +545,48 @@ test('the advanced summary does not claim 未配置 before the snapshot arrives'
   const disclosure = nodes(tree, byComponent('YanjiSettingDisclosureRow'))[0];
   assert.ok(disclosure, 'the advanced block still publishes its disclosure');
   assert.equal(disclosure.props.summary, '—');
+});
+
+test('initial settings read failure shows recovery without claiming values are unset', () => {
+  const tree = settingsHarness({ settings: null, readFailed: true }).render();
+  assert.match(text(tree), /设置读取失败/);
+  assert.equal(nodes(tree, node => node.type === 'YanjiTextAction' && node.props.label === '重新读取').length, 1);
+  const rows = nodes(tree, byComponent('YanjiSettingRow')).slice(0, 2);
+  for (const row of rows) {
+    assert.equal(row.props.pending, false);
+    assert.equal(row.props.disabled, true);
+    assert.equal(row.props.value, '读取失败');
+    assert.doesNotMatch(row.props.accessibilityLabel, /未设置|点击修改/);
+  }
+  const disclosure = nodes(tree, byComponent('YanjiSettingDisclosureRow'))[0];
+  assert.equal(disclosure.props.disabled, true);
+});
+
+test('a stale settings read keeps the last values visible and offers recovery', () => {
+  const tree = settingsHarness({ settings: stored(), readFailed: true }).render();
+  assert.match(text(tree), /上次读取的内容/);
+  const rows = nodes(tree, byComponent('YanjiSettingRow'));
+  assert.equal(rows[0].props.value, '2026年12月19日');
+  assert.equal(rows[0].props.disabled, false);
+});
+
+test('compact screens and large text put the theme on its own line without truncating values', () => {
+  for (const dimensions of [{ width: 320, fontScale: 1 }, { width: 360, fontScale: 1.5 }]) {
+    const tree = settingsHarness({ settings: stored(), dimensions }).render();
+    const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading' && node.props.title === '外观')[0];
+    assert.equal(heading.props.right, undefined);
+    const row = nodes(tree, byComponent('YanjiSettingRow'))[0];
+    const values = nodes(row.type(row.props), node => node.type === 'Text' && text(node) === '2026年12月19日');
+    assert.equal(values.length, 1);
+    assert.equal(values[0].props.numberOfLines, undefined);
+  }
+});
+
+test('backup actions are placed before the infrequently used AI configuration', () => {
+  const body = pageBody(settingsHarness({ settings: stored() }).render());
+  const backupIndex = body.findIndex(node => node.type === 'BackupDataSection');
+  const aiIndex = body.findIndex(node => node.type === 'YanjiPaperSectionHeading' && node.props.title === 'AI 辅助');
+  assert.ok(backupIndex >= 0 && backupIndex < aiIndex);
 });
 
 test('the advanced block is collapsed until it is opened', () => {
@@ -685,6 +734,61 @@ test('decision-model connection feedback uses the shared icon registry', async (
   assert.doesNotMatch(text(harness.render()), /[✓✕]/);
 });
 
+test('connection tests lock the draft and prevent overlapping test, save and clear requests', async () => {
+  const result = deferred();
+  const harness = settingsHarness({ settings: stored({ hasDecisionApiKey: true }), testDecisionConnection: () => result.promise });
+  const model = openDecisionModel(harness);
+  const testButton = () => nodes(harness.render(), node => node.type === 'Pressable' && node.props.accessibilityLabel === '测试决策模型连通性')[0];
+  testButton().props.onPress();
+  testButton().props.onPress();
+  model.save().props.onPress();
+  await flush();
+  assert.equal(harness.calls.filter(call => call[0] === 'testDecisionConnection').length, 1);
+  assert.equal(harness.calls.filter(call => call[0] === 'updateUserSettings').length, 0);
+  assert.equal(model.input('模型标识').props.editable, false);
+  assert.equal(model.input('API Base URL').props.editable, false);
+  assert.equal(model.input('API Key').props.editable, false);
+  assert.equal(testButton().props.accessibilityState.busy, true);
+  assert.equal(model.disclosure().props.busy, true);
+  result.resolve({ success: true, message: '测试成功' });
+  await flush();
+  assert.equal(model.input('模型标识').props.editable, true);
+  assert.match(text(harness.render()), /测试成功/);
+  model.input('模型标识').props.onChangeText('another-model');
+  assert.doesNotMatch(text(harness.render()), /测试成功/);
+});
+
+test('clearing a saved key requires a named confirmation and preserves the key on refusal', async () => {
+  const harness = settingsHarness({ settings: stored({ hasDecisionApiKey: true }), clearDecisionApiKey: async () => false });
+  openDecisionModel(harness);
+  const action = label => nodes(harness.render(), node => node.type === 'YanjiTextAction' && node.props.label === label)[0];
+  action('清除密钥').props.onPress();
+  assert.equal(harness.calls.filter(call => call[0] === 'clearDecisionApiKey').length, 0);
+  assert.match(text(harness.render()), /重新输入 API Key/);
+  action('取消').props.onPress();
+  assert.equal(action('确认清除密钥'), undefined);
+  action('清除密钥').props.onPress();
+  action('确认清除密钥').props.onPress();
+  action('确认清除密钥').props.onPress();
+  await flush();
+  assert.equal(harness.calls.filter(call => call[0] === 'clearDecisionApiKey').length, 1);
+  assert.match(text(harness.render()), /密钥未清除，请重试/);
+  assert.ok(action('确认清除密钥'));
+  assert.ok(action('清除密钥'));
+});
+
+test('a committed key removal is reported honestly when refreshing the page fails', async () => {
+  const harness = settingsHarness({ settings: stored({ hasDecisionApiKey: true }), refreshSettingsSnapshot: async () => { throw new Error('offline'); } });
+  openDecisionModel(harness);
+  const action = label => nodes(harness.render(), node => node.type === 'YanjiTextAction' && node.props.label === label)[0];
+  action('清除密钥').props.onPress();
+  action('确认清除密钥').props.onPress();
+  await flush();
+  assert.match(text(harness.render()), /API Key 已清除，页面更新失败/);
+  assert.doesNotMatch(text(harness.render()), /密钥未清除/);
+  assert.equal(action('清除密钥'), undefined);
+});
+
 test('decision-model false or rejection preserves every draft field and a retry saves', async () => {
   for (const failure of [false, new Error('room write failed')]) {
     const write = deferred();
@@ -777,7 +881,7 @@ test('a successful settings write followed by a failed re-read is not reported a
     'the confirmed Room write closes the editor before the re-read');
   assert.equal(nodes(after, byComponent('ExamDateSheet'))[0].props.error, null,
     'a re-read failure is not misreported as a failed write');
-  assert.match(text(after), /设置读取失败/);
+  assert.match(text(after), /设置更新失败/);
 });
 
 test('exam-date save keeps the sheet open and disables its draft while Room is pending', async () => {
