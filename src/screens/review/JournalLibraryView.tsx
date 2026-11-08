@@ -154,7 +154,7 @@ export function JournalLibraryView({
               </Text>
             </View>
             <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 12, lineHeight: 18, marginBottom: 3 }]}>
-              偶遇旧日灵感与沉思 · 随机抽取
+              偶遇旧日灵感与沉思
             </Text>
             <Text style={[typography.captionMeta, { color: colors.muted, fontSize: 11 }]}>
               共 {notes.length} 篇随笔 · 左右滑动翻阅

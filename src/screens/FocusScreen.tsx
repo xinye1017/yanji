@@ -964,10 +964,6 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                       正向计时待命
                     </Text>
                   </View>
-
-                  <Text style={[paper.typography.captionMeta, { color: paper.colors.muted, marginTop: YanjiSpacing.md, textAlign: 'center' }]}>
-                    自由正向计时
-                  </Text>
                 </>
               )}
             </View>

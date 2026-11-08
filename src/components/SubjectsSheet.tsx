@@ -571,10 +571,6 @@ export function SubjectsSheet({
                 </Text>
               ) : null}
 
-              <Text style={[typography.captionMeta, { color: colors.secondary, textAlign: 'center', marginBottom: YanjiSpacing.md }]}>
-                修改学科名称将同步更新历史专注记录与统计
-              </Text>
-
               <Pressable
                 onPress={confirmRestoreDefaults}
                 accessibilityRole="button"

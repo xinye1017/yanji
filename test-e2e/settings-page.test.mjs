@@ -130,7 +130,7 @@ test('countdown distinguishes a future exam, the exam day, and a past date', () 
   assert.equal(logic.examCountdownText('2026-12-19', '2026-10-17'), '距初试 63 天');
   assert.equal(logic.examCountdownText('2026-10-17', '2026-10-17'), '今天就是初试日');
   // The native payload clamps at 0 and so cannot tell these two apart.
-  assert.equal(logic.examCountdownText('2026-10-01', '2026-10-17'), '已过设定日期 16 天');
+  assert.equal(logic.examCountdownText('2026-10-01', '2026-10-17'), '初试已过 16 天');
   assert.equal(logic.examCountdownText('', '2026-10-17'), null);
 });
 

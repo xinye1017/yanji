@@ -685,7 +685,8 @@ test('the journal heading carries order and fold, and the plan keeps the reading
   const capture = nodes(tree, node => node.type === 'YanjiCaptureCard')[0];
   assert.ok(capture, 'the journal offers its capture card even with no notes');
   assert.equal(capture.props.title, '记录此刻');
-  assert.equal(capture.props.hint, '一个想法、一处卡点、一点收获');
+  assert.equal(capture.props.hint, undefined,
+    'the entry states its action; the modal placeholder carries the writing prompt');
   assert.equal(capture.props.accessibilityLabel, '记录此刻，新建今日随笔');
   assert.doesNotMatch(text(tree), /还没有记录，想到什么就写一条/,
     'the invitation replaces the old empty-state sentence instead of repeating it');

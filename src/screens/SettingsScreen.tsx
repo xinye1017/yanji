@@ -283,8 +283,7 @@ export function SettingsScreen(): React.JSX.Element {
           />
           <YanjiSettingRow
             label="时间表设置"
-            hint="管理每日作息"
-            accessibilityLabel="时间表设置，管理每日作息"
+            accessibilityLabel="时间表设置"
             onPress={openTimetable}
           />
           <YanjiSettingRow

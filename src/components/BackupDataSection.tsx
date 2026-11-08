@@ -242,12 +242,9 @@ export function BackupDataSection(): React.JSX.Element {
         spaceBefore={layout.sectionGap}
         titleStyle={typography.titleGroup}
       />
-      <Text style={[typography.captionMeta, { color: colors.secondary, marginBottom: YanjiSpacing.sm }]}>
-        手动保存和迁移学习数据
-      </Text>
       <YanjiSettingRow
         label="导出数据"
-        hint={operation === 'export' ? '正在保存备份文件…' : '将记录保存为本地备份文件'}
+        hint={operation === 'export' ? '正在保存备份文件…' : undefined}
         busy={operation === 'export'}
         accessibilityLabel="导出数据，将记录保存为本地备份文件"
         disabled={operation !== null}

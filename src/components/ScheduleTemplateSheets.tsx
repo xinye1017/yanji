@@ -67,7 +67,7 @@ function SheetShell({
 }: {
   visible: boolean;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   pending?: boolean;
   /** 变化时把弹层滚到底部，让重命名输入与确认动作避开键盘。 */
   scrollKey?: string | null;
@@ -446,7 +446,7 @@ export function ScheduleTemplateManagerSheet({
               { color: colors.secondary, paddingVertical: YanjiSpacing.md },
             ]}
           >
-            还没有模板。新建一套，把一天的学习节奏排出来。
+            还没有模板。
           </Text>
         ) : null}
 
@@ -917,7 +917,7 @@ export function ScheduleTemplateEditor({
                     { color: colors.secondary, paddingVertical: YanjiSpacing.md, lineHeight: 22 },
                   ]}
                 >
-                  还没有时间段。添加第一段，把一天的学习节奏排出来。
+                  还没有时间段。
                 </Text>
               ) : (
                 <View>
@@ -1017,19 +1017,6 @@ export function ScheduleTemplateEditor({
                   disabled={saving}
                 />
               </View>
-              <Text
-                style={[
-                  typography.captionMeta,
-                  {
-                    color: colors.secondary,
-                    textAlign: 'center',
-                    marginTop: YanjiSpacing.md,
-                    lineHeight: 18,
-                  },
-                ]}
-              >
-                保存后可以在时间轴上安排作息。
-              </Text>
               <View style={{ height: YanjiSpacing.xs }} />
             </>
           )}
@@ -1236,7 +1223,7 @@ export function ScheduleSubjectPickerSheet({
     <SheetShell
       visible={visible}
       title="开始专注"
-      subtitle={blockTitle ? `${blockTitle} · 选择记入的学科` : '选择记入的学科'}
+      subtitle={blockTitle || undefined}
       onClose={onClose}
     >
       <View style={{ marginTop: YanjiSpacing.md }}>

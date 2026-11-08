@@ -120,7 +120,7 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
       <View style={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg }}>
-        <YanjiEditorialHeader title="时间表设置" subtitle="安排每天的作息" trailing={<YanjiIconButton icon="close" accessibilityLabel="返回设置" onPress={onClose} tone="filled" />} />
+        <YanjiEditorialHeader title="时间表设置" trailing={<YanjiIconButton icon="close" accessibilityLabel="返回设置" onPress={onClose} tone="filled" />} />
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: YanjiSpacing.md }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: YanjiSpacing.xs }} style={{ flex: 1 }}>
             {templates.map(item => <YanjiChip key={item.id} label={item.name} selected={item.id === selectedId} onPress={() => setSelectedId(item.id)} />)}
@@ -134,7 +134,7 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
         <ScrollView ref={scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: insets.bottom + YanjiSpacing.xl }} onLayout={() => scroll.current?.scrollTo({ y: 8 * 80, animated: false })}>
           <ScheduleTimeline blocks={template.blocks} disabled={saving} onAdd={addBlock} onEdit={editBlock} onChange={(index, next) => void changeBlock(index, next)} />
         </ScrollView>
-      ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : '还没有作息模板，先新建一套。'}</Text>{!loading ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
+      ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : '还没有作息模板。'}</Text>{!loading ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
       <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={editTemplate} />
       <ScheduleTemplateEditor draft={draft} subjects={subjects} saving={saving} error={editorError} initialBlock={initialBlock} onClose={() => { if (!saving) { setDraft(null); setInitialBlock(null); } }} onSave={next => void save(next)} />
     </View>

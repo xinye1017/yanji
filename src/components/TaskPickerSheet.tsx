@@ -88,7 +88,6 @@ export function TaskPickerSheet({
         >
           <YanjiPaperSheetHeading
             title="关联今日计划"
-            subtitle="学科与时长会按任务计划带入，可再调整"
             onClose={onClose}
           />
           <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>

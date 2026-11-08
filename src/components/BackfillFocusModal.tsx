@@ -229,7 +229,7 @@ export function BackfillFocusModal({
         >
           <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: paper.radius.pill, backgroundColor: paper.colors.hairline, marginBottom: YanjiSpacing.lg }} />
 
-          <YanjiPaperSheetHeading title="补录专注" subtitle="记录一段已经发生的专注" onClose={onClose} />
+          <YanjiPaperSheetHeading title="补录专注" onClose={onClose} />
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 <Text style={[paper.typography.captionMeta, { color: paper.colors.secondary }]}>哪天</Text>

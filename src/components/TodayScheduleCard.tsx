@@ -144,7 +144,7 @@ export function TodayScheduleCard({
         </Text>
       ) : !template ? (
         <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-          还没有时间表，先安排一天的节奏。
+          还没有时间表。
         </Text>
       ) : blocks.length === 0 ? (
         <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>

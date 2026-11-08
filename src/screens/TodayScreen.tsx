@@ -603,7 +603,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
   // pages contradict each other after the exam date.
   const countdownExamDate = countdown?.examDate ?? '';
   const countdownLocal = countdownExamDate ? examCountdownText(countdownExamDate, todayIso()) : null;
-  // `examCountdownText` already reads 「距初试 N 天」/「已过设定日期 N 天」, so the
+  // `examCountdownText` already reads 「距初试 N 天」/「初试已过 N 天」, so the
   // badge only adds the year it belongs to rather than restating the count.
   const countdownLabel = countdown && countdownLocal
     ? `${countdownExamDate.slice(0, 4)} 考研 ${countdownLocal}`
@@ -829,7 +829,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <View style={{ marginTop: YanjiSpacing.sm }}>
           <YanjiCaptureCard
             title="记录此刻"
-            hint="一个想法、一处卡点、一点收获"
             accessibilityLabel="记录此刻，新建今日随笔"
             onPress={newNote}
           />
@@ -1106,7 +1105,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
               paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg, paddingBottom: insets.bottom + YanjiSpacing.lg,
             }, carryOverSheetStyle]}>
               <YanjiPaperSheetHeading title={`待处理计划 (${visibleCarryOverTasks.length} 项)`}
-                subtitle="保留原计划日期，选择接下来如何安排。" onClose={closeCarryOver} />
+                subtitle="保留原计划日期。" onClose={closeCarryOver} />
               <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
                 {carryOverReadFailed ? (
                   <YanjiStaleDataNotice message="读取失败，以下计划可能不是最新。"

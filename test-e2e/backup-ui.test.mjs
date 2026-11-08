@@ -227,18 +227,19 @@ async function openPreview(harness) {
   assert.equal(modal(harness.render()).props.visible, true, 'native staging opens the preview');
 }
 
-test('the backup section renders its purpose and two data-management rows', () => {
+test('the backup section renders two data-management rows', () => {
   const harness = backupHarness();
   const tree = harness.render();
 
   const heading = nodes(tree, node => node.type === 'YanjiPaperSectionHeading')[0];
   assert.equal(heading.props.title, '数据管理');
   assert.deepEqual(plain(heading.props.titleStyle), plain(theme.paper.typography.titleGroup));
-  assert.match(text(tree), /手动保存和迁移学习数据/);
+  assert.doesNotMatch(text(tree), /手动保存和迁移学习数据/,
+    'the rows state what they do; the section does not repeat it');
 
   const rows = nodes(tree, node => node.type === 'YanjiSettingRow');
   assert.deepEqual(rows.map(row => row.props.label), ['导出数据', '从备份恢复']);
-  assert.equal(rows[0].props.hint, '将记录保存为本地备份文件');
+  assert.equal(rows[0].props.hint, undefined, 'export is named by its row, not explained');
   assert.equal(rows[1].props.hint, '先预览内容，确认后覆盖本机记录');
 });
 

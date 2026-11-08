@@ -794,7 +794,7 @@ function TimelineState({ loading, entryCount, planCount }: {
   if (entryCount > 0) return null;
   const message = planCount > 0
     ? '这一天只留下了计划，还没有专注片段或随笔。'
-    : '这一天还没有记录。专注片段和随笔会留在这里。';
+    : '这一天还没有记录。';
   return <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: paper.layout.sectionGap }]}>{message}</Text>;
 }
 
@@ -1094,11 +1094,9 @@ function TrendSummary({
 
   // One sentence, read straight off the figures above it. No forecast, no
   // coaching, nothing the data cannot support.
-  const insightLine = !overview || overview.totalSeconds <= 0
+  const insightLine = !overview || overview.totalSeconds <= 0 || !peak
     ? null
-    : peak
-      ? `最长投入日为 ${peak.dayLabel}（${formatDuration(peak.totalMinutes * 60)}）${distribution[0] ? `，${distribution[0].subjectName}占比最高（${formatPercent(distribution[0].share)}）` : ''}。`
-      : '已沉淀真实专注数据，继续保持专注节奏。';
+    : `最长投入日为 ${peak.dayLabel}（${formatDuration(peak.totalMinutes * 60)}）${distribution[0] ? `，${distribution[0].subjectName}占比最高（${formatPercent(distribution[0].share)}）` : ''}。`;
 
   return (
     <>
@@ -1287,7 +1285,7 @@ function TrendSummary({
       </View>
       {!distribution.length ? (
         <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: YanjiSpacing.md }]}>
-          {overview ? '空白轨道，等待下一段真实的投入。' : '正在读取学科统计…'}
+          {overview ? '暂无学科投入。' : '正在读取学科统计…'}
         </Text>
       ) : null}
 

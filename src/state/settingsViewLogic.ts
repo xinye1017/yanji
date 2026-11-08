@@ -85,7 +85,7 @@ export function examCountdownText(iso: string, today: string): string | null {
   if (remaining === null) return null;
   if (remaining > 0) return `距初试 ${remaining} 天`;
   if (remaining === 0) return '今天就是初试日';
-  return `已过设定日期 ${-remaining} 天`;
+  return `初试已过 ${-remaining} 天`;
 }
 
 /** `6 小时`, `6 小时 30 分钟`, `未设置` when no positive goal is stored. */

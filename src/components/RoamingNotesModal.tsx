@@ -253,7 +253,7 @@ export function RoamingNotesModal({
                   { color: colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.sm, lineHeight: 20 },
                 ]}
               >
-                在时间线点击「记录此刻」记录灵感与疑点，随笔将在此漫游浮现。
+                在时间线点击「记录此刻」写下随笔。
               </Text>
             </View>
           ) : currentNote ? (
