@@ -4,7 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TimerCompletionFeedbackTest {
-    private val completion = TimerCompletion("session", "高等数学", 1500L, false)
+    private val completion = TimerCompletion("session", "高等数学", 1500L, false, recorded = true)
 
     @Test fun backgroundCompletionBelongsToNotificationAndIsNotReplayedAsCard() {
         val state = TimerCompletionFeedbackState()

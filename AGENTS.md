@@ -52,7 +52,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 
 ## 二、核心机制与避坑铁律（必读 ⚠️）
 
-> **Shell 环境声明**：本仓库 Agent 运行环境推荐为 **Git Bash (POSIX sh)**；PowerShell 命令仅适用于 Windows 本机手动交互执行。下文凡标注 `bash` / `powershell` 的示例，请按**当前会话实际 shell** 选择，不要混用两套语法。
+> **Shell 环境声明**：本机为 Windows。**所有本地验证与 Gradle 命令一律使用 PowerShell 语法**（`.\gradlew.bat`），**严禁** Linux 风格的 `./gradlew`。若 Agent 工具 shell 为 Git Bash，必须通过 `powershell.exe -NoProfile -Command '.\gradlew.bat <task> --stacktrace'` 执行，不得直接用 `./gradlew.bat`。ADB 设备脚本仍按 §五 / §六 的 Bash 示例执行；下文凡标注 `bash` / `powershell` 的示例，按用途选择，不要混用两套语法。
 
 ### 1. 【最关键】ADB 发现与安装必须落在同一次工具调用内
 
@@ -83,7 +83,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 - **痛点现象**：部分 Agent 或开发者构建耗时常常超过 2~3 分钟，甚至出现进程假死、超时无响应。
 - **根因与避坑铁律**：
   1. **精准指定 Task，严禁盲目执行 `build`**：
-     - 日常推送只需生成 Debug 安装包，执行 `assembleDebug`。
+     - 日常调试只需生成 Debug 安装包，执行 `assembleDebug`；推送前的 Lint 与单元测试单独按 §五.0 执行。
      - **严禁执行 `gradlew build`**：`build` 任务会触发完整的单元测试套件、全仓库 Lint 扫描、各构建变体校验，耗时漫长且容易因非阻塞性 warning 挂起或中断。
   2. **严禁日常构建盲目 `clean`**：
      - **切勿习惯性添加 `clean`**（如 `gradlew clean assembleDebug`）。
@@ -93,7 +93,8 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
      - 保留常驻 Gradle Daemon，**严禁添加 `--no-daemon`**。
      - 本仓库已启用 Configuration Cache，预热后无需重复解析 Gradle 依赖配置。
   4. **Windows 平台脚本后缀与执行方式**：
-     - Windows 无论在 PowerShell 还是 Git Bash 下，均必须显式调用 `gradlew.bat`（PowerShell 下 `.\gradlew.bat assembleDebug`，Git Bash 下 `./gradlew.bat assembleDebug`）。
+     - 一律使用 PowerShell 语法调用 `.\gradlew.bat`；**严禁** `./gradlew` 或省略 `.bat` 的无后缀写法。
+     - Git Bash 工具会话通过 `powershell.exe -NoProfile -Command '.\gradlew.bat assembleDebug --stacktrace'` 桥接执行。
      - 若省略 `.bat` 直接调用无后缀的 `gradlew`，在 Windows 非 POSIX 环境下易被错误关联，甚至出现管道挂起假死。
 
 ### 6. 【铁律】系统浅色 / 深色模式：产品只读；模拟器自由验证，真机须授权并还原
@@ -125,7 +126,7 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
 10. **无证据不宣称通过**：严格区分「编译成功」「测试执行成功」「模拟器安装启动成功」「真机安装启动成功」；未运行项必须显式标注，环境故障不得伪装成产品缺陷。
 11. **默认模拟器 / 真机按需**：日常测试一律在 Android 模拟器进行，模拟器上截图、交互、改设置与测试数据**不受限制**。只有用户明确要求「实机测试」时才推送手机；手机端只允许 `install -r -d` + `am start`，**禁止**截图、录屏、`uiautomator`、模拟点击/滑动、修改系统设置、抓库/备份/清数据等调试操作，除非用户逐项明确授权。系统深浅色按 §二.6 执行（模拟器自由验证；真机仅在明确实机测试且授权时切换并还原）。
-12. **修改完成必须 Git 提交与推送**：任务修改完成并验证后，**不需要**在个人知识库记录工作日志；必须针对目标改动文件执行 `git commit` 与 `git push`，并在提交时附加简略、概括性的提交信息（严禁提交未要求修改的在途文件）。
+12. **修改完成必须 Git 提交与推送**：任务修改完成并验证后，**不需要**在个人知识库记录工作日志；推送前必须先按 §五.0 完成 `lintDebug`、`testDebugUnitTest` 与 `assembleDebug` 三项本地验证，再针对目标改动文件执行 `git commit` 与 `git push`，并在提交时附加简略、概括性的提交信息（严禁提交未要求修改的在途文件）。
 13. **系统深浅色：产品逻辑只读，模拟器自由验证，真机授权并还原**：严禁在应用代码里写系统级深浅色（`UiModeManager` 等）；模拟器可自由切换验证；真机仅在用户明确要求实机测试且授权时临时切换，**前提是先记录基线、测完还原、如实报告**（见 §二.6）。
 
 ---
@@ -198,18 +199,34 @@ Level 5  长期沉淀事实 —— .workbuddy/memory/MEMORY.md（经验证的环
 
 ## 五、标准构建与设备部署流程（默认模拟器）
 
+### 第零步（每次 push 前必做）：本地验证流水线
+
+CI 的构建作业定义在 `.github/workflows/android-quality.yml`，核心步骤为 `:app:testDebugUnitTest` → `:app:lintDebug` → `:app:assembleDebug` → `:app:assembleRelease`，并另有 JS 守卫、typecheck、`npm test` 与 bundle 同步检查。**本地推送门禁至少完成 Lint、单元测试与 Debug 打包三项**，按下列顺序在 **PowerShell** 中逐条执行，并检查每一步的 Exit Code；任一步失败立即停止，不得继续后续命令：
+
+```powershell
+.\gradlew.bat lintDebug --stacktrace
+.\gradlew.bat testDebugUnitTest --stacktrace
+.\gradlew.bat assembleDebug --stacktrace
+```
+
+- **免二次下载**：直接使用本机已有的 Android SDK、JDK 与 Gradle 缓存；禁止为此流程重新下载依赖、执行 `clean` 或改写 `build`。
+- **Git Bash 会话**：通过 `powershell.exe -NoProfile -Command '.\gradlew.bat lintDebug --stacktrace'` 逐条桥接执行，严禁改用 `./gradlew`。
+- **失败自愈**：停止后续步骤，读取 `app/build/reports/lint-results-debug.html` 与 `app/build/reports/tests/testDebugUnitTest/` 定位根因文件与行号；修复后只重跑失败的步骤，直到整条流水线通过。
+- **通过标准**（推送前逐项确认）：
+  - [ ] Lint 静态检查通过
+  - [ ] 单元测试通过（记录通过数 / 跳过数）
+  - [ ] `app/build/outputs/apk/debug/app-debug.apk` 生成成功
+  - [ ] 输出：「本地验证全部通过，可以安全执行 git push。」
+
 ### 第一步：编译构建 APK
 
 **原则**：严禁 `clean`，严禁 `build`；只执行 `assembleDebug` 利用增量与配置缓存，30 秒内完成构建（详见 §二.5）。
 
-- **Bash (Git Bash，本仓库 Agent 默认)**：
-  ```bash
-  ./gradlew.bat assembleDebug
-  ```
-- **PowerShell (Windows 本机手动执行)**：
-  ```powershell
-  .\gradlew.bat assembleDebug
-  ```
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+> Git Bash 工具会话以 `powershell.exe -NoProfile -Command '.\gradlew.bat assembleDebug'` 执行；严禁 `./gradlew`。
 
 ### 第二步：安装到模拟器并启动（默认，所有日常测试）
 
@@ -291,7 +308,8 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 | `*.yanji-backup` / `*.backup.json` / 密钥库（`*.jks` / `*.keystore` / `*.pem` / `*.pfx`） | **绝不提交** |
 | 日常 UI / 业务改动 | 编译 + **模拟器**安装启动与测试；**不碰真机**；模拟器上截图/交互/测试数据不受限；**不跑**备份 / 抓库 |
 | 用户明确要求「实机测试」 | 才允许推送手机；仅覆盖安装 + 拉起主界面；**禁止**截图/录屏/`uiautomator`/模拟交互/改设置/抓库/备份/清数据，除非逐项授权 |
-| 仅有的两个例外：改动 Room Schema 需验证迁移链 | 才先跑 `:app:testDebugUnitTest` 迁移测试，必要时才备份 |
+| 任何推送前 | **必做** §五.0：`lintDebug` → `testDebugUnitTest` → `assembleDebug`，任一步失败先修复再继续 |
+| 改动 Room Schema 需验证迁移链 | 额外确认 `testDebugUnitTest` 中的迁移用例通过，必要时才备份 |
 
 > 权威忽略清单以仓库根 `.gitignore` 为准；本表为速查。
 
@@ -299,9 +317,10 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 每次任务执行修改完成后，需遵循以下交付闭环：
 1. **无需外部知识库留档**：**不需要**保存工作日志到个人知识库。
-2. **精准暂存目标文件**：严禁无脑 `git add .` 或 `git commit -a`；必须精准指定本次任务实际改动的文件（如 `git add <file>`），严格保护其他在途修改。
-3. **附加简略概括的提交信息**：执行 `git commit -m "<简略概括的提交信息>"`，提交信息应简明扼要概括核心改动（如 `fix: 修复...`、`feat: 新增...`、`docs: 更新...`）。
-4. **推送到远端**：执行 `git push` 推送至远端分支。
+2. **推送前本地验证**：按 §五.0 在 PowerShell 中依次执行 `lintDebug`、`testDebugUnitTest`、`assembleDebug`，全部通过后才可提交推送。
+3. **精准暂存目标文件**：严禁无脑 `git add .` 或 `git commit -a`；必须精准指定本次任务实际改动的文件（如 `git add <file>`），严格保护其他在途修改。
+4. **附加简略概括的提交信息**：执行 `git commit -m "<简略概括的提交信息>"`，提交信息应简明扼要概括核心改动（如 `fix: 修复...`、`feat: 新增...`、`docs: 更新...`）。
+5. **推送到远端**：执行 `git push` 推送至远端分支。
 
 ---
 
@@ -309,4 +328,4 @@ adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $
 
 1. **唯一入口**：本文是仓库主要的 Agent 操作指南与工程规范；其他开发手册与本文冲突时以本文（除代码与 ADR 外）为准。
 2. **修订原则**：只保留清晰可落地的规范与原则，不堆砌冗余报告；易漂移的事实一律改为引用式（§四）。
-3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、**默认模拟器测试 / 真机按需推送 / 真机禁截图等调试操作**、模拟器无测试限制、系统深浅色「产品只读 + 模拟器自由验证 + 真机授权还原」原则、必要的数据与计时安全、提交 / 忽略与 Git 推送纪律。**不要将旧卡片风格、固定配色、零边框或历史圆角规格升级为不可变规范**。
+3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、**默认模拟器测试 / 真机按需推送 / 真机禁截图等调试操作**、模拟器无测试限制、系统深浅色「产品只读 + 模拟器自由验证 + 真机授权还原」原则、**推送前本地验证流水线（§五.0）**、必要的数据与计时安全、提交 / 忽略与 Git 推送纪律。**不要将旧卡片风格、固定配色、零边框或历史圆角规格升级为不可变规范**。
