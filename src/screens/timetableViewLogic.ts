@@ -36,7 +36,6 @@ export interface ScheduleFocusOption {
   subjectName: string;
   /** 时间表里展示的科目名，例如「数学」「408」。 */
   label: string;
-  colorHex: string;
 }
 
 function pad2(value: number): string {
@@ -316,23 +315,9 @@ export function focusOptionsForBlock(
       subjectId: subject.id,
       subjectName: subject.name,
       label: subject.name,
-      colorHex: subject.colorHex,
     });
   }
   return options;
-}
-
-/** 时间轴科目标签的颜色；找不到学科时回落到中性色。 */
-export function subjectColorForBlock(
-  subjectIds: readonly string[],
-  subjects: readonly Subject[],
-  fallback: string
-): string {
-  for (const id of subjectIds) {
-    const subject = subjects.find(item => item.id === id);
-    if (subject) return subject.colorHex;
-  }
-  return fallback;
 }
 
 /** 周条里的日期数字。 */

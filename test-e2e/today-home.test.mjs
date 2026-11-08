@@ -78,18 +78,23 @@ test('Chinese dates and durations retain truthful zero and subminute values', ()
   assert.equal(logic.taskMeta(task({ actualMinutes: 45 })), '已投入 45m 预计 1h30m');
 });
 
-test('subject legend includes genuine planned subjects at zero and keeps their color', () => {
+test('subject legend includes genuine planned subjects at zero on the single accent ramp', () => {
   const saved = [session('a', '09:00', '09:30')];
-  const summary = logic.summarizeSubjects(saved, theme.paper.colors.secondary);
-  const legend = logic.spectrumLegend(summary, [task(), task({ subjectId: 'politics', subjectName: '政治', subjectColor: '#DC2626' })]);
+  const summary = logic.summarizeSubjects(saved, theme.paper.colors.accentRamp);
+  const legend = logic.spectrumLegend(
+    summary,
+    [task(), task({ subjectId: 'politics', subjectName: '政治', subjectColor: '#DC2626' })],
+    theme.paper.colors.accentRamp,
+  );
   assert.equal(legend.length, 2);
   assert.equal(legend[0].seconds, 1800);
   assert.equal(legend[1].seconds, 0);
-  assert.equal(legend[1].color, '#DC2626');
+  assert.equal(legend[1].color, theme.paper.colors.accentRamp[1],
+    'a planned-only subject stays on the page accent ramp, not its catalogue colour');
   assert.equal(saved[0].durationSeconds, 1800);
   const reordered = logic.summarizeSubjects([
     session('b', '10:00', '10:50', { subjectId: 'english' }), ...saved,
-  ], theme.paper.colors.secondary);
+  ], theme.paper.colors.accentRamp);
   assert.equal(reordered[1].id, 'math', 'series order must not depend on duration rank');
 });
 
@@ -104,18 +109,18 @@ test('rhythm clips to each local hour, allocates paused spans faithfully, and ag
     session('clock-mismatch', '13:00', '13:20', { durationSeconds: 300 }),
     session('last', '23:45', '24:00'),
   ];
-  const buckets = logic.buildRhythmBuckets(date, sessions, theme.paper.colors.secondary);
+  const buckets = logic.buildRhythmBuckets(date, sessions, theme.paper.colors.brand);
   const hour = h => buckets.find(bucket => bucket.hour === h);
   assert.equal(buckets.length, 18);
   assert.equal(hour(6).seconds, 900);
   assert.equal(hour(9).seconds, 900);
   assert.equal(hour(10).seconds, 900);
   assert.equal(hour(11).seconds, 2100);
-  assert.equal(hour(11).color, '#356AE6', 'two short math sessions together outweigh the English session');
+  assert.equal(hour(11).color, theme.paper.colors.brand, 'every studied hour draws the one page accent');
   assert.equal(hour(12).seconds, 1200, 'paused session is faithfully allocated to its active hour');
   assert.equal(hour(13).seconds, 300, 'session with duration mismatch is faithfully allocated');
   assert.equal(hour(23).seconds, 900);
-  assert.equal(logic.summarizeSubjects(sessions, theme.paper.colors.secondary).reduce((sum, item) => sum + item.seconds, 0),
+  assert.equal(logic.summarizeSubjects(sessions, theme.paper.colors.accentRamp).reduce((sum, item) => sum + item.seconds, 0),
     sessions.reduce((sum, item) => sum + item.durationSeconds, 0), 'timeline spans count toward saved investment');
 });
 
@@ -155,7 +160,7 @@ test('tiny spectrum progress reserves colored space and loading never announces 
 test('task controls keep completion, editing, and focus separate; completed rows have no focus capsule', () => {
   const calls = [];
   const props = {
-    title: '积分练习', subjectName: '数学一', accentColor: '#356AE6', meta: '实际专注 0m',
+    title: '积分练习', subjectName: '数学一', meta: '实际专注 0m',
     onToggle: () => calls.push('toggle'), onEdit: () => calls.push('edit'), onStartFocus: () => calls.push('focus'),
   };
   const row = shared.YanjiTaskLedgerRow({ ...props, completed: false });
@@ -180,29 +185,27 @@ test('task controls keep completion, editing, and focus separate; completed rows
   assert.equal(nodes(completed, node => node.props.accessibilityRole === 'checkbox')[0].props.accessibilityState.checked, true);
 });
 
-test('task subject labels render as a rounded rectangle badge with the subject colour (Scheme A)', () => {
+test('task subject labels render in the page accent, never a per-subject hue', () => {
   const original = theme.paper.colors;
   try {
     for (const colors of Object.values(tokens.YanjiPaperColors)) {
       theme.paper.colors = colors;
-      for (const accentColor of ['#16A34A', '#356AE6', '#DC2626']) {
-        const row = shared.YanjiTaskLedgerRow({
-          title: '积分练习', subjectName: '数学一', meta: '已投入 0m', accentColor,
-          completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
-        });
-        const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
-        assert.equal(label.props.style.color, accentColor, 'Scheme A: subject label text carries the subject color');
-        const badge = nodes(row, n => n.type === 'View' && n.props.style?.backgroundColor === tokens.toSubtleColor(accentColor, 0.14))[0];
-        assert.ok(badge, 'Scheme A: subject label lives in a tinted rounded-rectangle badge');
-        assert.equal(badge.props.style.borderRadius, theme.paper.radius.tag);
+      const row = shared.YanjiTaskLedgerRow({
+        title: '积分练习', subjectName: '数学一', meta: '已投入 0m',
+        completed: false, onToggle() {}, onEdit() {}, onStartFocus() {},
+      });
+      const label = nodes(row, n => n.type === 'Text' && n.props.children === '数学一')[0];
+      assert.equal(label.props.style.color, colors.brandInk, 'the subject label carries the page accent');
+      const badge = nodes(row, n => n.type === 'View' && n.props.style?.backgroundColor === colors.brandSubtle)[0];
+      assert.ok(badge, 'the subject label lives in a tinted rounded-rectangle badge');
+      assert.equal(badge.props.style.borderRadius, theme.paper.radius.tag);
 
-        const completedRow = shared.YanjiTaskLedgerRow({
-          title: '积分练习', subjectName: '数学一', meta: '已投入 0m', accentColor,
-          completed: true, onToggle() {}, onEdit() {}, onStartFocus() {},
-        });
-        const completedLabel = nodes(completedRow, n => n.type === 'Text' && n.props.children === '数学一')[0];
-        assert.equal(completedLabel.props.style.color, colors.secondary, 'completed task recedes to secondary text');
-      }
+      const completedRow = shared.YanjiTaskLedgerRow({
+        title: '积分练习', subjectName: '数学一', meta: '已投入 0m',
+        completed: true, onToggle() {}, onEdit() {}, onStartFocus() {},
+      });
+      const completedLabel = nodes(completedRow, n => n.type === 'Text' && n.props.children === '数学一')[0];
+      assert.equal(completedLabel.props.style.color, colors.secondary, 'completed task recedes to secondary text');
     }
   } finally {
     theme.paper.colors = original;
@@ -491,7 +494,7 @@ test('production homepage shows truthful task metadata and expands rhythm only o
   assert.equal(rows[0].props.completed, false);
   assert.equal(rows[1].props.completed, true);
   assert.equal(rows[1].props.meta, '实际专注 0m');
-  assert.equal(rows[0].props.accentColor, pending.subjectColor);
+  assert.equal(rows[0].props.subjectName, pending.subjectName);
   rows[0].props.onStartFocus();
   assert.equal(harness.calls[0][1].taskId, pending.id);
   assert.equal(nodes(tree, node => node.type === 'YanjiPaperSegmentedControl').length, 0);
@@ -997,8 +1000,8 @@ test('a morning focus session with pauses is properly displayed on the rhythm ch
   assert.ok(h10.seconds > 0, 'hour 10 must have allocated seconds');
   assert.ok(h11.seconds > 0, 'hour 11 must have allocated seconds');
   assert.equal(h10.seconds + h11.seconds, 1800, 'total allocated seconds across hours equals session duration');
-  assert.equal(h10.color, '#2D7A5E', 'hour 10 takes the session subject color');
-  assert.equal(h11.color, '#2D7A5E', 'hour 11 takes the session subject color');
+  assert.equal(h10.color, theme.paper.colors.brand, 'hour 10 takes the page accent');
+  assert.equal(h11.color, theme.paper.colors.brand, 'hour 11 takes the page accent');
 
   // The chart's spoken summary retains the measured focus time.
   assert.match(chart.props.accessibilityLabel, /06:00 之后已确认 30 分钟 连续专注/);

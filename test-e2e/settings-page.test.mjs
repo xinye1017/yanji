@@ -395,7 +395,7 @@ test('settings prints the stored exam date, countdown and daily goal', () => {
   assert.ok(harness.calls.some(call => call[0] === 'openTimetable'));
   assert.equal(rows[3].props.label, '学科管理');
   assert.equal(rows[3].props.value, undefined);
-  assert.equal(rows[3].props.hint, '学科、分类与配色');
+  assert.equal(rows[3].props.hint, '学科与分类');
   // The row opens the management screen, not a value editor.
   rows[3].props.onPress();
   const subjectsSheet = nodes(harness.render(), node => node.type === 'SubjectsSheet')[0];

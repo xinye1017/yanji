@@ -262,7 +262,7 @@ function deferred() {
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-test('a session renders as a single-line tag capsule with subject colour and duration, decoupled from note editing', () => {
+test('a session renders as a single-line tag capsule in the page accent with duration, decoupled from note editing', () => {
   const harness = screenHarness(snapshot({
     sessions: [session({ note: '手画了一遍指针断链过程', taskId: 'task-os-ch4' })],
     tasks: [{
@@ -277,8 +277,7 @@ test('a session renders as a single-line tag capsule with subject colour and dur
 
   assert.equal(row.props.tagLabel, '数据结构');
   assert.equal(row.props.tagIcon, 'clock3', 'every focus subject shares the clock icon');
-  assert.equal(row.props.tagColor, '#2D7A5E', 'tag carries the subject colour');
-  assert.equal(row.props.dotColor, '#2D7A5E', 'the node keeps the subject colour');
+  assert.equal(row.props.tagTone, 'brand', 'the tag and node carry the one page accent');
   assert.equal(row.props.content, undefined, 'no body text / "专注" line on sessions');
   assert.equal(row.props.metaText, '2 小时 6 分', 'duration rides beside the capsule');
   assert.equal(row.props.isFirst, true);

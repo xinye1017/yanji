@@ -252,11 +252,11 @@ test('the clock sits on the page gutter, and the dot/chip follow the tag tone', 
   assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brandSubtle)[0]);
   assert.ok(nodes(doubt, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brand)[0]);
 
-  const session = h.render({ tagLabel: '数据结构', tagTone: 'neutral', dotColor: '#2D7A5E', metaText: '30分钟' });
-  assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === '#2D7A5E')[0],
-    'a session keeps its subject-coloured dot');
-  assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.subtle)[0],
-    'the subject tag itself stays neutral');
+  const session = h.render({ tagLabel: '数据结构', tagTone: 'brand', metaText: '30分钟' });
+  assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brand)[0],
+    'a session takes the page accent dot');
+  assert.ok(nodes(session, n => n.type === 'View' && n.props.style?.backgroundColor === theme.paper.colors.brandSubtle)[0],
+    'the session tag rides the same accent wash');
   assert.match(text(session), /30分钟/, 'the duration meta rides on the same line');
 });
 

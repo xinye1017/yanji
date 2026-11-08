@@ -23,13 +23,13 @@ export const YanjiLiquidGlass = {
   pressedOpacity: 0.68,
   light: {
     /** A warm neutral veil leaves room for the lit edge without whitening it. */
-    tint: 'rgba(226,223,217,0.40)',
-    backdrop: 'rgba(246,244,239,0.45)',
+    tint: 'rgba(231,224,213,0.40)',
+    backdrop: 'rgba(247,243,236,0.45)',
   },
   dark: {
     /** The shader skips white lifting for dark tints; this veil controls contrast. */
-    tint: 'rgba(46,44,42,0.54)',
-    backdrop: 'rgba(27,25,23,0.62)',
+    tint: 'rgba(45,40,35,0.54)',
+    backdrop: 'rgba(26,22,18,0.62)',
   },
 } as const;
 

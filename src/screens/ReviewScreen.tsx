@@ -163,7 +163,14 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
    * blank — that is what makes the current week the end of the strip.
    */
   const filmstripPages = useMemo(() => {
-    const dotColors = dominantSubjectColors(weekOverview?.days ?? [], weekOverview?.subjectDistribution ?? []);
+    // The dots still mark each day's dominant subject, but within the single
+    // accent family: index into the ramp rather than painting the catalogue's
+    // many subject hues.
+    const weekDistribution = (weekOverview?.subjectDistribution ?? []).map((slice, index) => ({
+      ...slice,
+      subjectColor: colors.accentRamp[index % colors.accentRamp.length],
+    }));
+    const dotColors = dominantSubjectColors(weekOverview?.days ?? [], weekDistribution);
     const build = (start: string) => ({ start, cells: buildFilmstrip(start, date, today, dotColors) });
     const previous = shiftIsoDate(weekStart, -7);
     return [
@@ -171,7 +178,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
       build(weekStart),
       ...(canPageWeek(weekStart, today, 1) ? [build(shiftIsoDate(weekStart, 7))] : []),
     ];
-  }, [weekStart, date, today, weekOverview]);
+  }, [weekStart, date, today, weekOverview, colors.accentRamp]);
 
   /**
    * Picking a day moves the selection, and the strip follows it — including a
@@ -354,7 +361,20 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     },
   ];
   const days = overview?.days ?? [];
-  const columns = useMemo(() => buildTrendColumns(days, overview?.subjectDistribution ?? []), [days, overview]);
+  /**
+   * The catalogue's subject colours are identity data, not a page palette: the
+   * trend view recolours every slice onto the single accent ramp by its stable
+   * distribution order, so the page keeps one accent no matter how many
+   * subjects it shows. Labels continue to identify the subject.
+   */
+  const distribution = useMemo(
+    () => (overview?.subjectDistribution ?? []).map((slice, index) => ({
+      ...slice,
+      subjectColor: colors.accentRamp[index % colors.accentRamp.length],
+    })),
+    [overview, colors.accentRamp],
+  );
+  const columns = useMemo(() => buildTrendColumns(days, distribution), [days, distribution]);
   const peak = peakTrendDay(columns);
   const delta = periodDelta(overview?.totalSeconds ?? 0, previousOverview?.totalSeconds ?? null);
   const deltaPercent = periodDeltaPercent(overview?.totalSeconds ?? 0, previousOverview?.totalSeconds ?? null);
@@ -376,9 +396,8 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     labelWidth: 38 * Math.max(1, fontScale),
     centers: scope === 'CALENDAR_MONTH' ? lineChartXCenters(columns.length, chartWidth, YanjiSpacing.xl) : undefined,
   }), [columns, chartWidth, scope, fontScale]);
-  const distribution = overview?.subjectDistribution ?? [];
   const spectrum = distribution.map(slice => ({ id: slice.subjectId, label: slice.subjectName,
-    seconds: slice.minutes * 60, color: slice.subjectColor || colors.secondary }));
+    seconds: slice.minutes * 60, color: slice.subjectColor }));
 
   const pageHeader = (
     <>
@@ -884,8 +903,7 @@ function TimelineItem({ entry, isFirst, isLast, busyNote, onEditNote, onOpenMenu
       timeLabel={formatClockFromEpoch(entry.at)}
       tagLabel={session.subjectName}
       tagIcon="clock3"
-      tagColor={session.subjectColor || colors.secondary}
-      dotColor={session.subjectColor || colors.secondary}
+      tagTone="brand"
       metaText={formatDuration(session.durationSeconds)}
       isFirst={isFirst} isLast={isLast} disabled={busyNote}
       accessibilityLabel={`${session.subjectName}，${formatDuration(session.durationSeconds)}`}

@@ -10,7 +10,7 @@ export function registerM3Tests() {
   describe('Tier 1: Feature 9 — Design Tokens (Paper, Radius, Hairline Border)', () => {
     it('verifies the dark palette is a warm charcoal canvas and forbids #000000 pure black', () => {
       const darkBg = YanjiThemeTokens.colors.dark.canvas;
-      assertEqual(darkBg, '#1B1917', 'Dark mode canvas must be #1B1917');
+      assertEqual(darkBg, '#1A1612', 'Dark mode canvas must be #1A1612');
 
       const validation = YanjiThemeTokens.validateBackgroundColor('#000000', true);
       assertEqual(validation.valid, false, 'Validation must reject #000000 in dark mode');

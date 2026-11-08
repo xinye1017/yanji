@@ -1259,14 +1259,6 @@ export function ScheduleSubjectPickerSheet({
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: radius.pill,
-                  backgroundColor: option.colorHex,
-                }}
-              />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text
                   numberOfLines={1}

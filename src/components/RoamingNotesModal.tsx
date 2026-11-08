@@ -17,9 +17,11 @@ import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
 
 const WHITE_GLYPH = '#FFFFFF'; // token-exempt: white contrast glyph on translucent dark scrim
-const AMBER_GLYPH = '#FDE68A'; // token-exempt: amber highlight on dark scrim
-const WAX_SEAL_BG = '#C84B31'; // token-exempt: vermilion wax seal stamp
-const WAX_SEAL_SHADOW = '#9E2B18'; // token-exempt: vermilion wax seal stamp shadow
+/** The light end of 靛青 for text and glyphs on the modal's always-dark scrim. */
+const ACCENT_GLYPH = '#D5E4F1'; // token-exempt: accent glyph on the dark scrim, outside the paper palette
+/** 胭脂 — a deep carmine wax seal, deliberately not the old terracotta. */
+const WAX_SEAL_BG = '#8E2F35'; // token-exempt: wax-seal illustration, not a UI surface
+const WAX_SEAL_SHADOW = '#6E2127'; // token-exempt: wax-seal illustration shadow
 
 export interface RoamingNotesModalProps {
   visible: boolean;
@@ -445,7 +447,7 @@ export function RoamingNotesModal({
               },
             ]}
           >
-            <YanjiIcon name="sparkles" size={16} color={AMBER_GLYPH} />
+            <YanjiIcon name="sparkles" size={16} color={ACCENT_GLYPH} />
             <Text style={styles.randomPillText}>随机抽取</Text>
           </Pressable>
 
@@ -538,7 +540,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 52 / 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: 'rgba(42, 36, 29, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -588,8 +590,8 @@ const styles = StyleSheet.create({
     borderRadius: YanjiRadius.xs,
     borderLeftWidth: 2,
     borderRightWidth: 2,
-    borderLeftColor: 'rgba(0, 0, 0, 0.15)',
-    borderRightColor: 'rgba(0, 0, 0, 0.15)',
+    borderLeftColor: 'rgba(42, 36, 29, 0.15)',
+    borderRightColor: 'rgba(42, 36, 29, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 20,
@@ -701,12 +703,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: YanjiSpacing.lg,
     height: 40,
     borderRadius: 40 / 2,
-    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    backgroundColor: 'rgba(157, 186, 212, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
+    borderColor: 'rgba(157, 186, 212, 0.42)',
   },
   randomPillText: {
-    color: AMBER_GLYPH,
+    color: ACCENT_GLYPH,
     fontSize: 13,
     fontWeight: '700',
   },

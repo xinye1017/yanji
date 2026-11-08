@@ -267,7 +267,6 @@ export function SubjectsSheet({
             <View style={{ marginTop: YanjiSpacing.md }}>
               {groups.map(group => {
                 const isEditingCategory = editingId === group.category.id;
-                const categoryAccent = group.category.colorHex || colors.brand;
                 return (
                   <View
                     key={group.category.id}
@@ -283,7 +282,6 @@ export function SubjectsSheet({
                     {/* Category Row */}
                     {isEditingCategory ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-                        <View style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: categoryAccent }} />
                         <TextInput
                           value={editName}
                           onChangeText={setEditName}
@@ -325,7 +323,6 @@ export function SubjectsSheet({
                     ) : (
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flex: 1 }}>
-                          <View style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: categoryAccent }} />
                           <Text style={[typography.titleGroup, { color: colors.ink, fontWeight: '700' }]}>
                             {group.category.name}
                           </Text>
@@ -356,10 +353,8 @@ export function SubjectsSheet({
                       <View style={{ marginTop: YanjiSpacing.sm, gap: YanjiSpacing.xs, paddingLeft: YanjiSpacing.md }}>
                         {group.children.map(child => {
                           const isEditingChild = editingId === child.id;
-                          const childAccent = child.colorHex || colors.muted;
                           return isEditingChild ? (
                             <View key={child.id} style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
-                              <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: childAccent }} />
                               <TextInput
                                 value={editName}
                                 onChangeText={setEditName}
@@ -409,7 +404,6 @@ export function SubjectsSheet({
                               }}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flex: 1 }}>
-                                <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: childAccent }} />
                                 <Text style={[typography.bodyPrimary, { color: colors.ink }]}>
                                   {child.name}
                                 </Text>

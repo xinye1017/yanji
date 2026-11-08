@@ -75,11 +75,18 @@ export function taskMeta(task: StudyTask): string {
     : `预计 ${compactDuration(task.plannedMinutes * 60)}`;
 }
 
+/**
+ * The spectrum's subject slices, one per subject with saved time.
+ *
+ * Colour is assigned by the slice's stable position in the sorted result, drawn
+ * from the single-hue `accentRamp`. A subject therefore keeps one accent-family
+ * step across the page without the UI ever painting a second accent colour.
+ */
 export function summarizeSubjects(
   sessions: readonly DailySession[],
-  fallbackColor: string,
+  accentRamp: readonly string[],
 ): YanjiSpectrumSegment[] {
-  const subjects = new Map<string, YanjiSpectrumSegment>();
+  const subjects = new Map<string, { id: string; label: string; seconds: number }>();
   for (const session of sessions) {
     if (session.durationSeconds <= 0) continue;
     const previous = subjects.get(session.subjectId);
@@ -88,15 +95,20 @@ export function summarizeSubjects(
       id: session.subjectId,
       label: session.subjectName,
       seconds: session.durationSeconds,
-      color: session.subjectColor || fallbackColor,
     });
   }
-  return [...subjects.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return [...subjects.values()]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((subject, index) => ({
+      ...subject,
+      color: accentRamp[index % accentRamp.length],
+    }));
 }
 
 export function spectrumLegend(
   subjects: readonly YanjiSpectrumSegment[],
   tasks: readonly StudyTask[],
+  accentRamp: readonly string[],
 ): YanjiSpectrumSegment[] {
   const legend = new Map(subjects.map(subject => [subject.id, subject]));
   for (const task of tasks) {
@@ -104,10 +116,14 @@ export function spectrumLegend(
       id: task.subjectId,
       label: task.subjectName,
       seconds: 0,
-      color: task.subjectColor,
+      // Recoloured below so planned-only subjects share the same accent ramp.
+      color: accentRamp[0],
     });
   }
-  return [...legend.values()];
+  return [...legend.values()].map((subject, index) => ({
+    ...subject,
+    color: accentRamp[index % accentRamp.length],
+  }));
 }
 
 function sessionPrecise(session: DailySession): boolean {
@@ -119,7 +135,7 @@ function sessionPrecise(session: DailySession): boolean {
 export function buildRhythmBuckets(
   date: string,
   sessions: readonly DailySession[],
-  fallbackColor: string,
+  accentColor: string,
 ): YanjiDayRhythmBucket[] {
   const plottable = sessions.filter(sessionPrecise);
   return RHYTHM_HOURS.map(hour => {
@@ -127,7 +143,6 @@ export function buildRhythmBuckets(
     start.setHours(hour, 0, 0, 0);
     const end = new Date(`${date}T00:00:00`);
     end.setHours(hour + 1, 0, 0, 0);
-    const bySubject = new Map<string, { seconds: number; color: string }>();
     let seconds = 0;
     for (const session of plottable) {
       const sStart = session.startTime;
@@ -139,22 +154,10 @@ export function buildRhythmBuckets(
       const allocated = Math.round(session.durationSeconds * ratio);
       if (allocated <= 0) continue;
       seconds += allocated;
-      const previous = bySubject.get(session.subjectId);
-      if (previous) previous.seconds += allocated;
-      else bySubject.set(session.subjectId, { seconds: allocated, color: session.subjectColor || fallbackColor });
     }
-    // Several short sessions of one subject can outweigh a single longer one.
-    let dominantId = '';
-    let dominantSeconds = 0;
-    let color: string | undefined;
-    for (const [id, subject] of bySubject) {
-      if (subject.seconds > dominantSeconds || (subject.seconds === dominantSeconds && id.localeCompare(dominantId) < 0)) {
-        dominantId = id;
-        dominantSeconds = subject.seconds;
-        color = subject.color;
-      }
-    }
-    return { hour, seconds, color };
+    // The chart draws one accent, not one hue per subject: an hour is either
+    // studied or empty, and the page's single accent is what makes it visible.
+    return { hour, seconds, color: seconds > 0 ? accentColor : undefined };
   });
 }
 

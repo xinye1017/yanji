@@ -23,7 +23,6 @@ const NODE_TOP = 8;
 
 export function ScheduleBlockRow({
   block,
-  subjectColor,
   isFirst,
   isLast,
   isCurrent,
@@ -35,7 +34,6 @@ export function ScheduleBlockRow({
   onStart,
 }: {
   block: ScheduleBlock;
-  subjectColor: string;
   isFirst: boolean;
   isLast: boolean;
   isCurrent: boolean;
@@ -158,7 +156,6 @@ export function ScheduleBlockRow({
             <YanjiLedgerChip
               label={block.subjectLabel}
               tone={block.subjectIds.length > 0 ? 'subject' : 'meta'}
-              color={subjectColor}
               completed={completed}
             />
             {isCurrent ? (

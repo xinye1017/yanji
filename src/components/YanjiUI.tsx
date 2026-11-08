@@ -33,8 +33,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { toSubtleColor, YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
-export { toSubtleColor } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import { buildLineChartGeometry } from './lineChartGeometry';
 import { YANJI_ICON_STROKE, getYanjiIcon } from './icons';
 import type { YanjiIconName } from './icons';
@@ -1317,7 +1316,8 @@ export function YanjiSubjectProportionRow({
 // YanjiTaskLedgerRow — subject checkbox, task ledger & separate focus capsule
 //
 // The checkbox owns its touch column. Text wraps independently of the focus
-// action, and subject identity stays in a small swatch beside readable metadata.
+// action, and subject identity stays in a small accent-tinted chip beside
+// readable metadata.
 // ---------------------------------------------------------------------------
 
 /**
@@ -1330,31 +1330,28 @@ export function YanjiSubjectProportionRow({
 export function YanjiLedgerChip({
   label,
   tone = 'subject',
-  color,
   completed = false,
 }: {
   label: string;
-  /** `subject` tints by the subject colour; `meta` stays neutral. */
+  /** `subject` carries the page accent; `meta` stays neutral. */
   tone?: 'subject' | 'meta';
-  /** Subject colour; required for the `subject` tone. */
-  color?: string;
   /** A finished row flattens both chips to the neutral tier. */
   completed?: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, radius } = paper;
-  const useSubject = tone === 'subject' && Boolean(color) && !completed;
+  const useSubject = tone === 'subject' && !completed;
   return (
     <View style={{
       flexShrink: 1,
-      backgroundColor: useSubject ? toSubtleColor(color as string, 0.14) : colors.subtle,
+      backgroundColor: useSubject ? colors.brandSubtle : colors.subtle,
       borderRadius: radius.tag,
       paddingHorizontal: 7,
       paddingVertical: 1.5,
     }}>
       <Text numberOfLines={1} style={{
         ...typography.captionMeta,
-        color: useSubject ? (color as string) : colors.secondary,
+        color: useSubject ? colors.brandInk : colors.secondary,
         fontWeight: '600',
         flexShrink: 1,
       }}>{label}</Text>
@@ -1392,7 +1389,6 @@ export function YanjiTaskLedgerRow({
   title,
   subjectName,
   meta,
-  accentColor,
   completed,
   isLead = false,
   isLast = false,
@@ -1406,7 +1402,6 @@ export function YanjiTaskLedgerRow({
   title: string;
   subjectName: string;
   meta: string;
-  accentColor: string;
   completed: boolean;
   /** First pending task carries the prominent filled play button. */
   isLead?: boolean;
@@ -1497,7 +1492,7 @@ export function YanjiTaskLedgerRow({
               only adds what the margin cannot: the subject, and — once the row
               has real investment — how much of it has happened. */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.xs + 2, marginTop: layout.taskSubMarginTop }}>
-            <YanjiLedgerChip label={subjectName} tone="subject" color={accentColor} completed={completed} />
+            <YanjiLedgerChip label={subjectName} tone="subject" completed={completed} />
             {subLineMeta ? <YanjiLedgerChip label={subLineMeta} tone="meta" completed={completed} /> : null}
           </View>
         </Pressable>

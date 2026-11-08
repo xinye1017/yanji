@@ -27,7 +27,6 @@ import {
   scheduleProgress,
   sortBlocks,
   startOfWeek,
-  subjectColorForBlock,
   uniqueTemplateName,
   validateBlockDraft,
   weekDates,
@@ -243,10 +242,4 @@ test('focus options keep the block subject itself, including whole categories', 
   assert.equal(focusOptionsForBlock(['math', 'calc'], SUBJECTS).length, 2);
   // A block with no subject cannot start focus.
   assert.deepEqual(focusOptionsForBlock([], SUBJECTS), []);
-});
-
-test('subject colour falls back to the neutral token when no subject matches', () => {
-  assert.equal(subjectColorForBlock(['math'], SUBJECTS, '#999999'), '#111111');
-  assert.equal(subjectColorForBlock(['ghost'], SUBJECTS, '#999999'), '#999999');
-  assert.equal(subjectColorForBlock([], SUBJECTS, '#999999'), '#999999');
 });

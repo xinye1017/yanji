@@ -11,7 +11,7 @@
 import React, { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { toSubtleColor, YanjiSpacing } from '../theme/tokens';
+import { YanjiSpacing } from '../theme/tokens';
 import { YanjiIcon } from './YanjiUI';
 import type { YanjiIconName } from './icons';
 import type { PopoverAnchor } from './TimelineActionPopover';
@@ -33,12 +33,8 @@ interface TimelineCompactRowProps {
   tagLabel?: string | null;
   /** The category glyph inside the tag (lightbulb / circle-help / clock-3). */
   tagIcon?: YanjiIconName;
-  /** 灵感 = positive (green), 疑点 = brand (orange-red), sessions = neutral. */
+  /** 灵感 = positive (green), 疑点 and sessions = brand (the page accent). */
   tagTone?: CompactTagTone;
-  /** Explicit subject/tag color (e.g. subjectColor) that styles the capsule background wash and text. */
-  tagColor?: string;
-  /** Overrides the dot colour; sessions pass their subject colour. */
-  dotColor?: string;
   /** Right-aligned secondary text before the menu, e.g. a session duration. */
   metaText?: string;
   /** Note text body. If omitted or empty, the row renders as a lightweight single-line event without a body card. */
@@ -112,8 +108,6 @@ export function TimelineCompactRow({
   tagLabel,
   tagIcon,
   tagTone = 'neutral',
-  tagColor,
-  dotColor,
   metaText,
   content,
   isFirst,
@@ -129,19 +123,11 @@ export function TimelineCompactRow({
   const hasContent = Boolean(content && content.trim());
   const title = hasContent ? previewOf(content!) : '';
 
-  const tone = tagTone === 'positive'
+  const capsuleTone = tagTone === 'positive'
     ? { dot: colors.positive, chipBg: colors.positiveSubtle, chipInk: colors.positive }
     : tagTone === 'brand'
       ? { dot: colors.brand, chipBg: colors.brandSubtle, chipInk: colors.brandInk }
       : { dot: colors.secondary, chipBg: colors.subtle, chipInk: colors.secondary };
-
-  const capsuleTone = tagColor
-    ? {
-        dot: tagColor,
-        chipBg: toSubtleColor(tagColor, 0.14),
-        chipInk: tagColor,
-      }
-    : tone;
 
   // Single-line compact row (focus session) centers at 16; multi-line card row (note) centers at 24
   const center = hasContent ? 24 : 16;
@@ -195,7 +181,7 @@ export function TimelineCompactRow({
               width: layout.timelineNodeSize,
               height: layout.timelineNodeSize,
               borderRadius: nodeRadius,
-              backgroundColor: dotColor ?? capsuleTone.dot,
+              backgroundColor: capsuleTone.dot,
             }}
           />
           {!isLast ? (

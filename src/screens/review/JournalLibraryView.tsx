@@ -134,7 +134,7 @@ export function JournalLibraryView({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <View
                 style={{
-                  backgroundColor: theme.isDark ? 'rgba(200, 75, 49, 0.2)' : 'rgba(200, 75, 49, 0.1)',
+                  backgroundColor: colors.brandSubtle,
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: radius.pill,
@@ -231,9 +231,7 @@ export function JournalLibraryView({
                   paddingHorizontal: 5,
                   paddingVertical: 1,
                   borderRadius: radius.pill,
-                  backgroundColor: selected
-                    ? (theme.isDark ? 'rgba(200, 75, 49, 0.25)' : 'rgba(200, 75, 49, 0.12)')
-                    : (theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'),
+                  backgroundColor: selected ? colors.brandSubtle : colors.subtle,
                 }}
               >
                 <Text
@@ -322,9 +320,7 @@ export function JournalLibraryView({
                       paddingVertical: 2,
                       borderRadius: radius.pill,
                       backgroundColor:
-                        note.category === 'DOUBT'
-                          ? (theme.isDark ? 'rgba(200, 75, 49, 0.2)' : 'rgba(200, 75, 49, 0.1)')
-                          : (theme.isDark ? 'rgba(42, 157, 143, 0.2)' : 'rgba(42, 157, 143, 0.1)'),
+                        note.category === 'DOUBT' ? colors.brandSubtle : colors.positiveSubtle,
                     }}
                   >
                     <Text
@@ -405,12 +401,8 @@ export function JournalLibraryView({
                       paddingVertical: 4,
                       borderRadius: radius.pill,
                       borderWidth: 1,
-                      borderColor: note.isResolved
-                        ? (theme.isDark ? 'rgba(42, 157, 143, 0.4)' : 'rgba(42, 157, 143, 0.3)')
-                        : (theme.isDark ? 'rgba(200, 75, 49, 0.4)' : 'rgba(200, 75, 49, 0.3)'),
-                      backgroundColor: note.isResolved
-                        ? (theme.isDark ? 'rgba(42, 157, 143, 0.15)' : 'rgba(42, 157, 143, 0.08)')
-                        : (theme.isDark ? 'rgba(200, 75, 49, 0.15)' : 'rgba(200, 75, 49, 0.08)'),
+                      borderColor: note.isResolved ? colors.positive : colors.brand,
+                      backgroundColor: note.isResolved ? colors.positiveSubtle : colors.brandSubtle,
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >

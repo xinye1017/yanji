@@ -32,7 +32,7 @@ import { TaskEditorModal } from '../components/TaskEditorModal';
 import { useNavigationActions, useNavigationState } from '../navigation/NavigationShell';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
-import { toSubtleColor, YanjiSpacing } from '../theme/tokens';
+import { YanjiSpacing } from '../theme/tokens';
 import {
   refreshDailySnapshot, refreshSettingsSnapshot,
   useDailyReadFailed, useDailySnapshot, useSettingsSnapshot,
@@ -191,7 +191,7 @@ function CarryOverLedgerRow({
           {task.title}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: YanjiSpacing.xs + 2 }}>
-          <YanjiLedgerChip label={task.subjectName} tone="subject" color={task.subjectColor} />
+          <YanjiLedgerChip label={task.subjectName} tone="subject" />
           <YanjiLedgerChip label={taskMeta(task)} tone="meta" />
         </View>
         <View
@@ -483,9 +483,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
     if (visibleCarryOverTasks.length === 0) closeCarryOver();
   }, [closeCarryOver, visibleCarryOverTasks.length]);
   const goalSeconds = settings ? (settings.dailyGoalHours ?? 0) * 3600 : null;
-  const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.secondary), [sessions, colors.secondary]);
-  const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? []), [subjects, tasks]);
-  const rhythmBuckets = useMemo(() => buildRhythmBuckets(date, sessions ?? [], colors.secondary), [date, sessions, colors.secondary]);
+  const subjects = useMemo(() => summarizeSubjects(sessions ?? [], colors.accentRamp), [sessions, colors.accentRamp]);
+  const legendItems = useMemo(() => spectrumLegend(subjects, tasks ?? [], colors.accentRamp), [subjects, tasks, colors.accentRamp]);
+  const rhythmBuckets = useMemo(() => buildRhythmBuckets(date, sessions ?? [], colors.brand), [date, sessions, colors.brand]);
   const rhythmSummaryText = useMemo(
     () => rhythmSummary(rhythmBuckets, snapshot !== null, hourRangeLabel),
     [rhythmBuckets, snapshot],
@@ -635,7 +635,6 @@ export function TodayScreen({ visible, foregroundRevision }: {
           title={task.title}
           subjectName={task.subjectName}
           meta={taskMeta(task)}
-          accentColor={task.subjectColor}
           completed={task.completed}
           isLead={item.isLead}
           isLast={item.isLast}
@@ -764,7 +763,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
                             position: 'absolute', top: 0, bottom: 0,
                             left: `${segLeft}%`,
                             width: `${segWidth}%`,
-                            backgroundColor: session.subjectColor || colors.secondary,
+                            backgroundColor: colors.brand,
                             // Once one highlight is selected the others recede,
                             // so the detail has an obvious source on the strip.
                             opacity: pressed ? 0.7 : selection && !selected ? 0.35 : 1,

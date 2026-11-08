@@ -118,16 +118,29 @@ export const YanjiMotion = {
 // onto this domain instead, so there is one paper vocabulary rather than a
 // second set of numbers scattered across screens.
 //
+// One accent per page. 靛青 indigo is the only chromatic UI accent: controls,
+// selection states and every data series draw from this one hue. Subjects stay
+// identifiable through their labels and through the single-hue `accentRamp`
+// below, never through a second colour. The orange / terracotta and bright
+// corporate-blue families are deliberately absent. `positive`, `danger` and
+// `amber` are semantic feedback only — never decorative page accents.
+//
+// Every neutral is a warm grey (a trace of red over blue), so canvas and
+// charcoal read as paper rather than as a blue-grey dashboard.
+//
 // Contrast policy (measured, WCAG 2.1 relative luminance):
 //   `ink`      > 11:1 on every canvas/surface/subtle/elevated step of its mode.
 //   `secondary` >= 4.5:1 on every step — this is the readable body/meta tier.
 //   `muted`     < 4.5:1 by design: decorative rules, tick marks, disabled
 //               controls and struck-through archive rows only. It must never
 //               carry a timestamp, an axis label or an unread task title.
-//   `brandInk` is the readable brand text tier on the warm parchment canvas
-//               (plain `brand` is only 4.24:1 there — good enough for a CTA
-//               fill, not for text). Use `brand` + `onBrand` for fills.
-//   `amber`     the paused/waiting accent, readable as text on every step.
+//   `brand`     the fill/mark tier: >= 3:1 on every step, >= 4.5:1 against
+//               `onBrand` for solid fills.
+//   `brandInk`  the readable brand text tier: >= 4.5:1 on every step and on
+//               its own tint.
+//   `accentRamp` five solid steps of the same indigo, each >= 3:1 on its
+//               canvas; adjacent steps stay visually distinct so a stacked
+//               chart can be read without a second hue.
 //
 // The *Subtle tints are measured too, and for the same reason. A capsule
 // (badge, chip, selected row, week cell) paints its own label at `captionMeta`
@@ -139,22 +152,23 @@ export const YanjiMotion = {
 
 export const YanjiPaperColors = {
   light: {
-    canvas: '#F6F4EF',
-    elevated: '#FAF8F4',
-    surface: '#FFFFFF',
-    subtle: '#EDEAE2',
+    canvas: '#F7F3EC',
+    elevated: '#FBF7F1',
+    surface: '#FFFCF7',
+    subtle: '#EFE8DD',
     /** Full-bleed wash behind the 寸阴尺 strip — a hair of ink, not a surface. */
-    vernierWash: 'rgba(28,30,33,0.03)',
-    ink: '#1C1E21',
-    secondary: '#565960',
-    muted: '#94969C',
-    hairline: 'rgba(28,30,33,0.08)',
+    vernierWash: 'rgba(42,36,29,0.03)',
+    ink: '#2A241D',
+    secondary: '#5E564B',
+    muted: '#9B9184',
+    hairline: 'rgba(42,36,29,0.09)',
     /** Vernier ticks. Decorative by definition, so they sit below the 4.5:1 text bar. */
-    tickMinor: 'rgba(28,30,33,0.20)',
-    tickMajor: 'rgba(28,30,33,0.45)',
-    brand: '#C84B31',
-    /** Readable brand text on parchment. Measured 5.43:1 on canvas, 5.96:1 on surface. */
-    brandInk: '#B23A22',
+    tickMinor: 'rgba(42,36,29,0.22)',
+    tickMajor: 'rgba(42,36,29,0.48)',
+    /** 靛青 — the page accent. A deep, slightly muted indigo, not a corporate blue. */
+    brand: '#33587C',
+    /** Readable brand text on parchment. Measured 8.29:1 on canvas, 8.96:1 on surface. */
+    brandInk: '#2C4A69',
     /**
      * Selection tints. The alpha is measured, not aesthetic: it is the highest
      * value that still keeps the capsule's own label (`brandInk` / `amber` at
@@ -162,32 +176,31 @@ export const YanjiPaperColors = {
      * capsule can land on — canvas, elevated, surface and subtle. Raising it
      * fails dark-mode badges and selected chips, so it stays here.
      */
-    brandSubtle: 'rgba(200,75,49,0.07)',
-    onBrand: '#FFFFFF',
-    /** Paused / waiting accent. Measured >= 5.30:1 across the four paper steps, and 4.81:1 on its own tint. */
-    amber: '#875400',
-    amberSubtle: 'rgba(135,84,0,0.07)',
+    brandSubtle: 'rgba(51,88,124,0.07)',
+    /** Single-hue data series. Measured 8.33 / 5.88 / 4.41 / 3.35 / 3.08:1 on canvas. */
+    accentRamp: ['#2C4A66', '#3C6183', '#4E7596', '#6289A8', '#6C8FAB'],
+    onBrand: '#FFFCF7',
+    /** Paused / waiting accent: 茶金 brass, not orange. Measured >= 5.53:1 across the paper steps. */
+    amber: '#6E5926',
+    amberSubtle: 'rgba(110,89,38,0.07)',
     /** Modal / sheet scrim, derived from `ink` so the veil shares the paper's warmth. */
-    scrim: 'rgba(28,30,33,0.32)',
-    /** Destructive actions. Measured 6.28:1 on `surface`, 5.71:1 on `canvas`, and 4.71:1 on its own tint. */
-    danger: '#B52B2B',
+    scrim: 'rgba(42,36,29,0.32)',
+    /** Destructive actions. Measured 6.31:1 on `surface`, 5.83:1 on `canvas`, and 5.66:1 on its own tint. */
+    danger: '#A9362E',
     /** 7% tint matching `brandSubtle` / `amberSubtle` / `positiveSubtle` while keeping `danger` >= 4.5:1 on `subtle`. */
-    dangerSubtle: 'rgba(181,43,43,0.07)',
+    dangerSubtle: 'rgba(169,54,46,0.07)',
     /**
-     * A period that improved on the one before it. Measured worst case 5.49:1
-     * across the four paper steps, and 5.00:1 on its own tint below — the same
-     * readable-text bar `amber` and `brandInk` hold.
-     *
-     * The board's 竹青 `#2D7A5E` is the *subject* colour for 408 and stays one;
-     * as badge text it measures 4.31:1 on `subtle` and would fail here.
+     * A period that improved on the one before it — 竹青, kept as feedback only.
+     * Measured worst case 5.17:1 across the four paper steps, and 5.58:1 on its
+     * own tint below.
      */
-    positive: '#27684F',
+    positive: '#2E6B50',
     /** See the tint note above: alpha is capped by the badge label's 4.5:1. */
-    positiveSubtle: 'rgba(39,104,79,0.07)',
+    positiveSubtle: 'rgba(46,107,80,0.07)',
   },
   dark: {
     /**
-     * Warm charcoal, not a near-black. The old #111315 sat at 0.6% luminance,
+     * Warm charcoal, not a near-black. The old blue-black sat at 0.6% luminance,
      * which read as a hole punched in the screen: every surface above it had to
      * climb hard to separate, and the warm paper identity of the light theme
      * disappeared entirely. This stack keeps the same hue family as the
@@ -195,39 +208,38 @@ export const YanjiPaperColors = {
      * page reads as dark paper rather than as an off screen. Each step is a
      * visible move, not a rounding error.
      */
-    canvas: '#1B1917',
-    elevated: '#211F1C',
-    surface: '#262320',
-    subtle: '#302C28',
-    vernierWash: 'rgba(239,234,225,0.03)',
-    ink: '#EFEAE1',
-    secondary: '#A8A199',
-    muted: '#6E6862',
-    hairline: 'rgba(239,234,225,0.09)',
-    tickMinor: 'rgba(239,234,225,0.22)',
-    tickMajor: 'rgba(239,234,225,0.50)',
-    brand: '#E8705A',
-    /** Lifted from `brand` so labels stay >= 4.5:1 (measured 4.93:1) over the 10% `brandSubtle` wash on `subtle`. */
-    brandInk: '#F08A74',
+    canvas: '#1A1612',
+    elevated: '#211D18',
+    surface: '#27221C',
+    subtle: '#322B24',
+    vernierWash: 'rgba(243,236,224,0.03)',
+    ink: '#F3ECE0',
+    secondary: '#B4A99A',
+    muted: '#7D7265',
+    hairline: 'rgba(243,236,224,0.10)',
+    tickMinor: 'rgba(243,236,224,0.22)',
+    tickMajor: 'rgba(243,236,224,0.50)',
+    /** The same 靛青, lifted for a dark field. */
+    brand: '#8FB0CE',
+    /** Lifted from `brand` so labels stay >= 4.5:1 over the 10% `brandSubtle` wash on `subtle`. */
+    brandInk: '#A9C4DC',
     /** See the light-mode tint note: 10% dark wash paired with `brandInk` to stay >= 4.5:1 across all surfaces. */
-    brandSubtle: 'rgba(232,112,90,0.10)',
-    onBrand: '#1B1917',
-    amber: '#DFA76A',
-    amberSubtle: 'rgba(223,167,106,0.10)',
+    brandSubtle: 'rgba(143,176,206,0.10)',
+    /** Single-hue data series for the dark field. Measured 11.63 / 9.51 / 7.31 / 5.43 / 4.08:1 on canvas. */
+    accentRamp: ['#BBD3E6', '#A3C0D9', '#89A9C4', '#6F91AE', '#587C99'],
+    onBrand: '#1A1612',
+    amber: '#D6BB82',
+    amberSubtle: 'rgba(214,187,130,0.10)',
     /** Heavier veil than light mode, matching the dark surface stack. */
-    scrim: 'rgba(0,0,0,0.56)',
-    /** Destructive actions. Measured 6.24:1 on `surface`, 6.61:1 on `canvas`. */
-    danger: '#F5827F',
+    /** Warm veil rather than pure black, so even the dimmed page stays on the paper family. */
+    scrim: 'rgba(20,16,12,0.58)',
+    /** Destructive actions. Measured 6.50:1 on `surface`, 7.41:1 on `canvas`. */
+    danger: '#EE8B83',
     /** See the light-mode tint note: keep the destructive label above 4.5:1. */
-    dangerSubtle: 'rgba(245,130,127,0.10)',
-    /**
-     * See the light-mode note. Dark needs its own value rather than a reuse of
-     * light's: `#27684F` would be unreadable here, and the board's 竹青
-     * `#2D7A5E` measures 4.39:1 on `subtle`. Measured worst case 5.09:1 on the
-     * four steps, 4.80:1 on its own tint.
-     */
-    positive: '#5FBE96',
-    positiveSubtle: 'rgba(95,190,150,0.10)',
+    dangerSubtle: 'rgba(238,139,131,0.10)',
+    /** 竹青 lifted for the dark field. Measured worst case 7.04:1 on the four steps. */
+    positive: '#7AC8A2',
+    positiveSubtle: 'rgba(122,200,162,0.10)',
   },
 } as const;
 
@@ -237,16 +249,16 @@ const paperImmersiveBase = {
    * to read as a room with the lights down rather than as an unlit screen: it
    * sits a step below the paper canvas and keeps the same warm bias.
    */
-  canvas: '#141210',
-  ink: '#F6F4EF',
-  secondary: '#C4C7CE',
-  subtitle: '#8A8F99',
-  muted: '#6E737D',
+  canvas: '#12100C',
+  ink: '#F7F1E7',
+  secondary: '#C9C0B1',
+  subtitle: '#9D9385',
+  muted: '#7A7164',
   /** Destructive text on the always-dark immersion field; paper `danger` is too dark here. */
-  danger: '#F87171',
-  subtle: 'rgba(255,255,255,0.08)',
-  pillBg: 'rgba(255,255,255,0.05)',
-  pillBorder: 'rgba(255,255,255,0.08)',
+  danger: '#F0877E',
+  subtle: 'rgba(255,246,232,0.08)',
+  pillBg: 'rgba(255,246,232,0.05)',
+  pillBorder: 'rgba(255,246,232,0.09)',
   /**
    * Horizon tide — the wash that rises from the bottom edge.
    *
@@ -256,32 +268,37 @@ const paperImmersiveBase = {
    * `stopOpacity` resolves to fully opaque. An `rgba(...)` string in `tideColor`
    * would therefore paint a solid slab instead of a wash.
    */
-  tideOpacity: 0.14,
-  secondaryActionBg: 'rgba(255,255,255,0.06)',
-  secondaryActionBorder: 'rgba(255,255,255,0.10)',
-  secondaryActionText: '#D5D8DF',
-  primaryActionText: '#F6F4EF',
+  tideOpacity: 0.16,
+  secondaryActionBg: 'rgba(255,246,232,0.06)',
+  secondaryActionBorder: 'rgba(255,246,232,0.10)',
+  secondaryActionText: '#DDD3C4',
+  primaryActionText: '#F7F1E7',
 } as const;
 
 /**
  * The immersion field for a running / paused focus session. The navigation is
  * hidden there, so this palette owns the whole screen — including the area
  * behind the status bar.
+ *
+ * Both states stay on the same 靛青 accent: pausing does not introduce a second
+ * hue, it lowers the accent's energy and the tide's height. The whole screen
+ * therefore still reads as one page with one accent.
  */
 export const YanjiPaperImmersive = {
   running: {
     ...paperImmersiveBase,
-    accent: '#3A9B78',
-    tideColor: '#2D7A5E',
-    primaryActionBg: 'rgba(246,244,239,0.12)',
-    primaryActionBorder: 'rgba(246,244,239,0.22)',
+    accent: '#9DBAD4',
+    tideColor: '#557A9B',
+    primaryActionBg: 'rgba(157,186,212,0.16)',
+    primaryActionBorder: 'rgba(157,186,212,0.30)',
   },
   paused: {
     ...paperImmersiveBase,
-    accent: '#DDA059',
-    tideColor: '#DDA059',
-    primaryActionBg: 'rgba(221,160,89,0.18)',
-    primaryActionBorder: 'rgba(221,160,89,0.34)',
+    accent: '#8798A8',
+    tideColor: '#6F8595',
+    tideOpacity: 0.09,
+    primaryActionBg: 'rgba(135,152,168,0.14)',
+    primaryActionBorder: 'rgba(135,152,168,0.26)',
   },
 } as const;
 
@@ -556,16 +573,3 @@ export const YanjiPaperMotion = {
   selectionMs: 160,
   opacityReducedMs: 120,
 } as const;
-
-/**
- * Resolves a translucent background wash from a hex or rgba color string.
- */
-export function toSubtleColor(hexOrColor: string, alpha = 0.14): string {
-  if (hexOrColor.startsWith('#') && hexOrColor.length === 7) {
-    const r = parseInt(hexOrColor.slice(1, 3), 16);
-    const g = parseInt(hexOrColor.slice(3, 5), 16);
-    const b = parseInt(hexOrColor.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  return hexOrColor;
-}

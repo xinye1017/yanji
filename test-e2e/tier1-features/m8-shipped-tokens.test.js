@@ -58,9 +58,9 @@ export function registerShippedTokenTests() {
 
     it('no dark token is pure black', () => {
       // §三.6: pure black is forbidden as a background. The paper canvas is a
-      // warm charcoal (#1B1917) — dark, but still visibly a surface rather than
+      // warm charcoal (#1A1612) — dark, but still visibly a surface rather than
       // an unlit screen, and never #000000.
-      assertEqual(tokens.YanjiPaperColors.dark.canvas, '#1B1917', 'Dark canvas must be #1B1917');
+      assertEqual(tokens.YanjiPaperColors.dark.canvas, '#1A1612', 'Dark canvas must be #1A1612');
       for (const [key, value] of Object.entries(tokens.YanjiPaperColors.dark)) {
         if (typeof value !== 'string' || !value.startsWith('#')) continue;
         const normalized = value.trim().toUpperCase();
@@ -72,7 +72,7 @@ export function registerShippedTokenTests() {
     });
 
     it('light mode is parchment, not a pure white page background', () => {
-      assertEqual(tokens.YanjiPaperColors.light.canvas, '#F6F4EF', 'Light canvas must be #F6F4EF');
+      assertEqual(tokens.YanjiPaperColors.light.canvas, '#F7F3EC', 'Light canvas must be #F7F3EC');
       assert(
         tokens.YanjiPaperColors.light.canvas !== '#FFFFFF',
         'A pure-white page background would leave white cards indistinguishable (§三.6)'
@@ -81,9 +81,9 @@ export function registerShippedTokenTests() {
 
     it('onBrand exists in both modes with the planned values', () => {
       // The on-brand foreground must be explicit, not assumed: light brand is
-      // dark enough for white, dark brand is light enough to need dark ink.
-      assertEqual(tokens.YanjiPaperColors.light.onBrand, '#FFFFFF', 'Light onBrand must be #FFFFFF');
-      assertEqual(tokens.YanjiPaperColors.dark.onBrand, '#1B1917', 'Dark onBrand must be #1B1917');
+      // dark enough for warm paper, dark brand is light enough to need dark ink.
+      assertEqual(tokens.YanjiPaperColors.light.onBrand, '#FFFCF7', 'Light onBrand must be #FFFCF7');
+      assertEqual(tokens.YanjiPaperColors.dark.onBrand, '#1A1612', 'Dark onBrand must be #1A1612');
     });
 
     it('actual shipped brand text meets normal-size 4.5:1 contrast in both themes', () => {
@@ -123,10 +123,10 @@ export function registerShippedTokenTests() {
       }
     });
 
-    it('danger carries the retired-replacement value in light mode', () => {
-      // #D64545 was retired on a measured WCAG failure; #B52B2B clears 4.5:1
-      // even over a 7% dangerSubtle wash on the darkest light surface (subtle).
-      assertEqual(tokens.YanjiPaperColors.light.danger, '#B52B2B', 'Light danger must be #B52B2B');
+    it('danger keeps its readable crimson in light mode', () => {
+      // #A9362E clears 4.5:1 even over a 7% dangerSubtle wash on the darkest
+      // light surface (subtle), and stays a crimson rather than terracotta.
+      assertEqual(tokens.YanjiPaperColors.light.danger, '#A9362E', 'Light danger must be #A9362E');
     });
 
     it('every radius value used in the scale belongs to the YanjiRadius scale', () => {

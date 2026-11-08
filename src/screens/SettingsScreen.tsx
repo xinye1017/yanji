@@ -289,8 +289,8 @@ export function SettingsScreen(): React.JSX.Element {
           />
           <YanjiSettingRow
             label="学科管理"
-            hint="学科、分类与配色"
-            accessibilityLabel="学科管理，编辑学科、分类与配色"
+            hint="学科与分类"
+            accessibilityLabel="学科管理，编辑学科与分类"
             isLast
             onPress={() => openSheetWith('subjects')}
           />

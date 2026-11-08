@@ -12,39 +12,42 @@ export const YanjiThemeTokens = {
    * Authoritative palette — the 素笺与寸阴 paper domain. Mirrors
    * `YanjiPaperColors` in src/theme/tokens.ts.
    *
-   * Light danger adopts the retired-replacement value #B52B2B; the previous
-   * #D64545 failed WCAG and was formally retired.
+   * 靛青 indigo is the only accent hue; every neutral is a warm grey. The
+   * accent ramp carries data series, so subject identity never introduces a
+   * second page accent.
    */
   colors: {
     light: {
-      canvas: '#F6F4EF',         // Parchment page background
-      surface: '#FFFFFF',
-      subtle: '#EDEAE2',
-      ink: '#1C1E21',
-      secondary: '#565960',
-      muted: '#94969C',
-      hairline: 'rgba(28,30,33,0.08)',
-      brand: '#C84B31',          // Fills only; text uses brandInk
-      brandInk: '#B23A22',       // Readable brand text on parchment (5.43:1)
-      onBrand: '#FFFFFF',
-      amber: '#875400',
-      scrim: 'rgba(28,30,33,0.32)',
-      danger: '#B52B2B',
+      canvas: '#F7F3EC',         // Warm parchment page background
+      surface: '#FFFCF7',
+      subtle: '#EFE8DD',
+      ink: '#2A241D',
+      secondary: '#5E564B',
+      muted: '#9B9184',
+      hairline: 'rgba(42,36,29,0.09)',
+      brand: '#33587C',          // 靛青 — fills and marks
+      brandInk: '#2C4A69',       // Readable brand text on parchment (8.29:1)
+      onBrand: '#FFFCF7',
+      accentRamp: ['#2C4A66', '#3C6183', '#4E7596', '#6289A8', '#6C8FAB'],
+      amber: '#6E5926',          // 茶金 waiting accent, not orange
+      scrim: 'rgba(42,36,29,0.32)',
+      danger: '#A9362E',
     },
     dark: {
-      canvas: '#1B1917',         // Warm charcoal (never #000000)
-      surface: '#262320',
-      subtle: '#302C28',
-      ink: '#EFEAE1',
-      secondary: '#A8A199',
-      muted: '#6E6862',
-      hairline: 'rgba(239,234,225,0.09)',
-      brand: '#E8705A',
-      brandInk: '#F08A74',       // Lifted so dark brand labels clear 4.5:1 on brandSubtle/subtle
-      onBrand: '#1B1917',
-      amber: '#DFA76A',
+      canvas: '#1A1612',         // Warm charcoal (never #000000)
+      surface: '#27221C',
+      subtle: '#322B24',
+      ink: '#F3ECE0',
+      secondary: '#B4A99A',
+      muted: '#7D7265',
+      hairline: 'rgba(243,236,224,0.10)',
+      brand: '#8FB0CE',
+      brandInk: '#A9C4DC',
+      onBrand: '#1A1612',
+      accentRamp: ['#BBD3E6', '#A3C0D9', '#89A9C4', '#6F91AE', '#587C99'],
+      amber: '#D6BB82',
       scrim: 'rgba(0,0,0,0.56)',
-      danger: '#F5827F',
+      danger: '#EE8B83',
     },
   },
   /** YanjiRadius semantic scale — raw dp literals are forbidden at call sites. */
