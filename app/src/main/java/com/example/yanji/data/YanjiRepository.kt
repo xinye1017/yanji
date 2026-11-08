@@ -419,6 +419,9 @@ class YanjiRepository private constructor() {
     suspend fun deleteScheduleTemplate(templateId: String): Boolean =
         scheduleStore.delete(templateId)
 
+    suspend fun activateScheduleTemplate(templateId: String): Boolean =
+        scheduleStore.activate(templateId)
+
     suspend fun setScheduleDayTemplate(date: String, templateId: String): Boolean =
         scheduleStore.setDayTemplate(date, templateId)
 

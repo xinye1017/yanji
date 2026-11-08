@@ -1074,18 +1074,32 @@ test('daily-goal false or rejection keeps the draft and a retry succeeds', async
   }
 });
 
-test('a goal of zero means "no goal" and the sheet says so before saving it', async () => {
-  // Zero is reachable through the stepper, and `dailyGoalHours: 0` is how this
-  // codebase stores "unset" (both Today and this page read <= 0 that way). The
-  // action is therefore labelled 「清除目标」: writing zero is a removal, and the
-  // button must not read as if it were setting a target.
+test('with no goal stored the sheet opens on a disabled 保存目标, not 清除目标', async () => {
+  // `dailyGoalHours: 0` is how this codebase stores "unset". Opening the sheet
+  // in that state used to show a filled 「清除目标」 as the only action, which
+  // read as the way to set a goal while clearing nothing. There is nothing to
+  // save or clear until the draft changes, so the action is a disabled 保存目标.
   const harness = settingsHarness({ settings: stored({ dailyGoalHours: 0 }) });
   const sheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
-  // `YanjiPrimaryButton` is a stub in this harness, so its label is read from
-  // the element the sheet renders rather than from a real render pass.
   const save = nodes(sheet(), node => node.type === 'YanjiPrimaryButton')[0];
   assert.ok(save, 'the sheet must publish its save action');
+  assert.equal(save.props.label, '保存目标');
+  assert.equal(save.props.disabled, true);
+});
+
+test('a stored goal stepped down to zero becomes 清除目标', async () => {
+  // Zero is reachable through the stepper, and writing it removes the goal.
+  // The action must say so rather than read as saving.
+  const harness = settingsHarness({ settings: stored({ dailyGoalHours: 4 }) });
+  const sheet = () => nodes(harness.render(), byComponent('DailyGoalSheet'))[0];
+  const minus = nodes(sheet(), node =>
+    node.props?.accessibilityLabel === '减少 30 分钟')[0];
+  assert.ok(minus, 'the stepper publishes its decrement');
+  for (let i = 0; i < 8; i++) minus.props.onPress();
+
+  const save = nodes(sheet(), node => node.type === 'YanjiPrimaryButton')[0];
   assert.equal(save.props.label, '清除目标');
+  assert.notEqual(save.props.disabled, true);
 
   await sheet().props.onSave(0);
   const writes = harness.calls.filter(call => call[0] === 'updateUserSettings');

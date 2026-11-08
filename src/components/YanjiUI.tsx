@@ -2217,6 +2217,7 @@ export function YanjiTextInput({
   autoCapitalize = 'sentences',
   accessibilityLabel,
   editable = true,
+  inputRef,
   variant = 'well',
   style,
 }: {
@@ -2228,6 +2229,8 @@ export function YanjiTextInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   accessibilityLabel?: string;
   editable?: boolean;
+  /** Lets a sheet focus the field once its window is actually on screen. */
+  inputRef?: React.RefObject<React.ComponentRef<typeof TextInput> | null>;
   /**
    * `well` sinks the field into the sheet as a tinted box. `page` writes
    * directly on the paper with no box, for a sheet whose whole body is the
@@ -2248,6 +2251,7 @@ export function YanjiTextInput({
     : paper.typography.bodyPrimary;
   return (
     <TextInput
+      ref={inputRef}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}

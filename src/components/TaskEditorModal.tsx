@@ -64,6 +64,11 @@ export function TaskEditorModal({
   const [subjectId, setSubjectId] = useState<string | null>(null);
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [saving, setSaving] = useState(false);
+  // Field errors sit under the field they refer to; `error` is the write
+  // failure that belongs to the save action. One shared error used to render
+  // 「先选择学科」 below 时长 and stay there after a subject was picked.
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -79,6 +84,8 @@ export function TaskEditorModal({
     setCategoryId(null);
     setSubjectId(null);
     setMinutes(editingTask?.plannedMinutes ?? DEFAULT_MINUTES);
+    setTitleError(null);
+    setSubjectError(null);
     setError(null);
     setConfirmDelete(false);
     YanjiDataNative.getSubjects()
@@ -110,26 +117,27 @@ export function TaskEditorModal({
     [subjects, subjectId]
   );
 
-  const pickCategory = useCallback(
-    (category: Subject) => {
-      const kids = subjects.filter(s => s.parentId === category.id && s.enabled);
-      setCategoryId(category.id);
-      // A childless category (英语一 / 政治 / 其他) is itself the subject.
-      setSubjectId(kids.length > 0 ? kids[0].id : category.id);
-    },
-    [subjects]
-  );
+  const pickCategory = useCallback((category: Subject) => {
+    setCategoryId(category.id);
+    // The category is itself a subject: a task can belong to 「整个大类」
+    // (数学一) exactly like a focus session can, so picking a category is a
+    // complete answer and the first child is not silently chosen for the user.
+    setSubjectId(category.id);
+    setSubjectError(null);
+  }, []);
 
   const handleSave = useCallback(async () => {
     const cleanTitle = title.trim();
     if (cleanTitle.length === 0) {
-      setError('先填写任务名称');
+      setTitleError('先填写任务名称');
       return;
     }
     if (!editingTask && !selectedSubject) {
-      setError('先选择学科');
+      setSubjectError('先选择学科');
       return;
     }
+    setTitleError(null);
+    setSubjectError(null);
     setSaving(true);
     setError(null);
     try {
@@ -212,10 +220,25 @@ export function TaskEditorModal({
           <YanjiPaperSectionHeading title="任务" />
           <YanjiTextInput
             value={title}
-            onChangeText={setTitle}
+            onChangeText={next => {
+              setTitle(next);
+              if (titleError) setTitleError(null);
+            }}
             placeholder="今天要做什么"
             accessibilityLabel="任务名称"
+            style={titleError ? { borderColor: paper.colors.danger } : undefined}
           />
+          {titleError ? (
+            <Text
+              accessibilityRole="alert"
+              style={[
+                paper.typography.captionMeta,
+                { color: paper.colors.danger, marginTop: YanjiSpacing.xs },
+              ]}
+            >
+              {titleError}
+            </Text>
+          ) : null}
 
           <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
 
@@ -282,25 +305,30 @@ export function TaskEditorModal({
                     marginTop: YanjiSpacing.md,
                   }}
                 >
+                  {/* The category itself is a valid subject, matching the
+                      focus screen's 「整个大类」 choice. Picking a category
+                      therefore selects this chip, not an arbitrary child. */}
+                  <YanjiChip
+                    label="整个大类"
+                    selected={subjectId === selectedCategory.id}
+                    onPress={() => {
+                      setSubjectId(selectedCategory.id);
+                      setSubjectError(null);
+                    }}
+                  />
                   {children.map(child => (
                     <YanjiChip
                       key={child.id}
                       label={child.name}
                       selected={child.id === subjectId}
-                      onPress={() => setSubjectId(child.id)}
+                      onPress={() => {
+                        setSubjectId(child.id);
+                        setSubjectError(null);
+                      }}
                     />
                   ))}
                 </View>
-              ) : (
-                <Text
-                  style={[
-                    paper.typography.captionMeta,
-                    { color: paper.colors.secondary, marginTop: YanjiSpacing.sm },
-                  ]}
-                >
-                  该学科没有子类
-                </Text>
-              )}
+              ) : null}
             </>
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
@@ -323,6 +351,17 @@ export function TaskEditorModal({
               ) : null}
             </View>
           )}
+          {subjectError ? (
+            <Text
+              accessibilityRole="alert"
+              style={[
+                paper.typography.captionMeta,
+                { color: paper.colors.danger, marginTop: YanjiSpacing.sm },
+              ]}
+            >
+              {subjectError}
+            </Text>
+          ) : null}
 
           <YanjiHairline style={{ marginTop: YanjiSpacing.lg }} />
 

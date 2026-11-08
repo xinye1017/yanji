@@ -281,9 +281,10 @@ const GOAL_MAX_MINUTES = 720;
  * preset buttons plus a separate stepper would let the two disagree.
  *
  * Zero is a real value here: it means "no goal", which the page and Today both
- * read as 未设置. It is reachable through the stepper on purpose, so the save
- * button says 「清除目标」 rather than 「保存目标」 when the draft is zero — the
- * user must be able to tell the difference between setting a goal and removing it.
+ * read as 未设置. Stepping down to zero from a stored goal labels the action
+ * 「清除目标」 rather than 「保存目标」, so setting and removing a goal cannot be
+ * confused. With no goal stored there is nothing to clear, so that entry point
+ * opens on a disabled 「保存目标」 instead.
  */
 export function DailyGoalSheet({
   visible,
@@ -311,6 +312,11 @@ export function DailyGoalSheet({
   }, [visible, initialHours]);
 
   const adjust = (delta: number) => setMinutes(current => Math.max(0, Math.min(GOAL_MAX_MINUTES, current + delta)));
+  // With no goal stored, the sheet opens at zero; 「清除目标」 there would be an
+  // action with nothing to clear and looked like the way to set one. The action
+  // only becomes a removal when a goal actually exists.
+  const hasStoredGoal = (initialHours ?? 0) > 0;
+  const clearing = hasStoredGoal && minutes === 0;
 
   return (
     <SettingsSheet
@@ -397,9 +403,9 @@ export function DailyGoalSheet({
       ) : null}
 
       <YanjiPrimaryButton
-        label={saving ? '保存中…' : minutes > 0 ? '保存目标' : '清除目标'}
+        label={saving ? '保存中…' : clearing ? '清除目标' : '保存目标'}
         onPress={() => onSave(minutes)}
-        disabled={saving}
+        disabled={saving || (!hasStoredGoal && minutes === 0)}
       />
     </SettingsSheet>
   );

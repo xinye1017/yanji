@@ -937,6 +937,19 @@ class YanjiDataModule(
     }
 
     @ReactMethod
+    fun activateScheduleTemplate(templateId: String, promise: Promise) {
+        scope.launch {
+            try {
+                promise.resolve(repository.activateScheduleTemplate(templateId))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                promise.reject("E_SCHEDULE_SAVE", "切换默认模板失败，请重试", error)
+            }
+        }
+    }
+
+    @ReactMethod
     fun setScheduleDayTemplate(date: String, templateId: String, promise: Promise) {
         scope.launch {
             try {

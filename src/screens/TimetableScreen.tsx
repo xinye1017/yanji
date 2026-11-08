@@ -116,15 +116,32 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
     setEditorError(null);
     setDraft({ id: null, name: copiedTemplateName(templates, item.name), blocks: item.blocks.map(block => ({ ...block, id: null })) });
   };
+  const activate = useCallback(async (item: ScheduleTemplate) => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await YanjiDataNative.activateScheduleTemplate(item.id);
+      setSelectedId(item.id);
+      await load();
+    } catch {
+      setError('设为默认失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, load]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.canvas }}>
       <View style={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.lg }}>
         <YanjiEditorialHeader title="时间表设置" trailing={<YanjiIconButton icon="close" accessibilityLabel="返回设置" onPress={onClose} tone="filled" />} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: YanjiSpacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: YanjiSpacing.md }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: YanjiSpacing.xs }} style={{ flex: 1 }}>
             {templates.map(item => <YanjiChip key={item.id} label={item.name} selected={item.id === selectedId} onPress={() => setSelectedId(item.id)} />)}
           </ScrollView>
+          {template && templates[0]?.id !== template.id ? (
+            <YanjiTextAction label="设为默认" onPress={() => void activate(template)} disabled={saving} />
+          ) : null}
           <YanjiTextAction label="管理" onPress={() => setManagerOpen(true)} />
         </View>
         <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm, marginBottom: YanjiSpacing.sm }]}>点击空白时间添加，拖动时段或边缘调整时间</Text>
@@ -135,7 +152,7 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
           <ScheduleTimeline blocks={template.blocks} disabled={saving} onAdd={addBlock} onEdit={editBlock} onChange={(index, next) => void changeBlock(index, next)} />
         </ScrollView>
       ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : '还没有作息模板。'}</Text>{!loading ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
-      <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={editTemplate} />
+      <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={templates[0]?.id ?? null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={editTemplate} onActivate={item => void activate(item)} />
       <ScheduleTemplateEditor draft={draft} subjects={subjects} saving={saving} error={editorError} initialBlock={initialBlock} onClose={() => { if (!saving) { setDraft(null); setInitialBlock(null); } }} onSave={next => void save(next)} />
     </View>
   );

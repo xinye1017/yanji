@@ -498,6 +498,8 @@ interface YanjiDataModuleNative {
   ): Promise<ScheduleTemplate>;
   renameScheduleTemplate(templateId: string, name: string): Promise<boolean>;
   deleteScheduleTemplate(templateId: string): Promise<boolean>;
+  /** 把这套模板设为默认作息；没有按日指派的日期都用它。 */
+  activateScheduleTemplate(templateId: string): Promise<boolean>;
   /** 只改写这一天的模板指派，其他日期与专注记录不受影响。 */
   setScheduleDayTemplate(date: string, templateId: string): Promise<boolean>;
   setScheduleBlockCompleted(

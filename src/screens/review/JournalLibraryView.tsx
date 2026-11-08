@@ -12,7 +12,7 @@ import { useYanjiTheme } from '../../theme/ThemeProvider';
 import { YanjiSpacing } from '../../theme/tokens';
 import { YanjiIcon } from '../../components/YanjiUI';
 
-export type JournalCategoryTab = 'favorite' | 'unresolved' | 'resolved';
+export type JournalCategoryTab = 'all' | 'favorite' | 'unresolved' | 'resolved';
 
 export interface JournalLibraryViewProps {
   visible: boolean;
@@ -35,7 +35,9 @@ export function JournalLibraryView({
   const { colors, typography, radius } = theme.paper;
 
   const [notes, setNotes] = useState<NoteEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<JournalCategoryTab>('favorite');
+  // Default to every note: a note just written from 记录此刻 is usually neither
+  // favorited nor a doubt, and the library is where a user goes to find it.
+  const [activeTab, setActiveTab] = useState<JournalCategoryTab>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const loadNotes = useCallback(async () => {
@@ -190,6 +192,7 @@ export function JournalLibraryView({
         }}
       >
         {([
+          { key: 'all', label: '全部', count: notes.length },
           { key: 'favorite', label: '收藏', count: favoriteCount },
           { key: 'unresolved', label: '待解决', count: unresolvedCount },
           { key: 'resolved', label: '已解决', count: resolvedCount },
@@ -262,7 +265,7 @@ export function JournalLibraryView({
           }}
         >
           <Text style={[typography.captionMeta, { color: colors.muted, fontSize: 13 }]}>
-            暂无相关随笔记录
+            {activeTab === 'all' ? '还没有随笔记录' : '暂无相关随笔记录'}
           </Text>
         </View>
       ) : (

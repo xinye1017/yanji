@@ -27,7 +27,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -121,6 +121,8 @@ export function RecordMomentModal({
   const captureDraftImageUri = useRef<string | null>(null);
   // Mirrors the key state for callbacks already in flight when the read lands.
   const aiConfiguredRef = useRef<boolean | null>(null);
+  // Handle for bringing the keyboard up once the sheet is on screen.
+  const inputRef = useRef<React.ComponentRef<typeof TextInput> | null>(null);
 
   // Editing starts from the saved note; new captures keep a separate unsaved
   // draft across closing the sheet and switching mounted tabs.
@@ -415,7 +417,20 @@ export function RecordMomentModal({
   );
 
   return (
-    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={handleClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType={reduceMotion ? 'none' : 'fade'}
+      onRequestClose={handleClose}
+      // Recording starts with a thought: a new note opens ready to type. A
+      // mount-time `autoFocus` in an Android modal focuses the field before the
+      // window can take input focus, so the IME never opens; focusing after
+      // `onShow` is what actually raises the keyboard.
+      onShow={() => {
+        if (editingNote) return;
+        setTimeout(() => inputRef.current?.focus(), 300);
+      }}
+    >
       <View
         style={{
           flex: 1,
@@ -552,6 +567,7 @@ export function RecordMomentModal({
             }}
             placeholder="一个想法、一处卡点、一点收获…"
             multiline
+            inputRef={inputRef}
             variant="page"
             accessibilityLabel="记录内容"
             style={{ minHeight: 84, maxHeight: 140, marginTop: YanjiSpacing.xs, marginBottom: 2 }}

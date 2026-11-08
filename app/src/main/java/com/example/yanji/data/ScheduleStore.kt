@@ -117,6 +117,24 @@ internal class ScheduleStore(
         }
     }
 
+    /**
+     * 把一套模板设为默认作息。
+     *
+     * 默认作息就是排序第一的模板：没有按日指派时，`day()` 回落到它。这里只重排
+     * `sortOrder`，不写任何日期指派，因此历史与已显式指定的日期都不受影响。
+     */
+    suspend fun activate(templateId: String): Boolean = write { dao ->
+        val ordered = dao.getTemplates()
+        val target = ordered.firstOrNull { it.id == templateId } ?: return@write false
+        if (ordered.first().id == templateId) return@write true
+        val reordered = listOf(target) + ordered.filter { it.id != templateId }
+        val now = System.currentTimeMillis()
+        reordered.forEachIndexed { index, template ->
+            if (template.sortOrder != index) dao.upsertTemplate(template.copy(sortOrder = index, updatedAt = now))
+        }
+        true
+    }
+
     suspend fun delete(templateId: String): Boolean = write { dao ->
         dao.getTemplate(templateId) ?: return@write false
         // 先删完成状态（子查询依赖 blocks），再删时间段、指派与模板。

@@ -203,9 +203,11 @@ export function ScheduleTemplateManagerSheet({
   onCreate,
   onCopy,
   onEdit,
+  onActivate,
 }: {
   visible: boolean;
   templates: ScheduleTemplate[];
+  /** The template today's schedule falls back to — the first in sort order. */
   activeTemplateId: string | null;
   onClose: () => void;
   /** 重命名 / 删除落库后，让页面重新读取模板与当天数据。 */
@@ -213,6 +215,7 @@ export function ScheduleTemplateManagerSheet({
   onCreate: () => void;
   onCopy: (template: ScheduleTemplate) => void;
   onEdit: (template: ScheduleTemplate) => void;
+  onActivate: (template: ScheduleTemplate) => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
@@ -296,37 +299,53 @@ export function ScheduleTemplateManagerSheet({
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
                     gap: YanjiSpacing.sm,
-                    flexWrap: 'wrap',
                   }}
                 >
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      typography.bodyPrimary,
-                      { color: colors.ink, fontWeight: '600', flexShrink: 1 },
-                    ]}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: YanjiSpacing.sm,
+                      flexShrink: 1,
+                    }}
                   >
-                    {template.name}
-                  </Text>
-                  {active ? (
-                    <View
-                      style={{
-                        backgroundColor: colors.brandSubtle,
-                        borderRadius: paper.radius.pill,
-                        paddingHorizontal: 7,
-                        paddingVertical: 2,
-                      }}
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        typography.bodyPrimary,
+                        { color: colors.ink, fontWeight: '600', flexShrink: 1 },
+                      ]}
                     >
-                      <Text
-                        style={[
-                          typography.captionMeta,
-                          { color: colors.brandInk, fontWeight: '700' },
-                        ]}
+                      {template.name}
+                    </Text>
+                    {active ? (
+                      <View
+                        style={{
+                          backgroundColor: colors.brandSubtle,
+                          borderRadius: paper.radius.pill,
+                          paddingHorizontal: 7,
+                          paddingVertical: 2,
+                        }}
                       >
-                        使用中
-                      </Text>
-                    </View>
+                        <Text
+                          style={[
+                            typography.captionMeta,
+                            { color: colors.brandInk, fontWeight: '700' },
+                          ]}
+                        >
+                          默认
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {!active && !renaming && !deleting ? (
+                    <SheetAction
+                      label="设为默认"
+                      onPress={() => onActivate(template)}
+                      disabled={pendingId !== null}
+                    />
                   ) : null}
                 </View>
                 <Text
