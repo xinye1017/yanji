@@ -65,11 +65,15 @@ class TimerNotificationInstrumentedTest {
             val result = TimerCompletionFeedback.state.pending.value!!
             assertEquals("高等数学", result.subjectName)
             assertEquals(3L, result.elapsedSeconds)
+            // Three seconds is below TimerStore's one-minute recording threshold,
+            // so the card must present the unrecorded outcome, not the saved one.
+            assertFalse(result.recorded)
             await { manager.activeNotifications.none { it.id == FocusNotificationSpecs.ONGOING_NOTIFICATION_ID } }
             assertFalse(manager.activeNotifications.any { it.id == FocusNotificationSpecs.COMPLETION_NOTIFICATION_ID })
             await { instrumentation.uiAutomation.rootInActiveWindow
-                ?.findAccessibilityNodeInfosByText("已计时完成")?.any { it.isVisibleToUser } == true }
+                ?.findAccessibilityNodeInfosByText("专注已结束")?.any { it.isVisibleToUser } == true }
             val root = instrumentation.uiAutomation.rootInActiveWindow
+            assertTrue(root.findAccessibilityNodeInfosByText("不足 1 分钟，本次不计入统计").any { it.isVisibleToUser })
             assertTrue(root.findAccessibilityNodeInfosByText("3 秒").any { it.isVisibleToUser })
             assertTrue(root.findAccessibilityNodeInfosByText("高等数学").any { it.isVisibleToUser })
             Thread.sleep(500) // Capture after the native Modal fade has completed.

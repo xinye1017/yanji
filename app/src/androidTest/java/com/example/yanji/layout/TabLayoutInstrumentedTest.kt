@@ -79,6 +79,9 @@ class TabLayoutInstrumentedTest {
     private var ownedTaskId: String? = null
     private val ownedNoteText = "snapshot-${UUID.randomUUID().toString().take(8)}"
     private val ownedTaskTitle = "task-${UUID.randomUUID().toString().take(8)}"
+    // The capture card's published label; the test drives the same control a
+    // screen reader does, so it must track the UI instead of a stale name.
+    private val newNoteEntryLabel = "记录此刻，新建今日随笔"
 
     @Before
     fun launchWithDeviceAuthorization() {
@@ -304,7 +307,7 @@ class TabLayoutInstrumentedTest {
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
         await("Today scrolled to footer") { !(required("scroll-today") as ScrollView).canScrollVertically(1) }
-        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
         await("draft note editor opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         val draft = "unsaved layout regression draft"
@@ -316,7 +319,7 @@ class TabLayoutInstrumentedTest {
         select("review")
         onMain { assertEquals(chosenDate, (required("review-date") as TextView).text.toString()) }
         select("today")
-        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
         await("draft note editor reopened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog()).check(matches(withText(draft)))
@@ -378,7 +381,7 @@ class TabLayoutInstrumentedTest {
             val scroll = required("scroll-today") as ScrollView
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
-        onView(withContentDescription("新建今日记录")).perform(scrollTo(), click())
+        onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
         await("note editor opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog())
