@@ -109,6 +109,20 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
   - **不得用授权代替验证纪律**：能只读取证就不切换；切换只为拿到"随系统变化"这条时间序列证据。
 - **原因**：主题跟随类问题只有跨越浅色→深色的切换才能证伪；模拟器可以无成本地反复切换，真机则应保持用户日常状态不被扰动。
 
+### 7. 【磁盘占用】构建产物体积收敛（node_modules 里的原生库产物）
+
+- **现象**：仓库目录曾膨胀到 **22G**，其中 **8.7G** 是 `node_modules` 里 RN 原生库的 NDK/CMake 产物；一次 `npm install` + 一次 `assembleDebug` 就能在十几分钟内重新长回来。
+- **根因**：
+  1. `settings.gradle.kts` 把 `react-native-reanimated` / `react-native-worklets` 以**源码工程**引入（`projectDir` 指向 `node_modules/<pkg>/android`），Gradle 直接在包目录里编 C++（RNGP），产物落在包内；
+  2. 未收敛 ABI 时 RN 默认编 **4 个 ABI**（arm64-v8a / armeabi-v7a / x86 / x86_64），每个 ABI 一份 `.cxx` + 一份 `.so`，产物 ×4。
+- **已收敛**：`gradle.properties` 的 `reactNativeArchitectures=arm64-v8a,x86_64`（app 模块由 RNGP 的 `NdkConfiguratorUtils` 读取该属性写入 `abiFilters`）。若将来确需 32 位设备（armeabi-v7a），在该列表补上即可。
+- **清理**：`scripts/clean-build-artifacts.sh`
+  - 默认：只清 `build/` 下的一次性诊断产物（带时间戳目录 + 过期报告/截图），**零构建代价**；
+  - `--native`：额外清 `node_modules` 里两个原生库的 `build/` 与 `.cxx`（代价：下次 `assembleDebug` 重编这两个库的 C++）；
+  - `--all`：额外清 `app/build/intermediates` 与 `app/.cxx`（代价同上）。
+- **红线**：空间回收只走上述脚本的白名单路径；**严禁**把 `gradle clean` 当作日常手段（见 §二.5），也**严禁** `rm -rf node_modules`（会连带删掉 `postinstall` 的 patch-package 产物）。
+- **真机备份不参与清理**：`build/device-backup/` 属真机数据，任何清理动作都必须跳过（脚本已显式排除）。
+
 ---
 
 ## 三、Active Constraints（红线清单 · 一页速查）

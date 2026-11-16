@@ -34,6 +34,15 @@ android {
         targetSdk = 36
         versionCode = 2
         versionName = "1.0.0"
+        // ABI 与 gradle.properties 的 reactNativeArchitectures 同源（唯一来源）。
+        // :app 刻意不应用 RNGP，RN 的 NdkConfiguratorUtils 不会给本模块写 abiFilters；
+        // 不显式声明的话，app 的 CMake 会按默认编 4 个 ABI
+        // （arm64-v8a / armeabi-v7a / x86 / x86_64），app/.cxx 与 intermediates
+        // 成倍膨胀，且 APK 里塞进用不到的 .so。
+        ndk {
+            abiFilters += (project.findProperty("reactNativeArchitectures") as String? ?: "")
+                .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
         // 插桩测试入口（app/src/androidTest）。之前从未声明过，因此 androidTest 目录一直是空的。
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
