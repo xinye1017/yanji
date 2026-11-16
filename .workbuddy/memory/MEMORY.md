@@ -13,7 +13,7 @@
 
 ## 数据、计时、安全：硬约束
 
-- **Room 为业务唯一事实源**，数据由 Kotlin Repository 管理；运行时禁止虚构学习记录，空表合法。Room 当前 `@Database(version = 22)`，以 `data/db/YanjiDatabase.kt` 为准；迁移须完整、非破坏性，禁止 `fallbackToDestructiveMigration()`，Entity 修改同时更新 `app/schemas/**`。
+- **Room 为业务唯一事实源**，数据由 Kotlin Repository 管理；运行时禁止虚构学习记录，空表合法。Room 当前 `@Database(version = 30)`，以 `data/db/YanjiDatabase.kt` 为准；迁移须完整、非破坏性，禁止 `fallbackToDestructiveMigration()`，Entity 修改同时更新 `app/schemas/**`。
 - 计时唯一事实源：Kotlin `TimerMachine` + `ActiveSessionCoordinator` + `FocusTimerService`，物理时间基于 `SystemClock.elapsedRealtime`；RN 只消费原生事件，不独立计算权威计时。前台通知依托 Chronometer，勿每秒 `notify()`；保留进程死亡后的活动快照恢复。
 - AI API Key 用 Android Keystore 加密并放入 `noBackupFilesDir`，异常 fail-closed；不得写入 Room、JS 持久化、备份、日志或 Git。
 - **历史持久化兼容值不可随 Kotlin 符号一起重命名**（当前代码已确认）：Room `journal_entries`；`ChatSender.JUANJUAN` 对应历史 sender；成就 ID `journey_journal_first`；`QuickStartPreset.TYPE_JOURNAL = "journal"`；备份 JSON 字段 `journalEntries`（通过 `@SerialName` 固定）。「卷卷 / Juanjuan」是角色名，「研迹」是产品名。变更前须审查迁移和旧数据兼容。

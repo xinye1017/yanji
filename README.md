@@ -107,7 +107,7 @@ UI 由 React Native 与 TypeScript 实现，Kotlin 宿主提供计时、数据�
                                 │
 ┌───────────────────────────────▼────────────────────────────────┐
 │ Kotlin services and repositories                                │
-│ Room database (v22), timer state, Android Keystore credentials  │
+│ Room database (v30), timer state, Android Keystore credentials  │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -137,7 +137,7 @@ UI 由 React Native 与 TypeScript 实现，Kotlin 宿主提供计时、数据�
        │
        │  (4) completeSession()
        ▼
-[Room Database (v22)] ──── 写入成功 ────▶ 清除 Active 快照
+[Room Database (v30)] ──── 写入成功 ────▶ 清除 Active 快照
        │
        └────────────────── 写入失败 ────▶ 保留 Active 快照 (严防学习成果丢失)
 ```
