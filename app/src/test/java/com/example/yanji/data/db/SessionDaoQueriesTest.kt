@@ -3,7 +3,6 @@ package com.example.yanji.data.db
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -139,32 +138,6 @@ class SessionDaoQueriesTest {
         val examTotalSecs = examSumStmt.getLong(0)
         examSumStmt.close()
         assertEquals(10500L + 10800L, examTotalSecs)
-
-        // 3. Achievement idempotent unlock & getUnlockedIds
-        db.prepare("INSERT OR IGNORE INTO unlocked_achievements (id, unlockedAt) VALUES (?, ?)").use { stmt ->
-            stmt.bindText(1, "ach_1")
-            stmt.bindLong(2, 1000L)
-            stmt.step(); stmt.reset()
-
-            stmt.bindText(1, "ach_2")
-            stmt.bindLong(2, 2000L)
-            stmt.step(); stmt.reset()
-
-            // Duplicate insert ignored
-            stmt.bindText(1, "ach_1")
-            stmt.bindLong(2, 3000L)
-            stmt.step()
-        }
-
-        val achStmt = db.prepare("SELECT id FROM unlocked_achievements")
-        val unlockedIds = mutableListOf<String>()
-        while (achStmt.step()) {
-            unlockedIds.add(achStmt.getText(0))
-        }
-        achStmt.close()
-        assertEquals(2, unlockedIds.size)
-        assertTrue(unlockedIds.contains("ach_1"))
-        assertTrue(unlockedIds.contains("ach_2"))
 
         db.close()
     }

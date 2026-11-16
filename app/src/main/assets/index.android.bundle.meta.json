@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "e03e732239273d36fb42f8064df4c51d6388ab3e400789f662e2cf135a59a173",
+    "sha256": "e88ccbc74afe46ab82a568bdc399edcb16400347b1deaca7d8b656f02750ed53",
     "files": [
       {
         "path": "App.tsx",
@@ -35,7 +35,7 @@
       },
       {
         "path": "gradle/libs.versions.toml",
-        "sha256": "00811ac6d2005f3fcdf028b622baced2d982a73550276028b8e567cd6d1d5188"
+        "sha256": "29ecda5b91e08a0707d441a5932b590ce481cfaaba295b84720eaddd0f0d2780"
       },
       {
         "path": "index.js",
@@ -47,11 +47,11 @@
       },
       {
         "path": "package-lock.json",
-        "sha256": "951d17bb256434b1d2484d7fafbbacabd26dc9a06d40e2f76b05554facecee1b"
+        "sha256": "5cbaecbc845e0a91d06fff1d61e517c53aed5e726e6e4c54c6664bf75af7f02e"
       },
       {
         "path": "package.json",
-        "sha256": "66920c62006f1e2e51024b6f98a216ad65a253dcc8eb8446da207bed0052a7b4"
+        "sha256": "5e5e38d910345818f7d63785846e839066eecb4e6e8b82a69ea7bd75f81a3f45"
       },
       {
         "path": "patches/README.md",
@@ -116,10 +116,6 @@
       {
         "path": "src/components/RollingTimeDisplay.tsx",
         "sha256": "c1fbaeef2ed3c5df9b123bda922783e6ae1faf19f672172d6c5e4c4a63a7c0fc"
-      },
-      {
-        "path": "src/components/ScheduleBlockRow.tsx",
-        "sha256": "debee6ccb407349b911a309d5bb2fb494baa6ecafae497308235bff81c2c7366"
       },
       {
         "path": "src/components/ScheduleTemplateSheets.tsx",
