@@ -298,7 +298,7 @@ class YanjiRepository private constructor() {
                 }
             }
 
-            // 以下不是首帧依赖：活动计时、打卡、维护任务与一次性成就事实读取。
+            // 以下不是首帧依赖：活动计时、打卡与维护任务。
             timerStore.bind()
             checkInStore.bind(db)
             launch {

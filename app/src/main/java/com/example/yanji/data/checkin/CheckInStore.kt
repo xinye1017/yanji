@@ -12,8 +12,8 @@ import kotlinx.coroutines.launch
 /**
  * 打卡的状态与动作归属者。
  *
- * 抽出来的原因：连续天数（streak）是成就系统的输入，规则分支多且容易被写错，
- * 需要能对 [CheckInLogic] 做纯函数级别的测试；同时打卡状态不该继续堆在
+ * 抽出来的原因：连续天数（streak）规则分支多且容易被写错，需要能对
+ * [CheckInLogic] 做纯函数级别的测试；同时打卡状态不该继续堆在
  * `YanjiRepository` 这个 God Object 里。
  */
 internal class CheckInStore(

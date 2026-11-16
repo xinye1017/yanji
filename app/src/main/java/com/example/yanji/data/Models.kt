@@ -120,7 +120,7 @@ data class Subject(
  *
  * 学科现在持久化在 Room 的 `subjects` 表（v14 起），这个 object 是该表的
  * **同步内存镜像**：由 [com.example.yanji.data.YanjiRepository] 在数据库发射时
- * 整体替换 [all]。之所以保留这套静态查询函数，是因为统计 / 成就 / 诊断等大量
+ * 整体替换 [all]。之所以保留这套静态查询函数，是因为统计 / 诊断等大量
  * 纯函数都在同步语境里按 id 反查学科，把它们全部改成挂起或 Flow 的收益极低。
  *
  * 约定：**只允许 Repository 调用 [replaceAll] 写入**，其余调用方一律只读。
