@@ -84,8 +84,6 @@ internal object ScheduleValidation {
                 )
             }
             input.copy(
-                startMinute = input.startMinute,
-                endMinute = input.endMinute,
                 subjectIds = subjectIds,
                 subjectLabel = label,
                 title = title

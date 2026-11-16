@@ -127,9 +127,9 @@ export function spectrumLegend(
 }
 
 function sessionPrecise(session: DailySession): boolean {
-  // A session is plottable whenever it has recorded duration and valid timestamps.
-  return session.durationSeconds > 0
-    && (session.endTime > session.startTime || session.durationSeconds > 0);
+  // Any saved duration is plottable below: buildRhythmBuckets already falls back
+  // to start + duration when endTime is not after startTime.
+  return session.durationSeconds > 0;
 }
 
 export function buildRhythmBuckets(
