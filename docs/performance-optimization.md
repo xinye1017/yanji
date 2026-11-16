@@ -87,6 +87,20 @@
 - 真机做过一次覆盖安装与启动（保留用户数据），首页、专注、回顾三页渲染正常、无崩溃；「今日学习节奏」在当天 0 分钟时无柱是既有空态，不是回归。
 - FlashList 2.3.3 属 v2 纯 JS 实现，无原生依赖，因此不需要也不应添加 Fabric codegen 或 Gradle include；本轮未改动任何原生构建配置。
 
+## 本轮复验（2026-11-17）
+
+在历史包袱清理、代码精简与原生 ABI 收敛之后重新跑了一遍完整本地验证。以下数字为本轮实测，取代上文"集成结果"中 2026-10-25 的旧值；旧值保留为该轮历史证据，不再代表当前提交。
+
+- `npm run typecheck`：通过。
+- `npm test`（Node ESM 全套）：**371/371** 通过，0 失败 / 0 跳过。
+- 三守卫：`check-project-facts.sh`（project-facts 一致）、`check-bundle-sync.mjs`（源码 / 配置 / 依赖锁 / 补丁内容与 HBC 完整性及已打包资源匹配）、`check-runtime-fixtures.sh`（1 条已复核匹配）——均 PASS。
+- `lintDebug` → `testDebugUnitTest` → `assembleDebug`（按 AGENTS.md §五.0 经 PowerShell 逐项执行）：BUILD SUCCESSFUL。lint **0 errors / 18 warnings**（全部为既有的 `MonochromeLauncherIcon` 提示，与本轮改动无关）；Kotlin JVM 单测 **314 项**（40 suites，0 失败 / 0 错误 / 0 跳过）。
+  - 单测数由历史的 318 降为 314，是因为成就系统摘除（`26707c6`）时一并删除了成就等价性等测试，属预期的用例收敛，不是回归。
+- 打包产物：`npm run bundle:android` 产出 HBC 98 字节码，`assembleDebug` 后 APK 内 `assets/index.android.bundle` 为 **3,170,490 字节**、magic `c61fbc03c103191f`。体积随每轮源码变化浮动，不能据此宣称缩包或加速。
+- 本轮相关提交：`556ca07`（死代码 / 未用依赖清理并重建 bundle）、`8153513`（失效注释清理）、`5cee04f`（冗余逻辑精简并重建 bundle）、`697715f`（原生 ABI 收敛 + 清理脚本）。
+
+本轮为纯静态与组件级验证，未做模拟器 / 真机安装、点击、录屏或性能采样；下文"未验证边界"依然成立。
+
 ## 未验证边界
 
 没有真机滚动、帧率、内存或启动耗时采样，因此启动改善、滚动流畅度与省电收益均未证实；字节码相对原 JS 体积约 +39.9%，不宣称缩包或真机加速。所有结论来自构建产物校验、独立测试数据库与组件级替身。`DailySnapshotInstrumentedTest` 的插桩断言只在编译层验证过，尚未在设备上执行。
