@@ -101,6 +101,33 @@
 
 本轮为纯静态与组件级验证，未做模拟器 / 真机安装、点击、录屏或性能采样；下文"未验证边界"依然成立。
 
+## 模拟器运行性能实测（2026-11-17）
+
+在 Android 模拟器（`emulator-5554`，Android 15 / x86_64 / AEHD 2.2 / 720×1600@320dpi / host GPU / 6 核 / 4GB）上安装 Debug APK 实测。动画 scale 保持 1（不关闭，避免 `useReducedMotion()` 静默跳过过渡）。数据来自 `am start -W`、`dumpsys gfxinfo [framestats]`、`dumpsys meminfo` 与 `/proc/<pid>/stat`。
+
+- **冷启动**：`am start -W` 的 TotalTime 为 1633 / 1692 / 1745ms（另一次 1664–1882ms），波动来自模拟器。时间线显示 `Choreographer: Skipped 44 frames`（约 730ms 主线程阻塞）发生在 `Application.onCreate` 的 RN 原生库加载与 ReactInstance 创建阶段——这是 RN 0.87 Bridgeless + Fabric 的框架固定成本，不是 app 业务逻辑。app 自己的启动预热跑在 IO 线程（settled 289–323ms），主线程有界等待仅 80–99ms，且已把 JS 引擎启动与 Room 预热并行化。
+- **稳态内存**：反复切换三个 Tab 并强制 GC 后，PSS 稳定在 ~302MB、Dalvik Heap 稳定在 ~6.3MB（三轮读数 ~297588 → 302120 → 302452 → 302472 KB，Heap 不增长）。三页常驻挂载是既定设计，**没有内存泄漏**；增长只是首次进入各页的懒挂载与玻璃纹理常驻，随后收敛。
+- **滚动帧耗时**（720p + host GPU，`framestats` 精确分解，71 帧）：IntendedVsync→FrameCompleted 中位数 **17.5ms**、p95 **18.1ms**、max 22.5ms（≈57fps，接近 60fps 上限）；`issueDrawCommands` 中位 5.2ms、`swapBuffers` 中位 7.8ms，瓶颈在 GPU 合成而非 JS/UI 线程。`Number Slow UI thread = 0`、`Number Missed Vsync = 0`。
+- **idle CPU**：无活动会话、停留首页时主线程 ~6% 单核；暂停态 tick 会停止，不空转。
+- **"jank 21–23%" 的真相**：`dumpsys gfxinfo` 把每帧 17ms（vsync 16.67ms）判为 janky，且 `input swipe` 注入与 vsync 不同步产生 ~80% 的 "High input latency"——这两项都是模拟器测试方法的伪影，不是真实用户卡顿。精确逐帧数据显示 p95 仅 18ms。
+
+### 瓶颈定位：A/B 验证后确认无 app 级瓶颈
+
+ Glass 底栏的 `react-native-blur-overlay` 曾被怀疑是绘制开销来源，遂做对照实验（每次重建 bundle + APK 装模拟器、同一 12–30 循环滑动负载）：
+
+| A/B 变量 | 结果 | 结论 |
+| :--- | :--- | :--- |
+| `maxUpdateFps` 60 → 24 | jank、slow-draw 均无变化（22% 对 22%） | 非瓶颈 |
+| `interactive` true → false | idle CPU 无差异（5.6 对 6.4 j/10s，噪声） | 非瓶颈 |
+| `downsampling` 2 → 4 | 库在 glass 模式把 `inputScale` 硬钳制为 0.5（已是最优），改值无效 | 无可调空间 |
+| 完全移除 BlurOverlay（仅留 children） | jank 22–27% 与基线 21–23% 相当，idle CPU 57 对 56 j/10s | 确认非瓶颈 |
+
+库自身文档也印证：glass 模式"never captures above half resolution"，性能杠杆是 downsampling 而此处已被钳制。`react-native-blur-overlay` 的 patch 只改像素着色（边缘提亮/反射），不改 capture 频率。**结论：当前实现已接近理论最优，没有可以安全移除或下调的性能包袱。** 唯一可归因的耗时是 RN 框架启动固定成本，不属于业务逻辑优化范畴。
+
+### 本轮唯一改进
+
+据 Context7（`react-native-website` / optimizing-flatlist-configuration）确认的官方建议——`renderItem`/`keyExtractor` 必须是稳定回调，否则每次父组件渲染都重建、破坏行回收——把 `ReviewScreen` 时间线 FlashList 的内联回调改为 `useCallback`（与 `TodayScreen` 既有做法一致），并把 `requestDeleteSession` 一并稳定化。行为不变，只减少无谓的函数重建。typecheck、371 项 JS 测试、模拟器装启与 Review 页渲染均已验证正常。
+
 ## 未验证边界
 
-没有真机滚动、帧率、内存或启动耗时采样，因此启动改善、滚动流畅度与省电收益均未证实；字节码相对原 JS 体积约 +39.9%，不宣称缩包或真机加速。所有结论来自构建产物校验、独立测试数据库与组件级替身。`DailySnapshotInstrumentedTest` 的插桩断言只在编译层验证过，尚未在设备上执行。
+没有真机滚动、帧率、内存或启动耗时采样，因此启动改善、滚动流畅度与省电收益均未证实；字节码相对原 JS 体积约 +39.9%，不宣称缩包或真机加速。所有结论来自构建产物校验、独立测试数据库与组件级替身。`DailySnapshotInstrumentedTest` 的插桩断言只在编译层验证过，尚未在设备上执行。上文所有帧率 / 内存 / CPU 数据均来自模拟器，未在真机（ColorOS / PKB110）复现；真机上玻璃材质走系统 RenderEffect、字体注册走 OPPO 衬线路径，性能特征可能不同，本轮未测。
