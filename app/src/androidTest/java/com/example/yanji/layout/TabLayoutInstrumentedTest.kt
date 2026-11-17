@@ -2,8 +2,10 @@ package com.example.yanji.layout
 
 import android.graphics.Rect
 import android.graphics.Bitmap
+import android.Manifest
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -30,6 +32,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.NoMatchingViewException
+import androidx.test.espresso.NoMatchingRootException
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -90,6 +93,19 @@ class TabLayoutInstrumentedTest {
             "Personal-device UI tests require explicit authorization."
         }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        // Starting a timer requests POST_NOTIFICATIONS before the native session is
+        // created (TimerNotificationPermission). Under instrumentation nobody can
+        // answer that dialog — it blocks startFocus and, if left pending, steals
+        // focus from the next test. Grant it up front as TimerNotificationInstrumentedTest
+        // already does. Emulator-only; personal devices need allowPersonalDevice.
+        if (Build.VERSION.SDK_INT >= 33 &&
+            instrumentation.targetContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            instrumentation.uiAutomation.grantRuntimePermission(
+                instrumentation.targetContext.packageName,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
         // Wake for the explicitly authorized test; never change the device's sleep settings.
         val wakeResult = instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_WAKEUP")
         ParcelFileDescriptor.AutoCloseInputStream(wakeResult).use { it.readBytes() }
@@ -308,23 +324,19 @@ class TabLayoutInstrumentedTest {
         }
         await("Today scrolled to footer") { !(required("scroll-today") as ScrollView).canScrollVertically(1) }
         onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
-        await("draft note editor opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         val draft = "unsaved layout regression draft"
         onView(withContentDescription("记录内容")).inRoot(isDialog()).perform(replaceText(draft), closeSoftKeyboard())
-        pressBack() // Exercise the modal's onRequestClose without a moving sheet target.
-        await("draft note editor closed") { root?.hasWindowFocus() == true }
+        closeNoteEditor()
         select("focus")
         onMain { assertTrue("Focus duration was preserved", selectedPreset(90)) }
         select("review")
         onMain { assertEquals(chosenDate, (required("review-date") as TextView).text.toString()) }
         select("today")
         onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
-        await("draft note editor reopened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog()).check(matches(withText(draft)))
-        pressBack()
-        await("draft note editor closed again") { root?.hasWindowFocus() == true }
+        closeNoteEditor()
 
         select("focus")
         onMain {
@@ -358,7 +370,6 @@ class TabLayoutInstrumentedTest {
         clickImmersive("暂停专注")
         await("test session paused again") { ActiveSessionCoordinator.active.value?.paused == true && find("focus-paused") != null }
         clickImmersive("放弃本轮")
-        await("discard confirmation dialog opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withText("确认放弃"))
         onView(withText("确认放弃")).inRoot(isDialog()).perform(click())
         await("test session discarded without saving a study record") { ActiveSessionCoordinator.active.value == null }
@@ -382,21 +393,41 @@ class TabLayoutInstrumentedTest {
             scroll.scrollTo(0, scroll.getChildAt(0).height)
         }
         onView(withContentDescription(newNoteEntryLabel)).perform(scrollTo(), click())
-        await("note editor opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText(ownedNoteText), closeSoftKeyboard())
         onView(withContentDescription("保存")).inRoot(isDialog()).perform(click())
         awaitRoom("new note is persisted") { db.noteEntryDao().getAllOnce().any { it.content == ownedNoteText } }
-        await("note editor closed after saving") { root?.hasWindowFocus() == true }
+        awaitDialogGone("note editor closed after saving")
         await("new note appears after Room invalidation") {
             findText(ownedNoteText, "today") != null
         }
         // A compact row has no standalone edit button: the row itself opens the
         // record, and the anchored 「···」 menu holds the management actions. Tap
         // the row the way a reader does, on the label the row actually publishes.
-        onView(withContentDescription("查看完整记录：$ownedNoteText")).perform(scrollTo(), click())
-        await("note editor opened for edit") { root?.hasWindowFocus() == false }
+        // The just-saved note is the last row and can sit under the floating
+        // dock. Scroll it clear of the dock before clicking, as a reader would.
+        val editLabel = "查看完整记录：$ownedNoteText"
+        await("saved note row clears the dock for editing") {
+            onMain {
+                val row = root?.let { r -> views(r).firstOrNull { v -> v.contentDescription?.toString() == editLabel } }
+                val dock = find("bottom-tab-bar")
+                val list = find("scroll-today")
+                if (row == null || dock == null || list == null) false
+                else {
+                    val rb = bounds(row); val db = bounds(dock)
+                    when {
+                        rb.bottom <= db.top -> true // already clear above the dock
+                        list is android.widget.ScrollView && list.canScrollVertically(1) -> {
+                            list.scrollBy(0, (rb.bottom - db.top) + 24)
+                            false
+                        }
+                        else -> rb.bottom <= db.top
+                    }
+                }
+            }
+        }
+        onView(withContentDescription(editLabel)).perform(click())
         awaitDialogChild(withContentDescription("记录内容"))
         onView(withContentDescription("记录内容")).inRoot(isDialog())
             .perform(replaceText("$ownedNoteText edited"), closeSoftKeyboard())
@@ -431,7 +462,6 @@ class TabLayoutInstrumentedTest {
         // per-run title. No fallback to a pre-existing user row, and no
         // three-pending-task threshold that silently degrades the assertions.
         onView(withContentDescription("添加任务")).perform(scrollTo(), click())
-        await("task editor opened") { root?.hasWindowFocus() == false }
         awaitDialogChild(withContentDescription("任务名称"))
         onView(withContentDescription("任务名称")).inRoot(isDialog())
             .perform(replaceText(ownedTaskTitle), closeSoftKeyboard())
@@ -444,7 +474,7 @@ class TabLayoutInstrumentedTest {
         // able to clean it up — and to recognise a session bound to it.
         val task = runBlocking { db.studyTaskDao().getAllFlow().first().first { it.title == ownedTaskTitle } }
         ownedTaskId = task.id
-        await("task editor closed after saving") { root?.hasWindowFocus() == true }
+        awaitDialogGone("task editor closed after saving")
         await("new task is visible after native table invalidation") { findText(ownedTaskTitle, "today") != null }
         onView(withContentDescription("开始专注：${task.title}")).perform(scrollTo(), click())
         await("Focus consumes the task preset") { required("pane-focus").alpha == 1f }
@@ -540,6 +570,8 @@ class TabLayoutInstrumentedTest {
                 return
             } catch (_: NoMatchingViewException) {
                 // Not mounted yet.
+            } catch (_: NoMatchingRootException) {
+                // Dialog window not attached yet.
             } catch (_: AssertionError) {
                 // Matched, but not laid out/displayed yet.
             }
@@ -547,6 +579,40 @@ class TabLayoutInstrumentedTest {
         }
         captureFailure("modal dialog content mounted")
         fail("Timed out waiting for the modal dialog content to mount")
+    }
+
+    /**
+     * Closes the record sheet through its own 「关闭」 control.
+     *
+     * A bare pressBack() is ambiguous once the sheet auto-focuses its text field
+     * on open (RecordMomentModal.onShow): the back press is consumed by the IME,
+     * leaving the sheet open and breaking the following test. The shipped close
+     * button is deterministic and needs no focus-timing wait.
+     */
+    private fun closeNoteEditor() {
+        onView(withContentDescription("关闭")).inRoot(isDialog()).perform(click())
+        awaitDialogGone("note editor closed via 关闭 button")
+    }
+
+    /** Waits until no dialog window is showing. */
+    private fun awaitDialogGone(message: String) {
+        val deadline = SystemClock.elapsedRealtime() + 15_000
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val gone = try {
+                onView(isDisplayed()).inRoot(isDialog()).check(matches(isDisplayed()))
+                false
+            } catch (_: NoMatchingRootException) {
+                true // no dialog window remains
+            } catch (_: NoMatchingViewException) {
+                false // dialog up but empty this frame
+            } catch (_: AssertionError) {
+                false
+            }
+            if (gone) return
+            SystemClock.sleep(100)
+        }
+        captureFailure(message)
+        fail("Timed out waiting for $message")
     }
 
     private fun select(tab: String) {
