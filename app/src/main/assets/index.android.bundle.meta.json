@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "67a4bc1031d6fa519d1d5790bde6abaf2578add88a5fa8e5708d9932b133de50",
+    "sha256": "e9f9a51ad83771bb1b95a236ca934dbb8647753ecad2e9344b2b420325c1c7ec",
     "files": [
       {
         "path": "App.tsx",
@@ -199,7 +199,7 @@
       },
       {
         "path": "src/screens/ReviewScreen.tsx",
-        "sha256": "9ab0f6eaa13bdf517a3c44c11ee5e86e2ee065d45e8137d4edf9140216f351e7"
+        "sha256": "1bf2cfe9f618066d2a0b40a2651260ef61b393fee9be7bbe4c454afe9349b1e0"
       },
       {
         "path": "src/screens/SettingsScreen.tsx",
@@ -272,15 +272,15 @@
     ]
   },
   "metro": {
-    "bytes": 2265912,
-    "sha256": "f02e84a5056aece2c17ff03caf3908b203f8a3eaefdc03283e0a3c30f9cfb96b",
-    "sha1": "5724adb98e3ea4c0b9f029057be3c6b05d56ca83"
+    "bytes": 2266005,
+    "sha256": "0412d8dd00c20bf48617c7f5887e5dcb6e6eea896da7788a88dd285b32e57ece",
+    "sha1": "ae5e298ab09ffd8466b7936ac0fbac975e5908d2"
   },
   "artifact": {
     "version": 98,
-    "sourceSha1": "5724adb98e3ea4c0b9f029057be3c6b05d56ca83",
-    "bytes": 3170490,
-    "sha256": "2a3ea3773638fc933b49df4e99eba56718546002f737605beb73c4afc8c1c75f"
+    "sourceSha1": "ae5e298ab09ffd8466b7936ac0fbac975e5908d2",
+    "bytes": 3170580,
+    "sha256": "deb17cf3b3f120676f3951d9ee37e66054e48880ba7b82ad9991d0c93843d7a7"
   },
   "assets": []
 }

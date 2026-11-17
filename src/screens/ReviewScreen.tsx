@@ -1,5 +1,5 @@
 /** Paper journal: event times are native facts; completed tasks have no time. */
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal, PanResponder, Pressable, ScrollView, Text, useWindowDimensions, View,
 } from 'react-native';
@@ -7,7 +7,7 @@ import Animated, {
   runOnUI, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { YanjiDataNative } from '../bridge';
 import type { DailySession, DailySnapshot, ReviewOverview, ReviewScope, ReviewSubjectSlice } from '../bridge';
 import {
@@ -328,10 +328,10 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
    * A session's only action is deleting it, so the row's trash button asks for
    * the same confirmation the menu used to lead to.
    */
-  const requestDeleteSession = (session: DailySession) => {
+  const requestDeleteSession = useCallback((session: DailySession) => {
     setDeleteError(null);
     setPendingDelete({ sessionId: session.id, isExam: session.isExam, subjectName: session.subjectName });
-  };
+  }, []);
   /** The actions a note's anchored menu holds; sessions never reach it. */
   const noteActions = (note: NoteEntry): TimelineAction[] => [
     ...(note.category === 'DOUBT' ? [{
@@ -523,22 +523,33 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
     },
   };
 
+  // Stable callbacks for the timeline FlashList: an inline renderItem/keyExtractor
+  // would be recreated on every parent render, defeating row recycling. This matches
+  // the Today page's FlashList setup.
+  const rowKey = useCallback((entry: TimelineEntry) => entry.key, []);
+  const renderTimelineItem = useCallback<ListRenderItem<TimelineEntry>>(({ item, index }) => (
+    <TimelineItem
+      entry={item}
+      isFirst={index === 0}
+      isLast={index === entries.length - 1}
+      busyNote={busyNote !== null}
+      onEditNote={note => {
+        setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
+        setConfirmDeleteNote(false);
+      }}
+      onOpenMenu={(note, anchor) => setTimelineMenu({ entry: note, anchor })}
+      onDeleteSession={requestDeleteSession}
+    />
+  ), [entries.length, busyNote, requestDeleteSession]);
+
   return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     {view === 'timeline'
       ? <FlashList
           {...listProps}
           data={entries}
-          keyExtractor={entry => entry.key}
+          keyExtractor={rowKey}
           ListHeaderComponent={timelineHeader}
-          renderItem={({ item, index }) => <TimelineItem entry={item}
-            isFirst={index === 0} isLast={index === entries.length - 1}
-            busyNote={busyNote !== null}
-            onEditNote={note => {
-              setEditingNote({ id: note.noteId, content: note.content, category: note.category ?? 'INSPIRATION' });
-              setConfirmDeleteNote(false);
-            }}
-            onOpenMenu={(note, anchor) => setTimelineMenu({ entry: note, anchor })}
-            onDeleteSession={requestDeleteSession} />}
+          renderItem={renderTimelineItem}
         />
       : view === 'trend'
       ? <ScrollView {...listProps} style={{ flex: 1 }}>{trendBody}</ScrollView>
