@@ -1,223 +1,112 @@
-# 「研迹」Coding Agent 指南 · 工程规范与默认模拟器测试 / 按需真机推送工作流
+# 研迹 · Agent 操作规范
 
-> 本文档是接手的 **AI Coding Agent**（Claude、Codex、Gemini、Cursor、Cline、Copilot、Antigravity 等）的操作规范与指南。
-> 记录项目的核心架构与工程原则、构建方式、设备连接机制、避坑指南、**默认模拟器测试**与**按需真机推送**工作流。
->
-> **开工顺序**：先读「§一 核心架构与工程原则」与「§三 Active Constraints」确立红线；开发前查阅「§二 核心机制与避坑铁律」；日常构建部署看「§五 标准构建与设备部署流程」；模拟器启动、投屏与性能设置见 [ADB.md §二.0](file:///d:/yanji/ADB.md)；真机无线连接、配对与排错**仅在用户明确要求「实机测试」时**查阅 [ADB.md §二.1–§二.2](file:///d:/yanji/ADB.md)。
+面向 AI Agent，命令式、去重、可扫描。详细设备手册见 [ADB.md](file:///d:/yanji/ADB.md)，按需查阅，不在本文重复。
 
----
+**冲突裁决顺序（高→低）**：代码/构建配置/Git 脏工作区/CI 守卫 > 本文 > `docs/adr/**`（无条件服从 ADR）> README（受 `check-project-facts.sh` 保护的字段）> `src/theme/**`+组件代码（UI 设计权威）> `.workbuddy/memory/MEMORY.md`。禁止把历史 Prompt/留档/截图/旧 Compose 页面当作既定事实——运行代码与构建配置才是事实。
 
-## 一、核心架构与工程原则
-
-### 当前运行架构：React Native + Kotlin（Yanji 2.0）
-
-**默认按此架构开展工作，不再从历史 Compose 页面推断当前 UI 技术栈。** 只有任务涉及架构升级，或下列权威文件出现变化时，才重新核对相关层。截图与旧文档用于参考，运行代码和构建配置决定事实。
-
-| 层 | 当前职责 | 权威入口 |
-| :--- | :--- | :--- |
-| UI | React Native + React + TypeScript，页面、组件、导航与视觉动画 | `package.json`、`App.tsx`、`src/screens/**`、`src/components/**`、`src/navigation/**` |
-| JavaScript 引擎 | Hermes，由 Android 宿主加载 | `YanjiApplication.kt`、`gradle/libs.versions.toml` |
-| 渲染架构 | Fabric / New Architecture，Bridgeless 宿主 | `gradle.properties`、`YanjiApplication.kt`、`MainActivity.kt` |
-| 原生业务 | Kotlin：计时、通知、数据查询与业务写入；RN 通过桥接调用 | `app/src/main/java/com/example/yanji/bridge/**`、`src/bridge/**`、原生业务包 |
-| 持久化 | Room 是唯一业务事实源；RN 不另建数据库或计时事实 | `app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt` |
-| 当前 UI 主题 | RN 语义 Token 与主题 Provider；导航玻璃材质集中在独立 Token 中 | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、`src/theme/liquidGlass.ts` |
-
-React Native 与 React 的版本以 `package.json` 为准，原生构件版本以 Version Catalog 为准，避免在指南中复制易漂移数值。历史 Compose 页面及其材质实现不属于当前运行 UI，不能直接拿来修复 RN 页面。
-
-**原生库接入方式**：本项目是 Android Add-to-App，`:app` 未应用 React Native app Gradle 插件；第三方库按既有流程手工链接。新增含 Fabric 组件的库需同步更新 `settings.gradle.kts`、`app/build.gradle.kts` 的依赖与 codegen 任务、`YanjiApplication.kt` 的 Package 注册，以及 `app/src/main/jni/{CMakeLists.txt,OnLoad.cpp}` 的 C++ 编译与组件描述符注册。不能仅安装 npm 包后就宣称接入完成。
-
-**前端交付顺序**：先执行 `npm run typecheck` 与必要的针对性检查，再执行 `npm run bundle:android`，经 Metro 与版本匹配的 Hermes 编译生成 APK 所用字节码（仍为 `app/src/main/assets/index.android.bundle`）及相邻构建元数据，最后执行 `gradlew.bat assembleDebug`。单独 Gradle 编译不会自动刷新 bundle；不得把旧 bundle 的安装误报为新 UI 已交付。`node scripts/check-bundle-sync.mjs` 无需安装依赖即可按真实内容检查源码、配置、依赖锁与补丁、字节码完整性和已打包资源；修改这些构建输入后必须重新生成 bundle 与元数据。Metro 暂存资源必须与 `app/src/main/res` 中的打包资源一致，否则构建拒绝发布字节码并指出需同步的资源。
-
-**原生构建并发**：Gradle worker 数由 `gradle.properties` 限制；各 Android 模块的 CMake/Ninja 编译任务池由根 `build.gradle.kts` 统一限制。不得为了提速覆盖这些限制，避免多 ABI 构建同时启动数十个 `clang++` 导致内存耗尽。
-
-**导航玻璃材质边界**：布局、染色与采样设置集中在 `src/theme/liquidGlass.ts`；Android 的边缘折射、色散及随染色明度调整的提亮/反射由 `patches/react-native-blur-overlay+3.2.1.patch` 维护，更新方式见 `patches/README.md`。`regular` / `clear` 是材质用途，不对应浅色 / 深色主题；外层容器底色也不等同于玻璃采样结果的遮罩。导航的系统无障碍偏好订阅集中在 `src/navigation/useNavigationAccessibility.ts`。
-
-**每日数据与订阅边界**：Today / Review 通过 `getDailySnapshot(date)` 共用一次 Room 事务读取，契约以 `src/bridge/index.ts` 与 `DailySnapshotReader.kt` 为准；任务实际用时按任务关联累计，不能按专注日期截断跨日贡献。数据失效事件仅来自 Room 表变更，RN 刷新协调器合并事件并限制隐藏页/后台查询。计时的低频会话快照与每秒 tick 分开订阅，tick 只更新可见计时组件，不能回到页面根状态驱动整页重渲染。
-
-**手动备份与恢复边界**：设置页通过 `YanjiBackupModule` 使用系统文件选择器；`BackupDocumentWorkflow` 只暂存已校验的内容并返回预览，用户确认后才交给 `BackupStore` 执行恢复。导出须等文件写入和关闭完成，恢复须等 Room 事务提交；导入前快照失败则拒绝写库。活动计时与恢复互斥，预览中必须明确空类别也会清空本机对应记录。API 密钥始终排除，完整导出、恢复与失败回滚测试使用独立数据库，不能拿日常真机数据库做破坏性验证。
-
-### 工程原则
-
-- **不要为了保持向后兼容而妥协**。对于已经过时的实现路径，直接删除，而不是额外添加兼容层、回退方案（fallback）或迁移逻辑（migration）。
-- **选择能够完整满足当前需求的最简单实现**。避免为了假想中的未来需求而提前设计抽象层、配置项或间接层。
-- **以逐层迭代的方式构建系统**。先实现一个能够端到端正常工作的最小版本，然后在这个已经可用的产品上，一层一层增加新的能力。永远不要为了尚未完成的复杂设计，而牺牲一个已经能够正常工作的产品。
-- **保持组件模块化，并清晰地进行关注点分离**。
-- **如果成熟、维护良好的库能够降低整体复杂度或提高可靠性，优先使用这些现有库**。如果没有明确理由，不要自己重新实现已有的通用功能。
-- **在自己编写实现或者添加新的依赖包之前，优先充分利用项目中已经存在的依赖**。在没有检查一个库的文档和类型定义之前，不要想当然地认为这个库不支持某项功能。
-- **从长期角度做架构决策**。不要接受那种“现在暂时能用、以后再替换”的权宜之计。
-- **在设计解决方案之前，先研究成熟产品是如何解决这个问题的**。优先采用这些产品已经验证过的设计模式和行业惯例，而不是从零开始重新发明一套方案。
-- **修改完成后执行 Git 提交与推送（无需保存外部知识库日志）**：每次执行修改完成后，**不需要**向个人知识库记录工作日志；必须执行 `git commit` 与 `git push` 推送至远端仓库。提交时必须附带简略、概括性的提交信息（如遵循 Conventional Commits 风格，用一两句话清晰概括改动要点），且注意隔离无关在途修改。
+**开工 3 步**：① `git status --short`（保护在途修改）；② 读 §1 红线 + §3 架构；③ 按 §2 决策树定位工作流。
 
 ---
 
-## 二、核心机制与避坑铁律（必读 ⚠️）
+## 1. 红线（MUST / NEVER，违反即交付失败）
 
-> **Shell 环境声明**：本机为 Windows。**所有本地验证与 Gradle 命令一律使用 PowerShell 语法**（`.\gradlew.bat`），**严禁** Linux 风格的 `./gradlew`。若 Agent 工具 shell 为 Git Bash，必须通过 `powershell.exe -NoProfile -Command '.\gradlew.bat <task> --stacktrace'` 执行，不得直接用 `./gradlew.bat`。ADB 设备脚本仍按 §五 / §六 的 Bash 示例执行；下文凡标注 `bash` / `powershell` 的示例，按用途选择，不要混用两套语法。
-
-### 1. 【最关键】ADB 发现与安装必须落在同一次工具调用内
-
-- **底层原因**：在部分 Agent 执行环境中，每个工具命令调用运行在独立的临时作业对象里；单条命令结束后，后台子进程（包括 `adb.exe` 服务端守护进程）会被系统自动回收终止，拆分调用会导致连接建立中断或误报 `device not found`。
-- **铁律**：**设备发现（`start-server` + 等待）与安装 / 启动必须写在同一个工具调用中。** 详细机理与多环境脚本参见 [ADB.md §一.1](file:///d:/yanji/ADB.md)。
-
-### 2. 【最省心】优先 mDNS 自动发现，断连配对走标准流程
-
-- **机制**：优先通过 Android 11+ TLS mDNS 动态广播发现设备序列号，不写死任何动态端口或 IP。
-- **断连处理**：若网络变动或凭据过期，按 [ADB.md §二.2](file:///d:/yanji/ADB.md) 的标准 6 步法进行配对（`adb pair`）与主端口连接（`adb connect`）。
-
-### 3. 【默认模拟器】日常测试一律使用 Android 模拟器；真机仅在明确要求时
-
-- **默认测试环境**：所有开发、构建验证、UI 检查、交互测试与截图默认在 **Android 模拟器**上完成。模拟器测试**不受限制**：可自由截图、录屏、模拟点击/滑动、运行自动交互测试、修改系统设置、切换深浅色、创建/清理测试数据。截图仍只保存到被 Git 忽略的 `build/` 目录。
-- **真机触发条件**：只有用户在当前任务中**明确说出「实机测试」**（或同义的明确指令）时，才允许把 APK 推送到手机。日常 UI/业务改动**不得**默认推送真机，也不得把真机当作日常测试环境。
-- **真机操作红线**：即使用户要求实机测试，手机端也**只允许**执行「覆盖安装（`install -r -d`）→ 调起主界面（`am start`）」这一交付动作。**禁止**在真实手机上截图、录屏、`uiautomator dump`、模拟点击/滑动、修改系统设置（深浅色、动画、权限、电池优化等）、抓取/导出数据库、备份、清数据或任何其他调试操作；如确需其中某项，必须由用户在该次请求中**逐项明确授权**。
-- **数据保护**：任何真机操作都必须保护已有数据与进行中的专注会话；模拟器是独立测试环境，测试数据只在模拟器内创建，不得注入真机或产品运行时。
-- **模拟器流程**：AVD 创建/启动、AEHD 加速、host GPU、720p 渲染、scrcpy 投屏与性能设置见 [ADB.md §二.0](file:///d:/yanji/ADB.md)。
-
-### 4. 【高频排错】网络代理与息屏休眠排查（仅真机无线调试）
-
-- **适用范围**：本节只影响「用户明确要求实机测试」时的无线调试连接；模拟器通过 `emulator-5554` 本地回环连接，不受代理、mDNS 或息屏影响。
-- **代理拦截（最常见）**：本机 GitHub 访问依赖**代理端口 `7898`**；一旦开启全局/TUN 模式会拦截局域网 UDP 5353 组播导致 mDNS 发现失败。排查步骤详见 [ADB.md §三.1](file:///d:/yanji/ADB.md)。
-- **页面休眠**：手机息屏或退到桌面后系统会将无线调试休眠并重置端口，实机调试时需保持在「无线调试」设置页面内。
-
-### 5. 【编译提速】Gradle 极速构建与避坑原则（30 秒 vs 2 分钟）
-
-- **痛点现象**：部分 Agent 或开发者构建耗时常常超过 2~3 分钟，甚至出现进程假死、超时无响应。
-- **根因与避坑铁律**：
-  1. **精准指定 Task，严禁盲目执行 `build`**：
-     - 日常调试只需生成 Debug 安装包，执行 `assembleDebug`；推送前的 Lint 与单元测试单独按 §五.0 执行。
-     - **严禁执行 `gradlew build`**：`build` 任务会触发完整的单元测试套件、全仓库 Lint 扫描、各构建变体校验，耗时漫长且容易因非阻塞性 warning 挂起或中断。
-  2. **严禁日常构建盲目 `clean`**：
-     - **切勿习惯性添加 `clean`**（如 `gradlew clean assembleDebug`）。
-     - `clean` 会暴力清空 Gradle Configuration Cache、Kotlin/KSP 增量缓存及 DEX 产物，导致原本 30 秒的增量编译（如 31/38 任务 `UP-TO-DATE`）变成 2~3 分钟的 100% 全量冷编译。
-     - 仅当修改了 Room Entity 实体需重新生成 Schema 或出现无法自愈的注解生成错乱时，才针对性 clean。
-  3. **利用常驻 Gradle Daemon 与 Configuration Cache**：
-     - 保留常驻 Gradle Daemon，**严禁添加 `--no-daemon`**。
-     - 本仓库已启用 Configuration Cache，预热后无需重复解析 Gradle 依赖配置。
-  4. **Windows 平台脚本后缀与执行方式**：
-     - 一律使用 PowerShell 语法调用 `.\gradlew.bat`；**严禁** `./gradlew` 或省略 `.bat` 的无后缀写法。
-     - Git Bash 工具会话通过 `powershell.exe -NoProfile -Command '.\gradlew.bat assembleDebug --stacktrace'` 桥接执行。
-     - 若省略 `.bat` 直接调用无后缀的 `gradlew`，在 Windows 非 POSIX 环境下易被错误关联，甚至出现管道挂起假死。
-
-### 6. 【铁律】系统浅色 / 深色模式：产品只读；模拟器自由验证，真机须授权并还原
-
-- **默认红线**：研迹**不得在产品逻辑中写入系统级深浅色**。应用内主题只允许**读取**系统 uiMode 与应用内偏好 `YanjiThemeMode`，严禁调用 `UiModeManager` / `setApplicationNightMode` / `setNightModeOverride` 等 API 去**改写系统模式**。
-- **模拟器（默认）**：主题跟随验证一律优先在模拟器进行，可自由切换浅色/深色、截图取证、反复对比，**无需额外授权**。
-- **真机（仅明确要求实机测试时）**：只有在用户明确要求实机测试，且在该次请求中明确授权验证主题跟随时，才允许临时切换手机系统深浅色：
-  - 允许的 ADB 操作：`adb shell cmd uimode night yes|no`、`adb shell settings put secure ui_night_mode 0|2`，以及对应的读取查询；
-  - **必须先记录基线**：动手前读取并记下 `settings get secure ui_night_mode`、`cmd uimode night`、`ui_night_mode_override_on/off`；
-  - **必须还原**：验证结束后把系统深浅色恢复到基线状态，并在对话中如实报告基线值与还原结果；
-  - **仅限深浅色**：本授权不放宽其他任何系统设置（位置、权限、后台、电池优化、动画等仍然一律不碰）；
-  - **不得用授权代替验证纪律**：能只读取证就不切换；切换只为拿到"随系统变化"这条时间序列证据。
-- **原因**：主题跟随类问题只有跨越浅色→深色的切换才能证伪；模拟器可以无成本地反复切换，真机则应保持用户日常状态不被扰动。
-
-### 7. 【磁盘占用】构建产物体积收敛（node_modules 里的原生库产物）
-
-- **现象**：仓库目录曾膨胀到 **22G**，其中 **8.7G** 是 `node_modules` 里 RN 原生库的 NDK/CMake 产物；一次 `npm install` + 一次 `assembleDebug` 就能在十几分钟内重新长回来。
-- **根因**：
-  1. `settings.gradle.kts` 把 `react-native-reanimated` / `react-native-worklets` 以**源码工程**引入（`projectDir` 指向 `node_modules/<pkg>/android`），Gradle 直接在包目录里编 C++（RNGP），产物落在包内；
-  2. 未收敛 ABI 时 RN 默认编 **4 个 ABI**（arm64-v8a / armeabi-v7a / x86 / x86_64），每个 ABI 一份 `.cxx` + 一份 `.so`，产物 ×4。
-- **已收敛**：`gradle.properties` 的 `reactNativeArchitectures=arm64-v8a,x86_64`（app 模块由 RNGP 的 `NdkConfiguratorUtils` 读取该属性写入 `abiFilters`）。若将来确需 32 位设备（armeabi-v7a），在该列表补上即可。
-- **清理**：`scripts/clean-build-artifacts.sh`
-  - 默认：只清 `build/` 下的一次性诊断产物（带时间戳目录 + 过期报告/截图），**零构建代价**；
-  - `--native`：额外清 `node_modules` 里两个原生库的 `build/` 与 `.cxx`（代价：下次 `assembleDebug` 重编这两个库的 C++）；
-  - `--all`：额外清 `app/build/intermediates` 与 `app/.cxx`（代价同上）。
-- **红线**：空间回收只走上述脚本的白名单路径；**严禁**把 `gradle clean` 当作日常手段（见 §二.5），也**严禁** `rm -rf node_modules`（会连带删掉 `postinstall` 的 patch-package 产物）。
-- **真机备份不参与清理**：`build/device-backup/` 属真机数据，任何清理动作都必须跳过（脚本已显式排除）。
+1. **保护在途修改**：开工先 `git status --short`；未要求改的已修改/在途文件不得改写、还原、清空。
+2. **禁破坏性 Git**：NEVER `git checkout -- .` / `git reset --hard` / `git clean -fd` / `git stash`；禁全仓库 formatter 覆盖无关文件。
+3. **零假数据**：NEVER 注入虚假业务/Mock；Room 是唯一业务事实源，空表合法（`scripts/check-runtime-fixtures.sh` 零容忍）。
+4. **凭据零泄漏**：AI API Key 绝不写入 Room/SharedPreferences/日志/Prompt/fixture/备份；Keystore 异常 Fail-Closed，禁降级明文。
+5. **迁移安全**：NEVER `fallbackToDestructiveMigration()`；手写 `migrate(connection: SQLiteConnection)`；NEVER `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite<3.35）；Entity 变更必须同步提交 `app/schemas/**`。
+6. **UI 设计自由**：设计权威仅运行代码与语义 Token（`src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、README「统一设计系统」），无独立设计文档；不得把历史色值/固定字号/圆角/零边框/无玻璃效果当红线。可重设计整个视觉系统，但须统一更新语义 Token、深浅色、触控目标、对比度、无障碍，并同步 `src/theme/**`+组件+测试契约。**系统级深浅色禁改**（见 #13）。禁止把旧卡片风格、固定配色、零边框、历史圆角升级为规范。
+7. **计时韧性**：物理事实基于单调时钟 `SystemClock.elapsedRealtime`；前台通知交系统 Chronometer；NEVER 每秒 `notify()`。
+8. **事实不复制**：SDK/版本/颜色/设备网络参数引用权威源（§5），不在文档硬编码。
+9. **ADB 单次调用**：`adb start-server`、设备发现、安装、启动必须在同一次工具调用内完成（否则后台子进程被作业对象回收，误报 `device not found`）。
+10. **无证据不宣称**：严格区分「编译成功 / 测试执行成功 / 模拟器安装启动成功 / 真机安装启动成功」；未运行项显式标注，环境故障不得伪装成产品缺陷。
+11. **默认模拟器 / 真机按需**：日常测试一律模拟器（截图/交互/改设置/测试数据无限制，截图仅存被忽略的 `build/`）；仅用户明确说「实机测试」才推手机，手机端只允许 `install -r -d` + `am start`，禁截图/录屏/`uiautomator`/模拟交互/改设置/抓库/备份/清数据（除非逐项明确授权）。
+12. **修改完成即提交推送**：不写外部知识库日志；推送前按 §6 完成 `lintDebug`→`testDebugUnitTest`→`assembleDebug`→16KB 守卫；精准 `git add <file>`（NEVER `git add .` / `git commit -a`），Conventional Commits 简讯，`git push`（直连失败走代理 7898，见 §5.5）。
+13. **系统深浅色**：产品逻辑只读；模拟器自由验证；真机仅明确实机测试且授权时切换——先记基线、测完还原、如实报告（§8）。
 
 ---
 
-## 三、Active Constraints（红线清单 · 一页速查）
+## 2. 决策树（快速定位）
 
-以下为**不可协商**的硬约束，违反即视为交付失败：
-
-1. **保护在途修改与隔离**：开工前必须先执行 `git status --short`；未明确要求修改的已修改/在途文件一律不得随意改写、还原或清空，保持专注修改目标文件。
-2. **禁破坏性 Git 操作**：禁止执行 `git checkout -- .`、`git reset --hard`、`git clean -fd`、`git stash`，严禁使用全仓库 formatter 覆盖无关文件。
-3. **零假数据**：严禁在运行时注入任何虚假业务演示数据 / Mock；Room 是唯一业务持久化事实源，空表是合法状态（`scripts/check-runtime-fixtures.sh` 实行零容忍检查）。
-4. **凭据零泄漏**：AI API Key 绝不写入 Room、SharedPreferences、日志、Prompt、测试 fixture 或备份；Keystore 异常时**拒绝降级为明文**（Fail-Closed）。
-5. **迁移安全**：严禁 `fallbackToDestructiveMigration()`；迁移必须手写 `migrate(connection: SQLiteConnection)`；严禁 `ALTER TABLE DROP COLUMN`（兼容 Android 7.0 / SQLite < 3.35）；`app/schemas/**` 必须随 Entity 变更同步提交。
-6. **UI 工程底线与设计自由**：设计权威只有运行代码与语义 Token（`src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、README「统一设计系统」），不存在需要遵循的独立设计文档；不得把历史色值、固定字号、圆角半径、零边框、无玻璃效果等作为禁止创新的红线。UI Agent 可重设计整个视觉系统（颜色、字体、层级、圆角、材质、卡片、动画），但需统一使用和更新语义 Design Tokens，确保深浅色、触控目标、对比度与无障碍可用。视觉改造必须同步更新 `src/theme/**`、相应组件及其测试契约，避免硬编码四散。**系统级深浅色设置禁止改动**。
-7. **计时韧性**：计时物理事实必须基于单调物理时钟（`SystemClock.elapsedRealtime`）；前台常驻通知交系统 Chronometer 驱动，**严禁每秒 `notify()`**。
-8. **事实不复制**：SDK / 版本 / 颜色 / 设备网络参数一律引用权威源（§四），不在文档硬编码。
-9. **ADB 步骤单次调用完整执行**：执行 ADB 相关操作时必须整段放在同一次工具调用内（见 §二.1 与 §五），避免后台子进程回收导致断连。
-10. **无证据不宣称通过**：严格区分「编译成功」「测试执行成功」「模拟器安装启动成功」「真机安装启动成功」；未运行项必须显式标注，环境故障不得伪装成产品缺陷。
-11. **默认模拟器 / 真机按需**：日常测试一律在 Android 模拟器进行，模拟器上截图、交互、改设置与测试数据**不受限制**。只有用户明确要求「实机测试」时才推送手机；手机端只允许 `install -r -d` + `am start`，**禁止**截图、录屏、`uiautomator`、模拟点击/滑动、修改系统设置、抓库/备份/清数据等调试操作，除非用户逐项明确授权。系统深浅色按 §二.6 执行（模拟器自由验证；真机仅在明确实机测试且授权时切换并还原）。
-12. **修改完成必须 Git 提交与推送**：任务修改完成并验证后，**不需要**在个人知识库记录工作日志；推送前必须先按 §五.0 完成 `lintDebug`、`testDebugUnitTest` 与 `assembleDebug` 三项本地验证，再针对目标改动文件执行 `git commit` 与 `git push`，并在提交时附加简略、概括性的提交信息（严禁提交未要求修改的在途文件）。
-13. **系统深浅色：产品逻辑只读，模拟器自由验证，真机授权并还原**：严禁在应用代码里写系统级深浅色（`UiModeManager` 等）；模拟器可自由切换验证；真机仅在用户明确要求实机测试且授权时临时切换，**前提是先记录基线、测完还原、如实报告**（见 §二.6）。
+| 触发条件 | 动作 |
+| :--- | :--- |
+| 改 UI / 业务 / 主题 | §6 验证门禁 → §7.1 模拟器安装测试；不碰真机 |
+| 用户明确要求「实机测试」 | §6 验证门禁 → §7.2 真机安装启动（仅此两项）；禁一切调试操作 |
+| 改 Room 实体 / 迁移 | 同步 `app/schemas/**` 与手写 migration；确认 `testDebugUnitTest` 迁移用例通过 |
+| 深浅色 / 主题跟随验证 | §8 |
+| 新增含 Fabric 组件的原生库 | §3.1 手工链接清单（装 npm 包≠接入完成） |
+| 磁盘膨胀 | §9 清理脚本白名单 |
+| 任何 push 前 | §6 门禁四项全过 |
+| 文档更新 | §11 保留清单，易漂移事实改引用式（§5） |
 
 ---
 
-## 四、项目事实、环境与权威层次
+## 3. 架构与权威入口
 
-### 4.1 Portable workflow（所有开发者 / CI）
+React Native + React + TypeScript / Hermes / Fabric（New Architecture, Bridgeless）/ Kotlin 原生业务 / Room 唯一持久化。版本以 `package.json`（JS）与 `gradle/libs.versions.toml`（原生）为准，勿在文档复制漂移数值。
 
-* 所有脚本必须从 `scripts/` 自身位置推导仓库根目录，**不得依赖固定盘符或用户名**。
-* Android SDK 通过 `ANDROID_HOME` / `ANDROID_SDK_ROOT` 或 `local.properties` 发现；ADB 默认从 `PATH` 查找，也可用 `ADB=/path/to/adb` 覆盖。
-* **默认测试目标是模拟器**：设备序列号形如 `emulator-5554`，通过 `adb devices` 自动发现；模拟器不受代理、mDNS 与息屏影响。
-* `scripts/adb-push.sh` 面向**用户明确要求的真机推送**，支持 `YANJI_APK`、`YANJI_DEVICE_BACKUP_DIR`、`YANJI_PACKAGE` 覆盖默认值；日常测试不得用它绕过「真机按需」规则。
-* 默认 APK 与设备备份路径分别是 `<repo>/app/build/outputs/apk/debug/app-debug.apk` 与 `<repo>/build/device-backup`。
+| 层 | 权威入口 |
+| :--- | :--- |
+| UI / 导航 / 动画 | `package.json`、`App.tsx`、`src/screens/**`、`src/components/**`、`src/navigation/**` |
+| JS 引擎 / 宿主 | `YanjiApplication.kt`、`MainActivity.kt`、`gradle/libs.versions.toml` |
+| 原生业务（计时/通知/数据查询与写入） | `app/src/main/java/com/example/yanji/bridge/**`、`src/bridge/**` |
+| 持久化 | `app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt` |
+| 主题 / 玻璃材质 | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx`、`src/theme/liquidGlass.ts`、`src/navigation/useNavigationAccessibility.ts` |
 
-### 4.2 事实的唯一来源（避免数值漂移）
+**3.1 原生库接入**：本项目 Android Add-to-App，`:app` 未应用 RN app Gradle 插件，第三方库手工链接。新增 Fabric 组件库须同步：`settings.gradle.kts`、`app/build.gradle.kts` 依赖+codegen 任务、`YanjiApplication.kt` Package 注册、`app/src/main/jni/{CMakeLists.txt,OnLoad.cpp}` C++ 编译与描述符注册。
 
-**不要在本文档复制 SDK / 版本 / 颜色数值**，以免与代码漂移。以下为权威来源：
+**3.2 前端交付顺序**：`npm run typecheck` → `npm run bundle:android`（Metro + 版本匹配 Hermes → `app/src/main/assets/index.android.bundle`+元数据）→ `gradlew.bat assembleDebug`。单独 Gradle 不刷新 bundle；禁止把旧 bundle 当新 UI 交付。改构建输入后必跑 `node scripts/check-bundle-sync.mjs`；Metro 暂存资源须与 `app/src/main/res` 一致。
 
-| 事实 | 权威来源 | 备注 |
-| :--- | :--- | :--- |
-| `compileSdk` / `minSdk` / `targetSdk` / `versionCode` / `versionName` | `app/build.gradle.kts`、`README.md` 顶部 `project-facts` 注释 | 由 `scripts/check-project-facts.sh` 在 CI 校验 |
-| Room schema 版本与库版本 | `app/src/main/java/com/example/yanji/data/db/YanjiDatabase.kt`、`gradle/libs.versions.toml` | 同上由 CI 守卫 |
-| 依赖库版本（Kotlin / Compose BOM / Room / KSP 等） | `gradle/libs.versions.toml` | 统一走 Version Catalog |
-| 包名 / namespace / 主入口 Activity | `app/build.gradle.kts`、`app/src/main/AndroidManifest.xml` | — |
-| 当前 React Native 设计 Token | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx` | 本轮视觉重构允许设计评审后修改，并同步更新相关测试；Kotlin 原生 UI 仍参考其原生主题 |
-| 设备网络参数（序列号 / IP / 端口） | mDNS 动态广播发现，或 `$ANDROID_SERIAL` | 动态过滤 `_adb-tls-connect` |
-| 废弃功能（`QuickStartPreset`）行为 | `docs/adr/0001-retain-quick-start-compatibility-tombstone.md` | 兼容墓碑，禁止运行时读写 |
+**3.3 原生构建并发**：Gradle worker 由 `gradle.properties` 限；CMake/Ninja 任务池由根 `build.gradle.kts` 限。NEVER 为提速覆盖，避免多 ABI 同时启动数十 `clang++` 内存耗尽。
 
-需要数值时按需读取，例如：
+**3.4 导航玻璃边界**：布局/染色/采样在 `liquidGlass.ts`；Android 边缘折射、色散、随染色明度提亮/反射由 `patches/react-native-blur-overlay+3.2.1.patch` 维护（更新见 `patches/README.md`）。`regular`/`clear` 是用途非深浅色；外层容器底色≠玻璃采样遮罩。
 
-```bash
-grep -E 'compileSdk|minSdk|targetSdk|versionName' app/build.gradle.kts
-```
+**3.5 每日数据边界**：Today/Review 共用 `getDailySnapshot(date)`（一次 Room 事务），契约 `src/bridge/index.ts` + `DailySnapshotReader.kt`。任务用时按任务关联累计，NEVER 按专注日期截断跨日贡献。失效事件仅来自 Room 表变更；RN 协调器合并事件并限制隐藏页/后台查询。计时低频会话快照与每秒 tick 分开订阅，tick 只更新可见计时组件，NEVER 回页面根状态驱动整页重渲染。
 
-**版本号命名约定（自下次版本更新起启用）**：`versionName` 采用 `x.x.xxx` 三段式，第三段固定 3 位（如 `1.0.000`）。一次小更新只把第三段 +1（`1.0.000` → `1.0.001`），`versionCode` 同步 +1（`2` → `3`）。当前版本（`1.0.0` / `versionCode=2`）保持不动，到下次更新时再切换成三段式。发布号写入 `app/build.gradle.kts` 后，必须同步更新 README 顶部 `project-facts` 注释中的 `versionName` / `versionCode`（仍由 `scripts/check-project-facts.sh` 校验），两处保持一致。
-
-### 4.3 权威层次（冲突时的裁决顺序）
-
-当不同文档互相矛盾时，按以下**由高到低**的顺序裁决：
-
-```text
-Level 0  机器执行守卫与代码现状（最高权威）
-         Git 脏工作区 / app/build.gradle.kts / YanjiDatabase.kt /
-         CI 守卫脚本（scripts/check-*.sh）/ verification-metadata.xml
-Level 1  Agent 核心指南 —— AGENTS.md（本文）
-Level 2  架构决策记录 —— docs/adr/**（分歧时无条件服从 ADR）
-Level 3  项目门面与验证事实 —— README.md（受 check-project-facts.sh 保护的字段）
-Level 4  当前运行 UI 的设计 Token 与组件代码 —— `src/theme/**`、`src/components/**`、`src/screens/**`（设计权威即此处，历史 Compose 主题仅作迁移参考）
-Level 5  长期沉淀事实 —— .workbuddy/memory/MEMORY.md（经验证的环境与平台坑）
-```
-
-**裁决准则**：① 代码与构建配置永远拥有最高真实性；② ADR 具有裁决性法律地位，历史文档与 ADR 分歧时**无条件服从 ADR**；③ 禁止把历史 Prompt / 留档当作既定事实。
-
-### 4.4 Owner-specific workflow（仓库作者当前设备，仅供参考）
-
-以下路径、设备型号与无线调试提示**只描述作者机器**，不得复制进可执行脚本或 CI：
-
-- **代码仓库**：`github.com/xinye1017/yanji`，分支 `main`，远端 `origin`
-- **操作系统**：Windows（Git Bash / PowerShell）
-- **项目路径**：`D:\yanji`
-- **应用包名**：`com.example.yanji`；主入口 `com.example.yanji.MainActivity`
-- **Android SDK 路径**：`C:\Users\dex\Android\Sdk`（配置于 `local.properties`）
-- **ADB 工具路径**：`C:\Users\dex\Android\Sdk\platform-tools\adb.exe`（已配置进系统环境变量 `PATH`）
-- **调试 APK 产物路径**：`app\build\outputs\apk\debug\app-debug.apk`
-- **默认测试设备**：Android 模拟器，序列号 `emulator-5554`；AVD、AEHD、host GPU、720p 与 scrcpy 投屏参数见 [ADB.md §二.0](file:///d:/yanji/ADB.md)
-- **真机（仅明确要求实机测试时）**：`PKB110` 逻辑分辨率为 **1256×2760**（**不是** 1080×2400），点击坐标以 `uiautomator dump` 结果为准——但真机默认禁止截图/`uiautomator`/模拟交互
-- **网络代理**：本机 GitHub 访问走代理端口 `7898`；该代理若全局接管会干扰 ADB mDNS（仅影响真机无线调试，见 §二.4）
-
-> **设备串 / IP / 端口一律不写入本文档**：连接参数每次随机漂移，一律通过 mDNS 动态发现取得（§二.2）。
+**3.6 备份恢复边界**：设置页经 `YanjiBackupModule` + 系统文件选择器；`BackupDocumentWorkflow` 只暂存校验内容并返回预览，用户确认后才交 `BackupStore` 恢复。导出等文件写入关闭完成；恢复等 Room 事务提交；导入前快照失败则拒绝写库；活动计时与恢复互斥；预览必须明确空类别会清空本机对应记录；API 密钥始终排除；完整导出/恢复/回滚测试用独立数据库，禁拿日常真机库做破坏性验证。
 
 ---
 
-## 五、标准构建与设备部署流程（默认模拟器）
+## 4. 工程原则（设计取向）
 
-### 第零步（每次 push 前必做）：本地验证流水线
+- 不为向后兼容妥协：过时路径直接删除，不加兼容层/fallback/migration 兜底。
+- 选能完整满足当前需求的最简单实现，不为假想未来预建抽象/配置/间接层。
+- 逐层迭代：先端到端可用最小版本，再逐层加能力；不为未完成设计牺牲可用产品。
+- 组件模块化、关注点分离。
+- 优先成熟维护良好的库，禁无理由重造通用功能。
+- 自研或加依赖前先查尽项目已有依赖与库文档/类型定义，别假设其不支持。
+- 长期视角决策，禁「现在能用以后再换」的权宜之计。
+- 设计前先研究成熟产品的验证过的模式，不重新发明。
 
-CI 的构建作业定义在 `.github/workflows/android-quality.yml`，核心步骤为 `:app:testDebugUnitTest` → `:app:lintDebug` → `:app:assembleDebug` → `:app:assembleRelease`，并另有 JS 守卫、typecheck、`npm test` 与 bundle 同步检查。**本地推送门禁至少完成 Lint、单元测试与 Debug 打包三项**，按下列顺序在 **PowerShell** 中逐条执行，并检查每一步的 Exit Code；任一步失败立即停止，不得继续后续命令：
+---
+
+## 5. 环境与权威值
+
+**5.1 Shell（Windows）**：Gradle 一律 PowerShell `.\gradlew.bat <task> --stacktrace`，NEVER `./gradlew` 或无 `.bat` 后缀。Git Bash 会话用 `powershell.exe -NoProfile -Command '.\gradlew.bat <task> --stacktrace'` 桥接。ADB 脚本用 Bash（§7）。禁 `--no-daemon`（保留常驻 Daemon + Configuration Cache）。
+
+**5.2 权威来源（勿硬编码，按需 grep）**：
+
+| 事实 | 权威源 |
+| :--- | :--- |
+| `compileSdk`/`minSdk`/`targetSdk`/`versionCode`/`versionName` | `app/build.gradle.kts`；README 顶部 `project-facts`（`scripts/check-project-facts.sh` 校验） |
+| Room schema / 库版本 | `YanjiDatabase.kt`；`gradle/libs.versions.toml` |
+| 依赖版本 | `gradle/libs.versions.toml`（Version Catalog） |
+| 包名 / namespace / 入口 Activity | `app/build.gradle.kts`、`app/src/main/AndroidManifest.xml` |
+| RN 设计 Token | `src/theme/tokens.ts`、`src/theme/ThemeProvider.tsx` |
+| 设备网络参数 | mDNS 动态发现（`_adb-tls-connect`）或 `$ANDROID_SERIAL` |
+| 废弃功能 `QuickStartPreset` | `docs/adr/0001-retain-quick-start-compatibility-tombstone.md`（墓碑，禁运行时读写） |
+
+**5.3 版本约定（自下次更新启用）**：`versionName` 用 `x.x.xxx`，第三段固定 3 位；小更新第三段 +1（`1.0.000`→`1.0.001`），`versionCode` 同步 +1（`2`→`3`）。当前 `1.0.0`/`versionCode=2` 不动。发布时 `app/build.gradle.kts` 与 README `project-facts` 两处同步。
+
+**5.4 Portable**：脚本从 `scripts/` 自身位置推导仓库根，不依赖固定盘符/用户名。SDK 经 `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`local.properties` 发现；ADB 从 PATH 或 `ADB=/path/to/adb`。默认测试目标模拟器 `emulator-*`（`adb devices` 自动发现）。真机推送脚本 `scripts/adb-push.sh`（覆盖变量 `YANJI_APK`/`YANJI_DEVICE_BACKUP_DIR`/`YANJI_PACKAGE`，禁日常滥用）。默认 APK `app/build/outputs/apk/debug/app-debug.apk`，备份 `<repo>/build/device-backup`。
+
+**5.5 Owner 设备（仅参考，禁写入脚本/CI）**：仓库 `github.com/xinye1017/yanji` (main/origin)；Windows；`D:\yanji`；包名 `com.example.yanji`，入口 `.MainActivity`；SDK `C:\Users\dex\Android\Sdk`；ADB 在 PATH；默认模拟器 `emulator-5554`（启动/投屏见 ADB.md §二.0）；真机 `PKB110` 逻辑分辨率 **1256×2760**（非 1080×2400）；GitHub 走代理 **7898**（全局/TUN 会拦 mDNS，`git push` 直连超时用 `git -c http.proxy=http://127.0.0.1:7898 -c https.proxy=http://127.0.0.1:7898 push`）。设备串/IP/端口一律 mDNS 动态获取，禁写死。
+
+---
+
+## 6. 构建与验证门禁
+
+**6.1 推送前必做**（PowerShell 逐条，查 Exit Code，任一失败即停并只重跑失败步；失败报告见 `app/build/reports/lint-results-debug.html`、`app/build/reports/tests/testDebugUnitTest/`）：
 
 ```powershell
 .\gradlew.bat lintDebug --stacktrace
@@ -226,32 +115,15 @@ CI 的构建作业定义在 `.github/workflows/android-quality.yml`，核心步�
 bash scripts/check-16kb-alignment.sh
 ```
 
-- **Android 兼容性（每次构建必查）**：`assembleDebug` 后必须执行 `bash scripts/check-16kb-alignment.sh`，确保 APK 内每个 `.so` 的 ELF `LOAD p_align` 为 16384 且 ZIP 偏移按 16KB 对齐（Android 15+ / Google Play 的 16KB 页要求）。本模块 CMake 已带 `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`；新增原生库或改动 CMake/NDK 参数后该项若 FAIL，先修复再推送。
-- **免二次下载**：直接使用本机已有的 Android SDK、JDK 与 Gradle 缓存；禁止为此流程重新下载依赖、执行 `clean` 或改写 `build`。
-- **Git Bash 会话**：通过 `powershell.exe -NoProfile -Command '.\gradlew.bat lintDebug --stacktrace'` 逐条桥接执行，严禁改用 `./gradlew`。
-- **失败自愈**：停止后续步骤，读取 `app/build/reports/lint-results-debug.html` 与 `app/build/reports/tests/testDebugUnitTest/` 定位根因文件与行号；修复后只重跑失败的步骤，直到整条流水线通过。
-- **通过标准**（推送前逐项确认）：
-  - [ ] Lint 静态检查通过
-  - [ ] 单元测试通过（记录通过数 / 跳过数）
-  - [ ] `app/build/outputs/apk/debug/app-debug.apk` 生成成功
-  - [ ] 16KB 对齐守卫通过（Android 兼容性）
-  - [ ] 输出：「本地验证全部通过，可以安全执行 git push。」
+通过标准：Lint 0 errors；单测通过（记录数）；APK 生成；16KB 守卫 PASS（`.so` ELF `LOAD p_align`=16384 且 ZIP 偏移 16KB 对齐，Android 15+/Play 要求；本模块 CMake 已带 `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`，新增原生库/改 CMake/NDK 参数后 FAIL 先修复）。
 
-### 第一步：编译构建 APK
+**6.2 日常构建**：只 `.\gradlew.bat assembleDebug`（增量+配置缓存，约 30s）。NEVER `gradlew build`（触发全套测试/全仓 Lint/多变体，易挂起）；NEVER 习惯性 `clean`（清空增量缓存→2~3min 冷编译，仅 Room Entity 需重生成 Schema 或注解错乱时针对性 clean）。直接用本机 SDK/JDK/缓存，禁重下依赖/改 `build`。
 
-**原则**：严禁 `clean`，严禁 `build`；只执行 `assembleDebug` 利用增量与配置缓存，30 秒内完成构建（详见 §二.5）。
+---
 
-```powershell
-.\gradlew.bat assembleDebug
-```
+## 7. 设备安装（ADB 铁律：发现+安装+启动同一工具调用）
 
-> Git Bash 工具会话以 `powershell.exe -NoProfile -Command '.\gradlew.bat assembleDebug'` 执行；严禁 `./gradlew`。
-
-### 第二步：安装到模拟器并启动（默认，所有日常测试）
-
-**要求：整条命令在同一次工具调用内执行，不得把发现与安装拆分。**
-
-**Bash（Git Bash，本仓库 Agent 默认）**：
+**7.1 模拟器（默认）——Bash（Git Bash）**：
 
 ```bash
 adb start-server >/dev/null 2>&1
@@ -265,15 +137,9 @@ adb -s "$dev" install -r -d "app/build/outputs/apk/debug/app-debug.apk"
 adb -s "$dev" shell am start -n com.example.yanji/.MainActivity
 ```
 
-> **核心逻辑**：① 启动 ADB Server；② 动态抓取当前在线的 `emulator-*` 设备（**为空则明确报错退出，不回退真机**）；③ 保留模拟器数据覆盖安装（`-r -d`）；④ 立即调起主界面。
->
-> ✅ **模拟器无测试限制**：安装启动后可自由截图、录屏、模拟点击/滑动、运行自动交互测试、修改系统设置、切换深浅色、创建/清理测试数据；截图保存到 `build/`。模拟器是独立测试环境，测试数据不得注入真机或产品运行时。
+为空则报错退出，**不回退真机**。安装后模拟器无测试限制（截图/录屏/模拟点击滑动/自动交互/改设置/切深浅色/测试数据，截图存 `build/`）；测试数据不得注入真机或产品运行时。
 
-### 第三步（条件执行）：仅在用户明确要求「实机测试」时推送到手机
-
-> ⚠️ **日常任务不得执行本节**。只有用户在当前任务中明确说出「实机测试」或同义指令时才允许推送手机；手机端只允许安装与启动，禁止任何截图等调试操作（见 §二.3）。
-
-**Bash（Git Bash）**：
+**7.2 真机——仅用户明确要求「实机测试」——Bash（Git Bash）**：
 
 ```bash
 adb start-server >/dev/null 2>&1
@@ -282,7 +148,7 @@ try=0; until [ "$(adb devices | grep -c '_adb-tls-connect.*device')" -gt 0 ]; do
 done
 dev="$(adb devices | awk '/_adb-tls-connect.*device/{print $1; exit}')"
 if [ -z "$dev" ]; then
-  echo "ERROR: 未发现 mDNS 无线设备，请检查代理 / VPN 与手机无线调试（见 §二.4）" >&2
+  echo "ERROR: 未发现 mDNS 无线设备，请检查代理 / VPN 与手机无线调试（见 §5.5 / ADB.md §三.1）" >&2
   exit 1
 fi
 echo "Target Device: $dev"
@@ -290,61 +156,40 @@ adb -s "$dev" install -r -d "app/build/outputs/apk/debug/app-debug.apk"
 adb -s "$dev" shell am start -n com.example.yanji/.MainActivity
 ```
 
-**PowerShell（作者本机手动执行时）**：
+PowerShell（作者本机手动）：`adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $_ -match "adb-.*device" } | ForEach-Object { ($_ -split '\s+')[0] } | Select-Object -First 1); if (-not $dev) { Write-Error "未发现 mDNS 无线设备"; exit 1 }; Write-Host "Target Device: $dev"; adb -s $dev install -r -d "app\build\outputs\apk\debug\app-debug.apk"; adb -s $dev shell am start -n com.example.yanji/.MainActivity`
 
-```powershell
-adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $_ -match "adb-.*device" } | ForEach-Object { ($_ -split '\s+')[0] } | Select-Object -First 1); if (-not $dev) { Write-Error "未发现 mDNS 无线设备，请检查代理 / VPN 与手机无线调试（见 §二.4）"; exit 1 }; Write-Host "Target Device: $dev"; adb -s $dev install -r -d "app\build\outputs\apk\debug\app-debug.apk"; adb -s $dev shell am start -n com.example.yanji/.MainActivity
-```
-
-> **核心逻辑**：① 启动 ADB Server；② 等待约 2 秒让 mDNS 广播发现无线调试手机；③ 动态抓取当前在线 `adb-.*` 无线设备序列号（**为空则明确报错退出，不回退写死串**）；④ 保留本地用户数据覆盖安装（`-r -d`）；⑤ 立即调起主界面。
->
-> ⚠️ **真机红线**：安装启动后即完成本次实机交付；**禁止**在手机上截图、录屏、`uiautomator dump`、模拟点击/滑动、修改系统设置、抓取/导出数据库、备份或清数据。必须保护已有数据与进行中的专注会话；如确需其中某项，必须由用户在该次请求中逐项明确授权。
+发现为空则报错退出，**不回退写死串**。安装启动即完成交付；**真机红线**：NEVER 截图/录屏/`uiautomator dump`/模拟点击滑动/改系统设置/抓库备份/清数据（除非逐项明确授权）；保护已有数据与进行中专注会话。搜不到设备/`10061 积极拒绝`/凭据失效 → [ADB.md §二.2](file:///d:/yanji/ADB.md) 标准 6 步配对。代理 7898 全局接管会拦 UDP 5353 致 mDNS 失败（[ADB.md §三.1](file:///d:/yanji/ADB.md)）；手机息屏/退桌面会休眠无线调试并重置端口，须停留在「无线调试」页。
 
 ---
 
-## 六、设备连接与调试工作流（模拟器默认 / 真机按需）
+## 8. 深浅色验证
 
-> ⚠️ **模拟器启动、AVD 创建、AEHD 加速、host GPU、720p 渲染与 scrcpy 投屏见 [ADB.md §二.0](file:///d:/yanji/ADB.md)。无线调试全流程、断连配对 6 步法、网络代理（端口 7898）排错与真机操作红线见 [ADB.md](file:///d:/yanji/ADB.md) 其余章节；这些无线流程仅在用户明确要求「实机测试」时使用。**
-
-### 核心纪律与准则摘要：
-1. **默认模拟器**：所有日常测试、截图、交互与自动交互测试一律在模拟器进行，模拟器上**无测试限制**；
-2. **真机按需**：只有用户明确要求「实机测试」时才推送手机；手机端只允许覆盖安装（`install -r -d`）+ 调起主界面（`am start`）；
-3. **真机红线**：真实手机上**禁止**截图、录屏、`uiautomator`、模拟点击/滑动、修改系统设置、抓库/备份/清数据等调试操作，除非用户逐项明确授权；必须保护已有数据与专注会话；
-4. **同调用执行铁律**：`adb start-server`、设备发现、安装与启动必须写在**同一次工具调用内**执行，严禁拆分；
-5. **配对与排错（仅实机测试）**：遇到搜不到设备、提示 `10061 积极拒绝` 或凭证失效时，严格遵循 [ADB.md §二.2](file:///d:/yanji/ADB.md) 的标准 6 步法处理；
-6. **系统深浅色**：产品代码严禁写系统级深浅色；模拟器可自由切换验证；真机仅在明确实机测试且授权时切换，先记基线、测完还原（见 §二.6）。
+- **产品代码只读**：允许读取系统 uiMode 与 `YanjiThemeMode`；NEVER 调用 `UiModeManager`/`setApplicationNightMode`/`setNightModeOverride` 改写系统模式。
+- **模拟器（默认）**：自由切浅/深、截图取证、反复对比，无需授权。
+- **真机（仅明确实机测试且当次授权）**：操作限 `adb shell cmd uimode night yes|no`、`adb shell settings put secure ui_night_mode 0|2` 及读取；**先记基线** `settings get secure ui_night_mode`、`cmd uimode night`、`ui_night_mode_override_on/off`，测完**还原**并如实报告；仅限深浅色，不放宽其他系统设置；能只读取证就不切换。
 
 ---
 
-## 七、提交与忽略决策表
+## 9. 磁盘清理
+
+`scripts/clean-build-artifacts.sh`：默认只清 `build/` 一次性产物（零构建代价）；`--native` 额外清 node_modules 两个原生库 `build/`+`.cxx`（下次 assemble 重编 C++）；`--all` 额外清 `app/build/intermediates`+`app/.cxx`。NEVER 把 `gradle clean` 当日常手段；NEVER `rm -rf node_modules`（删除 `postinstall` 的 patch-package 产物）。`build/device-backup/` 属真机数据，任何清理跳过。ABI 已收敛 `reactNativeArchitectures=arm64-v8a,x86_64`，勿随意扩 32 位。
+
+---
+
+## 10. 提交与忽略
 
 | 情形 | 动作 |
 | :--- | :--- |
-| 改动 Room 实体 / 迁移 | **必须提交** `app/schemas/**` 对应 JSON（迁移测试的校验依据），且与代码同一提交 |
-| `local.properties` | **绝不提交**（含本机 SDK 路径） |
-| `*.db` / `*.db-wal` / `*.db-shm` / `device-backup/` | **绝不提交**（真机数据，`.gitignore` 已覆盖） |
-| `build/`（含设备备份、截图、临时报告） | **绝不提交**（`.gitignore` 已覆盖；临时报告统一写 `build/orca-reports/`） |
-| `*.yanji-backup` / `*.backup.json` / 密钥库（`*.jks` / `*.keystore` / `*.pem` / `*.pfx`） | **绝不提交** |
-| 日常 UI / 业务改动 | 编译 + **模拟器**安装启动与测试；**不碰真机**；模拟器上截图/交互/测试数据不受限；**不跑**备份 / 抓库 |
-| 用户明确要求「实机测试」 | 才允许推送手机；仅覆盖安装 + 拉起主界面；**禁止**截图/录屏/`uiautomator`/模拟交互/改设置/抓库/备份/清数据，除非逐项授权 |
-| 任何推送前 | **必做** §五.0：`lintDebug` → `testDebugUnitTest` → `assembleDebug`，任一步失败先修复再继续 |
-| 改动 Room Schema 需验证迁移链 | 额外确认 `testDebugUnitTest` 中的迁移用例通过，必要时才备份 |
+| 改 Room 实体/迁移 | **必须提交** `app/schemas/**` 对应 JSON，与代码同提交 |
+| `local.properties` / `*.db*` / `device-backup/` / `build/` / `*.yanji-backup` / `*.backup.json` / 密钥库（`*.jks`/`*.keystore`/`*.pem`/`*.pfx`） | **绝不提交**（权威忽略清单以根 `.gitignore` 为准） |
+| 日常 UI/业务改动 | §6 验证 + 模拟器测试；不碰真机；不跑备份/抓库 |
+| 明确「实机测试」 | 仅覆盖安装+拉起主界面；禁一切调试操作（§7.2） |
+| 任何 push 前 | §6 四项全过 |
 
-> 权威忽略清单以仓库根 `.gitignore` 为准；本表为速查。
-
-### 7.1 每次修改完成后的 Git 提交与推送闭环
-
-每次任务执行修改完成后，需遵循以下交付闭环：
-1. **无需外部知识库留档**：**不需要**保存工作日志到个人知识库。
-2. **推送前本地验证**：按 §五.0 在 PowerShell 中依次执行 `lintDebug`、`testDebugUnitTest`、`assembleDebug`，全部通过后才可提交推送。
-3. **精准暂存目标文件**：严禁无脑 `git add .` 或 `git commit -a`；必须精准指定本次任务实际改动的文件（如 `git add <file>`），严格保护其他在途修改。
-4. **附加简略概括的提交信息**：执行 `git commit -m "<简略概括的提交信息>"`，提交信息应简明扼要概括核心改动（如 `fix: 修复...`、`feat: 新增...`、`docs: 更新...`）。
-5. **推送到远端**：执行 `git push` 推送至远端分支。
+**交付闭环**：① 不写外部知识库日志；② §6 门禁全过；③ 精准 `git add <file>`，禁 `git add .`/`git commit -a`；④ `git commit -m "<Conventional Commits 简讯>"`；⑤ `git push`（失败走 §5.5 代理）。临时报告写 `build/orca-reports/`。
 
 ---
 
-## 八、文档维护原则
+## 11. 文档维护（更新本文时保留）
 
-1. **唯一入口**：本文是仓库主要的 Agent 操作指南与工程规范；其他开发手册与本文冲突时以本文（除代码与 ADR 外）为准。
-2. **修订原则**：只保留清晰可落地的规范与原则，不堆砌冗余报告；易漂移的事实一律改为引用式（§四）。
-3. **保留清单**：任何更新都不得删除 —— 核心架构原则、代理端口 `7898` 网络排查、mDNS 自动发现、ADB 同次调用铁律、**默认模拟器测试 / 真机按需推送 / 真机禁截图等调试操作**、模拟器无测试限制、系统深浅色「产品只读 + 模拟器自由验证 + 真机授权还原」原则、**推送前本地验证流水线（§五.0）**、必要的数据与计时安全、提交 / 忽略与 Git 推送纪律。**不要将旧卡片风格、固定配色、零边框或历史圆角规格升级为不可变规范**。
+本文唯一入口，与其他手册冲突时以本文为准（代码与 ADR 除外）。易漂移事实改引用式（§5）。**任何更新不得删除**：架构原则、代理 7898 排查、mDNS 自动发现、ADB 同调用铁律、默认模拟器测试/真机按需推送/真机禁调试、模拟器无限制、系统深浅色三原则（§8）、§6 验证门禁、数据与计时安全（§3.5/§3.6/红线 3/4/5/7）、提交忽略与推送纪律（§10）。
