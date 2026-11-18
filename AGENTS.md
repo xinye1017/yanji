@@ -175,6 +175,8 @@ React Native 与 React 的版本以 `package.json` 为准，原生构件版本�
 grep -E 'compileSdk|minSdk|targetSdk|versionName' app/build.gradle.kts
 ```
 
+**版本号命名约定（自下次版本更新起启用）**：`versionName` 采用 `x.x.xxx` 三段式，第三段固定 3 位（如 `1.0.000`）。一次小更新只把第三段 +1（`1.0.000` → `1.0.001`），`versionCode` 同步 +1（`2` → `3`）。当前版本（`1.0.0` / `versionCode=2`）保持不动，到下次更新时再切换成三段式。发布号写入 `app/build.gradle.kts` 后，必须同步更新 README 顶部 `project-facts` 注释中的 `versionName` / `versionCode`（仍由 `scripts/check-project-facts.sh` 校验），两处保持一致。
+
 ### 4.3 权威层次（冲突时的裁决顺序）
 
 当不同文档互相矛盾时，按以下**由高到低**的顺序裁决：
