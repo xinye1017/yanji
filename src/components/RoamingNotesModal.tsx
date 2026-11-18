@@ -9,19 +9,25 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCategory, NoteEntry, YanjiDataNative } from '../bridge';
 import { YanjiIcon } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
-import { YanjiRadius, YanjiSpacing } from '../theme/tokens';
+import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
-const WHITE_GLYPH = '#FFFFFF'; // token-exempt: white contrast glyph on translucent dark scrim
-/** The light end of 靛青 for text and glyphs on the modal's always-dark scrim. */
-const ACCENT_GLYPH = '#D5E4F1'; // token-exempt: accent glyph on the dark scrim, outside the paper palette
-/** 胭脂 — a deep carmine wax seal, deliberately not the old terracotta. */
-const WAX_SEAL_BG = '#8E2F35'; // token-exempt: wax-seal illustration, not a UI surface
+const WHITE_GLYPH = '#FFFFFF'; // token-exempt: white contrast glyph on the wax-seal illustration
+/** Deep carmine wax seal — deliberately outside the paper palette, it is illustration not UI surface. */
+const WAX_SEAL_BG = '#8E2F35'; // token-exempt: wax-seal illustration
 const WAX_SEAL_SHADOW = '#6E2127'; // token-exempt: wax-seal illustration shadow
+
+/** Card geometry. Named so the deck insets and the responsive width stay in sync. */
+const CARD_MAX_WIDTH = 295;
+const EMPTY_CARD_MAX_WIDTH = 280;
+const PHOTO_HEIGHT = 140;
+/** Off-screen travel for the swipe-to-turn animation. */
+const SWIPE_TRAVEL = 300;
 
 export interface RoamingNotesModalProps {
   visible: boolean;
@@ -51,15 +57,22 @@ export function RoamingNotesModal({
 }: RoamingNotesModalProps): React.JSX.Element | null {
   const theme = useYanjiTheme();
   const insets = useSafeAreaInsets();
-  const { colors, typography, radius } = theme.paper;
+  const reduceMotion = useReducedMotion();
+  const { colors, typography } = theme.paper;
+  // The roaming field is always dark, independent of the app's light/dark theme:
+  // it is the one place that owns its whole screen, like the focus immersion.
+  const immersed = theme.paper.immersive.running;
 
+  // Start in loading so reopening never flashes the "暂无随笔" empty state
+  // before the random batch resolves.
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 3D Tilt and Swipe animations
   const panX = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  /** Guards against a second turn starting while a card is still in flight. */
+  const animatingRef = useRef(false);
 
   const loadRandomBatch = useCallback(async () => {
     setLoading(true);
@@ -67,14 +80,13 @@ export function RoamingNotesModal({
       const batch = await YanjiDataNative.getRandomNotes(30);
       if (batch && batch.length > 0) {
         setNotes(batch);
-        setCurrentIndex(0);
       } else {
         const all = await YanjiDataNative.getAllNotes();
         setNotes(all || []);
-        setCurrentIndex(0);
       }
+      setCurrentIndex(0);
     } catch {
-      // Keep existing state on error
+      // Keep existing state on error.
     } finally {
       setLoading(false);
     }
@@ -84,46 +96,54 @@ export function RoamingNotesModal({
     if (visible) {
       void loadRandomBatch();
     }
+    // loadRandomBatch is memoized with empty deps, so `visible` is the only trigger.
   }, [visible]);
 
-  const goToNext = useCallback(() => {
-    if (notes.length <= 1) return;
-    Animated.timing(panX, {
-      toValue: -300,
-      duration: 150,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentIndex(prev => (prev + 1) % notes.length);
-      panX.setValue(300);
-      Animated.spring(panX, {
-        toValue: 0,
-        friction: 7,
-        tension: 40,
+  const advance = useCallback(
+    (delta: 1 | -1) => {
+      if (animatingRef.current || notes.length <= 1) return;
+      const step = () => setCurrentIndex(prev => (prev + delta + notes.length) % notes.length);
+      if (reduceMotion) {
+        step();
+        return;
+      }
+      animatingRef.current = true;
+      const toValue = delta > 0 ? -SWIPE_TRAVEL : SWIPE_TRAVEL;
+      Animated.timing(panX, {
+        toValue,
+        duration: 150,
         useNativeDriver: true,
-      }).start();
-    });
-  }, [notes.length, panX]);
+      }).start(() => {
+        step();
+        panX.setValue(-toValue);
+        Animated.spring(panX, {
+          toValue: 0,
+          friction: 7,
+          tension: 40,
+          useNativeDriver: true,
+        }).start(() => {
+          animatingRef.current = false;
+        });
+      });
+    },
+    [notes.length, panX, reduceMotion]
+  );
 
-  const goToPrev = useCallback(() => {
-    if (notes.length <= 1) return;
-    Animated.timing(panX, {
-      toValue: 300,
-      duration: 150,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentIndex(prev => (prev - 1 + notes.length) % notes.length);
-      panX.setValue(-300);
-      Animated.spring(panX, {
-        toValue: 0,
-        friction: 7,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [notes.length, panX]);
+  const goToNext = useCallback(() => advance(1), [advance]);
+  const goToPrev = useCallback(() => advance(-1), [advance]);
 
   const drawRandom = useCallback(() => {
-    if (notes.length <= 1) return;
+    if (notes.length <= 1 || animatingRef.current) return;
+    let nextIdx = currentIndex;
+    do {
+      nextIdx = Math.floor(Math.random() * notes.length);
+    } while (nextIdx === currentIndex && notes.length > 1);
+
+    if (reduceMotion) {
+      setCurrentIndex(nextIdx);
+      return;
+    }
+    animatingRef.current = true;
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.9,
@@ -136,14 +156,11 @@ export function RoamingNotesModal({
         tension: 40,
         useNativeDriver: true,
       }),
-    ]).start();
-
-    let nextIdx = currentIndex;
-    do {
-      nextIdx = Math.floor(Math.random() * notes.length);
-    } while (nextIdx === currentIndex && notes.length > 1);
-    setCurrentIndex(nextIdx);
-  }, [notes.length, currentIndex, scaleAnim]);
+    ]).start(() => {
+      setCurrentIndex(nextIdx);
+      animatingRef.current = false;
+    });
+  }, [notes.length, currentIndex, scaleAnim, reduceMotion]);
 
   const panResponder = useMemo(
     () =>
@@ -158,6 +175,8 @@ export function RoamingNotesModal({
             goToNext();
           } else if (dx > 60 || vx > 0.5) {
             goToPrev();
+          } else if (reduceMotion) {
+            panX.setValue(0);
           } else {
             Animated.spring(panX, {
               toValue: 0,
@@ -168,7 +187,7 @@ export function RoamingNotesModal({
           }
         },
       }),
-    [panX, goToNext, goToPrev]
+    [panX, goToNext, goToPrev, reduceMotion]
   );
 
   if (!visible) return null;
@@ -184,17 +203,27 @@ export function RoamingNotesModal({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? 'none' : 'fade'}
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[styles.scrim, { paddingTop: insets.top + YanjiSpacing.sm, paddingBottom: insets.bottom + YanjiSpacing.md }]}>
-        {/* Ambient Glow */}
+      <View
+        style={[
+          styles.scrim,
+          {
+            backgroundColor: immersed.canvas,
+            paddingTop: insets.top + YanjiSpacing.sm,
+            paddingBottom: insets.bottom + YanjiSpacing.md,
+          },
+        ]}
+        accessibilityViewIsModal
+      >
+        {/* Ambient Glow — uses the immersive tide accent so it reads on the always-dark field in every theme. */}
         <Svg width={260} height={260} style={styles.ambientGlow} pointerEvents="none">
           <Defs>
             <RadialGradient id="roamingAmbientGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor={colors.brand} stopOpacity="0.16" />
-              <Stop offset="100%" stopColor={colors.brand} stopOpacity="0" />
+              <Stop offset="0%" stopColor={immersed.accent} stopOpacity="0.14" />
+              <Stop offset="100%" stopColor={immersed.accent} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width="260" height="260" fill="url(#roamingAmbientGlow)" />
@@ -203,12 +232,17 @@ export function RoamingNotesModal({
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <Text style={[typography.titleGroup, styles.headerTitle]}>
+            <Text style={[typography.titleGroup, styles.headerTitle, { color: immersed.ink }]}>
               漫游随笔
             </Text>
             {notes.length > 0 ? (
-              <View style={styles.counterBadge}>
-                <Text style={styles.counterText}>
+              <View
+                style={[
+                  styles.counterBadge,
+                  { backgroundColor: immersed.subtle, borderColor: immersed.pillBorder },
+                ]}
+              >
+                <Text style={[styles.counterText, { color: immersed.ink }]}>
                   {`第 ${currentIndex + 1} / ${notes.length} 篇`}
                 </Text>
               </View>
@@ -221,16 +255,25 @@ export function RoamingNotesModal({
             accessibilityLabel="关闭漫游随笔"
             style={({ pressed }) => [
               styles.closeButton,
-              { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+              {
+                backgroundColor: immersed.pillBg,
+                borderColor: immersed.pillBorder,
+                opacity: pressed ? 0.75 : 1,
+                transform: [{ scale: pressed ? 0.94 : 1 }],
+              },
             ]}
           >
-            <YanjiIcon name="close" size={16} color={WHITE_GLYPH} />
+            <YanjiIcon name="close" size={16} color={immersed.ink} />
           </Pressable>
         </View>
 
         {/* 3D Spatial Stage */}
         <View style={styles.stage}>
-          {notes.length === 0 ? (
+          {loading ? (
+            <Text style={[typography.captionMeta, styles.loadingText, { color: immersed.secondary }]}>
+              正在拾取随笔…
+            </Text>
+          ) : notes.length === 0 ? (
             <View
               style={[
                 styles.emptyCard,
@@ -241,7 +284,7 @@ export function RoamingNotesModal({
                 },
               ]}
             >
-              <View style={styles.emptyIconWrapper}>
+              <View style={[styles.emptyIconWrapper, { backgroundColor: immersed.subtle }]}>
                 <YanjiIcon name="sprout" size={28} color={colors.secondary} />
               </View>
               <Text style={[typography.titleGroup, { color: colors.ink, marginTop: YanjiSpacing.md }]}>
@@ -269,6 +312,7 @@ export function RoamingNotesModal({
                   },
                 ]}
                 pointerEvents="none"
+                importantForAccessibility="no-hide-descendants"
               />
 
               {/* Deck Depth 1 (Middle) */}
@@ -282,6 +326,7 @@ export function RoamingNotesModal({
                   },
                 ]}
                 pointerEvents="none"
+                importantForAccessibility="no-hide-descendants"
               />
 
               {/* Active 3D Floating Card */}
@@ -313,6 +358,7 @@ export function RoamingNotesModal({
                     },
                   ]}
                   pointerEvents="none"
+                  importantForAccessibility="no-hide-descendants"
                 >
                   <Text
                     style={[
@@ -326,7 +372,7 @@ export function RoamingNotesModal({
 
                 {/* Top Photo Frame (Scheme A Fade) */}
                 {currentNote.imageUri ? (
-                  <View style={styles.photoContainer}>
+                  <View style={styles.photoContainer} importantForAccessibility="no-hide-descendants">
                     <View style={styles.photoInner}>
                       <Image
                         source={{ uri: currentNote.imageUri }}
@@ -360,6 +406,8 @@ export function RoamingNotesModal({
                       });
                     }
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel="编辑这篇随笔"
                   style={[
                     styles.cardBody,
                     {
@@ -374,6 +422,7 @@ export function RoamingNotesModal({
                       { color: colors.brand },
                     ]}
                     pointerEvents="none"
+                    importantForAccessibility="no"
                   >
                     “
                   </Text>
@@ -405,7 +454,7 @@ export function RoamingNotesModal({
                     </View>
 
                     {/* Vermilion Wax Seal Stamp */}
-                    <View style={styles.waxSeal}>
+                    <View style={styles.waxSeal} importantForAccessibility="no-hide-descendants">
                       <Text style={styles.waxSealLatin}>YANJI</Text>
                       <Text style={styles.waxSealKanji}>迹</Text>
                     </View>
@@ -426,12 +475,14 @@ export function RoamingNotesModal({
             style={({ pressed }) => [
               styles.navCircleButton,
               {
+                backgroundColor: immersed.pillBg,
+                borderColor: immersed.pillBorder,
                 opacity: notes.length <= 1 ? 0.3 : pressed ? 0.75 : 1,
                 transform: [{ scale: pressed ? 0.94 : 1 }],
               },
             ]}
           >
-            <YanjiIcon name="back" size={18} color={WHITE_GLYPH} />
+            <YanjiIcon name="back" size={18} color={immersed.ink} />
           </Pressable>
 
           <Pressable
@@ -442,13 +493,15 @@ export function RoamingNotesModal({
             style={({ pressed }) => [
               styles.randomPillButton,
               {
+                backgroundColor: immersed.primaryActionBg,
+                borderColor: immersed.primaryActionBorder,
                 opacity: notes.length <= 1 ? 0.4 : pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.96 : 1 }],
               },
             ]}
           >
-            <YanjiIcon name="sparkles" size={16} color={ACCENT_GLYPH} />
-            <Text style={styles.randomPillText}>随机抽取</Text>
+            <YanjiIcon name="sparkles" size={16} color={immersed.accent} />
+            <Text style={[styles.randomPillText, { color: immersed.accent }]}>随机抽取</Text>
           </Pressable>
 
           <Pressable
@@ -459,12 +512,14 @@ export function RoamingNotesModal({
             style={({ pressed }) => [
               styles.navCircleButton,
               {
+                backgroundColor: immersed.pillBg,
+                borderColor: immersed.pillBorder,
                 opacity: notes.length <= 1 ? 0.3 : pressed ? 0.75 : 1,
                 transform: [{ scale: pressed ? 0.94 : 1 }],
               },
             ]}
           >
-            <YanjiIcon name="forward" size={18} color={WHITE_GLYPH} />
+            <YanjiIcon name="forward" size={18} color={immersed.ink} />
           </Pressable>
         </View>
       </View>
@@ -475,7 +530,6 @@ export function RoamingNotesModal({
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(21, 20, 18, 0.90)',
     justifyContent: 'space-between',
     paddingHorizontal: YanjiSpacing.md,
   },
@@ -496,31 +550,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    color: WHITE_GLYPH,
     fontFamily: 'serif',
     fontSize: 16,
     letterSpacing: 0.5,
+  },
+  loadingText: {
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   counterBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: YanjiRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   counterText: {
-    color: WHITE_GLYPH,
     fontSize: 10,
     fontWeight: '600',
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 36 / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    width: YanjiTouch.min,
+    height: YanjiTouch.min,
+    borderRadius: YanjiTouch.min / 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -531,7 +583,8 @@ const styles = StyleSheet.create({
     paddingVertical: YanjiSpacing.md,
   },
   emptyCard: {
-    width: 280,
+    width: '100%',
+    maxWidth: EMPTY_CARD_MAX_WIDTH,
     padding: YanjiSpacing.xl,
     alignItems: 'center',
     borderWidth: 1,
@@ -540,12 +593,12 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 52 / 2,
-    backgroundColor: 'rgba(42, 36, 29, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardsStack: {
-    width: 295,
+    width: '100%',
+    maxWidth: CARD_MAX_WIDTH,
     position: 'relative',
   },
   /**
@@ -575,7 +628,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '3.5deg' }],
   },
   activeCard: {
-    width: 295,
+    width: '100%',
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -606,7 +659,7 @@ const styles = StyleSheet.create({
   },
   photoContainer: {
     width: '100%',
-    height: 140,
+    height: PHOTO_HEIGHT,
     padding: YanjiSpacing.sm,
     paddingBottom: 0,
   },
@@ -687,12 +740,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: YanjiSpacing.xl,
   },
   navCircleButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 42 / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    width: YanjiTouch.min,
+    height: YanjiTouch.min,
+    borderRadius: YanjiTouch.min / 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -701,14 +752,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: YanjiSpacing.lg,
-    height: 40,
-    borderRadius: 40 / 2,
-    backgroundColor: 'rgba(157, 186, 212, 0.18)',
+    height: YanjiTouch.min,
+    borderRadius: YanjiTouch.min / 2,
     borderWidth: 1,
-    borderColor: 'rgba(157, 186, 212, 0.42)',
   },
   randomPillText: {
-    color: ACCENT_GLYPH,
     fontSize: 13,
     fontWeight: '700',
   },

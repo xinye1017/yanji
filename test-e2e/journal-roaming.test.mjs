@@ -22,6 +22,19 @@ const theme = {
       muted: '#94969C',
       danger: '#be3232',
     },
+    immersive: {
+      running: {
+        canvas: '#12100C',
+        ink: '#F7F1E7',
+        secondary: '#C9C0B1',
+        subtle: 'rgba(255,246,232,0.08)',
+        pillBg: 'rgba(255,246,232,0.05)',
+        pillBorder: 'rgba(255,246,232,0.09)',
+        accent: '#9DBAD4',
+        primaryActionBg: 'rgba(157,186,212,0.16)',
+        primaryActionBorder: 'rgba(157,186,212,0.30)',
+      },
+    },
     radius: { sheet: 26, pill: 9999, tag: 8 },
     layout: { pageGutter: 20 },
     typography: {
@@ -158,6 +171,9 @@ function roamingHarness({
     'react-native-safe-area-context': {
       useSafeAreaInsets: () => ({ top: 40, bottom: 20 }),
     },
+    'react-native-reanimated': {
+      useReducedMotion: () => false,
+    },
     '../bridge': bridge,
     './YanjiUI': {
       YanjiIcon: 'YanjiIcon',
@@ -168,6 +184,7 @@ function roamingHarness({
     '../theme/tokens': {
       YanjiSpacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
       YanjiRadius: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, full: 9999 },
+      YanjiTouch: { min: 44, comfortable: 48 },
     },
   }).RoamingNotesModal;
 
@@ -184,6 +201,7 @@ function roamingHarness({
 
     return {
       tree,
+      find: predicate => walk(tree, predicate)[0],
       allText: walk(tree, node => node.type === 'Text')
         .map(n => (Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children))
         .filter(Boolean),
@@ -303,4 +321,48 @@ test('RoamingNotesModal renders empty state when no notes exist', async () => {
   const ui = await harness.render({ visible: true });
 
   assert.ok(ui.allText.some(t => t.includes('暂无随笔')), 'Should display empty state text');
+});
+
+test('RoamingNotesModal uses the always-dark immersive palette for the field and controls', async () => {
+  const harness = roamingHarness();
+  const ui = await harness.render({ visible: true });
+
+  // The scrim is the immersive canvas, not a hardcoded cold grey, so it stays
+  // on the warm paper family and is independent of the app light/dark theme.
+  const scrim = ui.find(node => node.type === 'View' && node.props?.accessibilityViewIsModal);
+  assert.ok(scrim, 'Should find the modal scrim');
+  assert.equal(scrim.props.style[1].backgroundColor, '#12100C', 'Scrim uses immersive canvas');
+
+  // The ambient glow reads the tide accent so it stays visible on the dark field.
+  const radialStop = ui.find(node => node.type === 'Stop' && node.props?.stopOpacity === '0.14');
+  assert.ok(radialStop, 'Should render the ambient glow with the immersive accent');
+  assert.equal(radialStop.props.stopColor, '#9DBAD4');
+
+  // Icon-only controls reach the minimum touch target.
+  const closeBtn = ui.findButtonByLabel('关闭漫游随笔');
+  const closeStyle = closeBtn.props.style({ pressed: false });
+  assert.equal(closeStyle[0].width, 44);
+  assert.equal(closeStyle[0].height, 44);
+});
+
+test('RoamingNotesModal shows a loading hint instead of the empty state while fetching', async () => {
+  // A deferred batch lets us observe the loading render before it resolves.
+  let resolveBatch;
+  const deferred = new Promise(resolve => { resolveBatch = resolve; });
+  const harness = roamingHarness({ getRandomNotes: () => deferred });
+  const ui = await harness.render({ visible: true });
+
+  assert.ok(ui.allText.some(t => t.includes('正在拾取随笔')), 'Should show loading hint while fetching');
+  assert.ok(!ui.allText.some(t => t.includes('暂无随笔')), 'Should not flash empty state while loading');
+
+  resolveBatch(harnessStatesNotes());
+  // Resolve with a real note so the card renders after loading.
+  function harnessStatesNotes() {
+    return [{
+      id: 'note-x', content: '加载完成后的随笔', category: 'INSPIRATION',
+      timestamp: 1729755120000, imageUri: null, isFavorite: false, isResolved: false,
+    }];
+  }
+  const settled = await harness.render();
+  assert.ok(settled.allText.some(t => t.includes('加载完成后的随笔')), 'Should render the note once loaded');
 });
