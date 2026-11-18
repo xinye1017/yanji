@@ -223,8 +223,10 @@ CI 的构建作业定义在 `.github/workflows/android-quality.yml`，核心步�
 .\gradlew.bat lintDebug --stacktrace
 .\gradlew.bat testDebugUnitTest --stacktrace
 .\gradlew.bat assembleDebug --stacktrace
+bash scripts/check-16kb-alignment.sh
 ```
 
+- **Android 兼容性（每次构建必查）**：`assembleDebug` 后必须执行 `bash scripts/check-16kb-alignment.sh`，确保 APK 内每个 `.so` 的 ELF `LOAD p_align` 为 16384 且 ZIP 偏移按 16KB 对齐（Android 15+ / Google Play 的 16KB 页要求）。本模块 CMake 已带 `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`；新增原生库或改动 CMake/NDK 参数后该项若 FAIL，先修复再推送。
 - **免二次下载**：直接使用本机已有的 Android SDK、JDK 与 Gradle 缓存；禁止为此流程重新下载依赖、执行 `clean` 或改写 `build`。
 - **Git Bash 会话**：通过 `powershell.exe -NoProfile -Command '.\gradlew.bat lintDebug --stacktrace'` 逐条桥接执行，严禁改用 `./gradlew`。
 - **失败自愈**：停止后续步骤，读取 `app/build/reports/lint-results-debug.html` 与 `app/build/reports/tests/testDebugUnitTest/` 定位根因文件与行号；修复后只重跑失败的步骤，直到整条流水线通过。
@@ -232,6 +234,7 @@ CI 的构建作业定义在 `.github/workflows/android-quality.yml`，核心步�
   - [ ] Lint 静态检查通过
   - [ ] 单元测试通过（记录通过数 / 跳过数）
   - [ ] `app/build/outputs/apk/debug/app-debug.apk` 生成成功
+  - [ ] 16KB 对齐守卫通过（Android 兼容性）
   - [ ] 输出：「本地验证全部通过，可以安全执行 git push。」
 
 ### 第一步：编译构建 APK
