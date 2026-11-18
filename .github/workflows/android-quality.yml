@@ -98,6 +98,11 @@ jobs:
       - name: Assemble debug
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      - name: 16KiB page-size alignment guard
+        # Android 15+ / Google Play require every packaged .so to be ELF LOAD
+        # aligned to 16KiB and zipaligned at 16KiB. APK is built above.
+        run: ./scripts/check-16kb-alignment.sh
+
       - name: Assemble unsigned release (R8 and resource shrink verification)
         run: ./gradlew :app:assembleRelease --stacktrace
 

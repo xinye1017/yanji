@@ -49,7 +49,11 @@ android {
         externalNativeBuild {
             cmake {
                 // 与 ReactAndroid AAR 及各 RN 原生库一致：共用同一份 libc++_shared.so。
-                arguments("-DANDROID_STL=c++_shared")
+                // 16KiB 页兼容（Android 15+ / Google Play 要求）：NDK r27 通过该开关为
+                // arm64-v8a / x86_64 追加 -Wl,-z,max-page-size=16384，使 libappmodules.so
+                // 的 ELF LOAD 段按 16KB 对齐（其余 RN .so 已是 16KB，唯有本模块是 4KB）。
+                // AGP 9 自动做 zipalign -P 16，ZIP 层对齐已满足，缺的正是这里的链接对齐。
+                arguments("-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
             }
         }
     }
