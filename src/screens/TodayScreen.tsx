@@ -903,15 +903,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
           <>
         {/* The greeting owns the top-left at Serif headline size; the date and exam
             countdown stack on the right as a clean text card that taps to open settings. */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, paddingBottom: layout.sectionGap }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 14, paddingBottom: YanjiSpacing.md }}>
           <Text accessibilityRole="header"
             style={[typography.titleGreeting, { color: colors.ink, flex: 1 }]}>
             {greeting(now.getHours())}
           </Text>
           {/* Date and countdown stay plain text; the gear beside them is the way
               into settings, so the text itself no longer doubles as a button. */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexShrink: 0 }}>
-            <View style={{ alignItems: 'flex-end', paddingTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <View style={{ alignItems: 'flex-end' }}>
               <Text style={[typography.captionMeta, { color: colors.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
                 {displayDate(date)}
               </Text>
@@ -936,7 +936,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
             and a hairline is a divider that sits centred in that same gap on
             each side instead of hugging whichever neighbour it happens to
             follow. */}
-        <View style={{ paddingTop: layout.sectionGap, paddingBottom: layout.sectionGap }}>
+        <View style={{ paddingTop: YanjiSpacing.md, paddingBottom: layout.sectionGap }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: layout.gridGap }}>
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>今日专注</Text>
             <Pressable onPress={openGoal} accessibilityRole="button" accessibilityLabel="调整日常学习目标"
