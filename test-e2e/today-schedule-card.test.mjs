@@ -50,10 +50,14 @@ function fixture({ schedule = day({ blocks: [block()] }), subjects = [math], fai
     },
     './YanjiUI': {
       YanjiIcon: 'YanjiIcon', YanjiPaperSectionHeading: 'YanjiPaperSectionHeading',
-      YanjiTextAction: 'YanjiTextAction',
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonBone: 'YanjiSkeletonBone',
+      YanjiSkeletonText: 'YanjiSkeletonText', YanjiTextAction: 'YanjiTextAction',
     },
     '../theme/ThemeProvider': {
-      useYanjiTheme: () => ({ paper: { colors: {}, typography: {}, layout: {}, radius: {} } }),
+      useYanjiTheme: () => ({ paper: {
+        colors: {}, layout: {}, radius: {},
+        typography: { captionMeta: { fontSize: 12, lineHeight: 16 }, bodyPrimary: { fontSize: 15, lineHeight: 22 } },
+      } }),
     },
     '../theme/tokens': { YanjiSpacing: { xs: 4, sm: 8, md: 12, xl: 24 } },
   }, {
@@ -103,6 +107,17 @@ function text(tree) {
   return typeof tree === 'string' || typeof tree === 'number' ? String(tree) : '';
 }
 const cardOf = tree => nodes(tree, node => node.type === 'Pressable' && typeof node.props?.accessibilityLabel === 'string')[0];
+
+test('before the day is read the card is a wireframe, not a loading sentence', async () => {
+  const f = fixture();
+  const loading = f.render();
+  const skeleton = nodes(loading, node => node.type === 'YanjiSkeleton')[0];
+  assert.ok(skeleton, 'the block card is drawn as a wireframe');
+  assert.equal(skeleton.props.accessibilityLabel, '正在读取今日时间表');
+  assert.doesNotMatch(text(loading), /正在读取今日时间表…|还没有时间表/);
+  await settle();
+  assert.equal(nodes(f.render(), node => node.type === 'YanjiSkeleton').length, 0, 'the read replaces it');
+});
 
 test('the current block reads as now, states its remainder, and starts a focus preset', async () => {
   const f = fixture();

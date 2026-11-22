@@ -184,6 +184,7 @@ function focusScreenHarness({ windowWidth = 393, windowHeight = 800 } = {}) {
     '../components/YanjiUI': {
       YanjiIcon: noop, YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
       YanjiPrimaryButton: 'YanjiPrimaryButton',
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },

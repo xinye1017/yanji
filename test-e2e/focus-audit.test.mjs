@@ -382,6 +382,7 @@ function focusScreenHarness({ session = {}, tasks = [], subjects = [], isDark = 
       YanjiIcon: noop, YanjiIconButton: 'YanjiIconButton',
       YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
       YanjiPrimaryButton: 'YanjiPrimaryButton',
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },

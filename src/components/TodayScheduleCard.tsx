@@ -10,7 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { ScheduleBlock, ScheduleDay, Subject } from '../bridge';
-import { YanjiIcon, YanjiPaperSectionHeading, YanjiTextAction } from './YanjiUI';
+import { YanjiIcon, YanjiPaperSectionHeading, YanjiSkeleton, YanjiSkeletonBone, YanjiSkeletonText, YanjiTextAction } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import {
@@ -139,9 +139,31 @@ export function TodayScheduleCard({
           <YanjiTextAction label="重试" onPress={() => void load()} />
         </View>
       ) : !day ? (
-        <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
-          正在读取今日时间表…
-        </Text>
+        // The block card's wireframe — status pill, time range, play capsule,
+        // title and meta — at the card's own padding, so the block lands in
+        // place instead of pushing the plan list down.
+        <YanjiSkeleton testID="today-schedule-skeleton" accessibilityLabel="正在读取今日时间表"
+          style={{
+            marginTop: YanjiSpacing.sm,
+            padding: YanjiSpacing.md,
+            borderRadius: radius.compactCard,
+            borderWidth: layout.hairlineWidth,
+            borderColor: colors.hairline,
+            backgroundColor: colors.elevated,
+          }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm }}>
+            <YanjiSkeletonBone width={44} height={typography.captionMeta.lineHeight + 4} round />
+            <YanjiSkeletonText type={typography.captionMeta} width={76} />
+            <View style={{ flex: 1 }} />
+            <YanjiSkeletonBone width={34} height={34} round />
+          </View>
+          <View style={{ marginTop: YanjiSpacing.xs }}>
+            <YanjiSkeletonText type={typography.bodyPrimary} width="58%" />
+          </View>
+          <View style={{ marginTop: 2 }}>
+            <YanjiSkeletonText type={typography.captionMeta} width="38%" />
+          </View>
+        </YanjiSkeleton>
       ) : !template ? (
         <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
           还没有时间表。

@@ -9,7 +9,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
-import { YanjiIcon, YanjiIconButton, YanjiPaperSheetHeading } from './YanjiUI';
+import {
+  YanjiIcon, YanjiIconButton, YanjiPaperSheetHeading, YanjiSkeleton, YanjiSkeletonBone,
+  YanjiSkeletonText,
+} from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import { YanjiDataNative } from '../bridge';
@@ -260,9 +263,34 @@ export function SubjectsSheet({
           />
 
           {loading && subjects.length === 0 ? (
-            <View style={{ paddingVertical: YanjiSpacing.xl, alignItems: 'center' }}>
-              <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>正在读取学科…</Text>
-            </View>
+            // Category cards as wireframes — a name row, then sub-subject chips —
+            // at the cards' own padding and radius, so the list lands in place.
+            <YanjiSkeleton testID="subjects-skeleton" accessibilityLabel="正在读取学科"
+              style={{ marginTop: YanjiSpacing.md }}>
+              {SUBJECT_SKELETON_GROUPS.map(({ nameWidth, chips }) => (
+                <View
+                  key={nameWidth}
+                  style={{
+                    backgroundColor: colors.subtle,
+                    borderRadius: radius.surface,
+                    padding: YanjiSpacing.md,
+                    marginBottom: YanjiSpacing.md,
+                    borderWidth: layout.hairlineWidth,
+                    borderColor: colors.hairline,
+                  }}
+                >
+                  {/* Bones on a `subtle` card need the surface tone to show. */}
+                  <YanjiSkeletonText type={typography.bodyPrimary} width={nameWidth}
+                    style={{ backgroundColor: colors.surface }} />
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.xs, marginTop: YanjiSpacing.sm }}>
+                    {chips.map(width => (
+                      <YanjiSkeletonBone key={width} width={width} height={layout.subjectChipHeight} round
+                        style={{ backgroundColor: colors.surface }} />
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </YanjiSkeleton>
           ) : (
             <View style={{ marginTop: YanjiSpacing.md }}>
               {groups.map(group => {

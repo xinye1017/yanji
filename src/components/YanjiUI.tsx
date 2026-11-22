@@ -18,15 +18,18 @@ import {
   Text,
   TextInput,
   View,
+  type DimensionValue,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withRepeat,
   withSequence,
   withSpring,
   withTiming,
@@ -845,6 +848,129 @@ export function YanjiStaleDataNotice({
         tone="amber"
       />
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// YanjiSkeleton — the wireframe a region shows before its first read returns
+//
+// A page that has not heard from Room yet used to render its real layout with
+// nothing in it: 「—」 where a number goes, an empty bar, a 「正在读取…」 line
+// where the rows go. That reads as an empty day that happens to be loading.
+// The skeleton instead draws bones in the shape of the content it is waiting
+// for, at the same heights, so the page does not jump when the data lands and
+// never shows a value it does not have.
+//
+// One `YanjiSkeleton` owns the pulse for a whole region; the bones inside it
+// are plain views, so a page with twenty bones still runs one animation per
+// region rather than twenty. The region is a single accessibility element with
+// a 「正在读取…」 label and a busy state — the bones themselves say nothing.
+// A failed read is not a loading state: callers render their failure copy and
+// retry instead of a skeleton that would breathe forever.
+// ---------------------------------------------------------------------------
+
+export function YanjiSkeleton({
+  accessibilityLabel,
+  children,
+  style,
+  testID,
+}: {
+  /** Spoken once for the whole region; omit when an enclosing element already speaks. */
+  accessibilityLabel?: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const reduceMotion = useReducedMotion();
+  const pulse = useSharedValue(1);
+  const { skeletonDimOpacity, skeletonPulseMs } = paper.motion;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+      return undefined;
+    }
+    pulse.value = withRepeat(
+      withTiming(skeletonDimOpacity, { duration: skeletonPulseMs, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(pulse);
+  }, [pulse, reduceMotion, skeletonDimOpacity, skeletonPulseMs]);
+
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  const speaks = accessibilityLabel !== undefined;
+
+  return (
+    <Animated.View
+      testID={testID}
+      accessible={speaks}
+      accessibilityRole={speaks ? 'progressbar' : undefined}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={speaks ? { busy: true } : undefined}
+      importantForAccessibility={speaks ? 'yes' : 'no-hide-descendants'}
+      pointerEvents="none"
+      style={[style, pulseStyle]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/** One bone of a skeleton: a flat `subtle` block. Rounded to a tag unless told otherwise. */
+export function YanjiSkeletonBone({
+  width = '100%',
+  height,
+  round = false,
+  style,
+}: {
+  width?: DimensionValue;
+  height: number;
+  /** A dot or capsule (avatars, nodes, play buttons) instead of a tag-rounded bar. */
+  round?: boolean;
+  style?: StyleProp<ViewStyle>;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          borderRadius: round ? paper.radius.pill : paper.radius.tag,
+          backgroundColor: paper.colors.subtle,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/**
+ * A bone standing in for one line of text in `type`: the bar is about a glyph
+ * tall (`layout.skeletonGlyphRatio` of the font size) and the leftover leading
+ * becomes margin, so the line box stays exactly `type.lineHeight` and the real
+ * text replaces it without a shift.
+ */
+export function YanjiSkeletonText({
+  type,
+  width = '100%',
+  style,
+}: {
+  type: { fontSize: number; lineHeight: number };
+  width?: DimensionValue;
+  style?: StyleProp<ViewStyle>;
+}): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const glyph = Math.round(type.fontSize * paper.layout.skeletonGlyphRatio);
+  return (
+    <YanjiSkeletonBone
+      width={width}
+      height={glyph}
+      style={[{ marginVertical: Math.max(0, (type.lineHeight - glyph) / 2) }, style]}
+    />
   );
 }
 

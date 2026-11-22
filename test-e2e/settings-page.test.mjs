@@ -209,7 +209,8 @@ function settingsHarness({
   const names = [
     'YanjiBadge', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiHairline',
     'YanjiIcon', 'YanjiIconButton', 'YanjiPaperSectionHeading', 'YanjiPaperSegmentedControl',
-    'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiTextAction', 'YanjiTextInput',
+    'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSkeleton', 'YanjiSkeletonBone',
+    'YanjiSkeletonText', 'YanjiTextAction', 'YanjiTextInput',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   // The page reserves real IME height so the advanced form stays reachable;
@@ -530,10 +531,14 @@ test('a settings snapshot that has not arrived yet is not reported as 未设置'
     assert.equal(row.props.pending, true, 'a pending row must say so');
     // Render the row itself: the placeholder is chosen inside it, so the
     // assertion is about what the user actually sees.
-    const rendered = nodes(row.type(row.props), node => node.type === 'Text');
+    const own = row.type(row.props);
+    const rendered = nodes(own, node => node.type === 'Text');
     const shown = rendered.map(node => String(node.props.children ?? '')).join('|');
     assert.doesNotMatch(shown, /未设置/, `${row.props.label} must not claim it is unset while loading`);
-    assert.match(shown, /—/, `${row.props.label} shows a placeholder instead`);
+    assert.doesNotMatch(shown, /—/, `${row.props.label} draws a wireframe, not a dash`);
+    assert.equal(nodes(own, node => node.type === 'YanjiSkeleton').length, 1,
+      `${row.props.label} shows a wireframe bone where its value goes`);
+    assert.equal(nodes(own, node => node.type === 'ActivityIndicator').length, 0, 'no spinner beside the bone');
   }
 });
 

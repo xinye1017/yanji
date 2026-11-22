@@ -24,7 +24,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { YanjiDataNative, YanjiTimerNative, onDataChanged } from '../bridge';
 import type { ActiveSessionState, StudyTask, Subject, TimerMode } from '../bridge';
-import { YanjiIcon, YanjiIconButton, YanjiPaperSegmentedControl, YanjiPrimaryButton } from '../components/YanjiUI';
+import {
+  YanjiIcon, YanjiIconButton, YanjiPaperSegmentedControl, YanjiPrimaryButton,
+  YanjiSkeleton, YanjiSkeletonText,
+} from '../components/YanjiUI';
 import { FocusVernierDial } from '../components/FocusVernierDial';
 import { RollingTimeDisplay } from '../components/RollingTimeDisplay';
 import { BackfillFocusModal } from '../components/BackfillFocusModal';
@@ -38,6 +41,9 @@ import { useDailySnapshot } from '../state/dataRefresh';
 import { todayIso } from '../state/settingsViewLogic';
 import { syncActiveSession, useActiveSession, useTimerTick } from '../state/timerStore';
 import { focusClockType, focusRingSize } from './focusViewLogic';
+
+/** Wireframe label widths for the category chips while subjects are read. */
+const FOCUS_SUBJECT_BONES = [36, 48, 30, 42] as const;
 
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 180;
@@ -278,15 +284,19 @@ function DurationPicker({
               accessibilityRole="button"
               accessibilityLabel={`${preset}分钟`}
               accessibilityState={{ selected: isSelected }}
-              hitSlop={6}
               onPress={() => {
                 setPreview(preset);
                 onCommitMinutes(preset);
               }}
               style={({ pressed }) => [
                 {
+                  // Keep the visible chip tight, but give the control a full
+                  // 44dp touch floor. Vertical only — width stays trimmed so six
+                  // Chinese-labelled presets still fit one line at 360dp.
+                  minHeight: YanjiTouch.min,
                   paddingHorizontal: 10,
                   paddingVertical: 5,
+                  justifyContent: 'center',
                   borderRadius: paper.radius.pill,
                   backgroundColor: isSelected
                     ? paper.colors.brandSubtle
@@ -786,11 +796,30 @@ export function FocusScreen({ visible }: { visible: boolean }): React.JSX.Elemen
                     );
                   })}
                 </View>
+              ) : subjectLoadState === 'loading' ? (
+                // The category chips as wireframes, at the chips' own size and
+                // radius, so the real row replaces them without a jump.
+                <YanjiSkeleton testID="focus-subjects-skeleton" accessibilityLabel="正在读取科目"
+                  style={{ flexDirection: 'row', flexWrap: 'wrap', gap: YanjiSpacing.sm }}>
+                  {FOCUS_SUBJECT_BONES.map(width => (
+                    <View key={width} style={{
+                      minHeight: 38,
+                      minWidth: 54,
+                      paddingVertical: 8,
+                      paddingHorizontal: YanjiSpacing.md,
+                      borderRadius: paper.radius.compactCard,
+                      backgroundColor: paper.colors.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <YanjiSkeletonText type={paper.typography.bodyPrimary} width={width} />
+                    </View>
+                  ))}
+                </YanjiSkeleton>
               ) : (
                 <View style={{ minHeight: paper.layout.rowMinHeight, justifyContent: 'center' }}>
                   <Text style={[paper.typography.bodyPrimary, { color: paper.colors.secondary }]}>
-                    {subjectLoadState === 'loading' ? '正在读取科目…' :
-                      subjectLoadState === 'error' ? '科目读取失败' : '暂无可用科目'}
+                    {subjectLoadState === 'error' ? '科目读取失败' : '暂无可用科目'}
                   </Text>
                   {subjectLoadState === 'error' ? (
                     <Pressable
@@ -1328,11 +1357,11 @@ function FocusTimerReadout({
           style={[
             theme.paper.typography.displayTimer,
             {
+              // Only the size tracks the ring; weight/family come from
+              // displayTimer so the clock cannot drift from the type token.
               color: immersed.ink,
               fontSize: clockType.fontSize,
               lineHeight: clockType.lineHeight,
-              fontWeight: '600',
-              fontFamily: 'sans-serif-medium',
               textAlign: 'center',
             },
           ]}

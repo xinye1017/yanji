@@ -47,10 +47,13 @@ const PROVIDER_DEFAULTS: Record<'openrouter' | 'typesafe', { model: string; endp
 export function YanjiDecisionModelSection({
   settings,
   onSaved,
+  pending = false,
 }: {
   settings: UserSettings | null;
   /** Called after a successful save or key change so the page can re-read Room. */
   onSaved: () => Promise<void> | void;
+  /** The settings snapshot is still in flight (not failed): the summary is a bone. */
+  pending?: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout, radius } = paper;
@@ -214,6 +217,7 @@ export function YanjiDecisionModelSection({
         summary={settings === null ? '—' : hasKey ? '已配置' : '未配置'}
         icon="sparkles"
         expanded={advancedOpen}
+        pending={pending && settings === null}
         disabled={settings === null}
         busy={busy}
         isLast

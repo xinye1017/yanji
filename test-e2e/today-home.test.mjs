@@ -228,7 +228,8 @@ function screenHarness(snapshot, bridge = {}, { readFailed = false } = {}) {
   const names = ['YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiDayRhythmChart',
     'YanjiEditorialHeader', 'YanjiEmptyLedgerRow', 'YanjiHairline', 'YanjiIcon', 'YanjiIconButton',
     'YanjiPaperSectionHeading', 'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading',
-    'YanjiPrimaryButton', 'YanjiSectionToggle', 'YanjiSubjectProportionRow',
+    'YanjiPrimaryButton', 'YanjiSectionToggle', 'YanjiSkeleton', 'YanjiSkeletonBone', 'YanjiSkeletonText',
+    'YanjiSubjectProportionRow',
     'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction'];
   const ui = Object.fromEntries(names.map(name => [name, name]));
   // The page's real list, replaced by a double that windows its cells. See
@@ -605,11 +606,32 @@ test('the current-hour tick appears once the strip has real data', () => {
   assert.equal(slots.find(slot => slot.hour === 10).height, tokens.YanjiPaperLayout.rhythmChartHeight);
 });
 
-test('production homepage keeps loading distinct from an empty saved day', () => {
+test('production homepage draws a skeleton while loading, never an empty saved day', () => {
   const tree = screenHarness(null).render();
-  assert.match(text(tree), /正在读取今日记录/);
-  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading')[0].props.countText, '—');
-  assert.equal(nodes(tree, node => node.type === 'YanjiChronoSpectrum')[0].props.accessibilityLabel, '正在读取今日专注');
+  const skeletons = nodes(tree, node => node.type === 'YanjiSkeleton').map(node => node.props.accessibilityLabel);
+  assert.ok(skeletons.includes('正在读取今日记录'), 'the summary block is a wireframe');
+  assert.ok(skeletons.includes('正在读取今日计划'), 'the plan list is a wireframe');
+  // No fabricated value stands in for data the page has not read yet.
+  assert.equal(nodes(tree, node => node.type === 'YanjiChronoSpectrum').length, 0, 'no empty bar');
+  assert.equal(nodes(tree, node => node.type === 'YanjiEmptyLedgerRow').length, 0, 'loading is not an empty plan');
+  assert.equal(nodes(tree, node => node.type === 'YanjiPaperSectionHeading')[0].props.countText, undefined);
+  assert.doesNotMatch(text(tree), /暂无专注记录|还没有安排今天的计划/);
+  // While the first read is still in flight the skeleton is the whole answer.
+  assert.equal(nodes(tree, node => node.type === 'YanjiTextAction' && node.props.label === '重新读取').length, 0);
+});
+
+test('the loading journal and rhythm rows are wireframes too', () => {
+  const h = screenHarness(null);
+  const tree = h.render();
+  // The page returns an element tree; the list double only runs when that tree
+  // is walked, so read what it was handed after the walk, not before.
+  const skeletons = nodes(tree, node => node.type === 'YanjiSkeleton').map(node => node.props.accessibilityLabel);
+  const types = h.flashList.lastRender('scroll-today').types;
+  assert.ok(types.includes('journal-skeleton'), 'the journal list carries its wireframe row');
+  assert.equal(nodes(tree, node => node.type === 'YanjiCaptureCard').length, 0, 'no capture slot before the day is read');
+  assert.equal(nodes(tree, node => node.type === 'YanjiDayRhythmChart').length, 0, 'no empty rhythm chart');
+  assert.ok(skeletons.includes('正在读取今日学习节奏'), 'the rhythm chart is a wireframe');
+  assert.ok(skeletons.includes('正在读取今日随笔'), 'the journal is a wireframe');
 });
 
 test('the goal opens a page-owned sheet that writes the same stored value', async () => {

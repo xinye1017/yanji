@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View, useWindowDimensions } from 'react-native';
-import { YanjiIcon, YanjiHairline } from './YanjiUI';
+import { YanjiIcon, YanjiHairline, YanjiSkeleton, YanjiSkeletonText } from './YanjiUI';
 import type { YanjiIconName } from './icons';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
@@ -25,7 +25,9 @@ import { YanjiSpacing } from '../theme/tokens';
  *
  * `pending` is what the row shows while the settings snapshot is still in
  * flight: claiming 「未设置」 before the read returns would be a statement about
- * stored data the page has not seen yet.
+ * stored data the page has not seen yet. The value slot is then a wireframe
+ * bone where the value will sit — not a 「—」 and a spinner — so the row keeps
+ * its shape and the value lands in place.
  */
 export function YanjiSettingRow({
   label,
@@ -55,7 +57,15 @@ export function YanjiSettingRow({
   const { width, fontScale } = useWindowDimensions();
   const stacked = width / fontScale < layout.settingsStackedWidth;
   const unset = pending || value === '未设置';
-  const shown = pending ? '—' : value;
+  const shown = pending ? undefined : value;
+  // Silent: the row's own label already says 「正在读取」.
+  const valueBone = (
+    <YanjiSkeleton>
+      <YanjiSkeletonText type={typography.bodyPrimary} width={72} />
+    </YanjiSkeleton>
+  );
+  // A value the row expects to show; actions such as 「时间表设置」 have none.
+  const hasValueSlot = pending || Boolean(shown);
 
   return (
     <View>
@@ -77,11 +87,11 @@ export function YanjiSettingRow({
       >
         <View style={{ flex: 1, gap: YanjiSpacing.xs }}>
           <Text style={[typography.bodyPrimary, { color: colors.ink }]}>{label}</Text>
-          {stacked && shown ? (
+          {stacked && hasValueSlot ? (pending ? valueBone : (
             <Text style={[typography.bodyPrimary, { color: unset ? colors.secondary : colors.ink, fontWeight: '600' }]}>
               {shown}
             </Text>
-          ) : null}
+          )) : null}
           {hint ? (
             <Text style={[typography.captionMeta, { color: colors.secondary }]}>
               {hint}
@@ -89,7 +99,7 @@ export function YanjiSettingRow({
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flexShrink: 1 }}>
-          {!stacked && shown ? <Text
+          {!stacked && pending ? valueBone : !stacked && shown ? <Text
             style={[
               typography.bodyPrimary,
               {
@@ -102,7 +112,7 @@ export function YanjiSettingRow({
           >
             {shown}
           </Text> : null}
-          {pending || busy ? <ActivityIndicator size="small" color={colors.secondary} /> : <YanjiIcon name="forward" size={15} color={colors.secondary} />}
+          {busy ? <ActivityIndicator size="small" color={colors.secondary} /> : <YanjiIcon name="forward" size={15} color={colors.secondary} />}
         </View>
       </Pressable>
       {isLast ? null : <YanjiHairline />}
@@ -121,6 +131,7 @@ export function YanjiSettingDisclosureRow({
   expanded,
   disabled = false,
   busy = false,
+  pending = false,
   isLast = false,
   onPress,
 }: {
@@ -130,6 +141,8 @@ export function YanjiSettingDisclosureRow({
   expanded: boolean;
   disabled?: boolean;
   busy?: boolean;
+  /** The summary is still being read: draw a bone where it goes. */
+  pending?: boolean;
   isLast?: boolean;
   onPress: () => void;
 }): React.JSX.Element {
@@ -137,6 +150,11 @@ export function YanjiSettingDisclosureRow({
   const { colors, typography, layout } = paper;
   const { width, fontScale } = useWindowDimensions();
   const stacked = width / fontScale < layout.settingsStackedWidth;
+  const summaryNode = pending ? (
+    <YanjiSkeleton>
+      <YanjiSkeletonText type={typography.captionMeta} width={44} />
+    </YanjiSkeleton>
+  ) : null;
 
   return (
     <View>
@@ -145,7 +163,7 @@ export function YanjiSettingDisclosureRow({
         disabled={disabled || busy}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={summary}
+        accessibilityHint={pending ? '正在读取' : summary}
         accessibilityState={{ expanded, disabled: disabled || busy, busy }}
         style={({ pressed }) => ({
           minHeight: layout.rowMinHeight,
@@ -161,11 +179,11 @@ export function YanjiSettingDisclosureRow({
           {icon ? <YanjiIcon name={icon} size={16} color={colors.secondary} /> : null}
           <View style={{ flex: 1, gap: YanjiSpacing.xs }}>
             <Text style={[typography.bodyPrimary, { color: colors.ink }]}>{label}</Text>
-            {stacked ? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{summary}</Text> : null}
+            {stacked ? summaryNode ?? <Text style={[typography.captionMeta, { color: colors.secondary }]}>{summary}</Text> : null}
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.xs, flexShrink: 1 }}>
-          {!stacked ? <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
+          {!stacked ? summaryNode ?? <Text style={[typography.captionMeta, { color: colors.secondary, flexShrink: 1 }]}>
             {summary}
           </Text> : null}
           {busy ? <ActivityIndicator size="small" color={colors.secondary} /> : <YanjiIcon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} color={colors.secondary} />}

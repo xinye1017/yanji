@@ -177,6 +177,9 @@ function roamingHarness({
     '../bridge': bridge,
     './YanjiUI': {
       YanjiIcon: 'YanjiIcon',
+      YanjiSkeleton: 'YanjiSkeleton',
+      YanjiSkeletonBone: 'YanjiSkeletonBone',
+      YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../theme/ThemeProvider': {
       useYanjiTheme: () => theme,
@@ -345,14 +348,16 @@ test('RoamingNotesModal uses the always-dark immersive palette for the field and
   assert.equal(closeStyle[0].height, 44);
 });
 
-test('RoamingNotesModal shows a loading hint instead of the empty state while fetching', async () => {
+test('RoamingNotesModal draws the card as a wireframe instead of the empty state while fetching', async () => {
   // A deferred batch lets us observe the loading render before it resolves.
   let resolveBatch;
   const deferred = new Promise(resolve => { resolveBatch = resolve; });
   const harness = roamingHarness({ getRandomNotes: () => deferred });
   const ui = await harness.render({ visible: true });
 
-  assert.ok(ui.allText.some(t => t.includes('正在拾取随笔')), 'Should show loading hint while fetching');
+  const skeleton = ui.find(node => node.type === 'YanjiSkeleton');
+  assert.ok(skeleton, 'Should draw the card wireframe while fetching');
+  assert.equal(skeleton.props.accessibilityLabel, '正在拾取随笔', 'The wireframe announces what it waits for');
   assert.ok(!ui.allText.some(t => t.includes('暂无随笔')), 'Should not flash empty state while loading');
 
   resolveBatch(harnessStatesNotes());

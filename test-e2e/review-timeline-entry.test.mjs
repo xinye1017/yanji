@@ -110,6 +110,7 @@ const UI_NAMES = [
   'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
   'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
   'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
+  'YanjiSkeleton', 'YanjiSkeletonBone', 'YanjiSkeletonText',
   'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
 ];
 
@@ -505,9 +506,31 @@ test('zero data and a loading snapshot stay truthful in the summary', () => {
   assert.deepEqual(summaryNumbers(empty), ['0', '0', '0']);
   assert.deepEqual(summaryTails(empty), ['/0']);
 
+  // Loading draws bones where the numbers go: no 「—」, no 0, no unit.
   const loading = screenHarness(null).render();
-  assert.deepEqual(summaryNumbers(loading), ['—', '—', '—']);
+  assert.deepEqual(summaryNumbers(loading), []);
+  const summaryBones = nodes(loading, node => node.type === 'YanjiSkeletonText'
+    && node.props.type === theme.paper.typography.metricSummary);
+  assert.equal(summaryBones.length, 3, 'each summary number is a bone at the metric size');
   assert.doesNotMatch(text(loading), /分钟/, 'no unit is invented before the read returns');
+
+  // A failed first read is not loading: it keeps its honest 「—」 rather than a
+  // wireframe that would breathe forever.
+  const failed = screenHarness(null, { dailyReadFailed: true }).render();
+  assert.deepEqual(summaryNumbers(failed), ['—', '—', '—']);
+});
+
+test('a loading day draws the timeline as a wireframe, a failed one keeps its copy', () => {
+  const loading = screenHarness(null).render();
+  const skeleton = nodes(loading, node => node.type === 'YanjiSkeleton'
+    && node.props.accessibilityLabel === '正在读取这一天的记录');
+  assert.equal(skeleton.length, 1, 'the timeline is one wireframe region');
+  assert.doesNotMatch(text(loading), /这一天还没有记录/, 'loading is not an empty day');
+
+  const failed = screenHarness(null, { dailyReadFailed: true }).render();
+  assert.equal(nodes(failed, node => node.type === 'YanjiSkeleton'
+    && node.props.accessibilityLabel === '正在读取这一天的记录').length, 0);
+  assert.match(text(failed), /正在读取这一天的记录…/);
 });
 
 test('the summary renders whichever day\'s snapshot is selected', () => {

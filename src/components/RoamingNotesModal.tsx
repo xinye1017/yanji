@@ -13,7 +13,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCategory, NoteEntry, YanjiDataNative } from '../bridge';
-import { YanjiIcon } from './YanjiUI';
+import { YanjiIcon, YanjiSkeleton, YanjiSkeletonBone, YanjiSkeletonText } from './YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
@@ -28,6 +28,10 @@ const EMPTY_CARD_MAX_WIDTH = 280;
 const PHOTO_HEIGHT = 140;
 /** Off-screen travel for the swipe-to-turn animation. */
 const SWIPE_TRAVEL = 300;
+/** The roaming card's note type (`styles.noteText`), so bone lines match real ones. */
+const NOTE_LINE = { fontSize: 14, lineHeight: 22 } as const;
+/** Wireframe line widths for the card while the batch is drawn. */
+const ROAMING_LINE_BONES = ['92%', '84%', '58%'] as const;
 
 export interface RoamingNotesModalProps {
   visible: boolean;
@@ -270,9 +274,36 @@ export function RoamingNotesModal({
         {/* 3D Spatial Stage */}
         <View style={styles.stage}>
           {loading ? (
-            <Text style={[typography.captionMeta, styles.loadingText, { color: immersed.secondary }]}>
-              正在拾取随笔…
-            </Text>
+            // The card itself, as a wireframe: same width, radius and body
+            // padding, three lines of note and the date / seal footer.
+            <YanjiSkeleton testID="roaming-skeleton" accessibilityLabel="正在拾取随笔"
+              style={styles.cardsStack}>
+              <View style={[
+                styles.activeCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.hairline,
+                  borderRadius: theme.radius.xl,
+                },
+              ]}>
+                <View style={[styles.cardBody, { paddingTop: YanjiSpacing.xl }]}>
+                  <View style={{ marginBottom: YanjiSpacing.md }}>
+                    {ROAMING_LINE_BONES.map(width => (
+                      <YanjiSkeletonText key={width} type={NOTE_LINE} width={width} />
+                    ))}
+                  </View>
+                  <View style={[styles.cardFooter, { borderTopColor: colors.hairline }]}>
+                    <View style={styles.metaColumn}>
+                      <YanjiSkeletonText type={{ fontSize: 11, lineHeight: 16 }} width={92} />
+                      <View style={{ marginTop: 2 }}>
+                        <YanjiSkeletonText type={typography.captionMeta} width={64} />
+                      </View>
+                    </View>
+                    <YanjiSkeletonBone width={36} height={36} round />
+                  </View>
+                </View>
+              </View>
+            </YanjiSkeleton>
           ) : notes.length === 0 ? (
             <View
               style={[
@@ -553,10 +584,6 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontSize: 16,
     letterSpacing: 0.5,
-  },
-  loadingText: {
-    textAlign: 'center',
-    letterSpacing: 1,
   },
   counterBadge: {
     paddingHorizontal: 8,

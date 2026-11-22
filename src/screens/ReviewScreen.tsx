@@ -14,6 +14,7 @@ import {
   YanjiCaptureCard, YanjiCard, YanjiChronoSpectrum, YanjiEditorialHeader,
   YanjiIconButton, YanjiLineChart, YanjiPaperSectionHeading,
   YanjiPaperSegmentedControl, YanjiPaperSheetHeading, YanjiPrimaryButton,
+  YanjiSkeleton, YanjiSkeletonBone, YanjiSkeletonText,
   YanjiStackedBarChart, YanjiStaleDataNotice, YanjiSubjectProportionRow,
 } from '../components/YanjiUI';
 import { EditingNote, RecordMomentModal } from '../components/RecordMomentModal';
@@ -26,7 +27,7 @@ import type { PopoverAnchor, TimelineAction } from '../components/TimelineAction
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { useNavigationActions } from '../navigation/NavigationShell';
 import { useBottomTabLayout } from '../navigation/useBottomTabLayout';
-import { YanjiSpacing } from '../theme/tokens';
+import { YanjiSpacing, YanjiTouch } from '../theme/tokens';
 import {
   prefetchDailySnapshots, prefetchReviewOverviews,
   refreshDailySnapshot, refreshReviewOverview,
@@ -450,14 +451,17 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         onStep={stepWeek}
         canStepForward={canPageWeek(weekStart, today, 1)}
       />
-      <DaySummary snapshot={snapshot} />
+      {/* Loading means "not read and not failed": a failed first read keeps its
+          「—」 and copy, because a skeleton that breathes forever would promise
+          data that is not coming. */}
+      <DaySummary snapshot={snapshot} loading={!snapshot && !dailyReadFailed} />
       <YanjiCaptureCard
         title="记录此刻"
         hint="补记这一天的想法或卡点"
         accessibilityLabel="记录此刻，补记这一天的随笔"
         onPress={() => setCreateOpen(true)}
       />
-      <TimelineState loading={!snapshot} entryCount={entries.length} planCount={dayTasks.length} />
+      <TimelineState loading={!snapshot} failed={dailyReadFailed} entryCount={entries.length} planCount={dayTasks.length} />
       {/* The rows used to sit under this gap inside their own wrapper. Now they
           are list items, so the header has to carry the separation itself. */}
       <View style={{ height: YanjiSpacing.lg }} />
@@ -484,6 +488,9 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         canStepForward={date < todayIso()}
       />
 
+      {/* The window has not been read yet: draw the card's wireframe rather
+          than a 0h 0m total and an empty chart that read as an idle period. */}
+      {overview === null && !overviewReadFailed ? <TrendSkeleton /> : (
       <TrendSummary
         overview={overview}
         previousOverview={previousOverview}
@@ -504,6 +511,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
         distribution={distribution}
         spectrum={spectrum}
       />
+      )}
     </>
   );
 
@@ -602,7 +610,7 @@ export function ReviewScreen({ visible }: { visible: boolean }): React.JSX.Eleme
           <YanjiPaperSheetHeading title={`删除「${pendingDelete?.subjectName ?? ''}」记录？`} subtitle="该记录与它的学习时长会一并删除，无法恢复。" onClose={() => { if (!deletingRef.current) setPendingDelete(null); }} disabled={deleting} />
           {deleteError ? <Text accessibilityRole="alert" style={[typography.bodyPrimary, { color: colors.danger, marginTop: YanjiSpacing.md }]}>{deleteError}</Text> : null}
           <YanjiPrimaryButton variant="danger" label={deleting ? '删除中…' : '确认删除'} onPress={() => void removeSession()} disabled={deleting} style={{ marginTop: YanjiSpacing.lg }} />
-          <Pressable onPress={() => { if (!deletingRef.current) setPendingDelete(null); }} disabled={deleting} accessibilityRole="button" accessibilityLabel="取消删除记录" accessibilityState={{ disabled: deleting }} style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={() => { if (!deletingRef.current) setPendingDelete(null); }} disabled={deleting} accessibilityRole="button" accessibilityLabel="取消删除记录" accessibilityState={{ disabled: deleting }} style={({ pressed }) => ({ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
             <Text style={[typography.bodyPrimary, { color: colors.secondary }]}>取消</Text>
           </Pressable>
         </ScrollView>
@@ -791,12 +799,17 @@ function WeekFilmstrip({ pages, onSelect, onStep, canStepForward }: {
  * A day whose only content is a plan is not an empty day — the plan is real and
  * the summary strip already counts it — so the copy says what is missing (a
  * recorded session or note) rather than claiming nothing happened.
+ *
+ * While the day's first read is in flight the line is a wireframe of timeline
+ * rows instead. A read that failed with nothing to show keeps the copy: the
+ * skeleton would otherwise breathe forever.
  */
-function TimelineState({ loading, entryCount, planCount }: {
-  loading: boolean; entryCount: number; planCount: number;
+function TimelineState({ loading, failed, entryCount, planCount }: {
+  loading: boolean; failed: boolean; entryCount: number; planCount: number;
 }): React.JSX.Element | null {
   const { paper } = useYanjiTheme();
   const { colors, typography } = paper;
+  if (loading && !failed) return <TimelineSkeleton />;
   if (loading) {
     return <Text style={[typography.bodyJournal, { color: colors.secondary, marginTop: paper.layout.sectionGap }]}>
       正在读取这一天的记录…
@@ -810,11 +823,115 @@ function TimelineState({ loading, entryCount, planCount }: {
 }
 
 // ---------------------------------------------------------------------------
+// Skeletons — wireframes for a window that has not been read yet
+//
+// Each mirrors the block it stands in for at that block's heights, carries no
+// numbers and no copy, and is replaced by the real block in place. The widths
+// are fixed shapes so the wireframe holds still from frame to frame.
+// ---------------------------------------------------------------------------
+
+const TIMELINE_BONES = ['68%', '52%', '74%', '46%'] as const;
+const DISTRIBUTION_BONES = ['34%', '26%', '20%'] as const;
+const TREND_AXIS_BONES = ['a', 'b', 'c', 'd', 'e', 'f', 'g'] as const;
+
+/** The day's timeline: clock column · spine node · one-line body. */
+function TimelineSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  return (
+    <YanjiSkeleton testID="review-timeline-skeleton" accessibilityLabel="正在读取这一天的记录"
+      style={{ marginTop: layout.sectionGap }}>
+      {TIMELINE_BONES.map((width, index) => (
+        <View key={width} style={{
+          flexDirection: 'row', alignItems: 'center',
+          minHeight: layout.timelineHeadBand,
+          marginTop: index === 0 ? 0 : layout.momentItemGap,
+        }}>
+          <View style={{ width: layout.timelineTimeColumn }}>
+            <YanjiSkeletonText type={typography.captionMeta} width={34} />
+          </View>
+          <View style={{ width: layout.timelineAxisColumn, alignItems: 'center' }}>
+            <YanjiSkeletonBone width={layout.timelineNodeSize} height={layout.timelineNodeSize} round />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <YanjiSkeletonText type={typography.bodyPrimary} width={width} />
+          </View>
+        </View>
+      ))}
+    </YanjiSkeleton>
+  );
+}
+
+/**
+ * The trend view: the KPI card (total, delta badge, average, chart well and
+ * axis), then the subject breakdown. The section title is real text — it is
+ * the page's own label, not data — so only its count waits.
+ */
+function TrendSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout } = paper;
+  return (
+    <>
+      <YanjiCard style={{ paddingHorizontal: YanjiSpacing.lg, paddingVertical: 14 }}>
+        <YanjiSkeleton testID="review-trend-skeleton" accessibilityLabel="正在读取趋势统计">
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View>
+              <YanjiSkeletonText type={typography.captionMeta} width={96} />
+              <View style={{ marginTop: 2 }}>
+                <YanjiSkeletonText type={typography.metricKpi} width={92} />
+              </View>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <YanjiSkeletonBone width={76} height={typography.deltaBadge.lineHeight + 6} />
+              <View style={{ marginTop: 6 }}>
+                <YanjiSkeletonText type={typography.kpiMeta} width={84} />
+              </View>
+            </View>
+          </View>
+          <View style={{
+            borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.hairline,
+            marginTop: 10, paddingTop: 18,
+          }}>
+            <YanjiSkeletonBone height={TREND_CHART_HEIGHT} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: YanjiSpacing.sm }}>
+              {TREND_AXIS_BONES.map(key => (
+                <YanjiSkeletonText key={key} type={typography.captionMeta} width={20} />
+              ))}
+            </View>
+          </View>
+        </YanjiSkeleton>
+      </YanjiCard>
+
+      <YanjiPaperSectionHeading title="学科投入比重" />
+      <YanjiSkeleton testID="review-distribution-skeleton" accessibilityLabel="正在读取学科分布">
+        <YanjiSkeletonBone height={layout.spectrumHeight} round />
+        <View style={{ marginTop: YanjiSpacing.md }}>
+          {DISTRIBUTION_BONES.map(width => (
+            <View key={width} style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              minHeight: layout.rowMinHeight - YanjiSpacing.md,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, flex: 1 }}>
+                <YanjiSkeletonBone width={layout.subjectSwatchSize} height={layout.subjectSwatchSize} round />
+                <YanjiSkeletonText type={typography.bodyPrimary} width={width} />
+              </View>
+              <YanjiSkeletonText type={typography.captionMeta} width={72} />
+            </View>
+          ))}
+        </View>
+      </YanjiSkeleton>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The day's summary strip — three facts, no card
 // ---------------------------------------------------------------------------
 
-function DaySummary({ snapshot }: {
+function DaySummary({ snapshot, loading }: {
   snapshot: DailySnapshot | null;
+  /** First read in flight: each number is a bone at the metric's line height. */
+  loading: boolean;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
   const { colors, typography, layout } = paper;
@@ -873,16 +990,23 @@ function DaySummary({ snapshot }: {
         marginTop: YanjiSpacing.xs,
         minHeight: typography.metricSummary.lineHeight,
       }}>
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
-          style={[typography.metricSummary, { color: colors.ink }]}>
-          {cell.value}
-        </Text>
-        {cell.tail ? (
-          <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.muted }]}>
-            {cell.tail}
+        {loading ? (
+          // The cell already speaks 「正在读取…」 for itself, so the bone is silent.
+          <YanjiSkeleton>
+            <YanjiSkeletonText type={typography.metricSummary} width={index === 1 ? 36 : 48} />
+          </YanjiSkeleton>
+        ) : <>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}
+            style={[typography.metricSummary, { color: colors.ink }]}>
+            {cell.value}
           </Text>
-        ) : null}
-        {cell.unit ? <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 2 }]}>{cell.unit}</Text> : null}
+          {cell.tail ? (
+            <Text numberOfLines={1} style={[typography.captionMeta, { color: colors.muted }]}>
+              {cell.tail}
+            </Text>
+          ) : null}
+          {cell.unit ? <Text style={[typography.bodyPrimary, { color: colors.secondary, marginLeft: 2 }]}>{cell.unit}</Text> : null}
+        </>}
       </View>
     </View>)}
   </View>;
@@ -988,16 +1112,20 @@ function PeriodSelectorBar({
               accessibilityRole="button"
               accessibilityState={{ selected }}
               accessibilityLabel={`切换范围至${opt.label}`}
-              style={{
-                paddingVertical: 4,
+              style={({ pressed }) => ({
+                minHeight: YanjiTouch.min,
+                minWidth: YanjiTouch.min,
                 paddingHorizontal: YanjiSpacing.md,
                 borderRadius: radius.pill,
                 backgroundColor: selected ? colors.ink : colors.subtle,
-              }}
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.7 : 1,
+              })}
             >
               <Text style={{
-                fontSize: 12,
-                fontWeight: selected ? '600' : '400',
+                ...typography.periodPill,
+                fontWeight: selected ? '700' : '400',
                 color: selected ? colors.canvas : colors.secondary,
               }}>
                 {opt.label}
@@ -1007,18 +1135,21 @@ function PeriodSelectorBar({
         })}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        {/* A 13dp glyph cannot own a 44dp box without crowding the date out of
+            a narrow screen. Fabric unions hitSlop into the touch region, so a
+            16dp slop lifts the glyph to a ~45dp target while the bar keeps its
+            compact width. */}
         <Pressable
           onPress={onPrevious}
           accessibilityRole="button"
           accessibilityLabel="上一周期"
-          hitSlop={8}
+          hitSlop={16}
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         >
-          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>‹</Text>
+          <Text style={[typography.navArrow, { color: colors.secondary }]}>‹</Text>
         </Pressable>
-        <Text testID="review-date" style={[typography.captionMeta, {
+        <Text testID="review-date" style={[typography.kpiMeta, {
           color: colors.secondary,
-          fontVariant: ['tabular-nums'],
-          fontSize: 11,
           paddingHorizontal: 4,
         }]}>
           {rangeLabel}
@@ -1028,10 +1159,10 @@ function PeriodSelectorBar({
           disabled={!canStepForward}
           accessibilityRole="button"
           accessibilityLabel="下一周期"
-          hitSlop={8}
-          style={{ opacity: canStepForward ? 1 : 0.3 }}
+          hitSlop={16}
+          style={({ pressed }) => ({ opacity: !canStepForward ? 0.3 : pressed ? 0.6 : 1 })}
         >
-          <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 13 }]}>›</Text>
+          <Text style={[typography.navArrow, { color: colors.secondary }]}>›</Text>
         </Pressable>
       </View>
     </View>
@@ -1120,25 +1251,25 @@ function TrendSummary({
               {overview ? (
                 metricParts.hours > 0 ? (
                   <>
-                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                    <Text style={[typography.metricKpi, { color: colors.ink }]}>
                       {metricParts.hours}
                     </Text>
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary, marginRight: 6 }}>h</Text>
-                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                    <Text style={[typography.metricKpiUnit, { color: colors.secondary, marginRight: 6 }]}>h</Text>
+                    <Text style={[typography.metricKpi, { color: colors.ink }]}>
                       {metricParts.minutes}
                     </Text>
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary }}>m</Text>
+                    <Text style={[typography.metricKpiUnit, { color: colors.secondary }]}>m</Text>
                   </>
                 ) : (
                   <>
-                    <Text style={{ fontSize: 32, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>
+                    <Text style={[typography.metricKpi, { color: colors.ink }]}>
                       {metricParts.minutes}
                     </Text>
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: colors.secondary }}>m</Text>
+                    <Text style={[typography.metricKpiUnit, { color: colors.secondary }]}>m</Text>
                   </>
                 )
               ) : (
-                <Text style={{ fontSize: 32, fontWeight: '700', color: colors.secondary }}>—</Text>
+                <Text style={[typography.metricKpi, { color: colors.secondary }]}>—</Text>
               )}
             </View>
           </View>
@@ -1150,21 +1281,14 @@ function TrendSummary({
               borderRadius: radius.tag,
               backgroundColor: deltaBadgeBg,
             }}>
-              <Text style={{
-                fontSize: 11,
-                fontWeight: '700',
-                color: deltaBadgeColor,
-                fontVariant: ['tabular-nums'],
-              }}>
+              <Text style={[typography.deltaBadge, { color: deltaBadgeColor }]}>
                 {deltaBadgeText}
               </Text>
             </View>
-            <Text style={{
-              fontSize: 11,
+            <Text style={[typography.kpiMeta, {
               color: colors.secondary,
               marginTop: 6,
-              fontVariant: ['tabular-nums'],
-            }}>
+            }]}>
               {scope !== 'TODAY' && overview
                 ? `${formatDailyAverageDuration(overview.dailyAverageSeconds)}${goalDays ? `  达标 ${goalDays.reached}/${goalDays.elapsed} 天` : ''}`
                 : `日均 ${overview ? formatDailyAverageDuration(overview.dailyAverageSeconds) : '—'}`}

@@ -124,6 +124,7 @@ test('FocusScreen category cards do not show 今日 xx duration text', () => {
     '../components/YanjiUI': {
       YanjiIcon: 'YanjiIcon',
       YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },
@@ -216,6 +217,8 @@ test('SubjectsSheet renders edit and delete options with 48dp targets and confir
       YanjiIcon: 'YanjiIcon',
       YanjiPaperSheetHeading: 'YanjiPaperSheetHeading',
       YanjiIconButton,
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonBone: 'YanjiSkeletonBone',
+      YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../theme/ThemeProvider': { useYanjiTheme: () => ({ paper }) },
     '../theme/tokens': tokens,
@@ -329,6 +332,7 @@ test('FocusScreen reloads subjects when onDataChanged receives event.type subjec
     '../components/YanjiUI': {
       YanjiIcon: 'YanjiIcon',
       YanjiPaperSegmentedControl: 'YanjiPaperSegmentedControl',
+      YanjiSkeleton: 'YanjiSkeleton', YanjiSkeletonText: 'YanjiSkeletonText',
     },
     '../components/FocusVernierDial': { FocusVernierDial: 'FocusVernierDial' },
     '../components/RollingTimeDisplay': { RollingTimeDisplay: 'RollingTimeDisplay' },

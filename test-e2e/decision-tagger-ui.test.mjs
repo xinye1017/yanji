@@ -47,6 +47,7 @@ function todayHarness(snapshot, nativeOverrides = {}) {
     'YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader', 'YanjiEmptyLedgerRow',
     'YanjiHairline', 'YanjiIcon', 'YanjiIconButton', 'YanjiDayRhythmChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton', 'YanjiSectionToggle',
+    'YanjiSkeleton', 'YanjiSkeletonBone', 'YanjiSkeletonText',
     'YanjiSubjectProportionRow', 'YanjiStaleDataNotice', 'YanjiTaskLedgerRow', 'YanjiTextAction',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));
@@ -154,6 +155,7 @@ function reviewHarness(daySnapshot, nativeOverrides = {}) {
     'YanjiBadge', 'YanjiCaptureCard', 'YanjiCard', 'YanjiChronoSpectrum', 'YanjiEditorialHeader',
     'YanjiIcon', 'YanjiIconButton', 'YanjiLineChart', 'YanjiPaperSectionHeading',
     'YanjiPaperSegmentedControl', 'YanjiPaperSheetHeading', 'YanjiPrimaryButton',
+    'YanjiSkeleton', 'YanjiSkeletonBone', 'YanjiSkeletonText',
     'YanjiStackedBarChart', 'YanjiStaleDataNotice', 'YanjiSubjectProportionRow',
   ];
   const ui = Object.fromEntries(names.map(name => [name, name]));

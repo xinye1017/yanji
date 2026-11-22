@@ -10,7 +10,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { NoteCategory, NoteEntry, YanjiDataNative, onDataChanged } from '../../bridge';
 import { useYanjiTheme } from '../../theme/ThemeProvider';
 import { YanjiSpacing } from '../../theme/tokens';
-import { YanjiIcon } from '../../components/YanjiUI';
+import { YanjiIcon, YanjiSkeleton, YanjiSkeletonText, YanjiTextAction } from '../../components/YanjiUI';
 
 export type JournalCategoryTab = 'all' | 'favorite' | 'unresolved' | 'resolved';
 
@@ -26,6 +26,9 @@ export interface JournalLibraryViewProps {
   }) => void;
 }
 
+/** Wireframe note cards for the first read: body line widths per card. */
+const LIBRARY_CARD_BONES = [['94%', '62%'], ['88%', '74%', '40%'], ['90%', '52%']] as const;
+
 export function JournalLibraryView({
   visible,
   onOpenRoaming,
@@ -39,15 +42,27 @@ export function JournalLibraryView({
   // favorited nor a doubt, and the library is where a user goes to find it.
   const [activeTab, setActiveTab] = useState<JournalCategoryTab>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+  /**
+   * Whether the library has ever been read. Until it has, every count on this
+   * view (共 N 篇, the tab badges) and the 「还没有随笔记录」 line would be a
+   * claim about notes the page has not seen, so they are drawn as wireframes.
+   * A failed first read says so and offers a retry instead of an empty library.
+   */
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const loadNotes = useCallback(async () => {
     try {
       const all = await YanjiDataNative.getAllNotes();
       setNotes(all || []);
+      setLoadState('ready');
     } catch {
-      // Keep existing state on error
+      // Keep the last good list on error; only a library that was never read
+      // has nothing real to show.
+      setLoadState(state => state === 'ready' ? 'ready' : 'error');
     }
   }, []);
+  const firstLoad = loadState === 'loading';
+  const firstLoadFailed = loadState === 'error';
 
   useEffect(() => {
     if (visible) {
@@ -158,9 +173,15 @@ export function JournalLibraryView({
             <Text style={[typography.captionMeta, { color: colors.secondary, fontSize: 12, lineHeight: 18, marginBottom: 3 }]}>
               偶遇旧日灵感与沉思
             </Text>
-            <Text style={[typography.captionMeta, { color: colors.muted, fontSize: 11 }]}>
-              共 {notes.length} 篇随笔 · 左右滑动翻阅
-            </Text>
+            {firstLoad ? (
+              <YanjiSkeleton>
+                <YanjiSkeletonText type={{ fontSize: 11, lineHeight: typography.captionMeta.lineHeight }} width={120} />
+              </YanjiSkeleton>
+            ) : (
+              <Text style={[typography.captionMeta, { color: colors.muted, fontSize: 11 }]}>
+                共 {notes.length} 篇随笔 · 左右滑动翻阅
+              </Text>
+            )}
           </View>
           <View
             style={{
@@ -204,7 +225,7 @@ export function JournalLibraryView({
               onPress={() => setActiveTab(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected }}
-              accessibilityLabel={`${tab.label}，共 ${tab.count} 项`}
+              accessibilityLabel={firstLoad ? `${tab.label}，正在读取` : `${tab.label}，共 ${tab.count} 项`}
               style={({ pressed }) => ({
                 flex: 1,
                 flexDirection: 'row',
@@ -237,18 +258,25 @@ export function JournalLibraryView({
                   backgroundColor: selected ? colors.brandSubtle : colors.subtle,
                 }}
               >
-                <Text
-                  style={[
-                    typography.captionMeta,
-                    {
-                      color: selected ? colors.brand : colors.muted,
-                      fontSize: 10,
-                      fontWeight: '600',
-                    },
-                  ]}
-                >
-                  {tab.count}
-                </Text>
+                {firstLoad ? (
+                  // The badge keeps its size; its number waits for the read.
+                  <YanjiSkeleton>
+                    <YanjiSkeletonText type={{ fontSize: 10, lineHeight: typography.captionMeta.lineHeight }} width={8} />
+                  </YanjiSkeleton>
+                ) : (
+                  <Text
+                    style={[
+                      typography.captionMeta,
+                      {
+                        color: selected ? colors.brand : colors.muted,
+                        fontSize: 10,
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {tab.count}
+                  </Text>
+                )}
               </View>
             </Pressable>
           );
@@ -256,7 +284,46 @@ export function JournalLibraryView({
       </View>
 
       {/* 3. Notes List */}
-      {filteredNotes.length === 0 ? (
+      {firstLoad ? (
+        // Note cards as wireframes, on the cards' own surface, border and
+        // padding: tag + date, then body lines.
+        <YanjiSkeleton testID="journal-library-skeleton" accessibilityLabel="正在读取随笔库">
+          {LIBRARY_CARD_BONES.map(lines => (
+            <View
+              key={lines.join('|')}
+              style={{
+                backgroundColor: colors.surface,
+                borderColor: colors.hairline,
+                borderWidth: 1,
+                borderRadius: theme.radius.lg,
+                marginBottom: YanjiSpacing.sm,
+                padding: YanjiSpacing.md,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: YanjiSpacing.xs }}>
+                <YanjiSkeletonText type={typography.captionMeta} width={28} />
+                <YanjiSkeletonText type={{ fontSize: 11, lineHeight: typography.captionMeta.lineHeight }} width={64} />
+              </View>
+              {lines.map(width => (
+                <YanjiSkeletonText key={width} type={{ fontSize: 14, lineHeight: 22 }} width={width} />
+              ))}
+            </View>
+          ))}
+        </YanjiSkeleton>
+      ) : firstLoadFailed ? (
+        <View
+          style={{
+            paddingVertical: YanjiSpacing.xl,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text accessibilityRole="alert" style={[typography.captionMeta, { color: colors.danger, fontSize: 13 }]}>
+            随笔读取失败。
+          </Text>
+          <YanjiTextAction label="重新读取" onPress={() => void loadNotes()} />
+        </View>
+      ) : filteredNotes.length === 0 ? (
         <View
           style={{
             paddingVertical: YanjiSpacing.xl * 1.5,

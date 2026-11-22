@@ -317,7 +317,7 @@ export function SettingsScreen(): React.JSX.Element {
             spaceBefore={layout.sectionGap}
             titleStyle={typography.titleGroup}
           />
-          <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} />
+          <YanjiDecisionModelSection settings={settings} onSaved={refreshSettingsSnapshot} pending={loading && !showReadError} />
         </View>
 
         <YanjiHairline style={{ marginTop: layout.sectionGap }} />

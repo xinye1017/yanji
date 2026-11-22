@@ -446,6 +446,55 @@ export const YanjiPaperTypography = {
     fontWeight: '500' as const,
     fontVariant: ['tabular-nums'] as const,
   },
+  /** The unit suffix beside a hero metric (小时 / 分). It reads a step above a
+   *  caption because it is locked to the big number's baseline, but it must not
+   *  compete with the number itself — 14/600 keeps it in the label tier. */
+  metricUnit: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600' as const,
+  },
+  /** A card KPI number, one step under `metricHero`: three of these never share
+   *  a row, so it can stay large without fighting the page title. */
+  metricKpi: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '700' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  /** The h/m unit beside a KPI number. */
+  metricKpiUnit: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500' as const,
+  },
+  /** Compact numeric meta on a KPI card — the delta footer and the date range. */
+  kpiMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '400' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  /** The period-over-period delta. Heavier than `kpiMeta` because it is the one
+   *  number the reader scans for on the card. */
+  deltaBadge: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '700' as const,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  /** A selectable period pill on the review range bar (当日 / 本周 / 本月). */
+  periodPill: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400' as const,
+  },
+  /** The ‹ / › stepper glyphs beside the period pills. */
+  navArrow: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400' as const,
+  },
 } as const;
 
 export const YanjiPaperLayout = {
@@ -553,6 +602,12 @@ export const YanjiPaperLayout = {
   /** A dated cell in the review filmstrip — day number above its subject dot. */
   filmstripCellMinHeight: 58,
   gridGap: 8,
+  /**
+   * A skeleton text bone is drawn at this share of its type's font size — about
+   * the height of a CJK glyph or a lining figure — and the rest of the line box
+   * becomes margin, so a bone line and the text that replaces it are one height.
+   */
+  skeletonGlyphRatio: 0.72,
 } as const;
 
 export const YanjiPaperRadius = {
@@ -572,4 +627,14 @@ export const YanjiPaperMotion = {
   sheetExitMs: 210,
   selectionMs: 160,
   opacityReducedMs: 120,
+  /**
+   * Skeleton (wireframe) breathing. While a region's first read is in flight it
+   * draws bones in the shape of the content it is waiting for, and the whole
+   * region eases between full opacity and `skeletonDimOpacity` once per
+   * `skeletonPulseMs`. Slow enough to read as "waiting", not as an alert;
+   * reduced motion holds it still. Bones paint `colors.subtle`, so light and
+   * dark follow the theme without a second colour role.
+   */
+  skeletonPulseMs: 900,
+  skeletonDimOpacity: 0.45,
 } as const;

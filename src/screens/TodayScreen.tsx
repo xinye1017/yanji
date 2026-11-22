@@ -16,10 +16,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onDataChanged, YanjiDataNative } from '../bridge';
 import type { NoteEntry, StudyTask } from '../bridge';
 import {
-  YanjiBadge, YanjiCaptureCard, YanjiChronoSpectrum, YanjiDayRhythmChart, YanjiEditorialHeader,
+  YanjiCaptureCard, YanjiChronoSpectrum, YanjiDayRhythmChart,
   YanjiEmptyLedgerRow, YanjiHairline, YanjiIcon, YanjiIconButton, YanjiLedgerChip,
   YanjiPaperSectionHeading, YanjiPaperSheetHeading, YanjiPrimaryButton, YanjiSectionToggle,
-  YanjiStaleDataNotice, YanjiTaskLedgerRow, YanjiTextAction,
+  YanjiSkeleton, YanjiSkeletonBone, YanjiSkeletonText, YanjiStaleDataNotice,
+  YanjiTaskLedgerRow, YanjiTextAction,
 } from '../components/YanjiUI';
 import { RecordMomentModal } from '../components/RecordMomentModal';
 import { LiveSessionReadout } from '../components/LiveSessionReadout';
@@ -110,6 +111,11 @@ type TodayRow =
     key: string;
   }
   | {
+    /** The journal's wireframe while the day's first read is in flight. */
+    kind: 'journal-skeleton';
+    key: string;
+  }
+  | {
     kind: 'note';
     key: string;
     note: NoteEntry;
@@ -180,7 +186,7 @@ function CarryOverLedgerRow({
   onDefer: () => void;
 }): React.JSX.Element {
   const { paper } = useYanjiTheme();
-  const { colors, typography, layout, radius } = paper;
+  const { colors, typography, layout } = paper;
   return (
     <View>
       <View style={{ paddingVertical: YanjiSpacing.sm, gap: YanjiSpacing.xs }}>
@@ -228,6 +234,118 @@ function CarryOverLedgerRow({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Skeletons — the page's wireframe before the day's first read returns
+//
+// Each one mirrors the block it stands in for, at that block's heights, so the
+// content replaces it without the page jumping. They carry no numbers and no
+// copy: a bone says "something goes here", never what. The widths below are
+// fixed so the wireframe is stable from frame to frame; they are shapes, not
+// data.
+// ---------------------------------------------------------------------------
+
+const LEGEND_BONES = [52, 40, 46] as const;
+const PLAN_BONES = ['64%', '48%', '56%'] as const;
+const RHYTHM_AXIS_BONES = ['06', '09', '12', '15', '18', '21', '24'] as const;
+const JOURNAL_BONES = ['72%', '54%'] as const;
+
+/** 今日专注: hero number and units, status line, spectrum and subject legend. */
+function TodaySummarySkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  return (
+    <YanjiSkeleton testID="today-summary-skeleton" accessibilityLabel="正在读取今日记录">
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: YanjiSpacing.sm, marginTop: 3 }}>
+        <YanjiSkeletonText type={typography.metricDaily} width={36} />
+        <YanjiSkeletonText type={typography.metricUnit} width={28} />
+        <YanjiSkeletonText type={typography.metricDaily} width={64} />
+        <YanjiSkeletonText type={typography.metricUnit} width={14} />
+      </View>
+      <View style={{ marginTop: 7, marginBottom: 4 }}>
+        <YanjiSkeletonText type={typography.captionMeta} width="52%" />
+      </View>
+      <YanjiSkeletonBone height={layout.spectrumHeight} round />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 15, rowGap: 6, marginTop: 10 }}>
+        {LEGEND_BONES.map(width => (
+          <View key={width} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <YanjiSkeletonBone width={layout.subjectSwatchSize} height={layout.subjectSwatchSize} round />
+            <YanjiSkeletonText type={typography.captionMeta} width={width} />
+          </View>
+        ))}
+      </View>
+    </YanjiSkeleton>
+  );
+}
+
+/** 今日计划: ledger rows — commitment, checkbox, title and sub-line, play capsule. */
+function PlanSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  const play = layout.compactActionHeight + 2;
+  return (
+    <YanjiSkeleton testID="today-plan-skeleton" accessibilityLabel="正在读取今日计划">
+      {PLAN_BONES.map((titleWidth, index) => (
+        <View key={titleWidth} style={{
+          flexDirection: 'row', alignItems: 'flex-start', gap: 11,
+          paddingTop: layout.taskRowPadding,
+          paddingBottom: index === PLAN_BONES.length - 1 ? 0 : layout.taskRowPadding,
+        }}>
+          <View style={{ width: 40, flexShrink: 0, paddingTop: 3 }}>
+            <YanjiSkeletonText type={typography.captionMeta} width={28} />
+          </View>
+          <YanjiSkeletonBone width={layout.taskCheckboxSize} height={layout.taskCheckboxSize}
+            style={{ marginTop: 2 }} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <YanjiSkeletonText type={typography.bodyTask} width={titleWidth} />
+            <View style={{ marginTop: layout.taskSubMarginTop }}>
+              <YanjiSkeletonText type={typography.captionMeta} width="36%" />
+            </View>
+          </View>
+          <YanjiSkeletonBone width={play} height={play} round />
+        </View>
+      ))}
+    </YanjiSkeleton>
+  );
+}
+
+/** 今日学习节奏: the chart well and its hour axis. */
+function RhythmSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  return (
+    <YanjiSkeleton testID="today-rhythm-skeleton" accessibilityLabel="正在读取今日学习节奏">
+      <YanjiSkeletonBone height={layout.rhythmChartHeight} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 + layout.hairlineWidth }}>
+        {RHYTHM_AXIS_BONES.map(mark => (
+          <YanjiSkeletonText key={mark} type={typography.captionMeta} width={14} />
+        ))}
+      </View>
+    </YanjiSkeleton>
+  );
+}
+
+/** 今日随笔: the capture slot, then compact rows of clock · node · body. */
+function JournalSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { typography, layout } = paper;
+  return (
+    <YanjiSkeleton testID="today-journal-skeleton" accessibilityLabel="正在读取今日随笔"
+      style={{ marginTop: YanjiSpacing.sm }}>
+      <YanjiSkeletonBone height={layout.rowMinHeight} />
+      {JOURNAL_BONES.map(width => (
+        <View key={width} style={{
+          flexDirection: 'row', alignItems: 'center', gap: layout.momentAxisGap,
+          minHeight: layout.timelineHeadBand, marginTop: YanjiSpacing.md,
+        }}>
+          <YanjiSkeletonText type={typography.captionMeta} width={36} />
+          <YanjiSkeletonBone width={layout.timelineNodeSize} height={layout.timelineNodeSize} round />
+          <YanjiSkeletonText type={typography.bodyPrimary} width={width} />
+        </View>
+      ))}
+    </YanjiSkeleton>
+  );
+}
+
 export function TodayScreen({ visible, foregroundRevision }: {
   visible: boolean; foregroundRevision: number;
 }): React.JSX.Element {
@@ -251,6 +369,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
    * numbers may be behind — which is exactly what this flag drives.
    */
   const dailyReadFailed = useDailyReadFailed(date);
+  /**
+   * The day's first read is still in flight: nothing has been read and nothing
+   * has failed. Only this state draws the skeleton. A failed read with nothing
+   * to show keeps its 「正在读取」 copy and the retry instead, because a
+   * wireframe that breathes forever would promise data that is not coming.
+   */
+  const pageLoading = !snapshot && !dailyReadFailed;
   const settingsSnapshot = useSettingsSnapshot('today', visible);
   const settings = settingsSnapshot?.settings ?? null;
   const countdown = settingsSnapshot?.examCountdown ?? null;
@@ -468,6 +593,9 @@ export function TodayScreen({ visible, foregroundRevision }: {
     list.push({ kind: 'rhythm', key: 'rhythm' });
     list.push({ kind: 'journal-heading', key: 'journal-heading' });
     if (snapshot) list.push({ kind: 'capture', key: 'capture' });
+    // Before the first read the journal is a wireframe, not an empty section:
+    // an empty one would say "no notes today" before the page knows that.
+    else if (pageLoading) list.push({ kind: 'journal-skeleton', key: 'journal-skeleton' });
     journalNotes.forEach((note, index) => {
       list.push({
         kind: 'note',
@@ -478,7 +606,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
       });
     });
     return list;
-  }, [pending, completed, carryOverVisible, snapshot, journalNotes]);
+  }, [pending, completed, carryOverVisible, snapshot, pageLoading, journalNotes]);
   useEffect(() => {
     if (visibleCarryOverTasks.length === 0) closeCarryOver();
   }, [closeCarryOver, visibleCarryOverTasks.length]);
@@ -678,7 +806,10 @@ export function TodayScreen({ visible, foregroundRevision }: {
             title="今日学习节奏"
             titleStyle={typography.titlePageSection}
             spaceBefore={layout.sectionGap}
-            right={<Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
+            // Nothing to expand before the read lands: the toggle would open
+            // four empty day parts, which is exactly the empty data the
+            // skeleton replaces.
+            right={pageLoading ? undefined : <Pressable onPress={() => setRhythmExpanded(expanded => !expanded)}
               accessibilityRole="button"
               accessibilityLabel={rhythmToggleLabel}
               accessibilityState={{ expanded: rhythmExpanded }}
@@ -702,11 +833,13 @@ export function TodayScreen({ visible, foregroundRevision }: {
           {/* Same air under every heading: the chart body starts a step below
               the title, like the plan rows and the journal timeline do. */}
           <View style={{ marginTop: YanjiSpacing.sm }}>
-            <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
-              startLabel="06:00" endLabel="24:00"
-              accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
+            {pageLoading ? <RhythmSkeleton /> : (
+              <YanjiDayRhythmChart buckets={rhythmBuckets} currentHour={now.getHours()}
+                startLabel="06:00" endLabel="24:00"
+                accessibilityLabel={`今日学习节奏，时间范围 06:00 至 24:00。${rhythmSummaryText}`} />
+            )}
           </View>
-          {rhythmExpanded ? (
+          {rhythmExpanded && !pageLoading ? (
             <View style={{ marginTop: YanjiSpacing.md }}>
               {DAY_PARTS.map((part, partIndex) => {
                 const startDate = new Date(`${date}T00:00:00`);
@@ -789,7 +922,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiPaperSectionHeading
           title="今日随笔"
           titleStyle={typography.titlePageSection}
-          countText={snapshot ? `${noteCount} 条` : '—'}
+          countText={snapshot ? `${noteCount} 条` : pageLoading ? undefined : '—'}
           spaceBefore={layout.sectionGap}
           right={noteCount > 1 ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
@@ -835,6 +968,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         </View>
       );
     }
+    if (item.kind === 'journal-skeleton') return <JournalSkeleton />;
     const note = item.note;
     return (
       <View style={{ marginTop: YanjiSpacing.md }}>
@@ -859,7 +993,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
     busyNote, busyTask, carryOverClosing, carryOverOpen, colors.hairline, colors.ink,
     colors.secondary, colors.subtle, date, journalExpanded, journalOrder,
     layout.gridGap, layout.hairlineWidth, layout.rowMinHeight, layout.sectionGap,
-    layout.spectrumHeight, newNote, noteCount, now, openCarryOver, openNote,
+    layout.spectrumHeight, newNote, noteCount, now, openCarryOver, openNote, pageLoading,
     peakHourText, radius.tag, rhythmBuckets, rhythmExpanded, rhythmSummaryText,
     rhythmToggleLabel, selectSegment, selection, sessions, snapshot, startTask,
     toggleTask, typography.bodyPrimary, typography.captionMeta,
@@ -960,13 +1094,17 @@ export function TodayScreen({ visible, foregroundRevision }: {
               )}
             </Pressable>
           </View>
+          {/* Before the first read lands the hero, its status line, the spectrum
+              and the legend are one wireframe at their real heights — not a 「—」,
+              an empty bar and a 「正在读取」 line that read as an empty day. */}
+          {pageLoading ? <TodaySummarySkeleton /> : <>
           <View accessible accessibilityLabel={snapshot ? `今日已保存专注 ${duration(effectiveSeconds)}` : '正在读取今日专注'}
             style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 3 }}>
             {snapshot ? <>
               <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor(effectiveSeconds / 3600))}</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.secondary, marginLeft: 5, marginRight: 8, transform: [{ translateY: -4 }] }}>小时</Text>
+              <Text style={[typography.metricUnit, { color: colors.secondary, marginLeft: 5, marginRight: 8, transform: [{ translateY: -4 }] }]}>小时</Text>
               <Text style={[typography.metricDaily, { color: colors.ink }]}>{String(Math.floor((effectiveSeconds % 3600) / 60)).padStart(2, '0')}</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.secondary, marginLeft: 5, transform: [{ translateY: -4 }] }}>分</Text>
+              <Text style={[typography.metricUnit, { color: colors.secondary, marginLeft: 5, transform: [{ translateY: -4 }] }]}>分</Text>
             </> : <Text style={[typography.metricDaily, { color: colors.ink }]}>—</Text>}
           </View>
           {/* Both halves are numbers the reader came for, so both are inked and
@@ -1000,12 +1138,15 @@ export function TodayScreen({ visible, foregroundRevision }: {
           ) : <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.sm }]}>
             {snapshot ? '暂无专注记录' : '正在读取今日记录…'}
           </Text>}
+          </>}
           {selection?.kind === 'subject' ? (
             <Text accessibilityLiveRegion="polite" style={[typography.captionMeta, { color: colors.secondary, marginTop: YanjiSpacing.xs }]}>
               {selection.subjectName}  {duration(selection.seconds)}
             </Text>
           ) : null}
-          {!snapshot ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}
+          {/* The retry belongs to a read that failed with nothing to show; while
+              the first read is still in flight the skeleton says so on its own. */}
+          {!snapshot && !pageLoading ? <YanjiTextAction label={retrying ? '读取中…' : '重新读取'} onPress={() => void retryRead()} disabled={retrying} /> : null}
           {/* The two banners are mutually exclusive by construction: with no
               snapshot there is nothing to be stale about, and the retry above
               already covers it. This one is for the worse-looking case — the
@@ -1064,7 +1205,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
         <YanjiPaperSectionHeading
           title="今日计划"
           titleStyle={typography.titlePageSection}
-          countText={snapshot ? undefined : '—'}
+          countText={snapshot || pageLoading ? undefined : '—'}
           spaceBefore={layout.sectionGap}
           right={<YanjiTextAction label="新建" accessibilityLabel="添加任务" onPress={openTaskEditor} />}
         />
@@ -1072,7 +1213,7 @@ export function TodayScreen({ visible, foregroundRevision }: {
           {/* The empty state states what is missing and nothing else: the one
               way to add a task is the heading's 「新建」, so repeating an action
               inside the row would be a second entry point to the same sheet. */}
-          {!tasks?.length ? <YanjiEmptyLedgerRow
+          {pageLoading ? <PlanSkeleton /> : !tasks?.length ? <YanjiEmptyLedgerRow
             prompt={snapshot ? '还没有安排今天的计划。' : '正在读取今日计划…'}
             actionLabel={null}
             onPress={openTaskEditor} /> : null}

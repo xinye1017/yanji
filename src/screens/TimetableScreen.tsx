@@ -6,13 +6,74 @@ import type { ScheduleBlock, ScheduleTemplate, Subject } from '../bridge';
 import { ScheduleTimeline } from '../components/ScheduleTimeline';
 import { ScheduleTemplateEditor, ScheduleTemplateManagerSheet, copiedTemplateName } from '../components/ScheduleTemplateSheets';
 import type { ScheduleTemplateDraft } from '../components/ScheduleTemplateSheets';
-import { YanjiChip, YanjiEditorialHeader, YanjiIconButton, YanjiTextAction } from '../components/YanjiUI';
+import {
+  YanjiChip, YanjiEditorialHeader, YanjiIconButton, YanjiSkeleton, YanjiSkeletonBone,
+  YanjiSkeletonText, YanjiTextAction,
+} from '../components/YanjiUI';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiSpacing } from '../theme/tokens';
 import { uniqueTemplateName, validateBlockDraft } from './timetableViewLogic';
 
 function toDraft(template: ScheduleTemplate): ScheduleTemplateDraft {
   return { id: template.id, name: template.name, blocks: template.blocks.map(block => ({ ...block, subjectIds: [...block.subjectIds] })) };
+}
+
+// ---------------------------------------------------------------------------
+// Skeletons — the timetable before its first read returns
+//
+// The chip row and the day grid are drawn as wireframes at their real sizes:
+// template chips, then hour rows (clock column · rule) with a few block bones
+// where time slots usually sit. They carry no times and no names. A failed
+// read never shows them — it keeps the error line and its retry.
+// ---------------------------------------------------------------------------
+
+/** Mirrors `ScheduleTimeline`'s grid so the real one replaces it in place. */
+const SKELETON_HOUR_HEIGHT = 80;
+const SKELETON_TIME_WIDTH = 54;
+const SKELETON_HOURS = [0, 1, 2, 3, 4, 5] as const;
+const SKELETON_BLOCKS = [
+  { top: 0.25, span: 1.5 },
+  { top: 2.5, span: 1 },
+  { top: 4, span: 1.25 },
+] as const;
+const SKELETON_CHIPS = [64, 52, 72] as const;
+
+function TemplateChipsSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  return (
+    <YanjiSkeleton style={{ flexDirection: 'row', gap: YanjiSpacing.xs }}>
+      {SKELETON_CHIPS.map(width => (
+        <YanjiSkeletonBone key={width} width={width} height={paper.layout.subjectChipHeight} round />
+      ))}
+    </YanjiSkeleton>
+  );
+}
+
+function TimetableGridSkeleton(): React.JSX.Element {
+  const { paper } = useYanjiTheme();
+  const { colors, typography, layout, radius } = paper;
+  return (
+    <YanjiSkeleton testID="timetable-skeleton" accessibilityLabel="正在读取时间表"
+      style={{ height: SKELETON_HOUR_HEIGHT * SKELETON_HOURS.length }}>
+      {SKELETON_HOURS.map(hour => (
+        <View key={hour} style={{
+          position: 'absolute', top: hour * SKELETON_HOUR_HEIGHT, left: 0, right: 0,
+          flexDirection: 'row', alignItems: 'flex-start',
+        }}>
+          <View style={{ width: SKELETON_TIME_WIDTH }}>
+            <YanjiSkeletonText type={typography.captionMeta} width={34} />
+          </View>
+          <View style={{ flex: 1, height: layout.hairlineWidth, backgroundColor: colors.hairline, marginTop: typography.captionMeta.lineHeight / 2 }} />
+        </View>
+      ))}
+      {SKELETON_BLOCKS.map(block => (
+        <YanjiSkeletonBone key={block.top} height={block.span * SKELETON_HOUR_HEIGHT - 4} style={{
+          position: 'absolute', left: SKELETON_TIME_WIDTH + 5, right: 4,
+          top: block.top * SKELETON_HOUR_HEIGHT, borderRadius: radius.compactCard,
+        }} />
+      ))}
+    </YanjiSkeleton>
+  );
 }
 
 export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX.Element {
@@ -49,6 +110,11 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
   }, []);
   useEffect(() => { void load(); return onDataChanged(event => { if (event.type === 'schedule' || event.type === 'subjects') void load(); }); }, [load]);
   const template = templates.find(item => item.id === selectedId) ?? null;
+  /**
+   * The first read is still in flight. A failed read is not loading: it shows
+   * the error line and retry, never a wireframe that would breathe forever.
+   */
+  const firstLoad = loading && !error && templates.length === 0;
 
   const save = useCallback(async (next: ScheduleTemplateDraft) => {
     if (saving) return;
@@ -137,7 +203,9 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
         <YanjiEditorialHeader title="时间表设置" trailing={<YanjiIconButton icon="close" accessibilityLabel="返回设置" onPress={onClose} tone="filled" />} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: YanjiSpacing.sm, marginTop: YanjiSpacing.md }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: YanjiSpacing.xs }} style={{ flex: 1 }}>
-            {templates.map(item => <YanjiChip key={item.id} label={item.name} selected={item.id === selectedId} onPress={() => setSelectedId(item.id)} />)}
+            {firstLoad
+              ? <TemplateChipsSkeleton />
+              : templates.map(item => <YanjiChip key={item.id} label={item.name} selected={item.id === selectedId} onPress={() => setSelectedId(item.id)} />)}
           </ScrollView>
           {template && templates[0]?.id !== template.id ? (
             <YanjiTextAction label="设为默认" onPress={() => void activate(template)} disabled={saving} />
@@ -151,7 +219,11 @@ export function TimetableScreen({ onClose }: { onClose: () => void }): React.JSX
         <ScrollView ref={scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm, paddingBottom: insets.bottom + YanjiSpacing.xl }} onLayout={() => scroll.current?.scrollTo({ y: 8 * 80, animated: false })}>
           <ScheduleTimeline blocks={template.blocks} disabled={saving} onAdd={addBlock} onEdit={editBlock} onChange={(index, next) => void changeBlock(index, next)} />
         </ScrollView>
-      ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : '还没有作息模板。'}</Text>{!loading ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
+      ) : firstLoad ? (
+        <View style={{ paddingHorizontal: layout.pageGutter, paddingTop: YanjiSpacing.sm }}>
+          <TimetableGridSkeleton />
+        </View>
+      ) : <View style={{ paddingHorizontal: layout.pageGutter, paddingVertical: YanjiSpacing.lg }}><Text style={[typography.bodyPrimary, { color: colors.secondary }]}>{loading ? '正在读取时间表…' : error ? '时间表暂时无法读取。' : '还没有作息模板。'}</Text>{!loading && !error ? <YanjiTextAction label="新建模板" onPress={create} /> : null}</View>}
       <ScheduleTemplateManagerSheet visible={managerOpen} templates={templates} activeTemplateId={templates[0]?.id ?? null} onClose={() => setManagerOpen(false)} onChanged={() => void load()} onCreate={create} onCopy={copy} onEdit={editTemplate} onActivate={item => void activate(item)} />
       <ScheduleTemplateEditor draft={draft} subjects={subjects} saving={saving} error={editorError} initialBlock={initialBlock} onClose={() => { if (!saving) { setDraft(null); setInitialBlock(null); } }} onSave={next => void save(next)} />
     </View>
