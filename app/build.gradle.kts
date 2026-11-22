@@ -32,8 +32,8 @@ android {
         applicationId = "com.example.yanji"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.002"
+        versionCode = 5
+        versionName = "1.0.003"
         // ABI 与 gradle.properties 的 reactNativeArchitectures 同源（唯一来源）。
         // :app 刻意不应用 RNGP，RN 的 NdkConfiguratorUtils 不会给本模块写 abiFilters；
         // 不显式声明的话，app 的 CMake 会按默认编 4 个 ABI

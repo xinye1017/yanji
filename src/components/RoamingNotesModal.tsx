@@ -5,6 +5,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -14,6 +15,7 @@ import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteCategory, NoteEntry, YanjiDataNative } from '../bridge';
 import { YanjiIcon, YanjiSkeleton, YanjiSkeletonBone, YanjiSkeletonText } from './YanjiUI';
+import type { YanjiIconName } from './icons';
 import { useYanjiTheme } from '../theme/ThemeProvider';
 import { YanjiRadius, YanjiSpacing, YanjiTouch } from '../theme/tokens';
 
@@ -26,12 +28,26 @@ const WAX_SEAL_SHADOW = '#6E2127'; // token-exempt: wax-seal illustration shadow
 const CARD_MAX_WIDTH = 295;
 const EMPTY_CARD_MAX_WIDTH = 280;
 const PHOTO_HEIGHT = 140;
+/** How far the back of the deck hangs below the active card. */
+const DECK_DEPTH = 14;
+/**
+ * The shortest the card may be. On device a one-line note (「测试2」) drew the
+ * card as a thin banner about a seventh of the screen tall, floating in an
+ * empty field. At this height a short note still reads as a card — text on
+ * top, the footer and actions at its foot — and a long one is still capped by
+ * the stage. Never taller than the stage allows.
+ */
+const CARD_MIN_HEIGHT = 240;
+/** The wax seal's diameter — shared by the seal and its skeleton bone. */
+const WAX_SEAL_SIZE = 36;
 /** Off-screen travel for the swipe-to-turn animation. */
 const SWIPE_TRAVEL = 300;
-/** The roaming card's note type (`styles.noteText`), so bone lines match real ones. */
-const NOTE_LINE = { fontSize: 14, lineHeight: 22 } as const;
+/** Drag distance at which the deck has fully risen toward the next card. */
+const DECK_RISE_TRAVEL = 160;
 /** Wireframe line widths for the card while the batch is drawn. */
 const ROAMING_LINE_BONES = ['92%', '84%', '58%'] as const;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface RoamingNotesModalProps {
   visible: boolean;
@@ -45,13 +61,44 @@ export interface RoamingNotesModalProps {
   }) => void;
 }
 
-function formatNoteDateTime(epochMs: number): string {
-  const d = new Date(epochMs);
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${m}月${day}日 ${h}:${min}`;
+/**
+ * When a note was written, in the two forms the card needs.
+ *
+ * Roaming surfaces old notes, so the year is part of the date whenever it is
+ * not this year — 「11月22日」 alone cannot tell this November from last. The
+ * relative half (「今天」「3 天前」「5 个月前」「2 年前」) answers how far back the
+ * card reaches without making the reader do date arithmetic. Days are counted
+ * between local midnights, so a note from 23:50 yesterday is 「昨天」, not
+ * 「今天」. A timestamp in the future (a clock that was ahead) gets no relative
+ * half rather than a negative one.
+ */
+export function roamingDateLabel(epochMs: number, nowMs: number): { date: string; relative: string } {
+  const at = new Date(epochMs);
+  const now = new Date(nowMs);
+  const h = String(at.getHours()).padStart(2, '0');
+  const min = String(at.getMinutes()).padStart(2, '0');
+  const day = `${at.getMonth() + 1}月${at.getDate()}日 ${h}:${min}`;
+  const date = at.getFullYear() === now.getFullYear() ? day : `${at.getFullYear()}年${day}`;
+
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(at)) / DAY_MS);
+  const relative = days < 0 ? ''
+    : days === 0 ? '今天'
+      : days === 1 ? '昨天'
+        : days < 30 ? `${days} 天前`
+          : days < 365 ? `${Math.floor(days / 30)} 个月前`
+            : `${Math.floor(days / 365)} 年前`;
+  return { date, relative };
+}
+
+/** The category line under the date: what kind of note this is, and for a doubt, where it stands. */
+function categoryLabel(note: NoteEntry): { label: string; icon: YanjiIconName } {
+  if (note.category === 'DOUBT') {
+    return note.isResolved
+      ? { label: '疑点 · 已解决', icon: 'doubtResolved' }
+      : { label: '疑点 · 待解决', icon: 'doubtUnresolved' };
+  }
+  return { label: '灵感', icon: 'inspiration' };
 }
 
 export function RoamingNotesModal({
@@ -62,9 +109,12 @@ export function RoamingNotesModal({
   const theme = useYanjiTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { colors, typography } = theme.paper;
+  const { typography, layout } = theme.paper;
   // The roaming field is always dark, independent of the app's light/dark theme:
   // it is the one place that owns its whole screen, like the focus immersion.
+  // The card is part of that field too — every colour below reads `immersed`,
+  // never the theme's paper, so a light-mode phone no longer gets a glaring
+  // parchment card on a near-black screen.
   const immersed = theme.paper.immersive.running;
 
   // Start in loading so reopening never flashes the "暂无随笔" empty state
@@ -72,6 +122,15 @@ export function RoamingNotesModal({
   const [notes, setNotes] = useState<NoteEntry[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  /**
+   * The stage's measured height. The card is capped to it so a long note
+   * scrolls inside the card instead of pushing the card over the header and
+   * the controls. Zero until the first layout: no cap is applied before the
+   * stage has a size to cap against.
+   */
+  const [stageHeight, setStageHeight] = useState(0);
+  /** A favourite write in flight; the toggle is disabled until Room answers. */
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
 
   const panX = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -102,6 +161,26 @@ export function RoamingNotesModal({
     }
     // loadRandomBatch is memoized with empty deps, so `visible` is the only trigger.
   }, [visible]);
+
+  /**
+   * Flip the current card's favourite. Only a confirmed write changes the
+   * card: `false` means the note is gone from Room, and a rejection leaves the
+   * stored state as it was, so in both cases the card keeps showing the truth.
+   */
+  const toggleFavorite = useCallback(async (note: NoteEntry) => {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    try {
+      const saved = await YanjiDataNative.toggleFavoriteNote(note.id);
+      if (saved) {
+        setNotes(prev => prev.map(item => (item.id === note.id ? { ...item, isFavorite: !item.isFavorite } : item)));
+      }
+    } catch {
+      // The stored state is unchanged; the card already shows it.
+    } finally {
+      setFavoriteBusy(false);
+    }
+  }, [favoriteBusy]);
 
   const advance = useCallback(
     (delta: 1 | -1) => {
@@ -169,6 +248,8 @@ export function RoamingNotesModal({
   const panResponder = useMemo(
     () =>
       PanResponder.create({
+        // Horizontal drags turn the card; vertical ones stay with the note's
+        // own scroll view, so a long note can be read without turning it.
         onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) =>
           Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2,
         onPanResponderMove: (_evt, { dx }) => {
@@ -202,6 +283,40 @@ export function RoamingNotesModal({
     inputRange: [-200, 0, 200],
     outputRange: ['-8deg', '0deg', '8deg'],
   });
+  /**
+   * The deck rises as the top card is dragged away: the card underneath
+   * straightens, lifts and brightens toward where the next card will sit, so
+   * the stack reads as real paper instead of two fixed grey slabs. Driven by
+   * the same `panX` as the drag, so reduced motion (which never moves `panX`)
+   * leaves it still.
+   */
+  const deckRise = (rest: number, risen: number) => panX.interpolate({
+    inputRange: [-DECK_RISE_TRAVEL, 0, DECK_RISE_TRAVEL],
+    outputRange: [risen, rest, risen],
+    extrapolate: 'clamp',
+  });
+  const deckTurn = (rest: string, risen: string) => panX.interpolate({
+    inputRange: [-DECK_RISE_TRAVEL, 0, DECK_RISE_TRAVEL],
+    outputRange: [risen, rest, risen],
+    extrapolate: 'clamp',
+  });
+
+  const cardMaxHeight = stageHeight > 0
+    ? stageHeight - DECK_DEPTH - YanjiSpacing.md * 2
+    : undefined;
+  // A short stage (split screen, large font scale) wins over the floor.
+  const cardMinHeight = cardMaxHeight === undefined
+    ? CARD_MIN_HEIGHT
+    : Math.min(CARD_MIN_HEIGHT, cardMaxHeight);
+  const cardSurface = {
+    backgroundColor: immersed.cardSurface,
+    borderColor: immersed.cardHairline,
+    borderWidth: layout.hairlineWidth,
+    borderRadius: theme.radius.xl,
+  };
+  const bone = { backgroundColor: immersed.cardBone };
+  const when = currentNote ? roamingDateLabel(currentNote.timestamp, Date.now()) : null;
+  const category = currentNote ? categoryLabel(currentNote) : null;
 
   return (
     <Modal
@@ -236,17 +351,21 @@ export function RoamingNotesModal({
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <Text style={[typography.titleGroup, styles.headerTitle, { color: immersed.ink }]}>
+            <Text accessibilityRole="header" style={[typography.titleGroup, styles.headerTitle, { color: immersed.ink }]}>
               漫游随笔
             </Text>
             {notes.length > 0 ? (
               <View
                 style={[
                   styles.counterBadge,
-                  { backgroundColor: immersed.subtle, borderColor: immersed.pillBorder },
+                  {
+                    backgroundColor: immersed.subtle,
+                    borderColor: immersed.pillBorder,
+                    borderWidth: layout.hairlineWidth,
+                  },
                 ]}
               >
-                <Text style={[styles.counterText, { color: immersed.ink }]}>
+                <Text style={[typography.captionMeta, { color: immersed.ink }]}>
                   {`第 ${currentIndex + 1} / ${notes.length} 篇`}
                 </Text>
               </View>
@@ -272,74 +391,68 @@ export function RoamingNotesModal({
         </View>
 
         {/* 3D Spatial Stage */}
-        <View style={styles.stage}>
+        <View style={styles.stage} onLayout={event => setStageHeight(event.nativeEvent.layout.height)}>
           {loading ? (
             // The card itself, as a wireframe: same width, radius and body
-            // padding, three lines of note and the date / seal footer.
+            // padding, three lines of note, the date / seal footer and the
+            // action bar — bones in the card's own dark tone.
             <YanjiSkeleton testID="roaming-skeleton" accessibilityLabel="正在拾取随笔"
               style={styles.cardsStack}>
-              <View style={[
-                styles.activeCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.hairline,
-                  borderRadius: theme.radius.xl,
-                },
-              ]}>
-                <View style={[styles.cardBody, { paddingTop: YanjiSpacing.xl }]}>
-                  <View style={{ marginBottom: YanjiSpacing.md }}>
+              <View style={[styles.activeCard, cardSurface, { minHeight: cardMinHeight }]}>
+                <View style={[styles.cardBody, styles.skeletonBody, { paddingTop: YanjiSpacing.xl }]}>
+                  <View style={styles.noteBlock}>
                     {ROAMING_LINE_BONES.map(width => (
-                      <YanjiSkeletonText key={width} type={NOTE_LINE} width={width} />
+                      <YanjiSkeletonText key={width} type={typography.bodyWriting} width={width} style={bone} />
                     ))}
                   </View>
-                  <View style={[styles.cardFooter, { borderTopColor: colors.hairline }]}>
+                  <View style={[styles.cardFooter, { borderTopColor: immersed.cardHairline, borderTopWidth: layout.hairlineWidth }]}>
                     <View style={styles.metaColumn}>
-                      <YanjiSkeletonText type={{ fontSize: 11, lineHeight: 16 }} width={92} />
-                      <View style={{ marginTop: 2 }}>
-                        <YanjiSkeletonText type={typography.captionMeta} width={64} />
-                      </View>
+                      <YanjiSkeletonText type={typography.captionMeta} width={108} style={bone} />
+                      <YanjiSkeletonText type={typography.captionMeta} width={72} style={bone} />
                     </View>
-                    <YanjiSkeletonBone width={36} height={36} round />
+                    <YanjiSkeletonBone width={WAX_SEAL_SIZE} height={WAX_SEAL_SIZE} round style={bone} />
+                  </View>
+                </View>
+                <View style={[styles.actionBar, { borderTopColor: immersed.cardHairline, borderTopWidth: layout.hairlineWidth }]}>
+                  <View style={styles.actionHalf}>
+                    <YanjiSkeletonText type={typography.captionMeta} width={44} style={bone} />
+                  </View>
+                  <View style={styles.actionHalf}>
+                    <YanjiSkeletonText type={typography.captionMeta} width={44} style={bone} />
                   </View>
                 </View>
               </View>
             </YanjiSkeleton>
           ) : notes.length === 0 ? (
-            <View
-              style={[
-                styles.emptyCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.hairline,
-                  borderRadius: theme.radius.xl,
-                },
-              ]}
-            >
+            <View style={[styles.emptyCard, cardSurface]}>
               <View style={[styles.emptyIconWrapper, { backgroundColor: immersed.subtle }]}>
-                <YanjiIcon name="sprout" size={28} color={colors.secondary} />
+                <YanjiIcon name="sprout" size={28} color={immersed.secondary} />
               </View>
-              <Text style={[typography.titleGroup, { color: colors.ink, marginTop: YanjiSpacing.md }]}>
+              <Text style={[typography.titleGroup, { color: immersed.ink, marginTop: YanjiSpacing.md }]}>
                 暂无随笔
               </Text>
               <Text
                 style={[
                   typography.bodyJournal,
-                  { color: colors.secondary, textAlign: 'center', marginTop: YanjiSpacing.sm, lineHeight: 20 },
+                  { color: immersed.secondary, textAlign: 'center', marginTop: YanjiSpacing.sm },
                 ]}
               >
                 在时间线点击「记录此刻」写下随笔。
               </Text>
             </View>
-          ) : currentNote ? (
+          ) : currentNote && when && category ? (
             <View style={styles.cardsStack}>
               {/* Deck Depth 2 (Back) */}
-              <View
+              <Animated.View
                 style={[
                   styles.depthDeck2,
+                  cardSurface,
                   {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.hairline,
-                    borderRadius: theme.radius.xl,
+                    opacity: deckRise(0.35, 0.55),
+                    transform: [
+                      { translateY: deckRise(0, -4) },
+                      { rotate: deckTurn('-5deg', '-3deg') },
+                    ],
                   },
                 ]}
                 pointerEvents="none"
@@ -347,13 +460,16 @@ export function RoamingNotesModal({
               />
 
               {/* Deck Depth 1 (Middle) */}
-              <View
+              <Animated.View
                 style={[
                   styles.depthDeck1,
+                  cardSurface,
                   {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.hairline,
-                    borderRadius: theme.radius.xl,
+                    opacity: deckRise(0.6, 0.9),
+                    transform: [
+                      { translateY: deckRise(0, -6) },
+                      { rotate: deckTurn('3.5deg', '1deg') },
+                    ],
                   },
                 ]}
                 pointerEvents="none"
@@ -365,41 +481,25 @@ export function RoamingNotesModal({
                 {...panResponder.panHandlers}
                 style={[
                   styles.activeCard,
+                  cardSurface,
                   {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.hairline,
-                    borderRadius: theme.radius.xl,
+                    minHeight: cardMinHeight,
+                    maxHeight: cardMaxHeight,
                     transform: [
                       { translateX: panX },
                       { rotateZ },
                       { scale: scaleAnim },
                     ],
                   },
-                  theme.shadow.sheet(theme.isDark),
+                  theme.shadow.sheet(true),
                 ]}
               >
-                {/* Washi Tape */}
+                {/* Washi tape: a strip of paper holding the card, nothing written on it. */}
                 <View
-                  style={[
-                    styles.washiTape,
-                    {
-                      backgroundColor: theme.isDark
-                        ? 'rgba(255, 255, 255, 0.18)'
-                        : 'rgba(255, 255, 255, 0.70)',
-                    },
-                  ]}
+                  style={[styles.washiTape, { backgroundColor: immersed.cardTape }]}
                   pointerEvents="none"
                   importantForAccessibility="no-hide-descendants"
-                >
-                  <Text
-                    style={[
-                      styles.washiTapeText,
-                      { color: colors.ink },
-                    ]}
-                  >
-                    YANJI ARCHIVE
-                  </Text>
-                </View>
+                />
 
                 {/* Top Photo Frame (Scheme A Fade) */}
                 {currentNote.imageUri ? (
@@ -413,9 +513,9 @@ export function RoamingNotesModal({
                       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
                         <Defs>
                           <LinearGradient id="roamingPaperFade" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={colors.surface} stopOpacity="0" />
-                            <Stop offset="0.6" stopColor={colors.surface} stopOpacity="0.4" />
-                            <Stop offset="1" stopColor={colors.surface} stopOpacity="1" />
+                            <Stop offset="0" stopColor={immersed.cardSurface} stopOpacity="0" />
+                            <Stop offset="0.6" stopColor={immersed.cardSurface} stopOpacity="0.4" />
+                            <Stop offset="1" stopColor={immersed.cardSurface} stopOpacity="1" />
                           </LinearGradient>
                         </Defs>
                         <Rect x="0" y="0" width="100%" height="100%" fill="url(#roamingPaperFade)" />
@@ -424,73 +524,101 @@ export function RoamingNotesModal({
                   </View>
                 ) : null}
 
-                {/* Card Content */}
-                <Pressable
-                  onPress={() => {
-                    if (onEditNote) {
-                      onEditNote({
-                        id: currentNote.id,
-                        content: currentNote.content,
-                        category: currentNote.category,
-                        isFavorite: currentNote.isFavorite,
-                        imageUri: currentNote.imageUri,
-                      });
-                    }
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="编辑这篇随笔"
-                  style={[
+                {/* The note itself. It scrolls inside the card when it is longer
+                    than the stage allows; the footer and actions stay put.
+                    Keyed by note so a new card always opens at its first line. */}
+                <ScrollView
+                  key={currentNote.id}
+                  style={styles.noteScroll}
+                  contentContainerStyle={[
                     styles.cardBody,
-                    {
-                      paddingTop: currentNote.imageUri ? YanjiSpacing.xs : YanjiSpacing.xl,
-                    },
+                    { paddingTop: currentNote.imageUri ? YanjiSpacing.xs : YanjiSpacing.xl, paddingBottom: 0 },
                   ]}
+                  showsVerticalScrollIndicator
+                  persistentScrollbar
                 >
                   {/* Decorative Quotation Mark */}
                   <Text
-                    style={[
-                      styles.quoteMark,
-                      { color: colors.brand },
-                    ]}
+                    style={[styles.quoteMark, { color: immersed.accent }]}
                     pointerEvents="none"
                     importantForAccessibility="no"
                   >
                     “
                   </Text>
-
-                  {/* Note text */}
-                  <Text
-                    style={[
-                      typography.bodyWriting,
-                      styles.noteText,
-                      { color: colors.ink },
-                    ]}
-                  >
+                  <Text style={[typography.bodyWriting, styles.noteText, { color: immersed.ink }]}>
                     {currentNote.content}
                   </Text>
+                </ScrollView>
 
-                  {/* Card Footer */}
-                  <View style={[styles.cardFooter, { borderTopColor: colors.hairline }]}>
+                {/* Card Footer: when and what, then the seal. */}
+                <View style={styles.cardBodyFooter}>
+                  <View style={[styles.cardFooter, { borderTopColor: immersed.cardHairline, borderTopWidth: layout.hairlineWidth }]}>
                     <View style={styles.metaColumn}>
-                      <Text style={[styles.dateText, { color: colors.ink }]}>
-                        {formatNoteDateTime(currentNote.timestamp)}
+                      <Text style={[typography.captionMeta, styles.dateText, { color: immersed.ink }]}>
+                        {when.date}
+                        {when.relative ? (
+                          <Text style={{ color: immersed.subtitle, fontWeight: typography.captionMeta.fontWeight }}>
+                            {`  ·  ${when.relative}`}
+                          </Text>
+                        ) : null}
                       </Text>
-                      <Text style={[typography.captionMeta, { color: colors.secondary, marginTop: 2 }]}>
-                        {currentNote.category === 'DOUBT'
-                          ? currentNote.isResolved
-                            ? '已解决疑点'
-                            : '待解决疑点'
-                          : '灵感'}
-                      </Text>
+                      <View style={styles.categoryRow}>
+                        <YanjiIcon name={category.icon} size={layout.momentTagIconSlot} color={immersed.secondary} />
+                        <Text style={[typography.captionMeta, { color: immersed.secondary }]}>
+                          {category.label}
+                        </Text>
+                      </View>
                     </View>
 
                     {/* Vermilion Wax Seal Stamp */}
                     <View style={styles.waxSeal} importantForAccessibility="no-hide-descendants">
-                      <Text style={styles.waxSealLatin}>YANJI</Text>
                       <Text style={styles.waxSealKanji}>迹</Text>
                     </View>
                   </View>
-                </Pressable>
+                </View>
+
+                {/* The card's own actions. Editing used to be a tap anywhere on
+                    the text with nothing saying so; favouriting meant leaving
+                    for the library. Both are now named buttons on the card. */}
+                <View style={[styles.actionBar, { borderTopColor: immersed.cardHairline, borderTopWidth: layout.hairlineWidth }]}>
+                  <Pressable
+                    onPress={() => void toggleFavorite(currentNote)}
+                    disabled={favoriteBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={currentNote.isFavorite ? '取消收藏这篇随笔' : '收藏这篇随笔'}
+                    accessibilityState={{ selected: currentNote.isFavorite, busy: favoriteBusy, disabled: favoriteBusy }}
+                    style={({ pressed }) => [styles.actionHalf, { opacity: favoriteBusy ? 0.5 : pressed ? 0.65 : 1 }]}
+                  >
+                    <YanjiIcon
+                      name={currentNote.isFavorite ? 'bookmark' : 'bookmarkOutline'}
+                      size={16}
+                      color={currentNote.isFavorite ? immersed.accent : immersed.secondary}
+                    />
+                    <Text style={[typography.captionMeta, {
+                      color: currentNote.isFavorite ? immersed.accent : immersed.secondary,
+                    }]}>
+                      {currentNote.isFavorite ? '已收藏' : '收藏'}
+                    </Text>
+                  </Pressable>
+                  <View style={[styles.actionDivider, { backgroundColor: immersed.cardHairline, width: layout.hairlineWidth }]} />
+                  <Pressable
+                    onPress={() => onEditNote?.({
+                      id: currentNote.id,
+                      content: currentNote.content,
+                      category: currentNote.category,
+                      isFavorite: currentNote.isFavorite,
+                      imageUri: currentNote.imageUri,
+                    })}
+                    disabled={!onEditNote}
+                    accessibilityRole="button"
+                    accessibilityLabel="编辑这篇随笔"
+                    accessibilityState={{ disabled: !onEditNote }}
+                    style={({ pressed }) => [styles.actionHalf, { opacity: !onEditNote ? 0.5 : pressed ? 0.65 : 1 }]}
+                  >
+                    <YanjiIcon name="compose" size={16} color={immersed.secondary} />
+                    <Text style={[typography.captionMeta, { color: immersed.secondary }]}>编辑</Text>
+                  </Pressable>
+                </View>
               </Animated.View>
             </View>
           ) : null}
@@ -532,7 +660,7 @@ export function RoamingNotesModal({
             ]}
           >
             <YanjiIcon name="sparkles" size={16} color={immersed.accent} />
-            <Text style={[styles.randomPillText, { color: immersed.accent }]}>随机抽取</Text>
+            <Text style={[typography.titleLedger, { color: immersed.accent }]}>随机抽取</Text>
           </Pressable>
 
           <Pressable
@@ -578,22 +706,15 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: YanjiSpacing.sm,
   },
   headerTitle: {
     fontFamily: 'serif',
-    fontSize: 16,
-    letterSpacing: 0.5,
   },
   counterBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: YanjiSpacing.sm,
     paddingVertical: 2,
     borderRadius: YanjiRadius.full,
-    borderWidth: 1,
-  },
-  counterText: {
-    fontSize: 10,
-    fontWeight: '600',
   },
   closeButton: {
     width: YanjiTouch.min,
@@ -614,7 +735,6 @@ const styles = StyleSheet.create({
     maxWidth: EMPTY_CARD_MAX_WIDTH,
     padding: YanjiSpacing.xl,
     alignItems: 'center',
-    borderWidth: 1,
   },
   emptyIconWrapper: {
     width: 52,
@@ -636,13 +756,10 @@ const styles = StyleSheet.create({
    */
   depthDeck2: {
     position: 'absolute',
-    top: 14,
-    bottom: -14,
+    top: DECK_DEPTH,
+    bottom: -DECK_DEPTH,
     left: 15,
     right: 15,
-    borderWidth: 1,
-    opacity: 0.2,
-    transform: [{ rotate: '-5deg' }],
   },
   depthDeck1: {
     position: 'absolute',
@@ -650,13 +767,9 @@ const styles = StyleSheet.create({
     bottom: -8,
     left: 8,
     right: 8,
-    borderWidth: 1,
-    opacity: 0.35,
-    transform: [{ rotate: '3.5deg' }],
   },
   activeCard: {
     width: '100%',
-    borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -668,21 +781,8 @@ const styles = StyleSheet.create({
     width: 96,
     height: 16,
     borderRadius: YanjiRadius.xs,
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
-    borderLeftColor: 'rgba(42, 36, 29, 0.15)',
-    borderRightColor: 'rgba(42, 36, 29, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 20,
     transform: [{ rotate: '-1deg' }],
-  },
-  washiTapeText: {
-    fontSize: 7.5,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    letterSpacing: 1.5,
-    opacity: 0.5,
   },
   photoContainer: {
     width: '100%',
@@ -697,9 +797,29 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  /** Shrinks (never grows) so a short note keeps the card short and a long one scrolls. */
+  noteScroll: {
+    // Grows into the card's minimum height so a short note keeps its footer and
+    // actions at the card's foot; shrinks under the stage cap so a long one
+    // scrolls instead of pushing them off.
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  /** The wireframe's body fills the same minimum height as the real card. */
+  skeletonBody: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+  },
   cardBody: {
     padding: YanjiSpacing.lg,
     position: 'relative',
+  },
+  cardBodyFooter: {
+    paddingHorizontal: YanjiSpacing.lg,
+    paddingBottom: YanjiSpacing.md,
+  },
+  noteBlock: {
+    marginBottom: YanjiSpacing.md,
   },
   quoteMark: {
     position: 'absolute',
@@ -707,33 +827,35 @@ const styles = StyleSheet.create({
     left: 14,
     fontSize: 32,
     fontFamily: 'serif',
-    opacity: 0.25,
+    opacity: 0.35,
   },
   noteText: {
-    fontFamily: 'serif',
-    fontSize: 14,
-    lineHeight: 22,
     letterSpacing: 0.3,
     marginBottom: YanjiSpacing.md,
   },
   cardFooter: {
-    borderTopWidth: 1,
     paddingTop: YanjiSpacing.sm,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: YanjiSpacing.sm,
   },
   metaColumn: {
     flex: 1,
+    gap: 2,
   },
   dateText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: YanjiSpacing.xs,
   },
   waxSeal: {
-    width: 36,
-    height: 36,
-    borderRadius: 36 / 2,
+    width: WAX_SEAL_SIZE,
+    height: WAX_SEAL_SIZE,
+    borderRadius: WAX_SEAL_SIZE / 2,
     backgroundColor: WAX_SEAL_BG,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.35)',
@@ -746,19 +868,29 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  waxSealLatin: {
-    fontSize: 6.5,
-    fontFamily: 'monospace',
-    color: WHITE_GLYPH,
-    opacity: 0.85,
-    lineHeight: 8,
-  },
+  /** One glyph, large enough to read — the old 6.5sp 「YANJI」 line was unreadable. */
   waxSealKanji: {
-    fontSize: 11,
+    fontSize: 16,
+    lineHeight: 20,
     fontFamily: 'serif',
     fontWeight: '700',
     color: WHITE_GLYPH,
-    lineHeight: 12,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  actionHalf: {
+    flex: 1,
+    minHeight: YanjiTouch.min,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionDivider: {
+    alignSelf: 'stretch',
+    marginVertical: YanjiSpacing.sm,
   },
   footerControls: {
     flexDirection: 'row',
@@ -782,9 +914,5 @@ const styles = StyleSheet.create({
     height: YanjiTouch.min,
     borderRadius: YanjiTouch.min / 2,
     borderWidth: 1,
-  },
-  randomPillText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

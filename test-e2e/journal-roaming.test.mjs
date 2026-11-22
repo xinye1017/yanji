@@ -33,6 +33,10 @@ const theme = {
         accent: '#9DBAD4',
         primaryActionBg: 'rgba(157,186,212,0.16)',
         primaryActionBorder: 'rgba(157,186,212,0.30)',
+        cardSurface: '#221E19',
+        cardHairline: 'rgba(255,246,232,0.10)',
+        cardBone: 'rgba(255,246,232,0.10)',
+        cardTape: 'rgba(255,246,232,0.12)',
       },
     },
     radius: { sheet: 26, pill: 9999, tag: 8 },
@@ -77,9 +81,11 @@ function roamingHarness({
     },
   ],
   getRandomNotes = null,
+  toggleFavoriteNote = null,
 } = {}) {
   const calls = {
     getRandomNotes: 0,
+    toggleFavoriteNote: [],
     onClose: 0,
     onEditNote: [],
   };
@@ -132,10 +138,14 @@ function roamingHarness({
         return Promise.resolve(notes);
       },
       getAllNotes: () => Promise.resolve(notes),
+      toggleFavoriteNote: id => {
+        calls.toggleFavoriteNote.push(id);
+        return toggleFavoriteNote ? toggleFavoriteNote(id) : Promise.resolve(true);
+      },
     },
   };
 
-  const component = loadTypeScript('src/components/RoamingNotesModal.tsx', {
+  const module = loadTypeScript('src/components/RoamingNotesModal.tsx', {
     react,
     'react-native': {
       Modal: 'Modal',
@@ -143,6 +153,7 @@ function roamingHarness({
       Text: 'Text',
       View: 'View',
       Image: 'Image',
+      ScrollView: 'ScrollView',
       StyleSheet: { absoluteFill: {}, create: s => s },
       Animated: {
         Value: class {
@@ -189,7 +200,8 @@ function roamingHarness({
       YanjiRadius: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, full: 9999 },
       YanjiTouch: { min: 44, comfortable: 48 },
     },
-  }).RoamingNotesModal;
+  });
+  const component = module.RoamingNotesModal;
 
   function collect(tree) {
     function walk(node, predicate, found = []) {
@@ -243,7 +255,7 @@ function roamingHarness({
     return ui;
   }
 
-  return { render, calls, states, refs };
+  return { render, calls, states, refs, module };
 }
 
 test('RoamingNotesModal renders active note with Scheme A photo and wax seal when visible', async () => {
@@ -255,11 +267,10 @@ test('RoamingNotesModal renders active note with Scheme A photo and wax seal whe
   assert.ok(ui.allText.some(t => t.includes('第 1 / 3 篇')), 'Should display note counter');
   // Note 1 content
   assert.ok(ui.allText.some(t => t.includes('泰勒展开求极限先看分母主阶数')), 'Should display active note content');
-  // Wax seal: contains YANJI and 迹
-  assert.ok(ui.allText.some(t => t.includes('YANJI')), 'Wax seal contains YANJI');
+  // The seal is one legible glyph now; the unreadable 6.5sp 「YANJI」 line and the
+  // 7.5sp 「YANJI ARCHIVE」 on the tape are gone.
   assert.ok(ui.allText.some(t => t.includes('迹')), 'Wax seal contains 迹');
-  // Washi tape contains YANJI ARCHIVE
-  assert.ok(ui.allText.some(t => t.includes('YANJI ARCHIVE')), 'Washi tape contains YANJI ARCHIVE');
+  assert.ok(!ui.allText.some(t => String(t).includes('YANJI')), 'No decorative Latin text is left on the card');
   // Photo exists for note 1
   assert.equal(ui.images.length, 1, 'Should render photo for note 1');
   assert.equal(ui.images[0].props.source.uri, 'file:///data/user/0/com.example.yanji/files/journal_photos/photo1.jpg');
@@ -370,4 +381,118 @@ test('RoamingNotesModal draws the card as a wireframe instead of the empty state
   }
   const settled = await harness.render();
   assert.ok(settled.allText.some(t => t.includes('加载完成后的随笔')), 'Should render the note once loaded');
+});
+
+// ---------------------------------------------------------------------------
+// The card itself: dark paper, a legible date, its own actions, and a cap so a
+// long note scrolls inside it instead of covering the controls.
+// ---------------------------------------------------------------------------
+
+function flatten(style) {
+  if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
+  return style && typeof style === 'object' ? style : {};
+}
+
+test('roamingDateLabel adds the year for another year and a calendar-day relative time', () => {
+  const { roamingDateLabel } = roamingHarness().module;
+  const now = new Date(2026, 10, 22, 0, 10).getTime();
+
+  const today = roamingDateLabel(new Date(2026, 10, 22, 0, 5).getTime(), now);
+  assert.equal(today.date, '11月22日 00:05', 'this year carries no year');
+  assert.equal(today.relative, '今天');
+  // Counted between local midnights: 23:50 last night is yesterday, not today.
+  assert.equal(roamingDateLabel(new Date(2026, 10, 21, 23, 50).getTime(), now).relative, '昨天');
+  assert.equal(roamingDateLabel(new Date(2026, 10, 12, 9, 0).getTime(), now).relative, '10 天前');
+  assert.equal(roamingDateLabel(new Date(2026, 9, 1, 9, 0).getTime(), now).relative, '1 个月前');
+
+  const lastYear = roamingDateLabel(new Date(2025, 10, 20, 15, 30).getTime(), now);
+  assert.equal(lastYear.date, '2025年11月20日 15:30', 'an older year is spelled out');
+  assert.equal(lastYear.relative, '1 年前');
+  // A clock that ran ahead never produces a negative 「-1 天前」.
+  assert.equal(roamingDateLabel(new Date(2026, 10, 23, 9, 0).getTime(), now).relative, '');
+});
+
+test('the card is dark paper from the immersive palette, not the light theme surface', async () => {
+  const ui = await roamingHarness().render({ visible: true });
+  const card = ui.find(node => node.type === 'AnimatedView'
+    && 'maxHeight' in flatten(node.props.style));
+  assert.ok(card, 'the active card is rendered');
+  assert.equal(flatten(card.props.style).backgroundColor, '#221E19', 'card uses immersive cardSurface');
+  assert.notEqual(flatten(card.props.style).backgroundColor, theme.paper.colors.surface);
+});
+
+test('a long note is capped to the stage and scrolls inside the card', async () => {
+  const harness = roamingHarness();
+  let ui = await harness.render({ visible: true });
+  const cardOf = tree => tree.find(node => node.type === 'AnimatedView'
+    && 'maxHeight' in flatten(node.props.style));
+  assert.equal(flatten(cardOf(ui).props.style).maxHeight, undefined, 'no cap before the stage is measured');
+
+  const stage = ui.find(node => node.type === 'View' && typeof node.props?.onLayout === 'function');
+  stage.props.onLayout({ nativeEvent: { layout: { height: 520 } } });
+  ui = await harness.render();
+  // 520 minus the deck's overhang (14) and the stage's own padding (12 × 2).
+  assert.equal(flatten(cardOf(ui).props.style).maxHeight, 520 - 14 - 24);
+
+  const scroll = ui.find(node => node.type === 'ScrollView');
+  assert.ok(scroll, 'the note sits in a scroll view');
+  assert.equal(scroll.key, 'note-1', 'keyed by note, so a new card opens at its first line');
+  assert.ok(ui.find(node => node.type === 'Text' && node.props.children === '泰勒展开求极限先看分母主阶数'));
+});
+
+test('a short note still draws a card, and the floor never outgrows a short stage', async () => {
+  // On device a one-line note made the card a thin banner in an empty field.
+  const harness = roamingHarness();
+  let ui = await harness.render({ visible: true });
+  const cardOf = tree => tree.find(node => node.type === 'AnimatedView'
+    && 'maxHeight' in flatten(node.props.style));
+  assert.equal(flatten(cardOf(ui).props.style).minHeight, 240, 'a minimum card height before layout');
+
+  const stage = () => ui.find(node => node.type === 'View' && typeof node.props?.onLayout === 'function');
+  stage().props.onLayout({ nativeEvent: { layout: { height: 520 } } });
+  ui = await harness.render();
+  assert.equal(flatten(cardOf(ui).props.style).minHeight, 240);
+
+  // A short stage (split screen, large font) caps the floor at the stage limit.
+  stage().props.onLayout({ nativeEvent: { layout: { height: 220 } } });
+  ui = await harness.render();
+  const style = flatten(cardOf(ui).props.style);
+  assert.equal(style.minHeight, style.maxHeight, 'min never exceeds max');
+  assert.equal(style.maxHeight, 220 - 14 - 24);
+});
+
+test('favourite on the card writes Room and only flips on a confirmed write', async () => {
+  const harness = roamingHarness();
+  let ui = await harness.render({ visible: true });
+  // note-1 starts favourited.
+  const unfavorite = ui.findButtonByLabel('取消收藏这篇随笔');
+  assert.ok(unfavorite, 'a favourited note offers to remove it');
+  assert.equal(unfavorite.props.accessibilityState.selected, true);
+  unfavorite.props.onPress();
+  ui = await harness.render();
+  assert.deepEqual(harness.calls.toggleFavoriteNote, ['note-1']);
+  assert.ok(ui.findButtonByLabel('收藏这篇随笔'), 'the confirmed write flips the card');
+  assert.ok(ui.findText('收藏'), 'the visible label follows');
+
+  // A note Room no longer has (false) or a failed write leaves the card as stored.
+  for (const reply of [async () => false, async () => { throw new Error('room'); }]) {
+    const h = roamingHarness({ toggleFavoriteNote: reply });
+    let tree = await h.render({ visible: true });
+    tree.findButtonByLabel('取消收藏这篇随笔').props.onPress();
+    tree = await h.render();
+    assert.ok(tree.findButtonByLabel('取消收藏这篇随笔'), 'an unconfirmed write changes nothing');
+  }
+});
+
+test('editing is a named button on the card that hands over the current note', async () => {
+  const harness = roamingHarness();
+  const ui = await harness.render({ visible: true });
+  const edit = ui.findButtonByLabel('编辑这篇随笔');
+  assert.ok(edit, 'the card offers an explicit edit button');
+  assert.ok(ui.findText('编辑'), 'with a visible label');
+  edit.props.onPress();
+  assert.equal(harness.calls.onEditNote.length, 1);
+  assert.equal(harness.calls.onEditNote[0].id, 'note-1');
+  assert.equal(harness.calls.onEditNote[0].imageUri,
+    'file:///data/user/0/com.example.yanji/files/journal_photos/photo1.jpg');
 });

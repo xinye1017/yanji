@@ -273,6 +273,24 @@ const paperImmersiveBase = {
   secondaryActionBorder: 'rgba(255,246,232,0.10)',
   secondaryActionText: '#DDD3C4',
   primaryActionText: '#F7F1E7',
+  /**
+   * The roaming card — dark paper resting on the immersion field.
+   *
+   * 漫游随笔 owns its whole screen on the always-dark field, so its card is
+   * part of that field rather than of the app's light/dark paper: a parchment
+   * card on a near-black screen was the brightest, harshest thing in the app.
+   * One warm step above `canvas`, separated by `cardHairline` and the sheet
+   * shadow rather than by luminance alone. Measured on `cardSurface`: `ink`
+   * 14.74:1, `secondary` 9.20:1, `subtitle` 5.48:1, `accent` 8.21:1 — so
+   * `subtitle` is the quietest tier that may still carry text; `muted`
+   * (3.45:1) stays decorative.
+   */
+  cardSurface: '#221E19',
+  cardHairline: 'rgba(255,246,232,0.10)',
+  /** Skeleton bones on the card; any paper `subtle` would glare on this field. */
+  cardBone: 'rgba(255,246,232,0.10)',
+  /** The washi strip across the card's top edge. Decorative, carries no text. */
+  cardTape: 'rgba(255,246,232,0.12)',
 } as const;
 
 /**
