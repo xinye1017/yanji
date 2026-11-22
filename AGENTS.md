@@ -21,7 +21,7 @@
 9. **ADB 单次调用**：`adb start-server`、设备发现、安装、启动必须在同一次工具调用内完成（否则后台子进程被作业对象回收，误报 `device not found`）。
 10. **无证据不宣称**：严格区分「编译成功 / 测试执行成功 / 模拟器安装启动成功 / 真机安装启动成功」；未运行项显式标注，环境故障不得伪装成产品缺陷。
 11. **默认模拟器 / 真机按需**：日常测试一律模拟器（截图/交互/改设置/测试数据无限制，截图仅存被忽略的 `build/`）；仅用户明确说「实机测试」才推手机，手机端只允许 `install -r -d` + `am start`，禁截图/录屏/`uiautomator`/模拟交互/改设置/抓库/备份/清数据（除非逐项明确授权）。
-12. **修改完成即提交推送**：不写外部知识库日志；推送前按 §6 完成 `lintDebug`→`testDebugUnitTest`→`assembleDebug`→16KB 守卫；精准 `git add <file>`（NEVER `git add .` / `git commit -a`），Conventional Commits 简讯，`git push`（直连失败走代理 7898，见 §5.5）。
+12. **修改完成即提交推送**：不写外部知识库日志；推送前按 §6 完成 `lintDebug`→`testDebugUnitTest`→`assembleDebug`→16KB 守卫；精准 `git add <file>`（NEVER `git add .` / `git commit -a`），Conventional Commits 简讯，`git push`（直连失败走代理 7897，见 §5.5）。
 13. **系统深浅色**：产品逻辑只读；模拟器自由验证；真机仅明确实机测试且授权时切换——先记基线、测完还原、如实报告（§8）。
 
 ---
@@ -100,7 +100,7 @@ React Native + React + TypeScript / Hermes / Fabric（New Architecture, Bridgele
 
 **5.4 Portable**：脚本从 `scripts/` 自身位置推导仓库根，不依赖固定盘符/用户名。SDK 经 `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`local.properties` 发现；ADB 从 PATH 或 `ADB=/path/to/adb`。默认测试目标模拟器 `emulator-*`（`adb devices` 自动发现）。真机推送脚本 `scripts/adb-push.sh`（覆盖变量 `YANJI_APK`/`YANJI_DEVICE_BACKUP_DIR`/`YANJI_PACKAGE`，禁日常滥用）。默认 APK `app/build/outputs/apk/debug/app-debug.apk`，备份 `<repo>/build/device-backup`。
 
-**5.5 Owner 设备（仅参考，禁写入脚本/CI）**：仓库 `github.com/xinye1017/yanji` (main/origin)；Windows；`D:\yanji`；包名 `com.example.yanji`，入口 `.MainActivity`；SDK `C:\Users\dex\Android\Sdk`；ADB 在 PATH；默认模拟器 `emulator-5554`（启动/投屏见 ADB.md §二.0）；真机 `PKB110` 逻辑分辨率 **1256×2760**（非 1080×2400）；GitHub 走代理 **7898**（全局/TUN 会拦 mDNS，`git push` 直连超时用 `git -c http.proxy=http://127.0.0.1:7898 -c https.proxy=http://127.0.0.1:7898 push`）。设备串/IP/端口一律 mDNS 动态获取，禁写死。
+**5.5 Owner 设备（仅参考，禁写入脚本/CI）**：仓库 `github.com/xinye1017/yanji` (main/origin)；Windows；`D:\yanji`；包名 `com.example.yanji`，入口 `.MainActivity`；SDK `C:\Users\dex\Android\Sdk`；ADB 在 PATH；默认模拟器 `emulator-5554`（启动/投屏见 ADB.md §二.0）；真机 `PKB110` 逻辑分辨率 **1256×2760**（非 1080×2400）；GitHub 走代理 **7897**（全局/TUN 会拦 mDNS，`git push` 直连超时用 `git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 push`）。设备串/IP/端口一律 mDNS 动态获取，禁写死。
 
 ---
 
@@ -158,7 +158,7 @@ adb -s "$dev" shell am start -n com.example.yanji/.MainActivity
 
 PowerShell（作者本机手动）：`adb start-server; Start-Sleep -Seconds 2; $dev = (adb devices | Where-Object { $_ -match "adb-.*device" } | ForEach-Object { ($_ -split '\s+')[0] } | Select-Object -First 1); if (-not $dev) { Write-Error "未发现 mDNS 无线设备"; exit 1 }; Write-Host "Target Device: $dev"; adb -s $dev install -r -d "app\build\outputs\apk\debug\app-debug.apk"; adb -s $dev shell am start -n com.example.yanji/.MainActivity`
 
-发现为空则报错退出，**不回退写死串**。安装启动即完成交付；**真机红线**：NEVER 截图/录屏/`uiautomator dump`/模拟点击滑动/改系统设置/抓库备份/清数据（除非逐项明确授权）；保护已有数据与进行中专注会话。搜不到设备/`10061 积极拒绝`/凭据失效 → [ADB.md §二.2](file:///d:/yanji/ADB.md) 标准 6 步配对。代理 7898 全局接管会拦 UDP 5353 致 mDNS 失败（[ADB.md §三.1](file:///d:/yanji/ADB.md)）；手机息屏/退桌面会休眠无线调试并重置端口，须停留在「无线调试」页。
+发现为空则报错退出，**不回退写死串**。安装启动即完成交付；**真机红线**：NEVER 截图/录屏/`uiautomator dump`/模拟点击滑动/改系统设置/抓库备份/清数据（除非逐项明确授权）；保护已有数据与进行中专注会话。搜不到设备/`10061 积极拒绝`/凭据失效 → [ADB.md §二.2](file:///d:/yanji/ADB.md) 标准 6 步配对。代理 7897 全局接管会拦 UDP 5353 致 mDNS 失败（[ADB.md §三.1](file:///d:/yanji/ADB.md)）；手机息屏/退桌面会休眠无线调试并重置端口，须停留在「无线调试」页。
 
 ---
 
@@ -192,4 +192,4 @@ PowerShell（作者本机手动）：`adb start-server; Start-Sleep -Seconds 2; 
 
 ## 11. 文档维护（更新本文时保留）
 
-本文唯一入口，与其他手册冲突时以本文为准（代码与 ADR 除外）。易漂移事实改引用式（§5）。**任何更新不得删除**：架构原则、代理 7898 排查、mDNS 自动发现、ADB 同调用铁律、默认模拟器测试/真机按需推送/真机禁调试、模拟器无限制、系统深浅色三原则（§8）、§6 验证门禁、数据与计时安全（§3.5/§3.6/红线 3/4/5/7）、提交忽略与推送纪律（§10）。
+本文唯一入口，与其他手册冲突时以本文为准（代码与 ADR 除外）。易漂移事实改引用式（§5）。**任何更新不得删除**：架构原则、代理 7897 排查、mDNS 自动发现、ADB 同调用铁律、默认模拟器测试/真机按需推送/真机禁调试、模拟器无限制、系统深浅色三原则（§8）、§6 验证门禁、数据与计时安全（§3.5/§3.6/红线 3/4/5/7）、提交忽略与推送纪律（§10）。
