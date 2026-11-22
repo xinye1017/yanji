@@ -18,6 +18,14 @@ import { YanjiSpacing } from '../theme/tokens';
 import { YanjiDataNative } from '../bridge';
 import type { Subject } from '../bridge';
 
+// Wireframe shapes for the category cards while subjects load — a category
+// name row and its sub-subject chips, sized to the rows that replace them.
+const SUBJECT_SKELETON_GROUPS = [
+  { nameWidth: 84, chips: [64, 52, 72] },
+  { nameWidth: 108, chips: [58, 76] },
+  { nameWidth: 72, chips: [64, 48, 60] },
+] as const;
+
 export function SubjectsSheet({
   visible,
   onClose,
