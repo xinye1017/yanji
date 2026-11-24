@@ -19,7 +19,7 @@
     ]
   },
   "inputs": {
-    "sha256": "6c121d86ea83108c1dda167235f337efdc71afb5e03c1bf7808c1fd8cc4b68b0",
+    "sha256": "5ffa85fdf222cd2af1c2ac183a248003cc4fb659a2b655996d4f7ee865f66d01",
     "files": [
       {
         "path": "App.tsx",
@@ -79,7 +79,7 @@
       },
       {
         "path": "skills-lock.json",
-        "sha256": "4b6ee058f9ebd77afca1bc200f49dec666aba5c3e5a13b0d966b39a6e8190651"
+        "sha256": "d4dff690c04509c01a419794b4e26b4be907456a7798af1b4933b9b5f061540f"
       },
       {
         "path": "src/bridge/index.ts",
