@@ -96,7 +96,7 @@ React Native + React + TypeScript / Hermes / Fabric（New Architecture, Bridgele
 | 设备网络参数 | mDNS 动态发现（`_adb-tls-connect`）或 `$ANDROID_SERIAL` |
 | 废弃功能 `QuickStartPreset` | `docs/adr/0001-retain-quick-start-compatibility-tombstone.md`（墓碑，禁运行时读写） |
 
-**5.3 版本约定（自下次更新启用）**：`versionName` 用 `x.x.xxx`，第三段固定 3 位；小更新第三段 +1（`1.0.000`→`1.0.001`），`versionCode` 同步 +1（`2`→`3`）。当前 `1.0.0`/`versionCode=2` 不动。发布时 `app/build.gradle.kts` 与 README `project-facts` 两处同步。
+**5.3 版本约定（每次更新必须递增）**：每次对外更新（发布、推送到设备或交付新构建）都必须递增版本号，不再有「当前版本不动」的豁免——交付时直接加一，无需逐次确认。`versionName` 用 `x.x.xxx`，第三段固定 3 位，每次更新 +1（`1.0.000`→`1.0.001`）；`versionCode` 同步 +1（`2`→`3`）。当前基线 `1.0.0`/`versionCode=2`，首次适用本约定时先规范为 `1.0.001`/`3`。版本号以 `app/build.gradle.kts` 为唯一权威源，须与 README `project-facts` 两处同步（`scripts/check-project-facts.sh` 校验）。
 
 **5.4 Portable**：脚本从 `scripts/` 自身位置推导仓库根，不依赖固定盘符/用户名。SDK 经 `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`local.properties` 发现；ADB 从 PATH 或 `ADB=/path/to/adb`。默认测试目标模拟器 `emulator-*`（`adb devices` 自动发现）。真机推送脚本 `scripts/adb-push.sh`（覆盖变量 `YANJI_APK`/`YANJI_DEVICE_BACKUP_DIR`/`YANJI_PACKAGE`，禁日常滥用）。默认 APK `app/build/outputs/apk/debug/app-debug.apk`，备份 `<repo>/build/device-backup`。
 
